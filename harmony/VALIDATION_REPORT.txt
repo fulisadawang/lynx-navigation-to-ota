@@ -1,0 +1,54 @@
+Lynx 4.0 HarmonyOS Shell 静态验收
+工程目录: harmony
+说明: 未下载 OHPM 依赖，未执行 DevEco/Hvigor/HAP 编译。
+
+[PASS] HarmonyOS 关键工程文件完整
+[PASS] HarmonyOS JSON/JSON5 可解析（12 个）
+[PASS] HarmonyOS SVG 可解析（7 个）
+[PASS] HarmonyOS PrimJS 固定为 4.0.0
+[FAIL] HarmonyOS release/4.0 OHPM 映射固定为 1.4.0
+[PASS] HarmonyOS Lynx/Service/XElement OHPM 依赖清单完整
+[PASS] HarmonyOS @lynx/* 统一引用 1.4.0 参数
+[PASS] HarmonyOS ImageKnifePro 固定为官方 Explorer 使用的 1.0.9
+[PASS] 业务壳已移除 Lynx monorepo 本地 override 与 GN 插件
+[PASS] 业务壳不依赖 Explorer 源码 CMake 构建
+[PASS] HarmonyOS XElement 9/9 能力清单完整
+[PASS] HarmonyOS Markdown 通过进程级 initialize 注册
+[PASS] HarmonyOS SVG/WebView Behavior 全量注入
+[PASS] 每个 HarmonyOS LynxView 使用统一 XElement BehaviorMap
+[PASS] HarmonyOS 三个独立 XElement OHPM 包显式声明
+[PASS] HarmonyOS XElement 严格限定 release/4.0，未混入 Video
+[PASS] HarmonyOS Service 在 LynxEnv.initialize 之前注册
+[PASS] HarmonyOS Log/DevTool/HTTP/Image Service 完整
+[PASS] HarmonyOS LynxView 容器输入与生命周期完整
+[PASS] HarmonyOS 容器采用 ArkUI Entry Component
+[PASS] HarmonyOS 路由兼容 Explorer、Sparkling 与统一别名
+[PASS] HarmonyOS 路由进入容器前执行安全校验
+[PASS] HarmonyOS 远程资源不限制 Host
+[PASS] HarmonyOS 远程资源保留 HTTPS 与 Bundle 后缀校验
+[PASS] HarmonyOS HTTP 调试默认关闭
+[PASS] HarmonyOS Template Provider 校验状态码和 20 MB 上限
+[PASS] HarmonyOS Template Provider 成功回调不携带 BusinessError
+[PASS] HarmonyOS Generic Provider 支持单请求与批量取消
+[PASS] HarmonyOS Generic Provider 成功回调不携带 BusinessError
+[PASS] HarmonyOS Template Provider 支持容器级批量取消
+[PASS] HarmonyOS 页面退出与重试释放 Provider 请求
+[PASS] HarmonyOS Media Provider 转换 rawfile 逻辑地址
+[PASS] HarmonyOS Bridge 方法完整：clearStorage, close, getAppInfo, getStorageItem, open, removeStorageItem, setStorageItem
+[PASS] HarmonyOS Native Module 遵循 LynxModule 构造协议
+[PASS] HarmonyOS Storage 使用独立 Preferences 持久化
+[PASS] HarmonyOS AppInfo platform 字段稳定
+[PASS] HarmonyOS Storage Name 与三端契约对齐
+[PASS] HarmonyOS 使用 Stage 模型 entry 模块
+[PASS] HarmonyOS 壳支持 phone/tablet/2in1
+[PASS] HarmonyOS 壳仅申请必要 INTERNET 权限
+[PASS] HarmonyOS Module Manifest 注册三类深链
+[PASS] HarmonyOS Sparkling 只保留可追溯协议兼容，不伪造 Runtime
+[PASS] HarmonyOS Sparkling 边界说明不进入默认 ArkTS 编译链
+[PASS] HarmonyOS ArkTS 业务源码均包含说明性注释
+[PASS] HarmonyOS ArkTS 分层源码数量合理（20 个）
+[PASS] HarmonyOS 启动页使用原生 ArkUI 组件
+[PASS] HarmonyOS ArkTS/TypeScript 基础分隔符检查通过
+[PASS] HarmonyOS Bundle 同步脚本 Bash 语法通过
+
+结果: 47 PASS, 0 WARN, 1 FAIL

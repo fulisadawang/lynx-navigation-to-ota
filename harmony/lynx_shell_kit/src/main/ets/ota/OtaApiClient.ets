@@ -1,0 +1,109 @@
+import http from '@ohos.net.http';
+import OtaJson from './OtaJson';
+import { LynxOtaConfig, OtaLatestBundleLists, OtaPrepareSignal, OtaReleaseSnapshot } from './OtaModels';
+
+/** OTA 服务端客户端。只接受 2xx；不限制 Host，但生产 Bundle 必须是 HTTPS。 */
+export default class OtaApiClient {
+  private readonly config: LynxOtaConfig;
+  private readonly activeRequests: Set<http.HttpRequest> = new Set();
+
+  constructor(config: LynxOtaConfig) {
+    this.config = config;
+  }
+
+  async fetchLatestBundleLists(signal?: OtaPrepareSignal): Promise<OtaLatestBundleLists> {
+    const query = `env=${encodeURIComponent(this.config.environment)}` +
+      `&hostApp=${encodeURIComponent(this.config.hostApp)}` +
+      `&platform=${encodeURIComponent(this.config.requestPlatform())}`;
+    const raw = await this.getText(`${this.baseUrl()}/api/ota/v1/releases/latest-bundle-list?${query}`, signal);
+    return OtaJson.parseLatestLists(raw);
+  }
+
+  async fetchLatestBundleList(lynxAppId: string, signal?: OtaPrepareSignal): Promise<OtaReleaseSnapshot> {
+    const query = `env=${encodeURIComponent(this.config.environment)}` +
+      `&hostApp=${encodeURIComponent(this.config.hostApp)}` +
+      `&lynxAppId=${encodeURIComponent(lynxAppId)}` +
+      `&platform=${encodeURIComponent(this.config.requestPlatform())}`;
+    const raw = await this.getText(`${this.baseUrl()}/api/ota/v1/releases/latest-bundle-list?${query}`, signal);
+    const parsed = OtaJson.parseLatestLists(raw);
+    const matched = parsed.bundleLists.find((item: OtaReleaseSnapshot) => item.lynxAppId === lynxAppId);
+    if (matched === undefined) {
+      throw new Error(`最新 bundle-list 中不存在 lynxAppId：${lynxAppId}`);
+    }
+    return matched;
+  }
+
+  async downloadBundle(bundleUrl: string, signal?: OtaPrepareSignal): Promise<ArrayBuffer> {
+    if (!bundleUrl.toLowerCase().startsWith('https://')) {
+      throw new Error('OTA Bundle 必须使用 HTTPS');
+    }
+    signal?.throwIfCancelled();
+    const request = http.createHttp();
+    this.activeRequests.add(request);
+    try {
+      const response = await request.request(bundleUrl, {
+        method: http.RequestMethod.GET,
+        expectDataType: http.HttpDataType.ARRAY_BUFFER,
+        usingCache: false,
+        connectTimeout: 15_000,
+        readTimeout: 30_000
+      });
+      signal?.throwIfCancelled();
+      this.ensureSuccess(response.responseCode, `下载 Bundle 失败：${bundleUrl}`);
+      const binary = response.result as ArrayBuffer;
+      if (binary === undefined || binary.byteLength === 0) {
+        throw new Error('OTA Bundle 内容为空');
+      }
+      return binary;
+    } finally {
+      request.destroy();
+      this.activeRequests.delete(request);
+    }
+  }
+
+  cancelAll(): void {
+    this.activeRequests.forEach((request: http.HttpRequest) => request.destroy());
+    this.activeRequests.clear();
+  }
+
+  private async getText(requestUrl: string, signal?: OtaPrepareSignal): Promise<string> {
+    signal?.throwIfCancelled();
+    const request = http.createHttp();
+    this.activeRequests.add(request);
+    try {
+      const headers: Record<string, string> = { 'Accept': 'application/json' };
+      if (this.config.clientToken.trim().length > 0) {
+        headers['x-ota-client-token'] = this.config.clientToken;
+      }
+      const response = await request.request(requestUrl, {
+        method: http.RequestMethod.GET,
+        expectDataType: http.HttpDataType.STRING,
+        usingCache: false,
+        header: headers,
+        connectTimeout: 10_000,
+        readTimeout: 30_000
+      });
+      signal?.throwIfCancelled();
+      this.ensureSuccess(response.responseCode, 'OTA 清单请求失败');
+      const raw = response.result as string;
+      if (raw.trim().length === 0) {
+        throw new Error('OTA 清单响应为空');
+      }
+      return raw;
+    } finally {
+      request.destroy();
+      this.activeRequests.delete(request);
+    }
+  }
+
+  private ensureSuccess(statusCode: number, prefix: string): void {
+    if (statusCode < 200 || statusCode >= 300) {
+      throw new Error(`${prefix}，HTTP ${statusCode}`);
+    }
+  }
+
+  private baseUrl(): string {
+    const value = this.config.apiBaseUrl.trim();
+    return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
+  }
+}

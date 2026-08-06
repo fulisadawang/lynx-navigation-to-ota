@@ -1,0 +1,14 @@
+import SDWebImage
+import SDWebImageWebPCoder
+import Sparkling
+import SparklingMethod
+
+/** Sparkling Playground 的启动顺序示例；仅在 Lynx 4.0 依赖对齐后启用。 */
+enum SparklingBootstrap {
+    static func initialize() {
+        SDImageCodersManager.shared.addCoder(SDImageWebPCoder.shared)
+        SPKServiceRegister.registerAll()
+        SPKExecuteAllPrepareBootTask()
+        // 业务 Tracker、Router、Storage、Media Service 应在此注册真实实现。
+    }
+}

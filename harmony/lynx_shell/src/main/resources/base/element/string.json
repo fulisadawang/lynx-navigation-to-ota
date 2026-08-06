@@ -1,0 +1,8 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Lynx 4.0 HarmonyOS native shell" },
+    { "name": "entry_ability_desc", "value": "Lynx Shell Entry Ability" },
+    { "name": "entry_ability_label", "value": "Lynx Shell" },
+    { "name": "network_permission_reason", "value": "用于加载远程 Lynx Bundle 和页面资源" }
+  ]
+}

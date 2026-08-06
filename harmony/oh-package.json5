@@ -1,0 +1,15 @@
+{
+  "name": "lynx-harmony-shell",
+  "version": "1.0.0",
+  "description": "Lynx 4.0 HarmonyOS native host shell",
+  "main": "",
+  "author": "Lynx Shell",
+  "license": "Apache-2.0",
+  "modelVersion": "5.0.0",
+  "parameterFile": "./parameter.json",
+  "dependencies": {
+    "@lynx/primjs": "4.0.0"
+  },
+  "devDependencies": {},
+  "dynamicDependencies": {}
+}

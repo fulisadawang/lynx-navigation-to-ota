@@ -1,0 +1,29 @@
+source 'https://cdn.cocoapods.org/'
+platform :ios, '13.0'
+
+use_modular_headers!
+use_frameworks! :linkage => :static
+
+project 'LynxShell.xcodeproj'
+
+target 'LynxShell' do
+  # 业务方只显式引用一个本地 Router Module；Lynx/XElement/OTA 依赖全部由 Podspec 管理。
+  # 这是普通 CocoaPods Module 引用，不使用 Sparkling autolink/codegen。
+  pod 'LynxShellKit', :path => '.'
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+      config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+      disable = ['-Wno-error', '-Wno-c99-designator',
+                 '-Wno-deprecated-declarations', '-Wno-deprecated-implementations']
+      ['OTHER_CPLUSPLUSFLAGS', 'OTHER_CFLAGS'].each do |key|
+        flags = config.build_settings[key] || ['$(inherited)']
+        flags = [flags] unless flags.is_a?(Array)
+        config.build_settings[key] = flags + disable
+      end
+    end
+  end
+end

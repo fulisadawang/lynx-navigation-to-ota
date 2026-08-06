@@ -1,0 +1,18 @@
+import Sparkling
+import UIKit
+
+/**
+ * 用 Sparkling 容器替换直接 LynxView 的最小示例。
+ *
+ * 当前 Playground 的公开示例使用 `SPKContainerView.load(withURL:_:)`。
+ * initData 的正式注入 API 需以完成 Lynx 4.0 升级后的 Sparkling 版本为准，
+ * 因此这里不伪造 `SPKContext` 属性，也不返回“假成功”。
+ */
+final class SparklingContainerAdapter {
+    func makeView(frame: CGRect, route: String) -> UIView {
+        let context = SPKContext()
+        let container = SPKContainerView(frame: frame)
+        container.load(withURL: route, context)
+        return container
+    }
+}

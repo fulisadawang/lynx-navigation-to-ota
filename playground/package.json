@@ -1,0 +1,38 @@
+{
+  "name": "lynx-shell-playground",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sparkling Playground UI adapted for the manual Lynx 4.0 iOS shell",
+  "scripts": {
+    "build": "rspeedy build",
+    "dev": "rspeedy dev",
+    "preview": "rspeedy preview"
+  },
+  "dependencies": {
+    "@lynx-js/react": "0.116.5"
+  },
+  "devDependencies": {
+    "@lynx-js/qrcode-rsbuild-plugin": "0.4.6",
+    "@lynx-js/react-rsbuild-plugin": "0.12.10",
+    "@lynx-js/rspeedy": "0.13.6",
+    "@lynx-js/types": "3.7.0",
+    "@rsbuild/core": "1.7.2",
+    "@types/react": "18.3.28",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": "^22 || ^24"
+  },
+  "packageManager": "pnpm@10.26.0",
+  "pnpm": {
+    "overrides": {
+      "@rspack/binding": "1.7.11",
+      "@rspack/core": "1.7.11"
+    },
+    "onlyBuiltDependencies": [
+      "core-js",
+      "esbuild"
+    ]
+  }
+}

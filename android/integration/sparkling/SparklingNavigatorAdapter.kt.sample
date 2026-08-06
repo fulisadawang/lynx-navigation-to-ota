@@ -1,0 +1,43 @@
+package com.example.lynxshell.integration.sparkling
+
+import android.content.Context
+import com.example.lynxshell.model.LynxPageRequest
+import com.tiktok.sparkling.Sparkling
+import com.tiktok.sparkling.SparklingContext
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+
+/**
+ * 将壳层页面模型翻译为 Sparkling Playground 当前使用的导航 API。
+ *
+ * 注意：此文件以 .sample 结尾，默认不进入 Android 编译；只有在 Sparkling
+ * 与 Lynx 4.0 依赖完成对齐后，才应复制到 app/src/main/java。
+ */
+object SparklingNavigatorAdapter {
+    fun open(context: Context, request: LynxPageRequest) {
+        val sparklingContext = SparklingContext()
+        sparklingContext.scheme = buildRoute(request)
+
+        // Playground 通过 withInitData 传入 JSON 字符串，而不是把 initData
+        // 拼进 URL，避免超长 URL、转义错误和敏感信息出现在日志中。
+        sparklingContext.withInitData(request.initDataJson)
+        Sparkling.build(context, sparklingContext).navigate()
+    }
+
+    private fun buildRoute(request: LynxPageRequest): String {
+        val bundle = URLEncoder.encode(
+            request.bundleUrl,
+            StandardCharsets.UTF_8.name(),
+        )
+        val title = URLEncoder.encode(
+            request.title,
+            StandardCharsets.UTF_8.name(),
+        )
+        val hideNav = if (request.showToolbar) 0 else 1
+        val hideStatusBar = if (request.hideStatusBar) 1 else 0
+        val orientation = request.orientation.name.lowercase()
+        return "hybrid://lynxview_page?bundle=$bundle&title=$title" +
+            "&hide_nav_bar=$hideNav&hide_status_bar=$hideStatusBar" +
+            "&screen_orientation=$orientation"
+    }
+}

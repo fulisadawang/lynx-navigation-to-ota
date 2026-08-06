@@ -1,0 +1,30 @@
+# 系统与 IDE 生成物
+.DS_Store
+.idea/
+**/xcuserdata/
+*.xcuserstate
+
+# 构建、依赖与缓存（均可由各平台工具重新生成）
+**/build/
+**/.derivedData/
+**/.build/
+**/.gradle/
+**/Pods/
+**/node_modules/
+**/oh_modules/
+**/.hvigor/
+**/.preview/
+
+# 本地发布/验收产物与历史独立工程
+.release/
+.workflow/
+LynxScreens-Android/
+
+# 本机与 CI 密钥配置：只允许通过安全运行时注入
+**/local.properties
+**/ota.local.properties
+**/.env
+**/.env.*
+*.jks
+*.keystore
+**/__pycache__/

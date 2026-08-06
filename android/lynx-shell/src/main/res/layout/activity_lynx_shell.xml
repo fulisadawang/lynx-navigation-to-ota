@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.example.lynxshell.transition.LynxCompatEdgeBackLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/transition_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- 只在交互返回期间显示上一页不可变 Window 快照，不承载第二个 LynxView。 -->
+    <ImageView
+        android:id="@+id/transition_underlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="noHideDescendants"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/live_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/shell_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorSurface"
+            android:elevation="0dp"
+            app:navigationIcon="@drawable/ic_arrow_back_24"
+            app:titleCentered="true" />
+
+        <FrameLayout
+            android:id="@+id/lynx_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <!-- 共享元素、容器形变和 scrim 的专用视觉层，不接收焦点与无障碍事件。 -->
+    <FrameLayout
+        android:id="@+id/transition_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="noHideDescendants" />
+</com.example.lynxshell.transition.LynxCompatEdgeBackLayout>

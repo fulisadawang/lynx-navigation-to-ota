@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="shell_surface">#FFFFFF</color>
+    <color name="shell_surface_dark">#121212</color>
+</resources>

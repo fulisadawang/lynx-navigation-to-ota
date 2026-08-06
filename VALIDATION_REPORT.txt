@@ -1,0 +1,104 @@
+Lynx 4.0 Native Shell 当前验收报告
+日期: 2026-07-31
+
+一、静态验收
+
+Android / iOS : 108 PASS, 0 WARN, 0 FAIL
+HarmonyOS     : 50 PASS, 0 WARN, 0 FAIL
+三端合计      : 158 PASS, 0 WARN, 0 FAIL
+
+命令:
+python3 scripts/static_check.py
+
+HarmonyOS 静态检查已按 Module 化后的 `lynx_shell_kit` 路径更新，结果为 50 PASS / 0 FAIL；
+Bridge 门禁现在会枚举 26 个公开方法，包含 `getNavigationState` 等导航接口，避免方法缺失回归。
+工程 `parameter.json` 与实际 OHPM 依赖均使用 4.0.0，不再回退到检查器历史口径 1.4.0。
+
+本轮新增覆盖:
+- Skyline 七种 preset-route 的双端声明与原生 renderer
+- share-element 1..8、key、shuttle、rect tween、逐元素手势开关
+- open-container 九项外观参数、双内容、圆角、颜色、影深和 fadeThrough
+- Android source underlay 元素擦除
+- iOS shadowHost / clipHost 分层
+- Android Activity Window 与 iOS UIKit 默认动画抑制
+- clearTop / singleTask / back / popTo / closeAll / reLaunch 单事务栈收敛
+- snapshot flags、maintainState、Reduce Motion、降级与终态事件
+- NativeModules / TypeScript / Android / iOS 契约和 Worklet 边界
+- HarmonyOS `lynx_shell_kit` HAR Module 与 Entry Demo 依赖边界
+- Playground 全量 16 个 `.lynx.bundle` 和 `static/` rawfile 导入
+- Lynx 页面默认移除原生标题栏
+- HarmonyOS Bridge 导航栈方法与稳定媒体 `1004` 占位方法
+
+二、前端与 Bundle
+
+pnpm exec tsc --noEmit : PASS
+pnpm build              : PASS
+
+构建产物:
+- 16 个 .lynx.bundle
+- 总输出约 2156.4 kB
+- 已同步到 Android assets 与 iOS App Bundle Resources
+
+SHA-256:
+go-bundles.lynx.bundle
+0e4ccddeffec332b01904c5cb4c324596dcdbe4beda43ec45b705ba6f6347777
+
+transition-gallery.lynx.bundle
+0be339e0900ce98031c51f36973d97536a67c253a3f8fd9c958c942cb5b21838
+
+transition-detail.lynx.bundle
+a6f66f92f80d633245a0c478d08554e93d6d2ce505fbf4e4a82207ad2ed9cf2e
+
+三、Android
+
+:app:compileDebugKotlin : BUILD SUCCESSFUL
+:app:assembleDebug      : BUILD SUCCESSFUL
+
+APK:
+android/app/build/outputs/apk/debug/app-debug.apk
+SHA-256:
+4dbdb5918ad8c37877fdb75f419917aebe83f1def2a2a31a24b08433118d3cef
+
+Demo 运行：已安装到 OnePlus 8 / Android 13 真机，前台 Activity 为
+`com.example.lynxshell.container.LynxShellActivity`，截图确认 `Sparkling Go` 本地 Playground
+已渲染。APK 内 `assets/bundles/main.lynx.bundle` SHA-256 为
+`4e977498613de901da82474796dceadd75edccb2b99c4e2065514d10be9a6036`。
+
+非阻塞警告:
+- AGP 8.5.2 官方只声明测试到 compileSdk 34，工程当前使用 compileSdk 35
+
+四、iOS
+
+swiftc -parse                 : PASS
+XcodeBuildMCP Debug build/run : SUCCEEDED
+errors                        : 0
+
+工作区:
+ios/LynxShell.xcworkspace
+
+构建产物:
+`ios/build/ModuleDerivedData/Build/Products/Debug-iphonesimulator/LynxShell.app`
+
+Demo 运行：已安装并启动 iPhone 16 Pro Simulator；清除旧测试 App 后截图确认
+`Sparkling Go` 本地 Playground 已渲染。App 内 `Bundles/main.lynx.bundle` SHA-256 与 Android、
+HarmonyOS 资源一致，均为 `4e977498613de901da82474796dceadd75edccb2b99c4e2065514d10be9a6036`。
+
+非阻塞警告:
+- 第三方 Pod 的部分对象文件无符号
+- PrimJS Create Symlinks Script Phase 未声明 outputs
+
+五、运行与边界
+
+- Android/iOS Demo 已完成安装、启动和本地 Bundle 首屏渲染；未覆盖完整按钮、返回手势、视觉或性能矩阵
+- HarmonyOS HAR `lynx_shell_kit/build/default/outputs/default/lynx_shell_kit.har` 与根工程
+  `assembleApp` 均构建成功；输出 `harmony/build/outputs/default/harmony-default-unsigned.app`，
+  内部 HAP 包含 16 个 `resources/rawfile/bundles/*.lynx.bundle` 及 `static/` 资源
+- HarmonyOS 模拟器 `127.0.0.1:5555` 已安装并启动；`main.lynx.bundle` 与
+  `nav-chain.lynx.bundle` 首屏渲染成功，截图中无壳层原生标题栏
+- HarmonyOS `nav-chain` 页面已确认渲染 `containerID` 与 `routeKey`；按钮逐项触发的
+  NativeModules 回调仍需后续真机/稳定 UI 自动化回归，不能以首屏渲染替代完整桥接验收
+- Android 混合栈 SessionExitHandler/AppHomeHandler 与 iOS Home Handler 需业务宿主接线
+- HarmonyOS 当前为未签名 `.app`；发布签名和真机回归待业务环境补齐
+- WebView、视频、Surface/Metal、受保护内容的快照质量不承诺
+- 普通 NativeModules 不等价于 Skyline UI-thread Worklet；任意 on-frame、
+  routeBuilder、withOpenContainer 实例关联不在本壳 1:1 支持范围

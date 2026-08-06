@@ -1,0 +1,451 @@
+.transition-detail-product {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.transition-detail-product-cover-share {
+  position: relative;
+  width: 100%;
+  height: 330px;
+  overflow: hidden;
+  border-radius: 30px;
+  background-color: #17162d;
+}
+
+.transition-detail-product-cover {
+  width: 100%;
+  height: 100%;
+}
+
+.transition-detail-product-badge {
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  height: 31px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background-color: rgba(13, 14, 25, 0.72);
+}
+
+.transition-detail-product-badge-text {
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.9px;
+}
+
+.transition-detail-product-index {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.transition-detail-product-index-value {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 39px;
+}
+
+.transition-detail-product-index-label {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+}
+
+.transition-detail-product-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 26px;
+  background-color: #f7f4ed;
+}
+
+.transition-detail-product-heading {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.transition-detail-product-heading-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.transition-detail-product-kicker {
+  color: #777181;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.9px;
+}
+
+.transition-detail-product-title-share {
+  align-self: flex-start;
+}
+
+.transition-detail-product-title {
+  color: #15131f;
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 34px;
+}
+
+.transition-detail-product-rating {
+  height: 34px;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  border-radius: 17px;
+  background-color: #e9e3d8;
+}
+
+.transition-detail-product-rating-star {
+  color: #f97360;
+  font-size: 12px;
+}
+
+.transition-detail-product-rating-value {
+  color: #302a38;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.transition-detail-product-desc {
+  color: #6f6977;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.transition-detail-product-meta {
+  min-height: 66px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  padding: 10px 4px;
+  border-radius: 18px;
+  background-color: #ece7de;
+}
+
+.transition-detail-product-meta-item {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.transition-detail-product-meta-value {
+  color: #241f2b;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.transition-detail-product-meta-label {
+  color: #847d89;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.transition-detail-product-meta-divider {
+  width: 1px;
+  height: 30px;
+  background-color: #d7cfc3;
+}
+
+.transition-detail-product-colors {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.transition-detail-product-color {
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  border-width: 2px;
+  border-style: solid;
+  border-color: #f7f4ed;
+}
+
+.transition-detail-product-color--coral {
+  background-color: #f97360;
+}
+
+.transition-detail-product-color--violet {
+  background-color: #6d4bd1;
+}
+
+.transition-detail-product-color--ivory {
+  background-color: #e8dfcf;
+}
+
+.transition-detail-product-color-label {
+  color: #6f6977;
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: 3px;
+}
+
+.transition-detail-product-purchase {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.transition-detail-product-price-share {
+  overflow: hidden;
+  border-radius: 18px;
+  background-color: #f97360;
+}
+
+.transition-detail-product-price {
+  min-width: 112px;
+  height: 54px;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+}
+
+.transition-detail-product-price-symbol {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.transition-detail-product-price-value {
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.transition-detail-product-back {
+  height: 54px;
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 18px;
+  background-color: #17162d;
+}
+
+.transition-detail-product-back-text {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.transition-detail-product-back-arrow {
+  color: #f97360;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.transition-detail-product-gesture {
+  color: #8a8390;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.transition-detail-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 28px 22px;
+  border-radius: 28px;
+  background-color: #111827;
+}
+
+.transition-detail-image-share {
+  width: 148px;
+  height: 148px;
+  margin-bottom: 8px;
+}
+
+.transition-detail-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 34px;
+}
+
+.transition-detail-kicker {
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.transition-detail-title {
+  color: #ffffff;
+  font-size: 21px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.transition-detail-desc {
+  color: #9ca3af;
+  font-size: 13px;
+  line-height: 19px;
+  text-align: center;
+}
+
+.transition-detail-card,
+.transition-detail-note {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 18px;
+  border-radius: 18px;
+}
+
+.transition-detail-card--dark,
+.transition-detail-note--dark {
+  background-color: #18181b;
+}
+
+.transition-detail-card--light,
+.transition-detail-note--light {
+  background-color: #ffffff;
+}
+
+.transition-detail-card-title,
+.transition-detail-note-title {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.transition-detail-card-title--dark,
+.transition-detail-note-title--dark {
+  color: #fafafa;
+}
+
+.transition-detail-card-title--light,
+.transition-detail-note-title--light {
+  color: #18181b;
+}
+
+.transition-detail-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+}
+
+.transition-detail-row--dark {
+  border-bottom-color: #27272a;
+}
+
+.transition-detail-row--light {
+  border-bottom-color: #e4e4e7;
+}
+
+.transition-detail-key {
+  width: 112px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.transition-detail-key--dark {
+  color: #60a5fa;
+}
+
+.transition-detail-key--light {
+  color: #2563eb;
+}
+
+.transition-detail-value {
+  flex: 1;
+  font-size: 12px;
+  line-height: 17px;
+  font-family: monospace;
+}
+
+.transition-detail-value--dark,
+.transition-detail-ready--dark,
+.transition-detail-state--dark,
+.transition-detail-note-text--dark {
+  color: #a1a1aa;
+}
+
+.transition-detail-value--light,
+.transition-detail-ready--light,
+.transition-detail-state--light,
+.transition-detail-note-text--light {
+  color: #52525b;
+}
+
+.transition-detail-ready,
+.transition-detail-state,
+.transition-detail-note-text {
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.transition-detail-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+
+.transition-detail-button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transition-detail-button--dark {
+  background-color: #27272a;
+}
+
+.transition-detail-button--light {
+  background-color: #f4f4f5;
+}
+
+.transition-detail-button--primary {
+  background-color: #2563eb;
+}
+
+.transition-detail-button-text {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.transition-detail-button-text--dark {
+  color: #e4e4e7;
+}
+
+.transition-detail-button-text--light {
+  color: #27272a;
+}
+
+.transition-detail-button-text--primary {
+  color: #ffffff;
+}

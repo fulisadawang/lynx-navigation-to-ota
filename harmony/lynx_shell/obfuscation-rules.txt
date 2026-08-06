@@ -1,0 +1,2 @@
+# 当前壳工程默认关闭 ArkTS 混淆。
+# 开启混淆前，请在真实 DevEco/Lynx 环境中验证 Native Module 类名、公开方法名和 XElement 行为注册不被改写。

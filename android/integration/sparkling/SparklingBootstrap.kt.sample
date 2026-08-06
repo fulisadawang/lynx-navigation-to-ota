@@ -1,0 +1,51 @@
+package com.example.lynxshell.integration.sparkling
+
+import android.app.Application
+import com.example.lynxshell.resource.ShellTemplateProvider
+import com.lynx.xelement.XElementBehaviors
+import com.tiktok.sparkling.hybridkit.HybridKit
+import com.tiktok.sparkling.hybridkit.config.BaseInfoConfig
+import com.tiktok.sparkling.hybridkit.config.SparklingHybridConfig
+import com.tiktok.sparkling.hybridkit.config.SparklingLynxConfig
+import com.tiktok.sparkling.method.registry.core.SparklingBridgeManager
+import com.tiktok.sparkling.method.router.close.RouterCloseMethod
+import com.tiktok.sparkling.method.router.open.RouterOpenMethod
+import com.tiktok.sparkling.method.storage.getItem.StorageGetItemMethod
+import com.tiktok.sparkling.method.storage.removeItem.StorageRemoveItemMethod
+import com.tiktok.sparkling.method.storage.setItem.StorageSetItemMethod
+
+/**
+ * 取自 Sparkling Playground 的启动顺序，仅作为 Lynx 4.0 对齐后的接入模板。
+ * Host Depend 必须由业务实现，不能使用空实现返回假成功。
+ */
+object SparklingBootstrap {
+    fun initialize(application: Application, isDebug: Boolean) {
+        HybridKit.init(application)
+        val baseInfo = BaseInfoConfig(isDebug = isDebug)
+        val lynxConfig = SparklingLynxConfig.build(application) {
+            addBehaviors(XElementBehaviors().create())
+            setTemplateProvider(ShellTemplateProvider(application))
+        }
+        val hybridConfig = SparklingHybridConfig.build(baseInfo) {
+            setLynxConfig(lynxConfig)
+        }
+        HybridKit.setHybridConfig(hybridConfig, application)
+        HybridKit.initLynxKit()
+
+        SparklingBridgeManager.registerIDLMethod("router.open", RouterOpenMethod::class.java) {
+            RouterOpenMethod()
+        }
+        SparklingBridgeManager.registerIDLMethod("router.close", RouterCloseMethod::class.java) {
+            RouterCloseMethod()
+        }
+        SparklingBridgeManager.registerIDLMethod("storage.setItem", StorageSetItemMethod::class.java) {
+            StorageSetItemMethod()
+        }
+        SparklingBridgeManager.registerIDLMethod("storage.getItem", StorageGetItemMethod::class.java) {
+            StorageGetItemMethod()
+        }
+        SparklingBridgeManager.registerIDLMethod("storage.removeItem", StorageRemoveItemMethod::class.java) {
+            StorageRemoveItemMethod()
+        }
+    }
+}

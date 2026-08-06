@@ -1,0 +1,13 @@
+{
+  "name": "lynx_shell",
+  "version": "1.0.0",
+  "description": "Lynx 4.0 HarmonyOS shell entry module",
+  "main": "",
+  "author": "Lynx Shell",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@lynx/lynx-shell-kit": "file:../lynx_shell_kit"
+  },
+  "devDependencies": {},
+  "dynamicDependencies": {}
+}

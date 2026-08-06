@@ -1,0 +1,10 @@
+{
+  "color": [
+    { "name": "start_window_background", "value": "#F6F7F9" },
+    { "name": "shell_background", "value": "#F6F7F9" },
+    { "name": "shell_surface", "value": "#FFFFFF" },
+    { "name": "shell_text_primary", "value": "#111827" },
+    { "name": "shell_text_secondary", "value": "#6B7280" },
+    { "name": "shell_brand", "value": "#FF4E5A" }
+  ]
+}

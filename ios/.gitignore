@@ -1,0 +1,5 @@
+Pods/
+DerivedData/
+OtaIOSSDK/.build/
+*.xcworkspace/xcuserdata/
+**/xcuserdata/

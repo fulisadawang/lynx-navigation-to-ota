@@ -1,0 +1,40 @@
+name: LynxShell
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: '13.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CLANG_ENABLE_MODULES: YES
+    IPHONEOS_DEPLOYMENT_TARGET: '13.0'
+targets:
+  LynxShell:
+    type: application
+    platform: iOS
+    deploymentTarget: '13.0'
+    sources:
+      # App Target 只编译 Sample 宿主；Lynx 实现由 Podfile 中的 LynxShellKit 提供。
+      - path: LynxShellSample
+        excludes:
+          - Resources/Bundles
+          - Supporting/Info.plist
+          - Supporting/Info-Debug.plist
+      - path: LynxShellSample/Resources/Bundles
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.lynxshell
+        TARGETED_DEVICE_FAMILY: '1,2'
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # XElement Behavior/AutoRegistry 位于 Objective-C 静态 Framework 中。
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -ObjC
+      configs:
+        Debug:
+          INFOPLIST_FILE: LynxShellSample/Supporting/Info-Debug.plist
+        Release:
+          INFOPLIST_FILE: LynxShellSample/Supporting/Info.plist
