@@ -489,6 +489,39 @@ current 缺失/损坏：忽略 30 分钟门控，进入原生 Loading
 - [NAVIGATION_README.md](NAVIGATION_README.md)
 - [ROUTING.md](ROUTING.md)
 
+服务端开发者请阅读 [OTA_SERVER_API_CONTRACT.md](OTA_SERVER_API_CONTRACT.md)。该文档按当前
+三端实际代码列出了客户端对接的 5 个 OTA API、OSS/CDN Bundle 下载契约、请求头、请求/响应
+JSON、错误状态、CI/CD 发布边界和 HarmonyOS 平台兼容要求。
+
+服务端最小返回模型可以概括为：
+
+```json
+{
+  "env": "TEST",
+  "hostApp": "capp",
+  "lynxAppId": "10000001",
+  "releaseId": "r20260629_001",
+  "platform": "android",
+  "status": "ACTIVE",
+  "changedBundles": [
+    {
+      "pageId": 10000001,
+      "bundlePath": "pages/10000001/home.lynx.bundle",
+      "bundleUrl": "https://cdn.example.com/home.lynx.bundle",
+      "bundleSha256": "sha256:<64位小写十六进制>",
+      "size": 524288,
+      "required": true,
+      "prefetch": true
+    }
+  ]
+}
+```
+
+其中 `bundlePath` 是服务端必须保留的精确 Bundle 身份，不能只返回 `bundleName`；
+`bundleUrl` 是客户端随后直接读取的 OSS/CDN 地址，不携带 OTA API token。当前服务端正式
+平台枚举仍为 `android/ios`，HarmonyOS 的临时 `serverPlatform=android` 兼容方式及正式放开
+`harmony` 所需的服务端改动，均已在契约文档中标明。
+
 ### 三端 OTA 边界
 
 三端现在都保留同一条明确的 OTA 调用边界：
