@@ -37,6 +37,18 @@ LynxNativeShells-4.0-XElement-Full-Android-iOS-Harmony/
 三端对齐主线是根目录的 `android/`、`ios/`、`harmony/`。此前独立的
 `LynxScreens-Android` 工程不属于本仓库，避免与当前 Activity-first Router 混淆。
 
+## GitHub Pages API 文档
+
+仓库已提供一份可直接发布的静态 API 文档页：
+
+- 本地文件：[docs/index.html](docs/index.html)
+- 在线入口（启用 GitHub Pages 后）：`https://fulisadawang.github.io/lynx-navigation-to-ota/`
+- 页面内容：接口搜索与切换、请求头、全量/定向 `latest-bundle-list`、Manifest、策略匹配、
+  结果上报、Bundle 校验、错误处理和三端状态。
+
+在 GitHub 仓库设置中选择 **Settings → Pages → Deploy from a branch → `main` / `/docs`**，
+保存后即可发布。页面中的示例令牌、Base URL 和 CDN 地址都是占位符，不包含真实凭证。
+
 ## 平台实现
 
 | 平台 | 原生页面模型 | Runtime 入口 | Bundle 容器 |
