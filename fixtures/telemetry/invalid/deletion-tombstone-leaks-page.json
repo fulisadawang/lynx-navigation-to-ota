@@ -1,0 +1,8 @@
+{
+  "kind": "deletion_tombstone",
+  "deletionRequestId": "delete_req_bad_01",
+  "oldSubjectRef": "subject_old_001",
+  "requestedAtUnixMs": 1760000700000,
+  "attemptState": "pending",
+  "pageViewId": "pv_should_not_be_here"
+}

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "configVersion": "config_bad_01",
+  "publishedAtUnixMs": 1760000000000,
+  "expiresAtUnixMs": 1760003600000,
+  "ttlSeconds": 3600,
+  "failOpen": false,
+  "killSwitch": { "enabled": false },
+  "switches": {
+    "upload": true,
+    "page": true,
+    "performance": true,
+    "exposure": true,
+    "business": true,
+    "diskQueue": true,
+    "diagnostics": false,
+    "backgroundRuntime": true
+  },
+  "sampling": { "page": 1, "performance": 0.1, "exposure": 0.05, "bridge": 0.1, "business": 0.1 },
+  "budgets": {
+    "maxBatchBytes": 70000,
+    "maxQueueBytes": 1048576,
+    "maxEventsPerPageView": 200,
+    "maxExposurePerPageView": 100,
+    "maxPerformanceEntries": 100,
+    "maxAttributes": 32
+  },
+  "deliveryOwner": "internal"
+}

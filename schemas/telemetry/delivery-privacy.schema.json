@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lynx-router.invalid/schemas/telemetry/delivery-privacy-1.0.0.schema.json",
+  "title": "Lynx Router Telemetry Delivery and Privacy Contracts",
+  "description": "Batch ACK 与 opt-out deletion tombstone。Tombstone 独立于普通 Telemetry 队列。",
+  "oneOf": [
+    { "$ref": "#/$defs/batchAck" },
+    { "$ref": "#/$defs/deletionTombstone" }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "batchAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "batchId", "acceptedEventIds", "rejected", "serverTimeUnixMs"],
+      "properties": {
+        "kind": { "const": "batch_ack" },
+        "batchId": { "$ref": "#/$defs/id" },
+        "acceptedEventIds": { "type": "array", "items": { "$ref": "#/$defs/id" }, "maxItems": 10000 },
+        "rejected": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["eventId", "code", "retryable"],
+            "properties": {
+              "eventId": { "$ref": "#/$defs/id" },
+              "code": { "type": "string", "enum": ["INVALID_SCHEMA", "UNAUTHORIZED", "RATE_LIMITED", "SERVER_ERROR", "TOO_LARGE", "REDACTED"] },
+              "retryable": { "type": "boolean" }
+            }
+          }
+        },
+        "serverTimeUnixMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "deletionTombstone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "deletionRequestId", "oldSubjectRef", "requestedAtUnixMs", "attemptState"],
+      "properties": {
+        "kind": { "const": "deletion_tombstone" },
+        "deletionRequestId": { "$ref": "#/$defs/id" },
+        "oldSubjectRef": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+        "requestedAtUnixMs": { "type": "integer", "minimum": 0 },
+        "attemptState": { "type": "string", "enum": ["pending", "in_flight", "retryable_failure", "acknowledged"] },
+        "attemptCount": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "lastAttemptAtUnixMs": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    }
+  }
+}

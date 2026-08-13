@@ -1,0 +1,9 @@
+{
+  "kind": "batch_ack",
+  "batchId": "batch_bad_01",
+  "acceptedEventIds": [],
+  "rejected": [
+    { "eventId": "evt_bad_01", "code": "RETRY_FOREVER", "retryable": true }
+  ],
+  "serverTimeUnixMs": 1760000800000
+}

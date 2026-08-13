@@ -1,0 +1,9 @@
+{
+  "kind": "batch_ack",
+  "batchId": "batch_001",
+  "acceptedEventIds": ["evt_page_first_screen_01", "evt_sampled_page_view_01"],
+  "rejected": [
+    { "eventId": "evt_invalid_001", "code": "INVALID_SCHEMA", "retryable": false }
+  ],
+  "serverTimeUnixMs": 1760000800000
+}

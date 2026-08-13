@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lynx-router.invalid/schemas/telemetry/remote-config-1.0.0.schema.json",
+  "title": "Lynx Router Telemetry Remote Config",
+  "description": "Remote Config Schema 1.0.0。Remote payload 不得覆盖宿主本地硬关闭；本地覆盖在合并层表达。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "configVersion", "publishedAtUnixMs", "expiresAtUnixMs", "ttlSeconds", "failOpen", "killSwitch", "switches", "sampling", "budgets", "deliveryOwner"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "configVersion": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,64}$" },
+    "publishedAtUnixMs": { "type": "integer", "minimum": 0 },
+    "expiresAtUnixMs": { "type": "integer", "minimum": 0 },
+    "ttlSeconds": { "type": "integer", "minimum": 60, "maximum": 604800 },
+    "failOpen": { "type": "boolean", "const": true },
+    "killSwitch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "reasonCode": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9._:-]{1,64}$" }
+      }
+    },
+    "switches": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["upload", "page", "performance", "exposure", "business", "diskQueue", "diagnostics", "backgroundRuntime"],
+      "properties": {
+        "upload": { "type": "boolean" },
+        "page": { "type": "boolean" },
+        "performance": { "type": "boolean" },
+        "exposure": { "type": "boolean" },
+        "business": { "type": "boolean" },
+        "diskQueue": { "type": "boolean" },
+        "diagnostics": { "type": "boolean" },
+        "backgroundRuntime": { "type": "boolean", "const": false }
+      }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "performance", "exposure", "bridge", "business"],
+      "properties": {
+        "page": { "type": "number", "minimum": 0, "maximum": 1 },
+        "performance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "exposure": { "type": "number", "minimum": 0, "maximum": 1 },
+        "bridge": { "type": "number", "minimum": 0, "maximum": 1 },
+        "business": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxBatchBytes", "maxQueueBytes", "maxEventsPerPageView", "maxExposurePerPageView", "maxPerformanceEntries", "maxAttributes"],
+      "properties": {
+        "maxBatchBytes": { "type": "integer", "minimum": 1024, "maximum": 65536 },
+        "maxQueueBytes": { "type": "integer", "minimum": 65536, "maximum": 104857600 },
+        "maxEventsPerPageView": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxExposurePerPageView": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "maxPerformanceEntries": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxAttributes": { "type": "integer", "minimum": 1, "maximum": 32 }
+      }
+    },
+    "deliveryOwner": { "type": "string", "enum": ["internal", "external"] },
+    "localOverrideContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostOwnsKillSwitch", "hostMayOnlyDisable"],
+      "properties": {
+        "hostOwnsKillSwitch": { "type": "boolean", "const": true },
+        "hostMayOnlyDisable": { "type": "boolean", "const": true }
+      }
+    }
+  }
+}

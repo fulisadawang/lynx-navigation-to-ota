@@ -83,6 +83,10 @@ dependencies {
     implementation("com.facebook.fresco:webpsupport:2.3.0")
     implementation("com.facebook.fresco:animated-base:2.3.0")
     implementation("com.squareup.okhttp3:okhttp:4.9.0")
+
+    // Telemetry Coordinator 是纯 JVM 状态机；测试不需要创建 LynxView 或 Android Activity。
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.24")
 }
 
 afterEvaluate {
