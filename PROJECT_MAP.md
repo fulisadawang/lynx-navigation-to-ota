@@ -20,6 +20,7 @@ ARCHITECTURE.md           三端页面模型与 Runtime 分层
 ROUTER_CONTRACT_V1.md     Android/iOS/HarmonyOS 页面语义契约
 BRIDGE_CONTRACT.md        NativeModules 调用协议
 ROUTING.md                Bundle、Scheme 与 params 路由规则
+BUNDLE_GLOBAL_ACCELERATION.md  Bundle 全球 CDN、OSS 传输加速、缓存与发布验收方案
 NAVIGATION_README.md      高级原生栈与返回/结果协议
 TRANSITIONS_README.md     原生容器转场协议
 SECURITY.md               Bundle、HTTPS、缓存和运行时安全边界

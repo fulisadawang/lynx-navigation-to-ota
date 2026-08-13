@@ -29,6 +29,7 @@ LynxNativeShells-4.0-XElement-Full-Android-iOS-Harmony/
 ├── NAVIGATION_README.md
 ├── TRANSITIONS_README.md
 ├── ROUTING.md
+├── BUNDLE_GLOBAL_ACCELERATION.md # Bundle 全球 CDN、OSS 加速与发布验收
 ├── SECURITY.md
 ├── SOURCE_MAPPING.md
 └── VALIDATION.md
