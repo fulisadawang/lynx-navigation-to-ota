@@ -19,6 +19,7 @@ import java.net.URI
 class LynxShellSampleApplication : Application() {
     private var startedActivityCount = 0
     private var hasCompletedInitialForeground = false
+    private var configurationChangePending = false
 
     override fun onCreate() {
         super.onCreate()
@@ -38,16 +39,25 @@ class LynxShellSampleApplication : Application() {
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
-                if (startedActivityCount == 0 && hasCompletedInitialForeground) {
+                if (startedActivityCount == 0 && hasCompletedInitialForeground && !configurationChangePending) {
                     // 从后台回到前台：再次拉取全量 latest-bundle-list，并后台更新有变化的包。
                     LynxRouter.onApplicationForeground()
                 }
+                configurationChangePending = false
                 startedActivityCount += 1
                 hasCompletedInitialForeground = true
             }
 
             override fun onActivityStopped(activity: Activity) {
                 startedActivityCount = (startedActivityCount - 1).coerceAtLeast(0)
+                if (activity.isChangingConfigurations) {
+                    configurationChangePending = true
+                    return
+                }
+                if (startedActivityCount == 0 && hasCompletedInitialForeground) {
+                    // 所有 Activity 都停止后才认定进程进入后台；单个页面 onPause 只代表页面隐藏。
+                    LynxRouter.onApplicationBackground()
+                }
             }
 
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit

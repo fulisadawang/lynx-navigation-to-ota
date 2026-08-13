@@ -221,6 +221,25 @@ export default class TelemetryCoordinator {
     this.emit('lynx.page.runtime_ready', 'page', 'lynx_runtime', handle);
   }
 
+  /** Provider/首屏失败只记录低基数原因，不把 URL、堆栈或本机路径写入事件。 */
+  markPageFailed(
+    pageViewId: string,
+    renderAttemptId: string = '',
+    generation: number = 0,
+    stage: string = 'render',
+    reasonCode: string = 'unknown'
+  ): void {
+    const handle = this.pagesById.get(pageViewId);
+    if (handle === undefined || !this.isCurrent(handle, renderAttemptId, generation)) {
+      this.dropStaleCallback(pageViewId, renderAttemptId, generation);
+      return;
+    }
+    this.emit('lynx.page.failed', 'page', 'native', handle, undefined, {
+      failureStage: this.safeString(stage) as Object,
+      reasonCode: this.safeString(reasonCode) as Object
+    });
+  }
+
   /** UIAbility 的 App 前后台事实与 ArkUI Page 可见状态正交。 */
   onApplicationBackground(): void {
     if (this.appState === TelemetryAppState.BACKGROUND) {

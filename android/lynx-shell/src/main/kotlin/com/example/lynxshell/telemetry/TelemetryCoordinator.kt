@@ -154,6 +154,15 @@ class TelemetryCoordinator(
 
     /** prepare 失败只关联 Attempted Snapshot，不读取失败后的 current 伪造 Resolved Snapshot。 */
     fun failPrepare(generation: Long, reasonCode: String): Boolean {
+        return failAttempt(generation, reasonCode, "prepare")
+    }
+
+    /** LynxView 已创建后的首屏/Provider 失败；与 prepare 失败分开归因。 */
+    fun failRender(generation: Long, reasonCode: String): Boolean {
+        return failAttempt(generation, reasonCode, "render")
+    }
+
+    private fun failAttempt(generation: Long, reasonCode: String, stage: String): Boolean {
         if (!isCurrentGeneration(generation)) return false
         attemptState = RenderAttemptState.UNUSABLE
         val safeReason = sanitizeValue(reasonCode)
@@ -162,7 +171,7 @@ class TelemetryCoordinator(
             category = TelemetryCategory.PAGE,
             includePageIdentity = true,
             attributes = mapOf(
-                "failureStage" to "prepare",
+                "failureStage" to stage,
                 "reasonCode" to safeReason,
             ),
         )

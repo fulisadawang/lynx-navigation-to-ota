@@ -11,6 +11,52 @@ public final class LynxNoopTelemetrySink: LynxTelemetrySink {
     public func record(_ event: LynxTelemetryEvent) {}
 }
 
+/**
+ * iOS Scene 生命周期适配器的弱引用注册表。
+ *
+ * SceneDelegate/宿主负责调用 LynxRouter.onApplicationForeground/Background；这里仅把事实
+ * 广播给仍存活的页面协调器，不持有 UIViewController 强引用。
+ */
+public enum LynxTelemetryCoordinatorRegistry {
+    private final class WeakBox {
+        weak var value: LynxTelemetryCoordinator?
+        init(_ value: LynxTelemetryCoordinator) { self.value = value }
+    }
+
+    private static let lock = NSLock()
+    private static var boxes: [WeakBox] = []
+
+    public static func register(_ coordinator: LynxTelemetryCoordinator) {
+        lock.lock()
+        defer { lock.unlock() }
+        boxes.removeAll { $0.value == nil }
+        if !boxes.contains(where: { $0.value === coordinator }) {
+            boxes.append(WeakBox(coordinator))
+        }
+    }
+
+    public static func unregister(_ coordinator: LynxTelemetryCoordinator) {
+        lock.lock()
+        boxes.removeAll { $0.value == nil || $0.value === coordinator }
+        lock.unlock()
+    }
+
+    public static func onApplicationForeground() {
+        snapshot().forEach { $0.onApplicationForeground() }
+    }
+
+    public static func onApplicationBackground() {
+        snapshot().forEach { $0.onApplicationBackground() }
+    }
+
+    private static func snapshot() -> [LynxTelemetryCoordinator] {
+        lock.lock()
+        defer { lock.unlock() }
+        boxes.removeAll { $0.value == nil }
+        return boxes.compactMap(\.value)
+    }
+}
+
 /// 本地 Debug Sink，仅用于调试/单测，生产环境不得把它当作 durable uploader。
 public final class LynxDebugTelemetrySink: LynxTelemetrySink {
     private let lock = NSLock()
@@ -92,6 +138,9 @@ public final class LynxTelemetryPageHandle {
     fileprivate var sequenceNo = 0
     fileprivate var attemptGeneration: Int
     fileprivate var activeStartedAtMonotonic: TimeInterval?
+
+    /// 当前 render attempt generation，供容器把 Lynx 回调绑定到正确的一次加载。
+    public var currentAttemptGeneration: Int { attemptGeneration }
 
     fileprivate init(identity: LynxTelemetryIdentity, attempted: LynxAttemptedBundleSnapshot) {
         self.pageViewId = identity.pageViewId
@@ -244,6 +293,31 @@ public final class LynxTelemetryCoordinator {
             return
         }
         emit(eventName: "lynx.page.runtime_ready", category: "page", source: "lynx_runtime", handle: handle)
+    }
+
+    /** Provider/首屏失败只记录低基数原因，不把原始 URL、堆栈或本机路径写入事件。 */
+    public func markPageFailed(
+        pageViewId: String,
+        renderAttemptId: String? = nil,
+        generation: Int? = nil,
+        stage: String,
+        reasonCode: String
+    ) {
+        guard let handle = page(pageViewId),
+              isCurrent(handle, renderAttemptId: renderAttemptId, generation: generation) else {
+            _ = dropStaleCallback(pageViewId: pageViewId, renderAttemptId: renderAttemptId, generation: generation)
+            return
+        }
+        emit(
+            eventName: "lynx.page.failed",
+            category: "page",
+            source: "native",
+            handle: handle,
+            attributes: [
+                "failureStage": .string(Self.safeString(stage)),
+                "reasonCode": .string(Self.safeString(reasonCode)),
+            ]
+        )
     }
 
     /// App 生命周期与 UIViewController 页面可见性正交；SceneDelegate 应调用这两个入口。

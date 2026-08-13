@@ -29,6 +29,15 @@ import PageBundleRuntimeRegistry, {
   PageBundleRuntime,
   PreparedPageBundle
 } from '../ota/OtaModels';
+import TelemetryCoordinator from '../telemetry/TelemetryCoordinator';
+import {
+  AttemptedBundleSnapshot,
+  ResolvedBundleSnapshot,
+  TelemetryBundleSource,
+  TelemetryIdentity,
+  TelemetryPageHandle
+} from '../telemetry/TelemetryModels';
+import TelemetryRegistry from '../telemetry/TelemetryRegistry';
 
 /**
  * 单页面 Lynx 宿主。
@@ -62,10 +71,17 @@ export struct LynxContainer {
   private rollbackInProgress: boolean = false;
   private viewWidth: number | string = '100%';
   private viewHeight: number | string = '100%';
+  /** 监控只观察 ArkUI/Lynx 事实；默认 Noop Sink，不改变页面加载。 */
+  private telemetryCoordinator: TelemetryCoordinator = new TelemetryCoordinator();
+  private telemetryHandle: TelemetryPageHandle | null = null;
+  private telemetryRenderAttemptId: string = '';
+  private telemetryGeneration: number = 0;
 
   aboutToAppear(): void {
     LynxNavigator.register(this.request);
     ShellWindowController.apply(this.request);
+    this.initializeTelemetry();
+    this.telemetryCoordinator.markPageVisible(this.request.entryID, 'arkui_page_appear');
 
     // 被下一页覆盖时保留 LynxView 和 LynxContext；返回当前 Page 后恢复前台事件。
     // 首次创建仍由 LynxView.onCreate 完成 register/viewAppear，避免重复注册。
@@ -101,11 +117,14 @@ export struct LynxContainer {
       this.prepareOtaBundle();
     } else {
       this.extraTiming.prepareTemplateEnd = new Date().getTime();
+      this.beginTelemetryAttempt();
+      this.resolveTelemetry(null, '');
       this.showLynxView = true;
     }
   }
 
   aboutToDisappear(): void {
+    this.telemetryCoordinator.markPageHidden(this.request.entryID, 'arkui_page_disappear');
     const disappearingContext = this.lynxContext;
     if (disappearingContext !== null) {
       disappearingContext.onEnterBackground();
@@ -120,6 +139,8 @@ export struct LynxContainer {
         return;
       }
       ShellMessageHub.sendLifecycle(this.request.entryID, 'destroyed', 'arkui_page_removed');
+      this.telemetryCoordinator.markPageDestroyed(this.request.entryID, 'arkui_page_removed');
+      TelemetryRegistry.unregister(this.telemetryCoordinator);
       ShellMessageHub.unregister(this.request.entryID);
       this.cancelPendingRequests();
       if (this.lynxContext === disappearingContext) {
@@ -143,9 +164,28 @@ export struct LynxContainer {
 
   private handleFirstScreen(): void {
     this.isLoading = false;
+    if (this.telemetryRenderAttemptId.length > 0) {
+      this.telemetryCoordinator.markRuntimeReady(
+        this.request.entryID,
+        this.telemetryRenderAttemptId,
+        this.telemetryGeneration
+      );
+      this.telemetryCoordinator.markFirstScreen(
+        this.request.entryID,
+        this.telemetryRenderAttemptId,
+        this.telemetryGeneration
+      );
+    }
   }
 
   private handleLoadError(message: string): void {
+    this.telemetryCoordinator.markPageFailed(
+      this.request.entryID,
+      this.telemetryRenderAttemptId,
+      this.telemetryGeneration,
+      this.request.isOtaRequest() ? 'prepare_or_render' : 'render',
+      message.length > 0 ? message : 'lynx_load_failed'
+    );
     if (this.request.isOtaRequest() && !this.rollbackAttempted && !this.rollbackInProgress) {
       this.attemptRollback(message.length > 0 ? message : 'Lynx 首屏加载失败');
       return;
@@ -188,6 +228,7 @@ export struct LynxContainer {
     this.prepareSignal = new OtaPrepareSignal();
     const signal = this.prepareSignal;
     const generation = ++this.prepareGeneration;
+    this.beginTelemetryAttempt();
     runtime.prepare(this.request.lynxAppId, this.request.bundleName, signal)
       .then((prepared: PreparedPageBundle) => {
         if (signal.cancelled || generation !== this.prepareGeneration ||
@@ -202,6 +243,7 @@ export struct LynxContainer {
           runtime.storageRoot()
         );
         this.extraTiming.prepareTemplateEnd = new Date().getTime();
+        this.resolveTelemetry(prepared, prepared.filePath);
         this.preparing = false;
         this.showLynxView = true;
       })
@@ -210,6 +252,13 @@ export struct LynxContainer {
           return;
         }
         this.preparing = false;
+        this.telemetryCoordinator.markPageFailed(
+          this.request.entryID,
+          this.telemetryRenderAttemptId,
+          this.telemetryGeneration,
+          'prepare',
+          error.message
+        );
         this.isLoading = false;
         this.errorMessage = `OTA Bundle 准备失败：${error.message}`;
       });
@@ -262,6 +311,103 @@ export struct LynxContainer {
       ShellMessageHub.unregister(this.request.entryID);
       this.lynxContext = null;
     }
+  }
+
+  /** 初始化页面身份；Native entryID/sessionID 是唯一身份来源。 */
+  private initializeTelemetry(): void {
+    if (this.telemetryHandle !== null) {
+      return;
+    }
+    const identity: TelemetryIdentity = {
+      navigationId: `navigation_${this.request.entryID}`,
+      navigationSessionId: this.request.sessionID,
+      entryId: this.request.entryID,
+      pageViewId: `page_${this.request.entryID}`,
+      renderAttemptId: `attempt_${this.request.entryID}_0`
+    };
+    this.telemetryHandle = this.telemetryCoordinator.startPage(
+      identity,
+      this.makeTelemetryAttemptedSnapshot(1)
+    );
+    TelemetryRegistry.register(this.telemetryCoordinator);
+    this.telemetryCoordinator.recordNavigationAdmission(
+      identity.navigationId,
+      true,
+      identity
+    );
+  }
+
+  /** 每次初始加载、重试或回滚前冻结候选 Bundle。 */
+  private beginTelemetryAttempt(): void {
+    if (this.telemetryHandle === null) {
+      this.initializeTelemetry();
+    }
+    if (this.telemetryHandle === null) {
+      return;
+    }
+    this.telemetryGeneration += 1;
+    const identity = this.telemetryHandle.beginRenderAttempt(
+      this.makeTelemetryAttemptedSnapshot(this.telemetryGeneration)
+    );
+    this.telemetryRenderAttemptId = identity.renderAttemptId;
+    this.telemetryGeneration = this.telemetryHandle.attemptGeneration;
+  }
+
+  /** prepare/render 成功后冻结 resolved；filePath 只用于当前 Provider。 */
+  private resolveTelemetry(prepared: PreparedPageBundle | null, filePath: string): void {
+    if (this.telemetryHandle === null) {
+      return;
+    }
+    const snapshot: ResolvedBundleSnapshot = {
+      kind: 'resolved',
+      bundleSource: this.telemetryBundleSource(),
+      lynxAppId: this.request.lynxAppId.length > 0 ? this.request.lynxAppId : undefined,
+      bundleName: this.telemetryBundleName(),
+      telemetryRouteKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.telemetryBundleName(),
+      releaseId: prepared?.releaseId,
+      bundleSha256: prepared?.sha256,
+      resolvedAtUnixMs: Date.now(),
+      internalLocalPath: filePath.length > 0 ? filePath : undefined
+    };
+    this.telemetryCoordinator.resolve(
+      this.request.entryID,
+      snapshot,
+      this.telemetryRenderAttemptId,
+      this.telemetryGeneration
+    );
+  }
+
+  private makeTelemetryAttemptedSnapshot(generation: number): AttemptedBundleSnapshot {
+    return {
+      kind: 'attempted',
+      bundleSource: this.telemetryBundleSource(),
+      lynxAppId: this.request.lynxAppId.length > 0 ? this.request.lynxAppId : undefined,
+      bundleName: this.telemetryBundleName(),
+      telemetryRouteKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.telemetryBundleName(),
+      prepareStartedAtUnixMs: Date.now(),
+      attemptGeneration: generation
+    };
+  }
+
+  private telemetryBundleSource(): TelemetryBundleSource {
+    if (this.request.isOtaRequest()) {
+      return TelemetryBundleSource.OTA;
+    }
+    if (this.request.bundleUrl.toLowerCase().startsWith('http')) {
+      return TelemetryBundleSource.DIRECT_HTTPS;
+    }
+    if (this.request.bundleUrl.toLowerCase().startsWith('assets://') ||
+      this.request.bundleUrl.toLowerCase().endsWith('.lynx.bundle')) {
+      return TelemetryBundleSource.ASSETS;
+    }
+    return TelemetryBundleSource.LOCAL_FILE;
+  }
+
+  private telemetryBundleName(): string {
+    let value = this.request.bundleName.length > 0 ? this.request.bundleName : this.request.bundleUrl;
+    const segments = value.split('/');
+    value = segments[segments.length - 1];
+    return value.toLowerCase().endsWith('.lynx.bundle') ? value : 'page.lynx.bundle';
   }
 
   build() {

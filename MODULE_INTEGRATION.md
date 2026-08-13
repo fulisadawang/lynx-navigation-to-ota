@@ -156,6 +156,9 @@ class MyActivityBundleRuntime(...) : ActivityBundleRuntime {
 
 // Application 从后台回到前台时调用一次
 LynxRouter.onApplicationForeground()
+
+// Application/进程确认进入后台时调用一次
+LynxRouter.onApplicationBackground()
 ```
 
 页面缺包时，适配器内部应调用 `syncLatestBundleList(appId)`，只同步当前页面所属
@@ -267,6 +270,9 @@ try LynxRouter.install(to: navigationController, otaConfiguration: ota)
 
 // App 启动和每次回前台都可调用；重叠同步会由 Runtime 合并。
 LynxRouter.onApplicationForeground()
+
+// Scene 进入后台时调用；页面 VC hidden 与 App background 是两个独立状态。
+LynxRouter.onApplicationBackground()
 ```
 
 ### 原生打开 Lynx
@@ -311,6 +317,20 @@ try await LynxRouter.deleteAllOtaBundles()
 OTA 命中合法 `current` 时立即打开，并按 appId 做 30 分钟后台检查；缺包或校验失败会显示
 原生 Loading，等待定向下载、size/SHA 校验、staging 和原子激活。首屏失败最多回滚一次。
 直接 `https://...lynx.bundle` 仍然绕过 OTA，不写入 OTA Store。
+
+### 宿主 App 生命周期（监控旁路）
+
+Router 不会抢占业务 App 的生命周期。三端宿主需要把系统事实转交给两个公开入口：
+
+```text
+Android    Application/ProcessLifecycle：onApplicationForeground / onApplicationBackground
+iOS        SceneDelegate：sceneWillEnterForeground / sceneDidEnterBackground
+HarmonyOS  UIAbility：onForeground / onBackground
+```
+
+这些入口同时驱动 OTA 的启动/回前台同步（仅 foreground）和 Telemetry 的 App 状态广播；页面
+`onPause`、`viewWillDisappear`、`aboutToDisappear` 只表示页面可见性，不能替代 App background。
+监控默认 Noop Sink，不联网、不落盘，不会阻塞路由。
 
 调试表单也可使用便捷入口：
 

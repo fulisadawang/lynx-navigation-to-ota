@@ -138,6 +138,7 @@ struct PreparedOtaBundle {
     let bundleName: String
     let fileURL: URL
     let releaseId: String?
+    let sha256: String?
 }
 
 /**
@@ -321,14 +322,17 @@ public actor LynxOtaRuntime {
               FileManager.default.isReadableFile(atPath: url.path) else {
             throw LynxOtaError.unreadableBundle(url.path)
         }
-        let releaseId = try await withSDK { sdk in
-            await sdk.current(lynxAppId: lynxAppId)?.context.releaseId
+        let current = try await withSDK { sdk in
+            await sdk.current(lynxAppId: lynxAppId)
         }
+        let releaseId = current?.context.releaseId
+        let sha256 = current?.bundles.first(where: { $0.bundlePath == bundleName })?.bundleSha256
         return PreparedOtaBundle(
             lynxAppId: lynxAppId,
             bundleName: bundleName,
             fileURL: url,
-            releaseId: releaseId
+            releaseId: releaseId,
+            sha256: sha256
         )
     }
 

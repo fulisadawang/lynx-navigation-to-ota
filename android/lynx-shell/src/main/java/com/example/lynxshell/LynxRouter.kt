@@ -9,6 +9,7 @@ import com.example.lynxshell.routing.LynxNavigationOptions
 import com.example.lynxshell.routing.LynxNavigationResult
 import com.example.lynxshell.routing.LynxNavigator
 import com.example.lynxshell.routing.LynxRouteParser
+import com.example.lynxshell.telemetry.TelemetryCoordinatorRegistry
 import org.json.JSONObject
 
 /**
@@ -47,6 +48,12 @@ object LynxRouter {
      */
     fun onApplicationForeground() {
         LynxShell.activityBundleRuntime()?.onApplicationForeground()
+        TelemetryCoordinatorRegistry.onApplicationForeground()
+    }
+
+    /** 宿主进程进入后台时调用；页面可见性与 App 状态保持正交。 */
+    fun onApplicationBackground() {
+        TelemetryCoordinatorRegistry.onApplicationBackground()
     }
 
     /** 按 appId 直接删除 Router 内置 OTA 的全部下载 Bundle；只适合诊断/验收入口。 */

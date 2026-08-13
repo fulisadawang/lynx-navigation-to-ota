@@ -162,7 +162,7 @@ export class TelemetryPageHandle {
   }
 
   /** 重试/回滚保留 pageViewId，但必须生成新的 renderAttemptId。 */
-  beginRenderAttempt(attemptedBundle: AttemptedBundleSnapshot, transactionId?: string): void {
+  beginRenderAttempt(attemptedBundle: AttemptedBundleSnapshot, transactionId?: string): TelemetryIdentity {
     this.attemptGeneration = Math.max(this.attemptGeneration + 1, attemptedBundle.attemptGeneration);
     this.identity = {
       navigationId: this.identity.navigationId,
@@ -176,5 +176,6 @@ export class TelemetryPageHandle {
     this.attemptedBundle = attemptedBundle;
     this.resolvedBundle = undefined;
     this.pageOpenReported = false;
+    return this.identity;
   }
 }

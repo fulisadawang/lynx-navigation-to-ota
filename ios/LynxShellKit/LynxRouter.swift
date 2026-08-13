@@ -34,8 +34,14 @@ public enum LynxRouter {
 
     /** App 每次回前台调用；按业务约定不做时间门控，触发 host 全量同步。 */
     public static func onApplicationForeground() {
+        LynxTelemetryCoordinatorRegistry.onApplicationForeground()
         guard let runtime = LynxShell.otaRuntime() else { return }
         Task { await runtime.synchronizeAllBundles() }
+    }
+
+    /** Scene 进入后台时调用；不会把页面 hidden 误当成 App background。 */
+    public static func onApplicationBackground() {
+        LynxTelemetryCoordinatorRegistry.onApplicationBackground()
     }
 
     /** 只暴露是否已配置，不暴露 clientToken、服务地址或磁盘目录。 */

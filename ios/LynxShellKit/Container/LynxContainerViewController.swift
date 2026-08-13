@@ -31,6 +31,11 @@ final class LynxContainerViewController: UIViewController {
     private var otaPrepareTask: Task<Void, Never>?
     private var otaRecoveryUsed = false
     private var otaRecoveryInFlight = false
+    /** Telemetry 只观察宿主事实，默认 Noop Sink，不改变 UIKit/Lynx 加载流程。 */
+    private let telemetryCoordinator = LynxTelemetryCoordinator()
+    private var telemetryHandle: LynxTelemetryPageHandle?
+    private var telemetryRenderAttemptId: String?
+    private var telemetryGeneration = 0
 
     init(
         request: LynxPageRequest,
@@ -54,6 +59,7 @@ final class LynxContainerViewController: UIViewController {
     }
 
     deinit {
+        LynxTelemetryCoordinatorRegistry.unregister(telemetryCoordinator)
         ShellMessageHub.unregister(pageId: navigationEntryID)
         otaPrepareTask?.cancel()
         templateProvider?.cancel()
@@ -63,6 +69,7 @@ final class LynxContainerViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         applyChrome()
+        initializeTelemetry()
 
         barrierControl.frame = view.bounds
         barrierControl.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -101,6 +108,7 @@ final class LynxContainerViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        if telemetryHandle == nil { initializeTelemetry() }
         let animateChrome = animated &&
             ShellNavigator.shared.allowsSystemChromeAnimation(for: self)
         navigationController?.setNavigationBarHidden(
@@ -113,6 +121,10 @@ final class LynxContainerViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        telemetryCoordinator.markPageHidden(
+            navigationEntryID,
+            reason: isMovingFromParent ? "detached" : "coveredByPage"
+        )
         // UIKit 的 VC 生命周期是 iOS 端 Native Page Stack 的事实源；这里同步 Lynx
         // Runtime，而不是让页面自己猜测“被覆盖”和“被销毁”的区别。
         lynxView?.onEnterBackground()
@@ -133,6 +145,7 @@ final class LynxContainerViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        telemetryCoordinator.markPageVisible(navigationEntryID, reason: "uikit_view_did_appear")
         lynxView?.onEnterForeground()
         sendLifecycle(state: "active", reason: "uikit_view_did_appear")
     }
@@ -140,6 +153,10 @@ final class LynxContainerViewController: UIViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isMovingFromParent {
+            telemetryCoordinator.markPageDestroyed(
+                navigationEntryID,
+                reason: "destroyed"
+            )
             sendLifecycle(state: "destroyed", reason: "uikit_view_did_disappear_pop")
             ShellMessageHub.unregister(pageId: navigationEntryID)
             ShellNavigator.shared.entryDidClose(navigationEntryID)
@@ -371,6 +388,75 @@ final class LynxContainerViewController: UIViewController {
         return value
     }
 
+    /** 初始化页面身份；Native 生成的 entry/pageView ID 不接受页面参数覆盖。 */
+    private func initializeTelemetry() {
+        guard telemetryHandle == nil else { return }
+        let identity = LynxTelemetryIdentity(
+            navigationSessionId: navigationSessionID,
+            entryId: navigationEntryID
+        )
+        let attempted = makeTelemetryAttemptedSnapshot(generation: 1)
+        telemetryHandle = telemetryCoordinator.startPage(
+            identity: identity,
+            attemptedBundle: attempted
+        )
+        LynxTelemetryCoordinatorRegistry.register(telemetryCoordinator)
+        telemetryCoordinator.recordNavigationAdmission(
+            navigationId: identity.navigationId,
+            accepted: true,
+            identity: identity
+        )
+    }
+
+    /** prepare 前冻结候选信息；URL 只转换为低基数 Bundle 名称，不写入监控。 */
+    private func makeTelemetryAttemptedSnapshot(generation: Int) -> LynxAttemptedBundleSnapshot {
+        LynxAttemptedBundleSnapshot(
+            source: telemetryBundleSource(),
+            bundleName: telemetryBundleName(),
+            telemetryRouteKey: request.resolvedRouteKey,
+            lynxAppId: request.lynxAppId,
+            prepareStartedAtUnixMs: Int64(Date().timeIntervalSince1970 * 1000),
+            attemptGeneration: generation
+        )
+    }
+
+    /** prepare/render 交付成功后冻结 resolved；绝对沙盒路径只用于当前 LynxView。 */
+    private func resolveTelemetry(prepared: PreparedOtaBundle?, localPath: String?) {
+        guard telemetryHandle != nil else { return }
+        let snapshot = LynxResolvedBundleSnapshot(
+            source: telemetryBundleSource(),
+            bundleName: telemetryBundleName(),
+            telemetryRouteKey: request.resolvedRouteKey,
+            lynxAppId: request.lynxAppId,
+            releaseId: prepared?.releaseId,
+            bundleSha256: prepared?.sha256,
+            resolvedAtUnixMs: Int64(Date().timeIntervalSince1970 * 1000),
+            internalLocalPath: localPath
+        )
+        _ = telemetryCoordinator.resolve(
+            pageViewId: navigationEntryID,
+            snapshot: snapshot,
+            renderAttemptId: telemetryRenderAttemptId,
+            generation: telemetryGeneration
+        )
+    }
+
+    private func telemetryBundleSource() -> LynxTelemetryBundleSource {
+        if request.isOtaRequest { return .ota }
+        if RemoteBundlePolicy.isRemote(request.bundleURL) { return .directHttps }
+        if request.bundleURL.lowercased().hasPrefix("assets://") ||
+            request.bundleURL.lowercased().hasSuffix(".lynx.bundle") {
+            return .assets
+        }
+        return .localFile
+    }
+
+    private func telemetryBundleName() -> String {
+        let logical = request.bundleName ?? request.bundleURL
+        let path = logical.split(separator: "/").last.map(String.init) ?? logical
+        return path.lowercased().hasSuffix(".lynx.bundle") ? path : "page.lynx.bundle"
+    }
+
     private func applyChrome() {
         title = request.title
         navigationItem.largeTitleDisplayMode = .never
@@ -403,6 +489,13 @@ final class LynxContainerViewController: UIViewController {
         otaPrepareTask?.cancel()
         otaPrepareTask = nil
         loadGeneration = UUID()
+        telemetryGeneration += 1
+        let attempted = makeTelemetryAttemptedSnapshot(generation: telemetryGeneration)
+        if let telemetryHandle {
+            let identity = telemetryHandle.beginRenderAttempt(attempted: attempted)
+            telemetryRenderAttemptId = identity.renderAttemptId
+            telemetryGeneration = telemetryHandle.currentAttemptGeneration
+        }
         if resetOtaRecovery {
             otaRecoveryUsed = false
             otaRecoveryInFlight = false
@@ -458,6 +551,10 @@ final class LynxContainerViewController: UIViewController {
                         return
                     }
                     self.preparedBundleData = data
+                    self.resolveTelemetry(
+                        prepared: prepared,
+                        localPath: prepared.fileURL.path
+                    )
                     self.loadingView.hide()
                     self.renderLynxView(generation: generation)
                 }
@@ -479,6 +576,12 @@ final class LynxContainerViewController: UIViewController {
     /** 已准备字节和普通 assets/HTTPS 共用同一 LynxView 创建链。 */
     private func renderLynxView(generation: UUID) {
         guard generation == loadGeneration else { return }
+
+        // Direct HTTPS/Assets 没有 OTA release，但仍需要一个已解析的 Bundle Snapshot，
+        // 这样页面打开耗时可以按同一 pageView/attempt 关联。OTA 路径在 prepare 成功处已解析。
+        if telemetryHandle?.resolvedBundle == nil {
+            resolveTelemetry(prepared: nil, localPath: nil)
+        }
 
         let provider = ShellTemplateProvider(
             allowHTTPInDebug: request.allowHTTPInDebug,
@@ -545,6 +648,15 @@ final class LynxContainerViewController: UIViewController {
     /** Provider/首屏错误时，OTA 页面只允许一次 previous/embedded 回滚。 */
     private func handleTemplateLoadFailure(generation: UUID, message: String) {
         guard generation == loadGeneration else { return }
+        if let telemetryRenderAttemptId {
+            telemetryCoordinator.markPageFailed(
+                pageViewId: navigationEntryID,
+                renderAttemptId: telemetryRenderAttemptId,
+                generation: telemetryGeneration,
+                stage: telemetryHandle?.resolvedBundle == nil ? "prepare" : "render",
+                reasonCode: message
+            )
+        }
         if request.isOtaRequest, !firstScreenReady, attemptOtaRecovery(generation: generation, reason: message) {
             return
         }
@@ -631,6 +743,18 @@ final class LynxContainerViewController: UIViewController {
             }
             self.firstScreenReady = true
             self.firstScreenFailed = false
+            if let telemetryRenderAttemptId {
+                self.telemetryCoordinator.markRuntimeReady(
+                    pageViewId: self.navigationEntryID,
+                    renderAttemptId: telemetryRenderAttemptId,
+                    generation: self.telemetryGeneration
+                )
+                self.telemetryCoordinator.markFirstScreen(
+                    pageViewId: self.navigationEntryID,
+                    renderAttemptId: telemetryRenderAttemptId,
+                    generation: self.telemetryGeneration
+                )
+            }
             self.loadingView.hide()
             self.finishReadiness(success: true, reason: nil)
             if let appId = self.request.lynxAppId,
@@ -647,6 +771,15 @@ final class LynxContainerViewController: UIViewController {
             return
         }
         firstScreenFailed = true
+        if let telemetryRenderAttemptId {
+            telemetryCoordinator.markPageFailed(
+                pageViewId: navigationEntryID,
+                renderAttemptId: telemetryRenderAttemptId,
+                generation: telemetryGeneration,
+                stage: "render",
+                reasonCode: "first_screen_failed"
+            )
+        }
         finishReadiness(success: false, reason: "target_not_ready")
     }
 

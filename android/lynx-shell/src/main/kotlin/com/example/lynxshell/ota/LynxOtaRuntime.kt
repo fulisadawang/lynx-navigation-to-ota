@@ -210,6 +210,11 @@ class LynxOtaRuntime(
         bundleName = bundleName,
         file = file,
         releaseId = current?.context?.releaseId,
+        // ReleaseTransaction 已经完成 SHA 校验；这里只把 Manifest 中同名 Bundle 的
+        // 摘要传给监控快照，不把绝对路径暴露给 Router 或 Wire 事件。
+        sha256 = current?.bundles
+            ?.firstOrNull { it.bundlePath == bundleName }
+            ?.bundleSha256,
     )
 
     private companion object {

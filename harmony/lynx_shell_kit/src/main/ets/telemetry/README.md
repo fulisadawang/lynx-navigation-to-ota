@@ -11,4 +11,18 @@
 
 `TelemetryCoordinator` 由 ArkUI Page、Router 和 LynxViewClient 提交事实，负责页面/App 正交状态、首屏幂等、导航受理、转场终态、stale callback 和 OTA snapshot。默认 Noop Sink；Debug Sink 是有界内存实现。
 
+宿主 UIAbility 需要显式转交 App 生命周期：
+
+```ts
+onForeground(): void {
+  LynxRouter.onApplicationForeground();
+}
+
+onBackground(): void {
+  LynxRouter.onApplicationBackground();
+}
+```
+
+Page 的 `aboutToDisappear` 只表示页面隐藏或移除，不能替代 UIAbility 的 App background。
+
 当前阶段不接网络、磁盘队列、生产 uploader 或未核实 Lynx 4.0 Performance 回调。HarmonyOS HAP/真机构建必须另行验证，不能以本目录 fixture 代替。

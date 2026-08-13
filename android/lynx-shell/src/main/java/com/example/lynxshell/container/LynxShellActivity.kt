@@ -33,6 +33,16 @@ import com.example.lynxshell.transition.PreparedRouteStore
 import com.example.lynxshell.ui.ShellErrorView
 import com.example.lynxshell.ui.ShellLoadingView
 import com.example.lynxshell.ota.ActivityBundleRuntime
+import com.example.lynxshell.ota.PreparedActivityBundle
+import com.example.lynxshell.telemetry.AttemptedBundleSnapshot
+import com.example.lynxshell.telemetry.CoordinatorLynxTelemetryAdapter
+import com.example.lynxshell.telemetry.PageLifecycleState
+import com.example.lynxshell.telemetry.ResolvedBundleSnapshot
+import com.example.lynxshell.telemetry.TelemetryBundleSource
+import com.example.lynxshell.telemetry.TelemetryCoordinator
+import com.example.lynxshell.telemetry.TelemetryCoordinatorRegistry
+import com.example.lynxshell.telemetry.TelemetryHostContext
+import com.example.lynxshell.telemetry.TelemetryIdentity
 import com.example.lynxshell.util.JsonObjectCodec
 import com.google.android.material.appbar.MaterialToolbar
 import com.lynx.tasm.LynxError
@@ -69,6 +79,11 @@ class LynxShellActivity : AppCompatActivity() {
     private var bundleFuture: Future<*>? = null
     /** 一个页面 generation 最多自动回滚一次，避免坏版本形成无限重试。 */
     private var otaRecoveryUsed = false
+    /** 监控是旁路；默认 Noop Sink，不影响导航、OTA 或 Lynx 首屏。 */
+    private lateinit var telemetryCoordinator: TelemetryCoordinator
+    private lateinit var telemetryAdapter: CoordinatorLynxTelemetryAdapter
+    private var telemetryGeneration: Long? = null
+    private var telemetryFirstScreenReached = false
     private val otaExecutor: ExecutorService = Executors.newCachedThreadPool { runnable ->
         Thread(runnable, "lynx-shell-ota").apply { isDaemon = true }
     }
@@ -117,6 +132,8 @@ class LynxShellActivity : AppCompatActivity() {
         request = parsed.getOrThrow()
         // 登记 routeKey/sessionID 后，Native Module 才能执行 popTo/closeAll/redirect。
         LynxNavigator.register(this, request)
+        initializeTelemetry()
+        telemetryCoordinator.onNavigationAccepted()
         onBackPressedDispatcher.addCallback(this, disabledSystemBackCallback)
         configureWindow(request)
         transitionCoordinator = LynxTransitionCoordinator(
@@ -240,6 +257,7 @@ class LynxShellActivity : AppCompatActivity() {
         lynxViewClient = null
         contentGeneration += 1L
         val generation = contentGeneration
+        beginTelemetryAttempt()
 
         val preparedToken = intent.getStringExtra(
             LynxTransitionIntent.EXTRA_PREPARED_ROUTE_TOKEN,
@@ -278,7 +296,9 @@ class LynxShellActivity : AppCompatActivity() {
         generation: Long,
         preparedBytes: ByteArray?,
         preparedFile: File?,
+        preparedBundle: PreparedActivityBundle? = null,
     ) {
+        resolveTelemetryBundle(preparedBundle, preparedFile)
         val provider = ShellTemplateProvider(
             context = applicationContext,
             allowHttpInDebug = request.allowHttpInDebug,
@@ -306,6 +326,11 @@ class LynxShellActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (!isFinishing && !isDestroyed) {
                             if (isCurrentGeneration(generation)) loadingView.hide()
+                            telemetryGeneration?.let { telemetryGenerationId ->
+                                if (telemetryAdapter.onFirstScreen(telemetryGenerationId)) {
+                                    telemetryFirstScreenReached = true
+                                }
+                            }
                             transitionCoordinator.onFirstScreen(
                                 lynxView = lynxView ?: return@runOnUiThread,
                                 generation = generation,
@@ -325,6 +350,7 @@ class LynxShellActivity : AppCompatActivity() {
                 override fun onReceivedError(error: LynxError) {
                     runOnUiThread {
                         if (!isFinishing && !isDestroyed) {
+                            telemetryGeneration?.let { telemetryCoordinator.failRender(it, "lynx_received_error") }
                             transitionCoordinator.onLoadError()
                         }
                     }
@@ -391,6 +417,7 @@ class LynxShellActivity : AppCompatActivity() {
                                     generation = generation,
                                     preparedBytes = value.bytes,
                                     preparedFile = value.file,
+                                    preparedBundle = value,
                                 )
                             },
                             onFailure = { error ->
@@ -402,6 +429,9 @@ class LynxShellActivity : AppCompatActivity() {
                         )
                     },
                     onFailure = { error ->
+                        telemetryGeneration?.let {
+                            telemetryCoordinator.failPrepare(it, error.message ?: "ota_prepare_failed")
+                        }
                         handleTemplateLoadFailure(
                             generation,
                             error.message ?: "OTA Bundle 准备失败",
@@ -415,6 +445,13 @@ class LynxShellActivity : AppCompatActivity() {
     /** 根 Bundle prepare/首屏失败时按 appId 回滚一次并重新准备。 */
     private fun handleTemplateLoadFailure(generation: Long, message: String) {
         if (!isCurrentGeneration(generation)) return
+        telemetryGeneration?.let {
+            if (request.isOtaRequest() && telemetryCoordinator.currentResolvedSnapshot() == null) {
+                telemetryCoordinator.failPrepare(it, message)
+            } else {
+                telemetryCoordinator.failRender(it, message)
+            }
+        }
         loadingView.hide()
         if (request.isOtaRequest() && attemptOtaRecovery(generation, message)) return
         if (::transitionCoordinator.isInitialized) transitionCoordinator.onLoadError()
@@ -520,6 +557,9 @@ class LynxShellActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        if (::telemetryCoordinator.isInitialized) {
+            telemetryCoordinator.onPageLifecycle(PageLifecycleState.HIDDEN, "activity_on_pause")
+        }
         routerPageId()?.let { pageId ->
             ShellMessageHub.sendLifecycle(pageId, "covered", "activity_on_pause")
         }
@@ -530,6 +570,9 @@ class LynxShellActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         restoreContentReleasedForRouteSnapshot()
+        if (::telemetryCoordinator.isInitialized && telemetryFirstScreenReached) {
+            telemetryCoordinator.onPageLifecycle(PageLifecycleState.VISIBLE, "activity_on_resume")
+        }
         routerPageId()?.let { pageId ->
             ShellMessageHub.sendLifecycle(pageId, "active", "activity_on_resume")
         }
@@ -554,6 +597,14 @@ class LynxShellActivity : AppCompatActivity() {
         }
         if (::transitionCoordinator.isInitialized) {
             transitionCoordinator.onDestroy(isChangingConfigurations)
+        }
+        if (::telemetryCoordinator.isInitialized) {
+            if (isFinishing) {
+                telemetryCoordinator.onPageLifecycle(PageLifecycleState.DESTROYED, "activity_on_destroy")
+            } else {
+                telemetryCoordinator.onPageLifecycle(PageLifecycleState.HIDDEN, "configurationChange")
+            }
+            TelemetryCoordinatorRegistry.unregister(telemetryCoordinator)
         }
         LynxNavigator.unregister(this)
         templateProvider?.close()
@@ -588,6 +639,80 @@ class LynxShellActivity : AppCompatActivity() {
 
     private fun routerPageId(): String? =
         LynxNavigator.routerPageIdentity(this)?.entryID
+
+    /** 创建页面监控身份；页面参数、URL 和绝对路径不会进入 HostContext。 */
+    private fun initializeTelemetry() {
+        val routerIdentity = LynxNavigator.routerPageIdentity(this)
+        val entryId = routerIdentity?.entryID ?: request.resolvedRouteKey()
+        telemetryCoordinator = TelemetryCoordinator(
+            pageIdentity = TelemetryIdentity.forPage(
+                entryId = entryId,
+                navigationSessionId = routerIdentity?.sessionID,
+                transactionId = LynxTransitionIntent.transactionID(intent),
+            ),
+            hostContext = TelemetryHostContext(
+                telemetryRouteKey = request.resolvedRouteKey(),
+                hostMode = "activity",
+                platform = "android",
+            ),
+        )
+        telemetryAdapter = CoordinatorLynxTelemetryAdapter(telemetryCoordinator)
+        TelemetryCoordinatorRegistry.register(telemetryCoordinator)
+    }
+
+    /** prepare 前冻结候选快照；replace/重试/回滚都会生成新的 attempt。 */
+    private fun beginTelemetryAttempt() {
+        if (!::telemetryCoordinator.isInitialized) return
+        telemetryFirstScreenReached = false
+        val bundleName = telemetryBundleName()
+        telemetryGeneration = telemetryCoordinator.beginRenderAttempt(
+            AttemptedBundleSnapshot(
+                bundleSource = telemetryBundleSource(),
+                lynxAppId = request.lynxAppId,
+                bundleName = bundleName,
+                telemetryRouteKey = request.resolvedRouteKey(),
+                prepareStartedAtUnixMs = System.currentTimeMillis(),
+                attemptGeneration = 0L,
+            ),
+        )
+    }
+
+    /** prepare 成功后冻结 resolved 快照；绝对路径仅用于当前进程交给 Provider。 */
+    private fun resolveTelemetryBundle(
+        prepared: PreparedActivityBundle?,
+        preparedFile: File?,
+    ) {
+        val generation = telemetryGeneration ?: return
+        val bundleName = telemetryBundleName()
+        telemetryCoordinator.resolveBundle(
+            generation,
+            ResolvedBundleSnapshot(
+                bundleSource = telemetryBundleSource(),
+                lynxAppId = request.lynxAppId,
+                bundleName = bundleName,
+                telemetryRouteKey = request.resolvedRouteKey(),
+                releaseId = prepared?.releaseId,
+                bundleSha256 = prepared?.sha256,
+                resolvedAtUnixMs = System.currentTimeMillis(),
+                internalLocalPath = prepared?.file?.absolutePath ?: preparedFile?.absolutePath,
+            ),
+        )
+    }
+
+    private fun telemetryBundleSource(): TelemetryBundleSource = when {
+        request.isOtaRequest() -> TelemetryBundleSource.OTA
+        LynxPageRequest.isRemoteBundleUrl(request.bundleUrl) -> TelemetryBundleSource.DIRECT_HTTPS
+        request.bundleUrl.startsWith("assets://", ignoreCase = true) ||
+            request.bundleUrl.endsWith(".lynx.bundle", ignoreCase = true) -> TelemetryBundleSource.ASSETS
+        else -> TelemetryBundleSource.LOCAL_FILE
+    }
+
+    /** Wire Schema 只接受文件名；完整路径仍保留在 Router/Provider 内部。 */
+    private fun telemetryBundleName(): String {
+        val logical = request.bundleName ?: request.bundleUrl
+        val name = logical.substringAfterLast('/').substringAfterLast('\\')
+        return if (name.endsWith(".lynx.bundle", ignoreCase = true)) name else "page.lynx.bundle"
+    }
 
     private fun isLightColor(color: Int): Boolean {
         val luminance = (

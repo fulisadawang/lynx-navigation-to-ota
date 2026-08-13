@@ -11,6 +11,7 @@ import LynxRouteParser from './LynxRouteParser';
 import LynxNavigator from './LynxNavigator';
 import LynxOtaRuntime from '../ota/LynxOtaRuntime';
 import PageBundleRuntimeRegistry, { LynxOtaConfig } from '../ota/OtaModels';
+import TelemetryRegistry from '../telemetry/TelemetryRegistry';
 
 /**
  * HarmonyOS 端与 Android `LynxRouter`、iOS `LynxRouter` 对齐的统一门面。
@@ -35,6 +36,12 @@ export default class LynxRouter {
   /** 宿主回到前台时调用；每次触发全量 latest-bundle-list，不受页面 30 分钟门控影响。 */
   static onApplicationForeground(): void {
     PageBundleRuntimeRegistry.current()?.onApplicationForeground();
+    TelemetryRegistry.onApplicationForeground();
+  }
+
+  /** UIAbility 进入后台时调用；页面可见性与 App 状态保持正交。 */
+  static onApplicationBackground(): void {
+    TelemetryRegistry.onApplicationBackground();
   }
 
   /**

@@ -59,6 +59,11 @@ export default class EntryAbility extends UIAbility {
     LynxRouter.onApplicationForeground();
   }
 
+  /** UIAbility 进入后台；页面 aboutToDisappear 不等同于 App background。 */
+  onBackground(): void {
+    LynxRouter.onApplicationBackground();
+  }
+
   onConfigurationUpdate(newConfig: Configuration): void {
     const current = AppStorage.get<ConfigurationConstant.ColorMode>(ShellConstants.STORAGE_COLOR_MODE);
     if (current !== newConfig.colorMode) {

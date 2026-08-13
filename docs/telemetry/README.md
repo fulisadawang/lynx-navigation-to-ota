@@ -120,6 +120,24 @@ receipt/ACK → 清理旧 subject reference。
 
 `invalid/` 中的样例故意违反版本、SHA、采样、隐私或枚举规则，确保 CI 不会只检查“文件能解析”。
 
+## Phase 1B：三端宿主接线
+
+当前分支已把已确认的 Native Page Stack 边界接入三端容器：
+
+- Android `LynxShellActivity`：路由受理后创建页面身份，`prepare()` 前冻结 Attempted Snapshot，
+  OTA/Assets/HTTPS 交付成功后冻结 Resolved Snapshot，`onFirstScreen`、失败、覆盖、恢复和销毁都进入
+  Coordinator。`LynxRouter.onApplicationForeground()` / `onApplicationBackground()` 由宿主进程生命周期调用。
+- iOS `LynxContainerViewController`：对应 `UINavigationController` 页面生命周期；SceneDelegate 必须在
+  `sceneWillEnterForeground` / `sceneDidEnterBackground` 调用 Router 的两个 App 生命周期入口。
+- HarmonyOS `LynxContainer`：对应 ArkUI Page 生命周期；UIAbility 必须在 `onForeground` / `onBackground`
+  调用 Router 的两个 App 生命周期入口。
+
+这里的 `internalLocalPath` 只在当前进程交给 Provider/LynxView，Wire 事件、Debug Sink 和未来磁盘队列
+均不得携带绝对路径。三端当前默认仍是 Noop Sink；没有网络上传、持久队列或服务端 ACK。
+
+接线验证范围：fixture/schema、静态检查、Swift Telemetry smoke 已通过；Android Gradle 编译、Harmony
+HAP/真机和锁定 Lynx 4.0 patch 的 Performance/Resource/Bridge ABI 仍标记为 `[待确认]`。
+
 ## 本地校验
 
 无需安装依赖，在仓库根目录执行：

@@ -361,9 +361,9 @@ public struct LynxTelemetryEvent: Codable, Equatable {
         self.lifecycle = lifecycle ?? pageState.map {
             LynxTelemetryLifecycleSnapshot(
                 pageState: $0,
-                appState: appState ?? .background,
+                appState: appState ?? .foreground,
                 attemptState: resolvedBundle == nil ? "unusable" : "usable",
-                activeEligible: $0 == .visible && (appState ?? .background) == .foreground && resolvedBundle != nil,
+                activeEligible: $0 == .visible && (appState ?? .foreground) == .foreground && resolvedBundle != nil,
                 reason: nil
             )
         }

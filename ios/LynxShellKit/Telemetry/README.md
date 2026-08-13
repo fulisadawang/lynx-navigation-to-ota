@@ -11,4 +11,19 @@
 
 `LynxTelemetryCoordinator` 只负责构造事实事件：Router admission、UIViewController 页面状态、Scene App 前后台、首屏、转场终态、stale callback 和 OTA snapshot。默认 `LynxNoopTelemetrySink`，调试才使用有界 `LynxDebugTelemetrySink`。
 
+宿主 SceneDelegate 需要显式转交 App 生命周期：
+
+```swift
+func sceneWillEnterForeground(_ scene: UIScene) {
+    LynxRouter.onApplicationForeground()
+}
+
+func sceneDidEnterBackground(_ scene: UIScene) {
+    LynxRouter.onApplicationBackground()
+}
+```
+
+Router 不会把单个 UIViewController 的 hidden 事件猜成 App background；两个状态由 Coordinator
+分别记录。
+
 当前没有接入 Lynx 4.0 未确认的 Performance ABI，也没有网络、磁盘队列或 durable uploader；因此不能把本目录称为生产监控已上线。
