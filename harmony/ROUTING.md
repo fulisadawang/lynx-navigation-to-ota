@@ -41,9 +41,16 @@ hybrid://lynxview_page?bundle=main.lynx.bundle&hide_nav_bar=1&screen_orientation
 - 导航栏：`hideNavigationBar`、`hideNavBar`、`hide_nav_bar`、`hidden_nav`
 - 状态栏：`hideStatusBar`、`hide_status_bar`
 - 方向：`orientation`、`screenOrientation`、`screen_orientation`
+- 路由动画：`animated`，布尔值，默认 `true`
 - 背景：`backgroundColor`、`background_color`
 - 尺寸：`width` / `widthPx` / `width_px`、`height` / `heightPx` / `height_px`
 - 调试 HTTP：`allowHttpInDebug`、`allow_http_in_debug`、`allowHttp`、`allow_http`
+- 键盘布局：`keyboardBehavior`、`keyboard_behavior`，值为 `system` / `resize` / `pan` / `nothing`
+
+`animated=false` 仅关闭本次打开/替换目标页面的页面转场；不传或传 `true` 时保留
+ArkUI Router 的系统默认动画。`clearTop` / `singleTask` 回退已有页面时仍由当前
+`@ohos.router` 栈控制动画，若要让所有回退操作都严格按命令关闭动画，需要后续切换到
+支持逐次动画参数的 NavPathStack 适配层。
 
 
 ## 固定入口校验

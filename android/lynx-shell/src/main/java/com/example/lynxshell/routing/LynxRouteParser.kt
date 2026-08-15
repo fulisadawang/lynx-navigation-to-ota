@@ -3,6 +3,7 @@ package com.example.lynxshell.routing
 import android.content.Intent
 import android.net.Uri
 import com.example.lynxshell.BuildConfig
+import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.model.PageOrientation
 import org.json.JSONObject
@@ -113,6 +114,9 @@ object LynxRouteParser {
                 intent.getStringExtra(LynxPageRequest.EXTRA_ORIENTATION),
                 PageOrientation.SYSTEM,
             ),
+            keyboardBehavior = parseKeyboardBehavior(
+                intent.getStringExtra(LynxPageRequest.EXTRA_KEYBOARD_BEHAVIOR),
+            ),
             backgroundColor = intent.getStringExtra(LynxPageRequest.EXTRA_BACKGROUND_COLOR) ?: "#FFFFFF",
             widthPx = intent.optionalInt(LynxPageRequest.EXTRA_WIDTH),
             heightPx = intent.optionalInt(LynxPageRequest.EXTRA_HEIGHT),
@@ -182,6 +186,9 @@ object LynxRouteParser {
                 false,
             ),
             orientation = parseOrientation(first(query, "orientation", "screen_orientation")),
+            keyboardBehavior = parseKeyboardBehavior(
+                first(query, "keyboardBehavior", "keyboard_behavior"),
+            ),
             backgroundColor = normalizeColor(
                 first(query, "backgroundColor", "background_color", "container_bg_color")
                     ?: "#FFFFFF",
@@ -214,6 +221,10 @@ object LynxRouteParser {
         // fullscreen 只控制 edge-to-edge；是否隐藏状态栏必须由独立参数明确表达。
         var hideStatusBar = base.hideStatusBar
         options.firstBoolean("hideStatusBar", "hide_status_bar")?.let { hideStatusBar = it }
+
+        val keyboardBehavior = options.firstString("keyboardBehavior", "keyboard_behavior")
+            ?.let(::parseKeyboardBehavior)
+            ?: base.keyboardBehavior
 
         val isDirectRemote = LynxPageRequest.isRemoteBundleUrl(base.bundleUrl)
         val appId = options.firstString("lynxAppId", "appId", "lynx_app_id")
@@ -267,6 +278,7 @@ object LynxRouteParser {
             orientation = options.firstString("orientation", "screen_orientation")
                 ?.let(::parseOrientation)
                 ?: base.orientation,
+            keyboardBehavior = keyboardBehavior,
             backgroundColor = normalizeColor(
                 options.firstString(
                     "backgroundColor",
@@ -305,6 +317,13 @@ object LynxRouteParser {
         "portrait", "vertical" -> PageOrientation.PORTRAIT
         "landscape", "horizontal" -> PageOrientation.LANDSCAPE
         else -> PageOrientation.SYSTEM
+    }
+
+    private fun parseKeyboardBehavior(value: String?): KeyboardBehavior = when (value?.trim()?.lowercase()) {
+        "resize" -> KeyboardBehavior.RESIZE
+        "pan" -> KeyboardBehavior.PAN
+        "nothing", "none" -> KeyboardBehavior.NOTHING
+        else -> KeyboardBehavior.SYSTEM
     }
 
     private fun normalizeColor(value: String): String =

@@ -476,7 +476,8 @@ ShellNavigator.shared.clearSavedNavigationState()
   Activity/UINavigationController 转场；
 - 声明 `routeType` 或非 `default` transition：打开、返回、手势和 fallback 全部由
   壳的自定义 coordinator 绘制，系统 Window/UIKit 默认动画被抑制；
-- `animated=false`：Android 使用无动画 Activity flag，iOS 使用非动画 push/pop；
+- `animated=false`：Android 使用无动画 Activity flag，iOS 使用非动画 push/pop，HarmonyOS
+  使用目标 Page 的零时长 `pageTransition`；
 - `backGestureEnabled=true`：允许 iOS 侧滑和 Android 系统 Back；
 - `backGestureEnabled=false`：系统返回被禁用，但原生导航栏返回和 Module API 保留。
 

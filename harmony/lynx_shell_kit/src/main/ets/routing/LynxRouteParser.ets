@@ -183,6 +183,11 @@ export default class LynxRouteParser {
       params.get('screenOrientation') ?? '',
       params.get('screen_orientation') ?? ''
     ]));
+    request.animated = LynxRouteParser.parseBoolean(params.get('animated') ?? '', true);
+    request.keyboardBehavior = LynxRouteParser.normalizeKeyboardBehavior(LynxRouteParser.firstNonEmpty([
+      params.get('keyboardBehavior') ?? '',
+      params.get('keyboard_behavior') ?? ''
+    ]));
     request.backgroundColor = LynxRouteParser.normalizeColor(LynxRouteParser.firstNonEmpty([
       params.get('backgroundColor') ?? '',
       params.get('background_color') ?? ''
@@ -224,6 +229,10 @@ export default class LynxRouteParser {
     }
     request.orientation = LynxRouteParser.normalizeOrientation(
       options.orientation ?? options.screenOrientation ?? request.orientation
+    );
+    request.animated = options.animated ?? request.animated;
+    request.keyboardBehavior = LynxRouteParser.normalizeKeyboardBehavior(
+      options.keyboardBehavior ?? request.keyboardBehavior
     );
     request.backgroundColor = LynxRouteParser.normalizeColor(options.backgroundColor ?? request.backgroundColor);
     const width = options.widthPx ?? options.width;
@@ -296,6 +305,14 @@ export default class LynxRouteParser {
       return normalized;
     }
     return 'auto';
+  }
+
+  private static normalizeKeyboardBehavior(value: string): string {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'resize' || normalized === 'pan' || normalized === 'nothing' || normalized === 'none') {
+      return normalized === 'none' ? 'nothing' : normalized;
+    }
+    return 'system';
   }
 
   private static normalizeColor(value: string): string {

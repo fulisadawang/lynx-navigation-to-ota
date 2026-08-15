@@ -79,6 +79,7 @@ export struct LynxContainer {
 
   aboutToAppear(): void {
     LynxNavigator.register(this.request);
+    // 页面级 keyboardBehavior 在 Window/UIContext 层生效；LynxView 不需要重复计算键盘高度。
     ShellWindowController.apply(this.request);
     this.initializeTelemetry();
     this.telemetryCoordinator.markPageVisible(this.request.entryID, 'arkui_page_appear');
@@ -155,6 +156,17 @@ export struct LynxContainer {
     // MessageHub 也无法判断当前 LynxContext 已经被真正移除。
     const result = LynxNavigator.closeResult();
     return result.code === 0;
+  }
+
+  /**
+   * `@ohos.router` 没有逐次 push 的 animated 参数；默认不声明时沿用系统转场。
+   * open/replace 传 animated=false 时，目标 Page 用零时长转场覆盖系统默认动画。
+   */
+  pageTransition() {
+    if (!this.request.animated) {
+      PageTransitionEnter({ type: RouteType.None, duration: 0 });
+      PageTransitionExit({ type: RouteType.None, duration: 0 });
+    }
   }
 
   private handleLoadSuccess(url: string): void {

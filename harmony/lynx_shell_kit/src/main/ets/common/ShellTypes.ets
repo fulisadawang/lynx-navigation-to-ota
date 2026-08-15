@@ -64,6 +64,10 @@ export interface ShellPageParams {
   hideStatusBar?: boolean;
   fullscreen?: boolean;
   orientation?: string;
+  /** 是否使用系统页面转场；默认开启。 */
+  animated?: boolean;
+  /** 页面获得输入焦点后，ArkUI 如何处理软键盘遮挡。 */
+  keyboardBehavior?: string;
   backgroundColor?: string;
   widthPx?: number;
   heightPx?: number;
@@ -77,6 +81,8 @@ export interface ShellPageParams {
 /** Native Module open 的 JSON Options。 */
 export interface ShellOpenOptions {
   launchMode?: string;
+  /** 是否使用系统页面转场；未传时默认 true。 */
+  animated?: boolean;
   title?: string;
   initData?: Object;
   globalProps?: Object;
@@ -86,6 +92,8 @@ export interface ShellOpenOptions {
   fullscreen?: boolean;
   orientation?: string;
   screenOrientation?: string;
+  /** `system` / `resize` / `pan` / `nothing`。 */
+  keyboardBehavior?: string;
   backgroundColor?: string;
   width?: number;
   widthPx?: number;

@@ -1,4 +1,5 @@
-import { LynxContainer as LynxShellKitContainer } from '@lynx/lynx-shell-kit';
+import router from '@ohos.router';
+import { LynxContainer as LynxShellKitContainer, LynxPageRequest } from '@lynx/lynx-shell-kit';
 
 /**
  * Demo 页面入口。
@@ -9,6 +10,16 @@ import { LynxContainer as LynxShellKitContainer } from '@lynx/lynx-shell-kit';
 @Entry
 @Component
 struct LynxContainer {
+  private request: LynxPageRequest = LynxPageRequest.fromRouterParams(router.getParams());
+
+  /** Entry 才是 main_pages.json 注册的真实页面，动画开关必须在这里声明。 */
+  pageTransition() {
+    if (!this.request.animated) {
+      PageTransitionEnter({ type: RouteType.None, duration: 0 });
+      PageTransitionExit({ type: RouteType.None, duration: 0 });
+    }
+  }
+
   build() {
     Column() {
       LynxShellKitContainer();

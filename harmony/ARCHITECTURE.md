@@ -20,7 +20,8 @@ XElementMarkdown.initialize
 
 `Index` 是 Demo 的原生 ArkUI 启动页；可复用 `lynx_shell_kit` HAR 提供单页面
 `LynxContainer`，Entry 仅保留 `@Entry` 包装。容器只接收 `LynxPageRequest`，不直接解析
-外部 URL；页面默认不叠加原生标题栏。
+外部 URL；页面默认不叠加原生标题栏。`animated=false` 由 Entry 包装页的
+`pageTransition()` 用零时长 enter/exit 覆盖系统页面转场，HAR 容器同步保留同一能力以便其他宿主复用。
 
 ## Module 层
 

@@ -24,6 +24,10 @@ export default class LynxPageRequest {
   hideStatusBar: boolean = false;
   fullscreen: boolean = false;
   orientation: string = 'auto';
+  /** 页面打开/替换时是否保留 ArkUI 系统转场；默认开启。 */
+  animated: boolean = true;
+  /** 页面级软键盘避让策略；默认采用 ArkUI 的 OFFSET 系统行为。 */
+  keyboardBehavior: string = 'system';
   backgroundColor: string = '#FFFFFF';
   widthPx: number = 0;
   heightPx: number = 0;
@@ -46,6 +50,8 @@ export default class LynxPageRequest {
       hideStatusBar: this.hideStatusBar,
       fullscreen: this.fullscreen,
       orientation: this.orientation,
+      animated: this.animated,
+      keyboardBehavior: this.keyboardBehavior,
       backgroundColor: this.backgroundColor,
       widthPx: this.widthPx,
       heightPx: this.heightPx,
@@ -71,6 +77,8 @@ export default class LynxPageRequest {
     request.hideStatusBar = params.hideStatusBar ?? request.hideStatusBar;
     request.fullscreen = params.fullscreen ?? request.fullscreen;
     request.orientation = params.orientation ?? request.orientation;
+    request.animated = params.animated ?? request.animated;
+    request.keyboardBehavior = params.keyboardBehavior ?? request.keyboardBehavior;
     request.backgroundColor = params.backgroundColor ?? request.backgroundColor;
     request.widthPx = params.widthPx ?? request.widthPx;
     request.heightPx = params.heightPx ?? request.heightPx;
