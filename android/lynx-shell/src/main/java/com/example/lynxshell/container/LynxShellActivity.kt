@@ -11,11 +11,13 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.lynxshell.R
 import com.example.lynxshell.LynxShell
+import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.model.PageOrientation
 import com.example.lynxshell.resource.ShellTemplateProvider
@@ -69,6 +71,12 @@ class LynxShellActivity : AppCompatActivity() {
     private var bundleFuture: Future<*>? = null
     /** 一个页面 generation 最多自动回滚一次，避免坏版本形成无限重试。 */
     private var otaRecoveryUsed = false
+    /** 当前页面的键盘布局策略；默认保持 Android 系统行为。 */
+    private var keyboardBehavior = KeyboardBehavior.SYSTEM
+    private var baseContainerPaddingLeft = 0
+    private var baseContainerPaddingTop = 0
+    private var baseContainerPaddingRight = 0
+    private var baseContainerPaddingBottom = 0
     private val otaExecutor: ExecutorService = Executors.newCachedThreadPool { runnable ->
         Thread(runnable, "lynx-shell-ota").apply { isDaemon = true }
     }
@@ -88,6 +96,14 @@ class LynxShellActivity : AppCompatActivity() {
         liveContent = findViewById(R.id.live_content)
         transitionOverlay = findViewById(R.id.transition_overlay)
         container = findViewById(R.id.lynx_container)
+        baseContainerPaddingLeft = container.paddingLeft
+        baseContainerPaddingTop = container.paddingTop
+        baseContainerPaddingRight = container.paddingRight
+        baseContainerPaddingBottom = container.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(transitionRoot) { _, insets ->
+            applyKeyboardInsets(insets)
+            insets
+        }
         toolbar = findViewById(R.id.shell_toolbar)
         errorView = ShellErrorView(this).also { view ->
             container.addView(
@@ -202,10 +218,53 @@ class LynxShellActivity : AppCompatActivity() {
             }
         }
 
+        configureKeyboardWindow(request)
+
         toolbar.title = request.title
         toolbar.visibility = if (request.showToolbar) android.view.View.VISIBLE else android.view.View.GONE
         toolbar.setNavigationOnClickListener { requestToolbarBack() }
         container.setBackgroundColor(background)
+    }
+
+    /**
+     * 应用页面级 IME 策略。
+     *
+     * `fullscreen=true` 时 Window 采用 edge-to-edge，Android R+ 不能只依赖
+     * `adjustResize`，因此 RESIZE 同时由 applyKeyboardInsets() 调整 Lynx 容器的可用高度。
+     */
+    @Suppress("DEPRECATION")
+    private fun configureKeyboardWindow(request: LynxPageRequest) {
+        keyboardBehavior = request.keyboardBehavior
+        val adjustMode = when (request.keyboardBehavior) {
+            KeyboardBehavior.SYSTEM -> WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED
+            KeyboardBehavior.RESIZE -> WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            KeyboardBehavior.PAN -> WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+            KeyboardBehavior.NOTHING -> WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+        }
+        window.setSoftInputMode(
+            adjustMode or WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED,
+        )
+        ViewCompat.requestApplyInsets(transitionRoot)
+    }
+
+    /** 仅在 edge-to-edge + RESIZE 时手动避让 IME，避免普通 Window 的 adjustResize 双重缩放。 */
+    private fun applyKeyboardInsets(insets: WindowInsetsCompat) {
+        val shouldResizeForIme =
+            keyboardBehavior == KeyboardBehavior.RESIZE &&
+                ::request.isInitialized && request.fullscreen
+        val bottomInset = if (shouldResizeForIme) {
+            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val navigationBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            maxOf(imeBottom, navigationBottom)
+        } else {
+            0
+        }
+        container.setPadding(
+            baseContainerPaddingLeft,
+            baseContainerPaddingTop,
+            baseContainerPaddingRight,
+            baseContainerPaddingBottom + bottomInset,
+        )
     }
 
     /**

@@ -119,6 +119,23 @@ LynxRouter.open(
 并重试，避免坏版本无限循环。没有 current 且没有 runtime 时会直接进入可重试的错误态，
 不会创建空白色 LynxView。
 
+### 键盘布局策略
+
+Android Router 默认保持系统键盘行为。需要按页面控制输入框被 IME 遮挡时，可在
+`LynxRouter.open(..., options)` 中传入 `keyboardBehavior`：
+
+```kotlin
+LynxRouter.open(
+    context = activity,
+    bundle = "login.lynx.bundle",
+    options = mapOf("keyboardBehavior" to "resize"),
+)
+```
+
+支持 `system`、`resize`、`pan`、`nothing`。全屏 edge-to-edge 页面使用 `resize` 时，
+壳会通过 IME Window Insets 调整 Lynx 内容区域；普通页面仍使用 Android Window 的
+`adjustResize`。该配置只控制布局避让，不承诺在没有输入框焦点时强制弹出键盘。
+
 Router 内置实现位于：
 
 ```text

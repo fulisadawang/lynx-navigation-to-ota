@@ -145,6 +145,43 @@ DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
 Lynx 页面默认不叠加 Harmony 原生标题栏；返回、标题和页面导航由 Bundle 自己绘制。
 兼容字段仍保留，但当前 Container 不渲染原生 Toolbar。
 
+### 路由转场动画
+
+三端 `open`/`push` 使用统一的 `animated` 选项，默认值为 `true`，不传时沿用平台系统转场：
+
+```ts
+await LynxRouter.open(
+  'detail.lynx.bundle',
+  { orderId: '10001' },
+  { animated: false }
+);
+```
+
+`animated: false` 适合首屏重定向、连续跳转和自动化测试，会关闭本次打开/替换目标页面的
+ArkUI Page 转场；`animated: true` 或省略时不覆盖系统默认动画。由于 HarmonyOS 当前使用
+`@ohos.router`，该参数通过 `LynxPageRequest` 传给 `LynxContainer.pageTransition()`，而不是
+直接传给 `router.pushUrl()`（该 API 没有逐次动画参数）。`clearTop` / `singleTask` 回到
+已有页面时仍由系统 Router 控制回退动画。
+
+### 键盘布局策略
+
+HarmonyOS Router 与 Android 使用同一个页面参数 `keyboardBehavior`，默认值为 `system`：
+
+```ts
+await LynxRouter.open(
+  'login.lynx.bundle',
+  {},
+  { keyboardBehavior: 'resize' }
+);
+```
+
+支持 `system`、`resize`、`pan`、`nothing`。HarmonyOS 由 `UIContext.setKeyboardAvoidMode()`
+映射到 ArkUI 的 `OFFSET`、`RESIZE`、`NONE`；不手工改写 LynxView 高度，也不要求业务页面自行监听
+键盘避让区。该配置控制布局避让，不代表在没有输入焦点时强制弹出软键盘。
+
+当前工程 `compatibleSdkVersion` 为 API 13；API 13 设备使用 `nothing` 时会安全降级为系统
+`OFFSET`，API 14 及以上才启用 ArkUI 的真正 `NONE`（完全不调整布局）。
+
 ### Native Page Stack 与统一 Router
 
 HarmonyOS 默认使用 `ArkUI Router + LynxContainer Page`；`NavPathStack` 保留为适配层替换点。业务只在 Ability

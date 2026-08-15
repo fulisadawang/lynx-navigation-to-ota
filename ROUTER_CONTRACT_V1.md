@@ -43,6 +43,43 @@ open("https://cdn.example.com/pay.lynx.bundle", { orderId: "123" })
 Bundle 文件名作为默认 `pageKey`；同一个 Bundle 多次打开仍由 `pageId` 区分实例。
 `hybrid://lynxview_page?bundle=...` 是兼容入口，解析后仍进入默认 Native Page Stack。
 
+### 路由转场动画
+
+`open` / `push` / `replace` 的 `options` 支持统一的 `animated` 布尔参数，默认值为 `true`：
+
+```text
+open("detail.lynx.bundle", { orderId: "123" }, { animated: false })
+```
+
+- `animated=true` 或省略：沿用 Android Activity、iOS `UINavigationController`、HarmonyOS
+  ArkUI Router 的平台默认转场；
+- `animated=false`：关闭本次打开/替换目标页面的转场，适合首屏重定向、连续跳转和自动化测试；
+- HarmonyOS 当前使用 legacy `@ohos.router`，没有逐次 `pushUrl` 动画参数，因此由
+  `LynxContainer.pageTransition()` 对目标 Page 使用零时长 enter/exit 覆盖默认转场；
+- `clearTop` / `singleTask` 等回到已有页面的操作，其回退动画仍由 HarmonyOS legacy Router
+  控制；若需要所有操作都按命令级开关关闭动画，后续应切换到支持逐次动画参数的 NavPathStack
+  适配层。[待确认]
+
+## 键盘布局策略
+
+页面可在 Router `options` 中传入可选的 `keyboardBehavior`，默认值为 `system`：
+
+```text
+keyboardBehavior: system | resize | pan | nothing
+```
+
+语义是页面获得输入焦点后，原生容器如何处理软键盘遮挡：
+
+- `system`：使用平台默认策略；
+- `resize`：压缩 Lynx 内容可用区域；
+- `pan`：将页面内容跟随输入焦点上移；
+- `nothing`：不为软键盘调整页面布局。
+
+Android 通过 Window soft-input 策略与 edge-to-edge IME Insets 实现，HarmonyOS 通过
+ArkUI `UIContext.setKeyboardAvoidMode()` 实现。该字段只控制布局避让，不承诺在没有输入框焦点时
+强制弹出软键盘；HarmonyOS API 13 对 `nothing` 会降级为默认 `OFFSET`，API 14 及以上才提供
+完全不调整布局的 `NONE`；iOS 适配层暂时保持平台默认行为。
+
 ## Bundle 来源模式
 
 路由必须把“Bundle 的定位方式”和“Bundle 的发行管理方式”分开。三端公开两种明确模式，

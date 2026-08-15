@@ -30,6 +30,8 @@ data class LynxPageRequest(
     val backGestureEnabled: Boolean = true,
     val allowHttpInDebug: Boolean = false,
     val orientation: PageOrientation = PageOrientation.SYSTEM,
+    /** 页面获得输入焦点后，Window 如何处理 IME 遮挡。默认交给 Android 系统选择。 */
+    val keyboardBehavior: KeyboardBehavior = KeyboardBehavior.SYSTEM,
     val backgroundColor: String = "#FFFFFF",
     val widthPx: Int? = null,
     val heightPx: Int? = null,
@@ -102,6 +104,7 @@ data class LynxPageRequest(
         putExtra(EXTRA_BACK_GESTURE_ENABLED, backGestureEnabled)
         putExtra(EXTRA_ALLOW_HTTP, allowHttpInDebug)
         putExtra(EXTRA_ORIENTATION, orientation.name)
+        putExtra(EXTRA_KEYBOARD_BEHAVIOR, keyboardBehavior.wireName)
         putExtra(EXTRA_BACKGROUND_COLOR, backgroundColor)
         widthPx?.let { putExtra(EXTRA_WIDTH, it) }
         heightPx?.let { putExtra(EXTRA_HEIGHT, it) }
@@ -130,6 +133,7 @@ data class LynxPageRequest(
         const val EXTRA_BACK_GESTURE_ENABLED = "lynx_shell.back_gesture_enabled"
         const val EXTRA_ALLOW_HTTP = "lynx_shell.allow_http"
         const val EXTRA_ORIENTATION = "lynx_shell.orientation"
+        const val EXTRA_KEYBOARD_BEHAVIOR = "lynx_shell.keyboard_behavior"
         const val EXTRA_BACKGROUND_COLOR = "lynx_shell.background_color"
         const val EXTRA_WIDTH = "lynx_shell.width"
         const val EXTRA_HEIGHT = "lynx_shell.height"
@@ -156,4 +160,17 @@ enum class PageOrientation {
     SYSTEM,
     PORTRAIT,
     LANDSCAPE,
+}
+
+/**
+ * Router 请求中的键盘布局策略。
+ *
+ * Android 的具体 Window 常量和 edge-to-edge Insets 处理留在容器层，路由只携带语义；
+ * HarmonyOS/iOS 由各自平台容器映射到原生键盘避让 API。
+ */
+enum class KeyboardBehavior(val wireName: String) {
+    SYSTEM("system"),
+    RESIZE("resize"),
+    PAN("pan"),
+    NOTHING("nothing"),
 }

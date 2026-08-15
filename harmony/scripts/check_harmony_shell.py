@@ -226,7 +226,46 @@ def runtime_and_container() -> None:
         "context.setExtraTiming",
     ]
     require(all(marker in container for marker in markers), "HarmonyOS LynxView 容器输入与生命周期完整")
+    require(
+        all(marker in container for marker in [
+            "pageTransition()",
+            "this.request.animated",
+            "PageTransitionEnter",
+            "PageTransitionExit",
+            "duration: 0",
+        ]),
+        "HarmonyOS 页面支持 animated=false 零时长转场覆盖",
+    )
+    page_request = shell_read("src/main/ets/model/LynxPageRequest.ets")
+    require(
+        all(marker in page_request for marker in [
+            "animated: boolean = true",
+            "animated: this.animated",
+            "params.animated",
+        ]),
+        "HarmonyOS LynxPageRequest 默认开启路由动画并透传参数",
+    )
+    window_controller = shell_read("src/main/ets/common/ShellWindowController.ets")
+    require(
+        all(marker in window_controller for marker in [
+            "setKeyboardAvoidMode",
+            "KeyboardAvoidMode.RESIZE",
+            "KeyboardAvoidMode.OFFSET",
+            "KeyboardAvoidMode.NONE",
+        ]),
+        "HarmonyOS Window/UIContext 支持 keyboardBehavior 四种布局策略",
+    )
     entry_wrapper = read("lynx_shell/src/main/ets/pages/LynxContainer.ets")
+    require(
+        all(marker in entry_wrapper for marker in [
+            "@Entry",
+            "pageTransition()",
+            "LynxPageRequest.fromRouterParams",
+            "PageTransitionEnter",
+            "PageTransitionExit",
+        ]),
+        "HarmonyOS Entry 包装页承载 animated 页面转场",
+    )
     require("@Component" in container and "@Entry" in entry_wrapper, "HarmonyOS 容器采用 ArkUI Entry Component")
 
 
@@ -248,6 +287,14 @@ def route_and_security() -> None:
         "allowHttp",
     ]
     require(all(alias in route for alias in aliases), "HarmonyOS 路由兼容 Explorer、Sparkling 与统一别名")
+    require(
+        all(marker in route for marker in ["keyboardBehavior", "keyboard_behavior", "normalizeKeyboardBehavior"]),
+        "HarmonyOS 路由支持 keyboardBehavior 键盘布局策略",
+    )
+    require(
+        all(marker in route for marker in ["params.get('animated')", "options.animated", "parseBoolean"]),
+        "HarmonyOS 路由支持 animated 动画开关",
+    )
     require("validateRequest" in route and "ShellSecurityPolicy.validateTemplateUrl" in route, "HarmonyOS 路由进入容器前执行安全校验")
     require(
         all(marker in route for marker in [

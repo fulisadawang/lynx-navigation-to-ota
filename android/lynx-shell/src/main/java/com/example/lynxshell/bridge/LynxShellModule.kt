@@ -41,7 +41,7 @@ class LynxShellModule(context: Context) : LynxModule(context) {
      * 打开页面。
      *
      * `optionsJSON` 同时承载页面参数和导航参数，可包含 `routeKey`、`launchMode`、
-     * `animated`、`backGestureEnabled`、`deduplicateWindowMs` 等字段。
+     * `animated`、`backGestureEnabled`、`deduplicateWindowMs`、`keyboardBehavior` 等字段。
      */
     @LynxMethod
     fun open(url: String, optionsJSON: String, callback: Callback) {
