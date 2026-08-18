@@ -10,6 +10,7 @@ class OtaModels private constructor() {
   companion object {
     const val DEFAULT_LYNX_APP_ID = "10000000"
     const val DEFAULT_OTA_CLIENT_TOKEN = "ota-client-token-v1-fixed"
+    const val MAX_BUNDLE_BYTES = 20 * 1024 * 1024
 
     @JvmStatic
     fun firstPresent(map: Map<String, Any?>, first: String, second: String): Any? {
@@ -77,6 +78,14 @@ class OtaModels private constructor() {
     const val BUNDLE_CHECKSUM_FAILED = "bundle_checksum_failed"
     const val RELEASE_ACTIVATE_FAILED = "release_activate_failed"
     const val MANUAL_ROLLBACK = "manual_rollback"
+    const val RELEASE_DISABLED = "release_disabled"
+    const val RELEASE_ROLLED_BACK = "release_rolled_back"
+    const val INVALID_RELEASE_STATUS = "invalid_release_status"
+    const val INVALID_BUNDLE_URL = "invalid_bundle_url"
+    const val MISSING_BUNDLE_SIZE = "missing_bundle_size"
+    const val INVALID_BUNDLE_SIZE = "invalid_bundle_size"
+    const val BUNDLE_TOO_LARGE = "bundle_too_large"
+    const val BUNDLE_SIZE_MISMATCH = "bundle_size_mismatch"
   }
 
   enum class Environment(@JvmField val wireValue: String) {
@@ -271,6 +280,7 @@ class OtaModels private constructor() {
     @JvmField val platform: Platform,
     platforms: List<Platform>?,
     bundles: List<BundleArtifact>?,
+    @JvmField val status: ReleaseStatus = ReleaseStatus.ACTIVE,
   ) {
     @JvmField val lynxAppId: String = lynxAppId ?: DEFAULT_LYNX_APP_ID
     @JvmField val platforms: List<Platform> = immutableList(if (platforms.isNullOrEmpty()) singletonList(platform) else platforms)
@@ -284,13 +294,14 @@ class OtaModels private constructor() {
       map["releaseId"] = releaseId
       map["platform"] = platform.wireValue
       map["platforms"] = platforms.map { it.wireValue }
+      map["status"] = status.wireValue
       map["bundles"] = bundles.map { it.toJsonMap() }
       return map
     }
 
     companion object {
       @JvmStatic
-      fun fromJsonMap(map: Map<String, Any?>): ReleaseManifest {
+      fun fromJsonMap(map: Map<String, Any?>, requireStatus: Boolean = false): ReleaseManifest {
         val parsedPlatforms = ArrayList<Platform>()
         val rawPlatforms = map["platforms"]
         if (rawPlatforms is List<*>) {
@@ -305,6 +316,10 @@ class OtaModels private constructor() {
         }
 
         val parsedPlatform = Platform.fromWire(stringValue(map["platform"]))
+        val rawStatus = map["status"]?.toString()
+        if (requireStatus && rawStatus.isNullOrBlank()) {
+          throw IllegalArgumentException("Manifest status 不能为空")
+        }
         return ReleaseManifest(
           Environment.fromWire(stringValue(map["env"])),
           HostApp.fromWire(stringValue(firstPresent(map, "hostApp", "app"))),
@@ -313,6 +328,7 @@ class OtaModels private constructor() {
           parsedPlatform,
           if (parsedPlatforms.isEmpty()) singletonList(parsedPlatform) else parsedPlatforms,
           parsedBundles,
+          rawStatus?.let { ReleaseStatus.fromWire(it) } ?: ReleaseStatus.ACTIVE,
         )
       }
     }
@@ -602,7 +618,7 @@ class OtaModels private constructor() {
     @JvmField val changedBundles: List<BundleArtifact> = immutableList(changedBundles)
 
     fun asManifest(): ReleaseManifest {
-      return ReleaseManifest(env, hostApp, lynxAppId, releaseId, platform, platforms, changedBundles)
+      return ReleaseManifest(env, hostApp, lynxAppId, releaseId, platform, platforms, changedBundles, status)
     }
 
     companion object {
@@ -811,6 +827,12 @@ class OtaModels private constructor() {
       this.lynxSdkVersion = lynxSdkVersion
       this.otaClientToken = if (otaClientToken.isNullOrBlank()) DEFAULT_OTA_CLIENT_TOKEN else otaClientToken
       this.storageDirectory = storageDirectory
+      require(apiBaseUri.scheme.equals("https", ignoreCase = true) && apiBaseUri.host?.isNotBlank() == true) {
+        "OTA API 必须使用 HTTPS 且包含 Host"
+      }
+      require(apiBaseUri.userInfo == null && apiBaseUri.query == null && apiBaseUri.fragment == null) {
+        "OTA API 地址不能包含 userInfo、query 或 fragment"
+      }
     }
   }
 }

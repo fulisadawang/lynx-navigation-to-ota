@@ -43,17 +43,23 @@ public enum OtaReleaseRollbackOutcome: Equatable, Sendable {
 /// 完成，因此升级后可以无损读取历史安装状态。
 public actor ReleaseTransaction {
     private let store: FileOtaReleaseStore
+    private let canonicalStore: CanonicalOtaStore
 
     public init(store: FileOtaReleaseStore) {
         self.store = store
+        self.canonicalStore = CanonicalOtaStore(baseDirectory: store.baseDirectoryURL)
     }
 
     /// 返回作用域内 current；没有 OTA current 时由 embedded 作为首次运行回退。
     public func current(scope: OtaReleaseScope) async -> OtaInstalledRelease? {
-        if let current = await store.currentRelease(app: scope.app, lynxAppId: scope.lynxAppId) {
-            return current
+        do {
+            if let current = try await canonicalStore.current(app: scope.app, lynxAppId: scope.lynxAppId) {
+                return current
+            }
+        } catch {
+            // 损坏的 canonical state 不应吞掉 legacy fallback；下一次事务会重新物化。
         }
-        return await store.embeddedRelease(app: scope.app, lynxAppId: scope.lynxAppId)
+        return await store.currentRelease(app: scope.app, lynxAppId: scope.lynxAppId)
     }
 
     public func current(app: OtaAppID, lynxAppId: String) async -> OtaInstalledRelease? {
@@ -86,24 +92,59 @@ public actor ReleaseTransaction {
         if currentRelease?.context.releaseId == request.release.context.releaseId {
             return .alreadyActive(currentRelease ?? request.release)
         }
-        try await store.stageRelease(request.release)
-        let activated = try await store.activateStagedRelease(
-            app: request.scope.app,
-            lynxAppId: request.scope.lynxAppId
-        )
+        try await prepareLegacyStateIfNeeded(scope: request.scope)
+        let activated = try await canonicalStore.install(request.release)
         return .updated(from: currentRelease, to: activated)
     }
 
     public func stage(_ release: OtaInstalledRelease) async throws {
-        try await store.stageRelease(release)
+        let scope = OtaReleaseScope(app: release.context.app, lynxAppId: release.context.lynxAppId)
+        try await prepareLegacyStateIfNeeded(scope: scope)
+        try await canonicalStore.stage(release)
     }
 
     public func activate(scope: OtaReleaseScope) async throws -> OtaInstalledRelease {
-        try await store.activateStagedRelease(app: scope.app, lynxAppId: scope.lynxAppId)
+        if (try await canonicalStore.staged(app: scope.app, lynxAppId: scope.lynxAppId)) != nil {
+            return try await canonicalStore.activate(app: scope.app, lynxAppId: scope.lynxAppId)
+        }
+        return try await store.activateStagedRelease(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func staged(scope: OtaReleaseScope) async -> OtaInstalledRelease? {
+        do {
+            if let staged = try await canonicalStore.staged(app: scope.app, lynxAppId: scope.lynxAppId) {
+                return staged
+            }
+        } catch {
+            // fall through to the legacy staged pointer during migration
+            print("[OtaIOSSDK] canonical staged read failed: \(error)")
+        }
+        return await store.stagedRelease(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func registerEmbedded(_ release: OtaInstalledRelease) async throws {
+        if let legacy = await store.currentRelease(app: release.context.app, lynxAppId: release.context.lynxAppId),
+           legacy.context.releaseId != "embedded" {
+            try? await canonicalStore.adoptLegacy(legacy)
+        }
+        try await canonicalStore.registerEmbedded(release)
+    }
+
+    public func deleteDownloadedBundles(app: OtaAppID, lynxAppId: String) async throws {
+        try await canonicalStore.deleteDownloadedBundles(app: app, lynxAppId: lynxAppId)
+        try await store.deleteDownloadedBundles(app: app, lynxAppId: lynxAppId)
+    }
+
+    public func deleteAllDownloadedBundles() async throws {
+        try await canonicalStore.deleteAllDownloadedBundles()
+        try await store.deleteAllDownloadedBundles()
     }
 
     /// 恢复 previous；没有 previous 时回退 embedded。不会扫描或猜测其它历史目录。
     public func rollback(scope: OtaReleaseScope) async throws -> OtaReleaseRollbackOutcome {
+        if let restored = try await canonicalStore.rollback(app: scope.app, lynxAppId: scope.lynxAppId) {
+            return .restored(restored)
+        }
         guard let restored = try await store.rollback(app: scope.app, lynxAppId: scope.lynxAppId) else {
             return .unavailable
         }
@@ -140,6 +181,24 @@ public actor ReleaseTransaction {
         }
         let nameMatches = release.bundles.filter { $0.bundleName == bundleName }
         return nameMatches.count == 1 ? nameMatches[0] : nil
+    }
+
+    private func prepareLegacyStateIfNeeded(scope: OtaReleaseScope) async throws {
+        if try await canonicalStore.current(app: scope.app, lynxAppId: scope.lynxAppId) != nil {
+            return
+        }
+        let legacy = await store.currentRelease(app: scope.app, lynxAppId: scope.lynxAppId)
+        if let legacy, legacy.context.releaseId != "embedded" {
+            do {
+                try await canonicalStore.adoptLegacy(legacy)
+                return
+            } catch {
+                // 旧 current 可能指向已失效的绝对路径；保留 legacy 供诊断，继续回退 embedded。
+            }
+        }
+        if let embedded = await store.embeddedRelease(app: scope.app, lynxAppId: scope.lynxAppId) {
+            try await canonicalStore.registerEmbedded(embedded)
+        }
     }
 }
 

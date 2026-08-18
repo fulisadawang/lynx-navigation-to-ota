@@ -41,6 +41,8 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 - 本地 current 通过 SHA 校验：合法旧版本立即打开，当前 appId 只有超过默认 30 分钟才在后台更新。
 - 本地缺包或 SHA 不一致：Activity 显示原生 Loading，只同步当前 appId，完成下载、大小/SHA
   校验和原子激活后再创建 LynxView；这条修复链路不受 30 分钟限制。
+- OTA API 与 Manifest Bundle URL 只允许 HTTPS；远程 Manifest 必须是 `ACTIVE`，Bundle `size`
+  必须为 `1..20971520` 字节，下载流超过 20 MB 会立即停止并清理 `.part`。
 - 同一个 Release 的 Bundle 使用最多 4 个 worker 并发下载/复制；不同 appId 的 Release
   仍由外层队列串行处理，避免一次更新占满设备网络和磁盘。
 - 单个 Bundle 下载失败时最多尝试 3 次（首次 + 2 次重试），重试之间做短暂退避；3 次仍失败
@@ -60,7 +62,8 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 └── .staging/                   # 事务完成后不应被路由读取
 ```
 
-`states/<appId>.json` 保存 current/previous 指针；Bundle 本体位于已发布的 Release 目录。
+`states/<appId>.json` 保存 `current/previous={kind,releaseId}` 指针；Bundle 本体位于已发布的
+Release 目录，不把下载 Bundle 的绝对路径写入 state。
 路由只读取已提交 current，不读取 `.part` 或 `.staging`。
 
 验收页或 Lynx 页面可以调用以下入口直接删除磁盘内容：

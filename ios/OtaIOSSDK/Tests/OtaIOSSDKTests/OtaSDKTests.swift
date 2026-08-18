@@ -112,7 +112,7 @@ actor RecordingBundleDownloader: OtaBundleDownloading {
 
     func download(from remoteURL: URL, to localURL: URL) async throws {
         downloadedURLs.append(remoteURL)
-        try await URLSessionBundleDownloader().download(from: remoteURL, to: localURL)
+        try await URLSessionBundleDownloader(allowLocalFileURLs: true).download(from: remoteURL, to: localURL)
     }
 
     func downloads() -> [URL] {
@@ -444,7 +444,7 @@ struct OtaSDKTests {
         let hotUpdate = LynxHotUpdate()
         try await hotUpdate.initialize(
             configuration: OtaSDKConfiguration(
-                apiBaseURL: URL(string: "http://127.0.0.1:8080")!,
+                apiBaseURL: URL(string: "https://127.0.0.1:8080")!,
                 app: .capp,
                 environment: .test,
                 appVersion: "1.0.0",
@@ -549,7 +549,7 @@ struct OtaSDKTests {
 
         let reusedBundle = installed.bundles.first { $0.bundlePath == "App.lynx.bundle" }
         let changedBundle = installed.bundles.first { $0.bundlePath == "GuideServiceDetail.lynx.bundle" }
-        #expect(reusedBundle?.localFilePath == reusableLocalURL.path)
+        #expect(reusedBundle?.localFilePath.contains("/store/releases/\(manifest.releaseId)/") == true)
         #expect(changedBundle?.localFilePath.contains(manifest.releaseId) == true)
         #expect(await downloader.downloads() == [changedSourceURL])
 
@@ -647,7 +647,7 @@ struct OtaSDKTests {
         #expect(summary.totalBundleCount == 2)
         #expect(summary.reusedBundleCount == 1)
         #expect(summary.downloadedBundleCount == 1)
-        #expect(installed.bundles.first { $0.bundlePath == "App.lynx.bundle" }?.localFilePath == reusableLocalURL.path)
+        #expect(installed.bundles.first { $0.bundlePath == "App.lynx.bundle" }?.localFilePath.contains("/store/releases/\(manifest.releaseId)/") == true)
         #expect(await downloader.downloads() == [changedSourceURL])
     }
 
@@ -916,7 +916,7 @@ struct OtaSDKTests {
         #expect(result.results.keys.sorted() == ["10000000", "10000002"])
         #expect(await sdk.getCurrentRelease(lynxAppId: "10000000")?.context.releaseId == firstLatest.releaseId)
         #expect(await sdk.getCurrentRelease(lynxAppId: "10000002")?.context.releaseId == secondLatest.releaseId)
-        #expect(await sdk.getCurrentRelease(lynxAppId: "10000002")?.bundles.first?.localFilePath == secondSourceURL.path)
+        #expect(await sdk.getCurrentRelease(lynxAppId: "10000002")?.bundles.first?.localFilePath.contains("/store/releases/\(secondLatest.releaseId)/") == true)
         #expect(await downloader.downloads().isEmpty)
         #expect(await apiClient.events().filter { $0.event == .checkResult }.map(\.lynxAppId).sorted() == ["10000000", "10000002"])
     }
@@ -1022,7 +1022,7 @@ struct OtaSDKTests {
         #expect(summary.downloadedBundleCount == 0)
         #expect(summary.reusedBundleCount == 1)
         #expect(installedBundle.localFilePath != missingLocalURL.path)
-        #expect(installedBundle.localFilePath == sourceBundleURL.path)
+        #expect(installedBundle.localFilePath.contains("/store/releases/\(latest.releaseId)/"))
         #expect(FileManager.default.fileExists(atPath: installedBundle.localFilePath))
         #expect(await downloader.downloads().isEmpty)
     }
@@ -1212,7 +1212,9 @@ struct OtaSDKTests {
         }
         #expect(from?.context.releaseId == cappEmbedded.context.releaseId)
         #expect(to.context.releaseId == cappUpdate.context.releaseId)
-        #expect((try await runtime.ensureBundleReady(scope: cappScope, bundleName: "home.lynx.bundle")).path == sourceURL.path)
+        let resolvedBundleURL = try await runtime.ensureBundleReady(scope: cappScope, bundleName: "home.lynx.bundle")
+        #expect(resolvedBundleURL.lastPathComponent == "home.lynx.bundle")
+        #expect(resolvedBundleURL.path.contains("/releases/capp-update/"))
         #expect((await transaction.current(scope: gappScope))?.context.releaseId == gappEmbedded.context.releaseId)
 
         let rollback = try await transaction.rollback(scope: cappScope)

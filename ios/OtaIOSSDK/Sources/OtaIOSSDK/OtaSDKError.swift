@@ -12,6 +12,10 @@ public enum OtaSDKError: Error, LocalizedError, Equatable {
     case invalidBundleName(String)
     case bundleNotFound(lynxAppId: String, bundleName: String)
     case invalidReleaseScope(expectedApp: OtaAppID, expectedLynxAppId: String, actualApp: OtaAppID, actualLynxAppId: String)
+    case invalidReleaseStatus(String)
+    case invalidBundleURL(String)
+    case missingBundleSize(String)
+    case bundleTooLarge(String)
 
     public var errorDescription: String? {
         switch self {
@@ -37,6 +41,14 @@ public enum OtaSDKError: Error, LocalizedError, Equatable {
             return "找不到 bundle：lynxAppId=\(lynxAppId), bundleName=\(bundleName)"
         case let .invalidReleaseScope(expectedApp, expectedLynxAppId, actualApp, actualLynxAppId):
             return "Release 作用域不一致：期望 \(expectedApp.rawValue)/\(expectedLynxAppId)，实际 \(actualApp.rawValue)/\(actualLynxAppId)"
+        case let .invalidReleaseStatus(status):
+            return "Release 状态不可激活：\(status)"
+        case let .invalidBundleURL(bundlePath):
+            return "Bundle URL 必须使用 HTTPS：\(bundlePath)"
+        case let .missingBundleSize(bundlePath):
+            return "Bundle 缺少 size：\(bundlePath)"
+        case let .bundleTooLarge(bundlePath):
+            return "Bundle 超过 20 MB：\(bundlePath)"
         }
     }
 }

@@ -7,6 +7,7 @@ import {
   OtaBundleArtifact,
   OtaLocalManifest,
   OtaPrepareSignal,
+  OtaReleaseRef,
   OtaReleaseSnapshot,
   OtaReleaseState,
   PreparedPageBundle
@@ -40,7 +41,7 @@ export default class ReleaseTransaction {
       return null;
     }
     this.ensureScope(state, lynxAppId);
-    return this.resolveBundle(state.currentReleaseId, lynxAppId, bundleName, true);
+    return this.resolveBundle(state.current.releaseId, lynxAppId, bundleName, true);
   }
 
   /** 缺包或损坏时由当前 appId 的最新快照修复，然后再次读取 current。 */
@@ -72,7 +73,7 @@ export default class ReleaseTransaction {
     const oldState = this.readState(snapshot.lynxAppId);
     if (oldState !== null) {
       this.ensureScope(oldState, snapshot.lynxAppId);
-      if (oldState.currentReleaseId === snapshot.releaseId && this.verifyRelease(snapshot.releaseId, snapshot.lynxAppId)) {
+      if (oldState.current.releaseId === snapshot.releaseId && this.verifyRelease(snapshot.releaseId, snapshot.lynxAppId)) {
         return;
       }
     }
@@ -89,7 +90,7 @@ export default class ReleaseTransaction {
         this.ensureParent(target);
         let reused = false;
         if (oldState !== null) {
-          const previous = this.resolveBundle(oldState.currentReleaseId, snapshot.lynxAppId, normalized, true);
+          const previous = this.resolveBundle(oldState.current.releaseId, snapshot.lynxAppId, normalized, true);
           if (previous !== null && previous.sha256.toLowerCase() === artifact.bundleSha256.toLowerCase()) {
             fs.copyFileSync(previous.filePath, target);
             reused = true;
@@ -120,15 +121,17 @@ export default class ReleaseTransaction {
 
       const published = this.releaseDirectory(snapshot.releaseId);
       if (this.exists(published)) {
-        this.deleteRecursively(published);
+        // 与 state 的最后提交保持同样的替换语义，避免先删除已发布目录再 rename 的空窗。
+        fs.moveFileSync(staging, published, 0);
+      } else {
+        fs.renameSync(staging, published);
       }
-      fs.renameSync(staging, published);
       if (!this.verifyRelease(snapshot.releaseId, snapshot.lynxAppId)) {
         throw new Error('发布后的 Release 校验失败');
       }
 
-      const previous = oldState !== null && oldState.currentReleaseId !== snapshot.releaseId ?
-        oldState.currentReleaseId : oldState?.previousReleaseId;
+      const previous: OtaReleaseRef | undefined = oldState !== null && oldState.current.releaseId !== snapshot.releaseId ?
+        oldState.current : oldState?.previous;
       const state: OtaReleaseState = {
         env: this.config.environment,
         hostApp: this.config.hostApp,
@@ -136,11 +139,11 @@ export default class ReleaseTransaction {
         // 本地 Manifest 记录服务端快照的平台；宿主平台仍由 config.platform 表示。
         platform: this.config.requestPlatform(),
         generation: (oldState?.generation ?? 0) + 1,
-        currentReleaseId: snapshot.releaseId,
-        previousReleaseId: previous
+        current: { kind: 'downloaded', releaseId: snapshot.releaseId },
+        previous: previous
       };
       // state 是唯一激活点，必须最后写入。
-      this.writeTextAtomic(this.statePath(snapshot.lynxAppId), JSON.stringify(state));
+      this.writeState(state);
     } catch (error) {
       if (this.exists(staging)) {
         this.deleteRecursively(staging);
@@ -152,11 +155,11 @@ export default class ReleaseTransaction {
   /** 首屏失败只切换 state；不把坏 current 再保存成 previous。 */
   rollback(lynxAppId: string): boolean {
     const state = this.readState(lynxAppId);
-    if (state === null || state.previousReleaseId === undefined) {
+    if (state === null || state.previous === undefined) {
       return false;
     }
-    const previousId = state.previousReleaseId;
-    if (!this.verifyRelease(previousId, lynxAppId)) {
+    const previousId = state.previous.releaseId;
+    if (state.previous.kind === 'downloaded' && !this.verifyRelease(previousId, lynxAppId)) {
       return false;
     }
     const restored: OtaReleaseState = {
@@ -165,9 +168,10 @@ export default class ReleaseTransaction {
       lynxAppId: state.lynxAppId,
       platform: state.platform,
       generation: state.generation + 1,
-      currentReleaseId: previousId
+      current: state.previous,
+      previous: undefined
     };
-    this.writeTextAtomic(this.statePath(lynxAppId), JSON.stringify(restored));
+    this.writeState(restored);
     return true;
   }
 
@@ -181,9 +185,9 @@ export default class ReleaseTransaction {
     }
     const releaseIds: string[] = [];
     if (state !== null) {
-      releaseIds.push(state.currentReleaseId);
-      if (state.previousReleaseId !== undefined) {
-        releaseIds.push(state.previousReleaseId);
+      releaseIds.push(state.current.releaseId);
+      if (state.previous !== undefined) {
+        releaseIds.push(state.previous.releaseId);
       }
     }
     const statePath = this.statePath(lynxAppId);
@@ -261,7 +265,7 @@ export default class ReleaseTransaction {
       if (!/^sha256:[0-9a-fA-F]{64}$/.test(artifact.bundleSha256)) {
         throw new Error(`Bundle SHA-256 不合法：${normalized}`);
       }
-      if (artifact.size !== undefined && (artifact.size <= 0 || artifact.size > ReleaseTransaction.MAX_BUNDLE_BYTES)) {
+      if (artifact.size === undefined || artifact.size <= 0 || artifact.size > ReleaseTransaction.MAX_BUNDLE_BYTES) {
         throw new Error(`Bundle size 不合法：${normalized}`);
       }
       if (!artifact.bundleUrl.toLowerCase().startsWith('https://')) {
@@ -463,7 +467,7 @@ export default class ReleaseTransaction {
       }
       try {
         const state = OtaJson.parseState(fs.readTextSync(path));
-        if (state.currentReleaseId === releaseId || state.previousReleaseId === releaseId) {
+        if (state.current.releaseId === releaseId || state.previous?.releaseId === releaseId) {
           return true;
         }
       } catch (error) {
@@ -474,9 +478,9 @@ export default class ReleaseTransaction {
   }
 
   private normalizeBundlePath(raw: string): string {
-    let normalized = raw.trim();
-    while (normalized.startsWith('./')) {
-      normalized = normalized.substring(2);
+    const normalized = raw.trim();
+    if (normalized.startsWith('./')) {
+      throw new Error(`Bundle 路径不安全：${raw}`);
     }
     if (normalized.startsWith('/') || normalized.includes('\\')) {
       throw new Error(`Bundle 路径不安全：${raw}`);
@@ -490,6 +494,19 @@ export default class ReleaseTransaction {
 
   private statePath(lynxAppId: string): string {
     return `${this.statesRoot()}/${this.safeFileName(lynxAppId)}.json`;
+  }
+
+  private writeState(state: OtaReleaseState): void {
+    const canonical: OtaReleaseState = {
+      env: state.env,
+      hostApp: state.hostApp,
+      lynxAppId: state.lynxAppId,
+      platform: state.platform,
+      generation: state.generation,
+      current: state.current,
+      previous: state.previous
+    };
+    this.writeTextAtomic(this.statePath(state.lynxAppId), JSON.stringify(canonical));
   }
 
   private releaseDirectory(releaseId: string): string {

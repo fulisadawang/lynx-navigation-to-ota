@@ -39,6 +39,23 @@ LynxOtaPlatform/ios/sdk
 - 获取当前版本
 - 获取当前 bundle 本地文件地址
 
+### Canonical 本地 Release 布局
+
+下载版本与 Android 保持同一目标模型：Bundle 不把绝对文件路径写进 current state，完整 Release
+自包含于固定目录，state 只保存 Release 引用。
+
+```text
+<storageDirectory>/
+├── releases/<releaseId>/
+│   ├── release-manifest.json
+│   └── <bundlePath>
+├── .staging/<releaseId>.<transactionId>/
+└── states/<app>_<lynxAppId>.json
+```
+
+升级期间旧 `current-release*.json` 只用于兼容读取；首次成功事务会把旧 Bundle 物化到新的
+Release 目录，之后 current/previous 只通过 `kind + releaseId` 引用。
+
 ## 推荐接法
 
 主工程优先直接使用 `LynxHotUpdate.shared`：
@@ -110,7 +127,8 @@ let templateURL = await LynxHotUpdate.shared.currentTemplateURL(pageId: 10000000
 服务端每个 release 的 manifest 是完整版本快照，里面会包含当前版本应具备的所有 bundle。SDK 下载时不会盲目全量下载，而是先拿当前已安装 release 的本地 bundle 做对比：
 
 1. 用 `bundlePath + bundleSha256` 查找本地已安装 bundle。
-2. 如果 SHA 一致且本地文件存在，直接复用原 `localFilePath`。
+2. 如果 SHA 一致且本地文件存在，复制到新 Release 的 staging 目录，并重新校验 SHA；不会把旧
+   Release 的绝对 `localFilePath` 持久化到新 current。
 3. 如果 SHA 不一致或本地文件不存在，才下载 manifest 中的 `bundleUrl`。
 4. 只对新下载的 bundle 做文件 SHA256 校验；复用 bundle 只做文件存在性检查。
 

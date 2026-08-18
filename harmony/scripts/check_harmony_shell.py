@@ -418,7 +418,12 @@ def comments_and_structure() -> None:
     require(all(marker in router for marker in ["openOta(", "deleteOtaBundles(", "deleteAllOtaBundles("]), "HarmonyOS Router 暴露 appId + bundleName OTA 与删除 API")
     require(all(marker in container for marker in ["prepareOtaBundle", "正在准备 OTA 页面", "attemptRollback", "PreparedPageBundle"]), "HarmonyOS 容器先 prepare/Loading 后创建 LynxView，首屏失败只回滚一次")
     require(all(marker in provider for marker in ["loadPreparedFile", "preparedStorageRoot", "ArrayBuffer", "NOFOLLOW"]), "HarmonyOS Provider 把受控 prepared file 读取为 Lynx ArrayBuffer")
-    require(all(marker in transaction for marker in [".staging", "bundleSha256", "fs.fsyncSync", "currentReleaseId", "previousReleaseId", "deleteAllBundles"]), "HarmonyOS ReleaseTransaction 包含 staging/SHA/state/current-previous/直接删除")
+    require(
+        all(marker in transaction for marker in [".staging", "bundleSha256", "fs.fsyncSync", "deleteAllBundles"])
+        and ("current:" in transaction or "currentReleaseId" in transaction)
+        and ("previous:" in transaction or "previousReleaseId" in transaction),
+        "HarmonyOS ReleaseTransaction 包含 staging/SHA/state/current-previous/直接删除",
+    )
     require(all(marker in runtime for marker in ["syncAllBundlesAsync", "pageRefreshIntervalMillis", "ensureBundleReady", "rollback("]), "HarmonyOS OTA Runtime 对齐启动全量、页面 30 分钟、repair 与 rollback")
     ota_models = shell_read("src/main/ets/ota/OtaModels.ets")
     require("platform: string = 'harmony'" in ota_models and "serverPlatform: string = ''" in ota_models,

@@ -8,6 +8,9 @@ export default class OtaApiClient {
   private readonly activeRequests: Set<http.HttpRequest> = new Set();
 
   constructor(config: LynxOtaConfig) {
+    if (!config.apiBaseUrl.trim().toLowerCase().startsWith('https://')) {
+      throw new Error('OTA API 必须使用 HTTPS');
+    }
     this.config = config;
   }
 
@@ -53,6 +56,9 @@ export default class OtaApiClient {
       const binary = response.result as ArrayBuffer;
       if (binary === undefined || binary.byteLength === 0) {
         throw new Error('OTA Bundle 内容为空');
+      }
+      if (binary.byteLength > 20 * 1024 * 1024) {
+        throw new Error('OTA Bundle 超过 20 MB');
       }
       return binary;
     } finally {

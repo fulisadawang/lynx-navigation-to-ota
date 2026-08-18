@@ -41,12 +41,14 @@ data class LynxOtaConfig(
     }
 
     init {
-        require(apiBaseUri.scheme.equals("https", ignoreCase = true) ||
-            apiBaseUri.scheme.equals("http", ignoreCase = true)) {
-            "OTA apiBaseUri 必须使用 HTTP 或 HTTPS"
+        require(apiBaseUri.scheme.equals("https", ignoreCase = true)) {
+            "OTA apiBaseUri 必须使用 HTTPS"
         }
         require(apiBaseUri.host?.isNotBlank() == true) {
             "OTA apiBaseUri 必须包含 Host"
+        }
+        require(apiBaseUri.userInfo == null && apiBaseUri.query == null && apiBaseUri.fragment == null) {
+            "OTA apiBaseUri 不能包含 userInfo、query 或 fragment"
         }
         require(defaultLynxAppId.isNotBlank()) { "defaultLynxAppId 不能为空" }
         require(pageRefreshIntervalMillis >= 0L) {

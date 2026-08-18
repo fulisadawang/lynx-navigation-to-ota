@@ -48,6 +48,11 @@ public enum OtaReasonCode: String, Codable, CaseIterable, Sendable {
     case releaseActivateFailed = "release_activate_failed"
     case manualRollback = "manual_rollback"
     case serverRollbackRecovered = "server_rollback_recovered"
+    case releaseDisabled = "release_disabled"
+    case releaseRolledBack = "release_rolled_back"
+    case invalidBundleURL = "invalid_bundle_url"
+    case missingBundleSize = "missing_bundle_size"
+    case bundleTooLarge = "bundle_too_large"
 }
 
 public enum OtaReportEventStage: String, Codable, CaseIterable, Sendable {
@@ -157,6 +162,7 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
     public let releaseId: String
     public let platform: OtaPlatform
     public let platforms: [OtaPlatform]?
+    public let status: OtaReleaseStatus
     public let bundles: [OtaBundleArtifact]
 
     enum CodingKeys: String, CodingKey {
@@ -167,6 +173,7 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         case releaseId
         case platform
         case platforms
+        case status
         case bundles
     }
 
@@ -177,7 +184,8 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         releaseId: String,
         platform: OtaPlatform,
         platforms: [OtaPlatform]? = nil,
-        bundles: [OtaBundleArtifact]
+        bundles: [OtaBundleArtifact],
+        status: OtaReleaseStatus = .active
     ) {
         self.env = env
         self.app = app
@@ -185,6 +193,7 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         self.releaseId = releaseId
         self.platform = platform
         self.platforms = platforms
+        self.status = status
         self.bundles = bundles
     }
 
@@ -200,6 +209,7 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         releaseId = try container.decode(String.self, forKey: .releaseId)
         platform = try container.decode(OtaPlatform.self, forKey: .platform)
         platforms = try container.decodeIfPresent([OtaPlatform].self, forKey: .platforms)
+        status = try container.decode(OtaReleaseStatus.self, forKey: .status)
         bundles = try container.decode([OtaBundleArtifact].self, forKey: .bundles)
     }
 
@@ -211,6 +221,7 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         try container.encode(releaseId, forKey: .releaseId)
         try container.encode(platform, forKey: .platform)
         try container.encodeIfPresent(platforms, forKey: .platforms)
+        try container.encode(status, forKey: .status)
         try container.encode(bundles, forKey: .bundles)
     }
 }
@@ -955,7 +966,8 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
             releaseId: releaseId,
             platform: platform,
             platforms: platforms,
-            bundles: changedBundles
+            bundles: changedBundles,
+            status: status
         )
     }
 }

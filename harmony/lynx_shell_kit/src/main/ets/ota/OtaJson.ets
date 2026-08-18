@@ -2,6 +2,7 @@ import {
   OtaBundleArtifact,
   OtaLatestBundleLists,
   OtaLocalManifest,
+  OtaReleaseRef,
   OtaReleaseSnapshot,
   OtaReleaseState
 } from './OtaModels';
@@ -32,7 +33,7 @@ export default class OtaJson {
 
   static parseLocalManifest(raw: string): OtaLocalManifest {
     const root = OtaJson.objectValue(JSON.parse(raw), '本地 Manifest');
-    const bundles = OtaJson.parseBundles(root['bundles'], 'bundles');
+    const bundles = OtaJson.parseBundles(root['bundles'], 'bundles', false);
     return {
       env: OtaJson.stringValue(root, 'env'),
       hostApp: OtaJson.hostApp(root),
@@ -47,14 +48,27 @@ export default class OtaJson {
 
   static parseState(raw: string): OtaReleaseState {
     const root = OtaJson.objectValue(JSON.parse(raw), 'OTA state');
+    const current: OtaReleaseRef = OtaJson.parseRef(root['current']) ?? {
+      kind: 'downloaded' as 'downloaded',
+      releaseId: OtaJson.stringValue(root, 'currentReleaseId')
+    };
+    let previous: OtaReleaseRef | undefined = OtaJson.parseRef(root['previous']);
+    if (previous === undefined) {
+      const legacy = OtaJson.optionalString(root, 'previousReleaseId');
+      if (legacy !== undefined) {
+        previous = { kind: 'downloaded', releaseId: legacy };
+      }
+    }
     return {
       env: OtaJson.stringValue(root, 'env'),
       hostApp: OtaJson.hostApp(root),
       lynxAppId: OtaJson.stringValue(root, 'lynxAppId'),
       platform: OtaJson.stringValue(root, 'platform'),
       generation: OtaJson.numberValue(root, 'generation'),
-      currentReleaseId: OtaJson.stringValue(root, 'currentReleaseId'),
-      previousReleaseId: OtaJson.optionalString(root, 'previousReleaseId')
+      current,
+      previous,
+      currentReleaseId: current.releaseId,
+      previousReleaseId: previous?.releaseId
     };
   }
 
@@ -66,18 +80,19 @@ export default class OtaJson {
       lynxAppId: OtaJson.stringValue(root, 'lynxAppId'),
       releaseId: OtaJson.stringValue(root, 'releaseId'),
       platform: OtaJson.stringValue(root, 'platform'),
-      status: OtaJson.optionalString(root, 'status') ?? 'ACTIVE',
-      changedBundles: OtaJson.parseBundles(root['changedBundles'], 'changedBundles')
+      status: OtaJson.stringValue(root, 'status'),
+      changedBundles: OtaJson.parseBundles(root['changedBundles'], 'changedBundles', true)
     };
   }
 
-  private static parseBundles(value: Object | undefined, field: string): OtaBundleArtifact[] {
+  private static parseBundles(value: Object | undefined, field: string, requiredSize: boolean): OtaBundleArtifact[] {
     if (!Array.isArray(value)) {
       throw new Error(`${field} 必须是数组`);
     }
     const bundles: OtaBundleArtifact[] = [];
     value.forEach((item: Object) => {
       const object = OtaJson.objectValue(item, 'Bundle');
+      const size = requiredSize ? OtaJson.numberValue(object, 'size') : OtaJson.optionalNumber(object, 'size');
       bundles.push({
         pageId: OtaJson.numberValue(object, 'pageId'),
         bundlePath: OtaJson.stringValue(object, 'bundlePath'),
@@ -85,10 +100,22 @@ export default class OtaJson {
         bundleUrl: OtaJson.optionalString(object, 'remoteUrl') ??
           OtaJson.optionalString(object, 'bundleUrl') ??
           OtaJson.stringValue(object, 'bundleURL'),
-        size: OtaJson.optionalNumber(object, 'size')
+        size
       });
     });
     return bundles;
+  }
+
+  private static parseRef(value: Object | undefined): OtaReleaseRef | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    const object = OtaJson.objectValue(value, 'Release ref');
+    const kind = OtaJson.stringValue(object, 'kind');
+    if (kind !== 'embedded' && kind !== 'downloaded') {
+      throw new Error(`未知 Release ref：${kind}`);
+    }
+    return { kind: kind as 'embedded' | 'downloaded', releaseId: OtaJson.stringValue(object, 'releaseId') };
   }
 
   private static objectValue(value: Object, field: string): Record<string, Object> {

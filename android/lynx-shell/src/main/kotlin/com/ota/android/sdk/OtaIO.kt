@@ -26,40 +26,50 @@ object OtaIO {
   @JvmStatic
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun downloadAndHash(remoteUri: URI, localPath: File): StreamResult {
+    return downloadAndHash(remoteUri, localPath, null, OtaModels.MAX_BUNDLE_BYTES.toLong())
+  }
+
+  @JvmStatic
+  @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
+  fun downloadAndHash(
+    remoteUri: URI,
+    localPath: File,
+    expectedBytes: Long?,
+    maxBytes: Long,
+  ): StreamResult {
     if (Thread.currentThread().isInterrupted) {
       throw InterruptedException("Bundle 下载任务已取消")
     }
+    validateExpectedBytes(expectedBytes, maxBytes)
+    if (!remoteUri.scheme.equals("https", ignoreCase = true) || remoteUri.host.isNullOrBlank() ||
+      remoteUri.userInfo != null || remoteUri.fragment != null
+    ) {
+      throw OtaSdkException("远程 Bundle URL 必须使用 HTTPS", null, OtaModels.ReasonCodes.INVALID_BUNDLE_URL)
+    }
     localPath.parentFile?.let { ensureDirectory(it) }
-    when ((remoteUri.scheme ?: "").lowercase()) {
-      "file" -> {
-        if (localPath.exists() && !localPath.delete()) {
-          throw IOException("无法删除旧 Bundle：$localPath")
-        }
-        return copyAndHash(File(remoteUri), localPath)
+    val connection = remoteUri.toURL().openConnection() as HttpURLConnection
+    connection.instanceFollowRedirects = false
+    connection.requestMethod = "GET"
+    connection.connectTimeout = 10_000
+    connection.readTimeout = 60_000
+    val statusCode = connection.responseCode
+    if (statusCode < 200 || statusCode >= 300) {
+      // 错误响应通常很小，仅在诊断异常时读取，不影响 Bundle 流式路径。
+      val body = connection.errorStream?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
+      connection.disconnect()
+      throw OtaSdkException.invalidResponse(statusCode, body)
+    }
+    val contentLength = connection.contentLengthLong
+    if (contentLength > maxBytes || (expectedBytes != null && contentLength >= 0L && contentLength != expectedBytes)) {
+      connection.disconnect()
+      throw OtaSdkException("Bundle Content-Length 校验失败", null, OtaModels.ReasonCodes.BUNDLE_SIZE_MISMATCH)
+    }
+    try {
+      connection.inputStream.use { inputStream ->
+        return writeAndHash(inputStream, localPath, expectedBytes, maxBytes)
       }
-
-      "http", "https" -> {
-        val connection = remoteUri.toURL().openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 10_000
-        connection.readTimeout = 60_000
-        val statusCode = connection.responseCode
-        if (statusCode < 200 || statusCode >= 300) {
-          // 错误响应通常很小，仅在诊断异常时读取，不影响 Bundle 流式路径。
-          val body = connection.errorStream?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
-          connection.disconnect()
-          throw OtaSdkException.invalidResponse(statusCode, body)
-        }
-        try {
-          connection.inputStream.use { inputStream ->
-            return writeAndHash(inputStream, localPath)
-          }
-        } finally {
-          connection.disconnect()
-        }
-      }
-
-      else -> throw OtaSdkException("不支持的下载协议：${remoteUri.scheme ?: ""}")
+    } finally {
+      connection.disconnect()
     }
   }
 
@@ -67,17 +77,41 @@ object OtaIO {
   @JvmStatic
   @Throws(IOException::class, InterruptedException::class)
   fun copyAndHash(sourcePath: File, destinationPath: File): StreamResult {
+    return copyAndHash(sourcePath, destinationPath, null, OtaModels.MAX_BUNDLE_BYTES.toLong())
+  }
+
+  @JvmStatic
+  @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
+  fun copyAndHash(
+    sourcePath: File,
+    destinationPath: File,
+    expectedBytes: Long?,
+    maxBytes: Long,
+  ): StreamResult {
     if (!sourcePath.isFile) {
       throw IOException("Bundle 源文件不存在：$sourcePath")
     }
+    validateExpectedBytes(expectedBytes, maxBytes)
     FileInputStream(sourcePath).use { inputStream ->
-      return writeAndHash(inputStream, destinationPath)
+      return writeAndHash(inputStream, destinationPath, expectedBytes, maxBytes)
     }
   }
 
   @JvmStatic
   @Throws(IOException::class, InterruptedException::class)
   fun writeAndHash(inputStream: InputStream, destinationPath: File): StreamResult {
+    return writeAndHash(inputStream, destinationPath, null, OtaModels.MAX_BUNDLE_BYTES.toLong())
+  }
+
+  @JvmStatic
+  @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
+  fun writeAndHash(
+    inputStream: InputStream,
+    destinationPath: File,
+    expectedBytes: Long?,
+    maxBytes: Long,
+  ): StreamResult {
+    validateExpectedBytes(expectedBytes, maxBytes)
     destinationPath.parentFile?.let { ensureDirectory(it) }
     val digest = newSha256Digest()
     var bytes = 0L
@@ -95,9 +129,16 @@ object OtaIO {
           if (readCount == 0) {
             continue
           }
-          bytes += readCount.toLong()
+          val nextBytes = bytes + readCount.toLong()
+          if (nextBytes > maxBytes || (expectedBytes != null && nextBytes > expectedBytes)) {
+            throw OtaSdkException("Bundle 超过允许大小", null, OtaModels.ReasonCodes.BUNDLE_TOO_LARGE)
+          }
+          bytes = nextBytes
           digest.update(buffer, 0, readCount)
           outputStream.write(buffer, 0, readCount)
+        }
+        if (expectedBytes != null && bytes != expectedBytes) {
+          throw OtaSdkException("Bundle size 校验失败", null, OtaModels.ReasonCodes.BUNDLE_SIZE_MISMATCH)
         }
       }
     } catch (error: InterruptedException) {
@@ -110,8 +151,22 @@ object OtaIO {
         destinationPath.delete()
       }
       throw error
+    } catch (error: OtaSdkException) {
+      if (destinationPath.exists()) {
+        destinationPath.delete()
+      }
+      throw error
     }
     return StreamResult(bytes, formatSha256(digest.digest()))
+  }
+
+  private fun validateExpectedBytes(expectedBytes: Long?, maxBytes: Long) {
+    if (maxBytes <= 0L) {
+      throw IllegalArgumentException("Bundle 最大大小必须大于 0")
+    }
+    if (expectedBytes != null && (expectedBytes <= 0L || expectedBytes > maxBytes)) {
+      throw OtaSdkException("Bundle 声明大小不合法", null, OtaModels.ReasonCodes.INVALID_BUNDLE_SIZE)
+    }
   }
 
   @JvmStatic

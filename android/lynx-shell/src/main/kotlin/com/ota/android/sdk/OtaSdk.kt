@@ -304,6 +304,38 @@ class OtaSdk {
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   private fun updateToLatestBundleList(latest: OtaModels.LatestBundleList): OtaModels.LatestBundleListUpdateResult {
     val current = getCurrentRelease(latest.lynxAppId)
+    if (latest.status != OtaModels.ReleaseStatus.ACTIVE) {
+      val reasonCode = when (latest.status) {
+        OtaModels.ReleaseStatus.DISABLED -> OtaModels.ReasonCodes.RELEASE_DISABLED
+        OtaModels.ReleaseStatus.ROLLED_BACK -> OtaModels.ReasonCodes.RELEASE_ROLLED_BACK
+        else -> OtaModels.ReasonCodes.INVALID_RELEASE_STATUS
+      }
+      runCatching {
+        report(
+          OtaModels.ReportEvent.CHECK_RESULT,
+          latest.releaseId,
+          latest.lynxAppId,
+          null,
+          null,
+          null,
+          null,
+          ReportDetails(
+            OtaModels.ReportEventStage.CHECK,
+            OtaModels.ReportEventResult.SKIPPED,
+            reasonCode,
+            "Release 状态不可激活：${latest.status.wireValue}",
+            null,
+            null,
+            null,
+            reasonCode,
+          ),
+        )
+      }
+      return OtaModels.LatestBundleListUpdateResult.skipped(
+        current,
+        "Release 状态不可激活：${latest.status.wireValue}",
+      )
+    }
     if (current != null && current.context.releaseId == latest.releaseId) {
       if (hasAllLocalBundles(current)) {
         return OtaModels.LatestBundleListUpdateResult.alreadyActive(current)

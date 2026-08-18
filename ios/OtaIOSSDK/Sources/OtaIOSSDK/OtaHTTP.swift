@@ -59,7 +59,11 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
         }
     }
 
-    public init() {}
+    private let allowLocalFileURLs: Bool
+
+    public init(allowLocalFileURLs: Bool = false) {
+        self.allowLocalFileURLs = allowLocalFileURLs
+    }
 
     public func download(from remoteURL: URL, to localURL: URL) async throws {
         try Task.checkCancellation()
@@ -67,7 +71,7 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
         try fileManager.createDirectory(at: localURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         switch remoteURL.scheme?.lowercased() {
-        case "file":
+        case "file" where allowLocalFileURLs:
             let sourcePath = remoteURL.path
             guard fileManager.fileExists(atPath: sourcePath) else {
                 throw OtaSDKError.fileNotFound(sourcePath)
@@ -76,13 +80,8 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
                 try fileManager.removeItem(at: localURL)
             }
             try fileManager.copyItem(at: remoteURL, to: localURL)
-            do {
-                try Task.checkCancellation()
-            } catch {
-                try? fileManager.removeItem(at: localURL)
-                throw error
-            }
-        case "http", "https":
+            try Task.checkCancellation()
+        case "https":
             let (temporaryURL, response) = try await downloadTemporaryFile(from: remoteURL)
             // URLSession 回调内部已经把 CFNetwork 的临时文件移动到了 SDK 自己的
             // 临时目录。这里无论 HTTP 状态是否成功都负责清理，避免失败响应留下孤儿文件。
@@ -91,6 +90,9 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
                 throw OtaSDKError.invalidResponse(statusCode: statusCode, body: "")
             }
+            guard http.url?.scheme?.lowercased() == "https" else {
+                throw OtaSDKError.unsupportedDownloadScheme(http.url?.scheme ?? "unknown")
+            }
 
             // 下载期间另一个生命周期任务可能清理过 release 目录；移动前再次创建
             // 父目录，避免临时文件存在但目标目录已被删除时直接失败。
@@ -98,6 +100,11 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
             try fileManager.createDirectory(at: parentDirectory, withIntermediateDirectories: true)
             guard fileManager.fileExists(atPath: temporaryURL.path) else {
                 throw OtaSDKError.fileNotFound(temporaryURL.path)
+            }
+            let attributes = try fileManager.attributesOfItem(atPath: temporaryURL.path)
+            let actualSize = (attributes[.size] as? NSNumber)?.int64Value ?? -1
+            guard actualSize > 0, actualSize <= 20 * 1024 * 1024 else {
+                throw OtaSDKError.bundleTooLarge(localURL.lastPathComponent)
             }
             if fileManager.fileExists(atPath: localURL.path) {
                 try fileManager.removeItem(at: localURL)
@@ -186,6 +193,13 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
     private let encoder: JSONEncoder
 
     public init(baseURL: URL, otaClientToken: String = OtaDefaults.otaClientToken) {
+        precondition(
+            baseURL.scheme?.lowercased() == "https" &&
+                baseURL.host?.isEmpty == false &&
+                baseURL.user == nil &&
+                baseURL.fragment == nil,
+            "OTA API 必须使用 HTTPS 并包含 Host"
+        )
         self.baseURL = baseURL
         self.otaClientToken = otaClientToken
         self.decoder = JSONDecoder()
@@ -277,6 +291,9 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw OtaSDKError.invalidResponse(statusCode: -1, body: "Missing HTTPURLResponse")
+        }
+        guard http.url?.scheme?.lowercased() == "https" else {
+            throw OtaSDKError.unsupportedDownloadScheme(http.url?.scheme ?? "unknown")
         }
         guard 200..<300 ~= http.statusCode else {
             throw OtaSDKError.invalidResponse(

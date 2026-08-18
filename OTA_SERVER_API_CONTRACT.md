@@ -178,7 +178,7 @@ GET /api/ota/v1/releases/latest-bundle-list?env=TEST&hostApp=capp&lynxAppId=1000
 | `bundlePath` | 是 | 相对路径，必须精确指向一个 `.lynx.bundle` | 本地 current 的唯一身份；不要只返回 basename |
 | `bundleUrl` | 是 | 绝对 URL；生产必须 `https://` | 下载源；当前服务端字段名就是 `bundleUrl` |
 | `bundleSha256` | 是 | 推荐 `sha256:` + 64 位小写十六进制 | 下载后完整性校验 |
-| `size` | 是 | 非负整数，单位字节 | 下载大小校验；运行时上限为 20 MB |
+| `size` | 是 | 整数，`1..20971520`，单位字节 | 下载大小校验；客户端在流式传输中强制 20 MB 上限 |
 | `required` | 是 | Boolean | 发布元数据；当前 Router 不改变页面打开策略 |
 | `prefetch` | 是 | Boolean | 发布元数据；当前 Router 不强制后台预取 |
 
@@ -219,6 +219,7 @@ GET /api/ota/v1/release/r20260629_001/manifest?env=TEST&hostApp=capp&lynxAppId=1
   "releaseId": "r20260629_001",
   "platform": "android",
   "platforms": ["android"],
+  "status": "ACTIVE",
   "bundles": [
     {
       "pageId": 10000001,
@@ -230,6 +231,9 @@ GET /api/ota/v1/release/r20260629_001/manifest?env=TEST&hostApp=capp&lynxAppId=1
   ]
 }
 ```
+
+Manifest 的 `status` 是必填字段；客户端只允许 `ACTIVE` Release 进入下载/激活，
+`DISABLED` 和 `ROLLED_BACK` 必须保留 current 并跳过本次安装。
 
 服务端当前应返回 `bundlePath`，不能只返回 `bundleName`。`bundleName` 不是当前 Server
 Manifest 的必需字段；如果将来新增该字段，也必须继续保留 `bundlePath`，直到三端客户端同时

@@ -25,8 +25,8 @@ export class LynxOtaConfig {
 
   validate(context: common.UIAbilityContext): void {
     const normalized = this.apiBaseUrl.trim();
-    if (!normalized.startsWith('https://') && !normalized.startsWith('http://')) {
-      throw new Error('OTA apiBaseUrl 必须使用 HTTP 或 HTTPS');
+    if (!normalized.startsWith('https://')) {
+      throw new Error('OTA apiBaseUrl 必须使用 HTTPS');
     }
     if (this.hostApp.trim().length === 0 || this.environment.trim().length === 0) {
       throw new Error('OTA hostApp/environment 不能为空');
@@ -101,8 +101,16 @@ export interface OtaReleaseState {
   lynxAppId: string;
   platform: string;
   generation: number;
-  currentReleaseId: string;
+  current: OtaReleaseRef;
+  previous?: OtaReleaseRef;
+  /** 旧 state 兼容读取字段；canonical 写入不再生成。 */
+  currentReleaseId?: string;
   previousReleaseId?: string;
+}
+
+export interface OtaReleaseRef {
+  kind: 'embedded' | 'downloaded';
+  releaseId: string;
 }
 
 /** Router 容器只消费已校验路径；绝对路径不会写入 ArkUI Router 参数。 */

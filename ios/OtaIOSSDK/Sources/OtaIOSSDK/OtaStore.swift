@@ -13,6 +13,9 @@ public actor FileOtaReleaseStore {
         decoder.dateDecodingStrategy = .iso8601
     }
 
+    /// Canonical ReleaseTransaction 使用同一 storage root；旧 pointer API 仍保持封装。
+    public nonisolated var baseDirectoryURL: URL { baseDirectory }
+
     public func currentRelease(lynxAppId: String? = nil) -> OtaInstalledRelease? {
         if let lynxAppId,
            let scoped = try? readReleasePointer(at: currentReleasePointerURL(lynxAppId: lynxAppId)) {

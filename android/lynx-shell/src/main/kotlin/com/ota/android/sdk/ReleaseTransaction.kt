@@ -570,6 +570,15 @@ class ReleaseTransaction @JvmOverloads constructor(
 
   private fun validateManifest(scope: ReleaseScope, manifest: OtaModels.ReleaseManifest) {
     validateReleaseId(manifest.releaseId)
+    when (manifest.status) {
+      OtaModels.ReleaseStatus.ACTIVE -> Unit
+      OtaModels.ReleaseStatus.DISABLED ->
+        throw transactionError("Release 已禁用：${manifest.releaseId}", OtaModels.ReasonCodes.RELEASE_DISABLED)
+      OtaModels.ReleaseStatus.ROLLED_BACK ->
+        throw transactionError("Release 已回滚：${manifest.releaseId}", OtaModels.ReasonCodes.RELEASE_ROLLED_BACK)
+      else ->
+        throw transactionError("Release 状态不可激活：${manifest.status.wireValue}", OtaModels.ReasonCodes.INVALID_RELEASE_STATUS)
+    }
     if (manifest.env != scope.env || manifest.hostApp != scope.hostApp ||
       manifest.lynxAppId != scope.lynxAppId || manifest.platform != scope.platform
     ) throw transactionError("Manifest scope 与请求不一致", "scope_mismatch")
@@ -580,7 +589,20 @@ class ReleaseTransaction @JvmOverloads constructor(
         throw transactionError("Manifest 中存在重复 Bundle 路径：${artifact.bundlePath}", "duplicate_bundle_path")
       }
       validateSha(artifact.bundleSha256)
-      artifact.size?.let { if (it < 0) throw transactionError("Bundle size 不能为负数：${artifact.bundlePath}", "invalid_bundle_size") }
+      val size = artifact.size
+        ?: throw transactionError("Bundle size 不能为空：${artifact.bundlePath}", OtaModels.ReasonCodes.MISSING_BUNDLE_SIZE)
+      if (size <= 0) {
+        throw transactionError("Bundle size 必须大于 0：${artifact.bundlePath}", OtaModels.ReasonCodes.INVALID_BUNDLE_SIZE)
+      }
+      if (size > OtaModels.MAX_BUNDLE_BYTES) {
+        throw transactionError("Bundle 超过 ${OtaModels.MAX_BUNDLE_BYTES} 字节：${artifact.bundlePath}", OtaModels.ReasonCodes.BUNDLE_TOO_LARGE)
+      }
+      val bundleUri = artifact.bundleUrl
+      if (!bundleUri.scheme.equals("https", ignoreCase = true) || bundleUri.host.isNullOrBlank() ||
+        bundleUri.userInfo != null || bundleUri.fragment != null
+      ) {
+        throw transactionError("Bundle URL 必须使用 HTTPS：${artifact.bundlePath}", OtaModels.ReasonCodes.INVALID_BUNDLE_URL)
+      }
     }
   }
 
@@ -705,7 +727,12 @@ class ReleaseTransaction @JvmOverloads constructor(
       val reusableSource = findReusableSource(previousRelease, plan.artifact)
       if (reusableSource != null) {
         try {
-          val copied = OtaIO.copyAndHash(reusableSource, plan.partPath)
+          val copied = OtaIO.copyAndHash(
+            reusableSource,
+            plan.partPath,
+            plan.artifact.size?.toLong(),
+            OtaModels.MAX_BUNDLE_BYTES.toLong(),
+          )
           validateStreamResult(plan.artifact, copied)
           return BundleTransferResult(
             index = plan.index,
@@ -730,7 +757,12 @@ class ReleaseTransaction @JvmOverloads constructor(
           if (Thread.currentThread().isInterrupted) {
             throw InterruptedException("Bundle 下载任务已取消")
           }
-          val downloaded = OtaIO.downloadAndHash(plan.artifact.bundleUrl, plan.partPath)
+          val downloaded = OtaIO.downloadAndHash(
+            plan.artifact.bundleUrl,
+            plan.partPath,
+            plan.artifact.size?.toLong(),
+            OtaModels.MAX_BUNDLE_BYTES.toLong(),
+          )
           validateStreamResult(plan.artifact, downloaded)
           return BundleTransferResult(
             index = plan.index,

@@ -67,6 +67,15 @@ private class ServerOtaApiClient(
   private val baseUri: URI,
   otaClientToken: String?,
 ) : OtaApiClient {
+  init {
+    require(baseUri.scheme.equals("https", ignoreCase = true) && baseUri.host?.isNotBlank() == true) {
+      "OTA API 必须使用 HTTPS 且包含 Host"
+    }
+    require(baseUri.userInfo == null && baseUri.query == null && baseUri.fragment == null) {
+      "OTA API 地址不能包含 userInfo、query 或 fragment"
+    }
+  }
+
   private val otaClientToken: String =
     if (otaClientToken.isNullOrBlank()) OtaModels.DEFAULT_OTA_CLIENT_TOKEN else otaClientToken
 
@@ -93,7 +102,10 @@ private class ServerOtaApiClient(
     )
     val response = send("GET", uri, null)
     ensureSuccess(response)
-    return OtaModels.ReleaseManifest.fromJsonMap(OtaJson.asObject(OtaJson.parse(response.body), "manifest 响应"))
+    return OtaModels.ReleaseManifest.fromJsonMap(
+      OtaJson.asObject(OtaJson.parse(response.body), "manifest 响应"),
+      requireStatus = true,
+    )
   }
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
@@ -170,6 +182,7 @@ private class ServerOtaApiClient(
   @Throws(IOException::class)
   private fun send(method: String, uri: URI, body: String?): HttpResult {
     val connection = uri.toURL().openConnection() as HttpURLConnection
+    connection.instanceFollowRedirects = false
     connection.requestMethod = method
     connection.connectTimeout = 10_000
     connection.readTimeout = 30_000

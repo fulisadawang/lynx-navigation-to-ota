@@ -20,7 +20,7 @@ public actor OtaSDK {
         configuration: OtaSDKConfiguration,
         apiClient: OtaAPIClientProtocol? = nil,
         store: FileOtaReleaseStore? = nil,
-        downloader: OtaBundleDownloading = URLSessionBundleDownloader(),
+        downloader: OtaBundleDownloading? = nil,
         checksumValidator: OtaChecksumValidating = SHA256ChecksumValidator()
     ) {
         self.configuration = configuration
@@ -32,24 +32,28 @@ public actor OtaSDK {
         self.store = resolvedStore
         self.releaseTransaction = ReleaseTransaction(store: resolvedStore)
         self.bundleRuntime = BundleRuntime(transaction: releaseTransaction)
-        self.downloader = downloader
+        self.downloader = downloader ?? URLSessionBundleDownloader(
+            allowLocalFileURLs: configuration.environment == .test &&
+                configuration.apiBaseURL.scheme?.lowercased() == "http"
+        )
         self.checksumValidator = checksumValidator
     }
 
     public func initializeEmbeddedRelease(_ release: OtaInstalledRelease) async throws {
         try await store.saveEmbeddedRelease(release)
+        try await releaseTransaction.registerEmbedded(release)
         lifecycleState = .active(release.context)
     }
 
     /// 直接删除指定 appId 的下载版本；embedded 描述和 App 内置资源保留。
     public func deleteDownloadedBundles(lynxAppId: String) async throws {
-        try await store.deleteDownloadedBundles(app: configuration.app, lynxAppId: lynxAppId)
+        try await releaseTransaction.deleteDownloadedBundles(app: configuration.app, lynxAppId: lynxAppId)
         lifecycleState = .idle(current: nil)
     }
 
     /// 直接删除全部 appId 的下载版本；不会建立 `.delete-*` 备份目录。
     public func deleteAllDownloadedBundles() async throws {
-        try await store.deleteAllDownloadedBundles()
+        try await releaseTransaction.deleteAllDownloadedBundles()
         lifecycleState = .idle(current: nil)
     }
 
@@ -193,6 +197,7 @@ public actor OtaSDK {
             )
             throw error
         }
+        try validateRemoteManifest(manifest)
         let current = await getCurrentRelease(lynxAppId: manifest.lynxAppId)
         let reusableRelease = await reusableReleaseSnapshot(current: current, lynxAppId: manifest.lynxAppId)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: reusableRelease)
@@ -202,15 +207,14 @@ public actor OtaSDK {
     }
 
     public func activateStagedRelease() async throws -> OtaInstalledRelease {
-        guard let staged = await store.stagedRelease(app: configuration.app, lynxAppId: configuration.lynxAppId) else {
+        let scope = OtaReleaseScope(app: configuration.app, lynxAppId: configuration.lynxAppId)
+        guard let staged = await releaseTransaction.staged(scope: scope) else {
             throw OtaSDKError.missingStagedRelease
         }
         lifecycleState = .activating(releaseId: staged.context.releaseId)
         let installed: OtaInstalledRelease
         do {
-            installed = try await releaseTransaction.activate(
-                scope: OtaReleaseScope(app: staged.context.app, lynxAppId: staged.context.lynxAppId)
-            )
+            installed = try await releaseTransaction.activate(scope: scope)
         } catch {
             try? await report(
                 event: .activate,
@@ -337,6 +341,27 @@ public actor OtaSDK {
         _ latest: OtaLatestBundleList,
         current: OtaInstalledRelease?
     ) async throws -> OtaLatestBundleListUpdateResult {
+        if latest.status != .active {
+            let reasonCode: OtaReasonCode = latest.status == .disabled ? .releaseDisabled : .releaseRolledBack
+            try? await report(
+                event: .checkResult,
+                releaseId: latest.releaseId,
+                lynxAppId: latest.lynxAppId,
+                pageId: nil,
+                deviceId: nil,
+                eventStage: .check,
+                eventResult: .skipped,
+                reasonCode: reasonCode.rawValue,
+                reasonMessage: "Release 状态不可激活：\(latest.status.rawValue)",
+                message: reasonCode.rawValue
+            )
+            if let current {
+                lifecycleState = .active(current.context)
+            } else {
+                lifecycleState = .idle(current: nil)
+            }
+            return .skipped(current: current, message: "Release 状态不可激活：\(latest.status.rawValue)")
+        }
         if let current, current.context.releaseId == latest.releaseId {
             if hasAllLocalBundles(current, expectedBundles: latest.changedBundles) {
                 lifecycleState = .active(current.context)
@@ -388,6 +413,15 @@ public actor OtaSDK {
         }
 
         let manifest = latest.asManifest()
+        try validateRemoteManifest(manifest)
+        if manifest.bundles.isEmpty {
+            if let current {
+                lifecycleState = .active(current.context)
+            } else {
+                lifecycleState = .idle(current: nil)
+            }
+            return .noRelease(current: current)
+        }
         lifecycleState = .downloading(releaseId: manifest.releaseId)
         let reusableRelease = await reusableReleaseSnapshot(current: current, lynxAppId: latest.lynxAppId)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: reusableRelease)
@@ -427,13 +461,12 @@ public actor OtaSDK {
     }
 
     private func activateStagedRelease(lynxAppId: String) async throws -> OtaInstalledRelease {
-        guard let staged = await store.stagedRelease(app: configuration.app, lynxAppId: lynxAppId) else {
+        let scope = OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
+        guard let staged = await releaseTransaction.staged(scope: scope) else {
             throw OtaSDKError.missingStagedRelease
         }
         lifecycleState = .activating(releaseId: staged.context.releaseId)
-        let installed = try await releaseTransaction.activate(
-            scope: OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
-        )
+        let installed = try await releaseTransaction.activate(scope: scope)
         lifecycleState = .active(installed.context)
         try? await report(
             event: .activate,
@@ -679,6 +712,35 @@ public actor OtaSDK {
                 reusedBundleCount: reusedBundleCount
             )
         )
+    }
+
+    private func validateRemoteManifest(_ manifest: OtaReleaseManifest) throws {
+        guard manifest.status == .active else {
+            throw OtaSDKError.invalidReleaseStatus(manifest.status.rawValue)
+        }
+        let allowLocalTestFixtures = configuration.environment == .test &&
+            configuration.apiBaseURL.scheme?.lowercased() == "http"
+        guard !manifest.bundles.isEmpty else {
+            if allowLocalTestFixtures { return }
+            throw OtaSDKError.invalidBundleName("Release bundles 不能为空")
+        }
+        for bundle in manifest.bundles {
+            let scheme = bundle.bundleURL.scheme?.lowercased()
+            let isHTTPS = scheme == "https" && bundle.bundleURL.host?.isEmpty == false
+            let isLocalFixture = allowLocalTestFixtures && scheme == "file"
+            guard (isHTTPS || isLocalFixture),
+                  bundle.bundleURL.user == nil,
+                  bundle.bundleURL.fragment == nil else {
+                throw OtaSDKError.invalidBundleURL(bundle.bundlePath)
+            }
+            guard let size = bundle.size else {
+                if allowLocalTestFixtures { continue }
+                throw OtaSDKError.missingBundleSize(bundle.bundlePath)
+            }
+            guard size > 0, size <= 20 * 1024 * 1024 else {
+                throw OtaSDKError.bundleTooLarge(bundle.bundlePath)
+            }
+        }
     }
 
     private func reusableInstalledBundle(

@@ -235,10 +235,12 @@ ota.serverPlatform = 'android'; // 临时复用 Android release；后端支持 h
 OTA 与直连边界：
 
 - `openOta(appId, bundleName, params)`：Manifest/latest-list、staging、size/SHA、
-  current/previous、repair/rollback。
+  `states/<appId>.json` 的 `current/previous` Release ref、repair/rollback；新 state 不写
+  Bundle 绝对路径。
 - `open('https://...lynx.bundle', params)`：直接下载渲染，不进入 OTA、不过 30 分钟门控。
-- 当前 Bundle 下载使用受 20 MB 硬上限保护的 `ArrayBuffer`；这是 Harmony Lynx 4.0 Provider
-  接缝的明确内存边界，大 Bundle 后续应切换为流式落盘。
+- 当前 Bundle 下载会在 `ArrayBuffer` 返回后执行 20 MB 硬上限；这是 Harmony Lynx 4.0
+  Provider 接缝的临时内存边界，尚未等价于 Android 的流式落盘上限，需待目标 SDK 提供文件流
+  API 后再收敛。
 
 它与 Android `LynxRouter.open(context, bundle, params)`、iOS
 `LynxRouter.open(bundle:params:)` 对齐；不需要预注册 routeId，也不引入 Fragment。

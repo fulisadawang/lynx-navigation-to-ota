@@ -64,10 +64,10 @@ public struct LynxOtaConfiguration {
         self.pageRefreshInterval = pageRefreshInterval
     }
 
-    fileprivate func makeSDKConfiguration() throws -> OtaSDKConfiguration {
-        guard ["http", "https"].contains(apiBaseURL.scheme?.lowercased() ?? ""),
+    private func makeSDKConfiguration() throws -> OtaSDKConfiguration {
+        guard apiBaseURL.scheme?.lowercased() == "https",
               apiBaseURL.host?.isEmpty == false else {
-            throw LynxOtaError.invalidConfiguration("OTA apiBaseURL 必须包含 HTTP(S) 协议和 Host")
+            throw LynxOtaError.invalidConfiguration("OTA apiBaseURL 必须使用 HTTPS 并包含 Host")
         }
         guard !defaultLynxAppId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LynxOtaError.invalidConfiguration("defaultLynxAppId 不能为空")
@@ -113,6 +113,11 @@ public struct LynxOtaConfiguration {
             otaClientToken: clientToken,
             storageDirectory: directory
         )
+    }
+
+    /// 保留宿主配置内部封装，同时允许同文件的 Runtime 完成一次性 SDK 构造。
+    fileprivate func makeSDKConfigurationForRuntime() throws -> OtaSDKConfiguration {
+        try makeSDKConfiguration()
     }
 }
 
@@ -189,7 +194,7 @@ public actor LynxOtaRuntime {
     private var fullSyncPending = false
 
     public init(configuration: LynxOtaConfiguration) throws {
-        sdk = OtaSDK(configuration: try configuration.makeSDKConfiguration())
+        sdk = OtaSDK(configuration: try configuration.makeSDKConfigurationForRuntime())
         pageRefreshInterval = configuration.pageRefreshInterval
     }
 
