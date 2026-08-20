@@ -20,13 +20,14 @@ enum ShellTransitionDirection: String {
 }
 
 /**
- * Skyline preset-route 的七种稳定预设。
+ * Skyline preset-route 的官方预设与壳扩展 heroSheet。
  *
  * routeType 不再折叠成一个近似 style：style 仅用于状态诊断与兜底，真实渲染器由
  * routeType 逐项选择，确保返回时仍进入同一原生 renderer。
  */
 enum ShellRouteType: String, CaseIterable {
     case bottomSheet = "wx://bottom-sheet"
+    case heroSheet = "wx://hero-sheet"
     case upwards = "wx://upwards"
     case zoom = "wx://zoom"
     case cupertinoModal = "wx://cupertino-modal"
@@ -36,7 +37,7 @@ enum ShellRouteType: String, CaseIterable {
 
     var diagnosticStyle: ShellTransitionStyle {
         switch self {
-        case .bottomSheet, .upwards:
+        case .bottomSheet, .heroSheet, .upwards:
             return .slideUp
         case .zoom, .cupertinoModal, .modal:
             return .zoom
@@ -47,12 +48,16 @@ enum ShellRouteType: String, CaseIterable {
 
     var isPartialContainer: Bool {
         switch self {
-        case .bottomSheet, .cupertinoModal, .cupertinoModalInside,
+        case .bottomSheet, .heroSheet, .cupertinoModal, .cupertinoModalInside,
              .modalNavigation, .modal:
             return true
         case .upwards, .zoom:
             return false
         }
+    }
+
+    var isSheet: Bool {
+        self == .bottomSheet || self == .heroSheet
     }
 }
 
@@ -135,26 +140,94 @@ struct ShellRouteConfig {
             )
         )
     }
+
+    /** 顶层 transparent/heroSheet 只改变宿主承载透明度，不覆盖其它 routeConfig。 */
+    func transparentized() -> ShellRouteConfig {
+        ShellRouteConfig(
+            transitionDurationMilliseconds: transitionDurationMilliseconds,
+            reverseTransitionDurationMilliseconds: reverseTransitionDurationMilliseconds,
+            opaque: false,
+            maintainState: maintainState,
+            barrierColor: barrierColor,
+            barrierDismissible: barrierDismissible,
+            barrierLabel: barrierLabel,
+            canTransitionTo: canTransitionTo,
+            canTransitionFrom: canTransitionFrom,
+            allowEnterRouteSnapshotting: allowEnterRouteSnapshotting,
+            allowExitRouteSnapshotting: allowExitRouteSnapshotting,
+            fullscreenDrag: fullscreenDrag,
+            popGestureDirection: popGestureDirection
+        )
+    }
 }
 
-/** bottom-sheet 专属布局参数，height 使用 Skyline 的 vh 语义。 */
+/** Sheet 布局参数；height 使用 Skyline 的 vh 语义，detents 按升序排列。 */
 struct ShellRouteOptions {
     let round: Bool
     let heightVH: CGFloat
+    let detentsVH: [CGFloat]
+    let initialDetentVH: CGFloat
+    let initialDetentIndex: Int
 
-    static let `default` = ShellRouteOptions(round: true, heightVH: 60)
+    static let `default` = ShellRouteOptions(
+        round: true,
+        heightVH: ShellBottomSheetMotion.defaultHeightVH,
+        detentsVH: [ShellBottomSheetMotion.defaultHeightVH],
+        initialDetentVH: ShellBottomSheetMotion.defaultHeightVH,
+        initialDetentIndex: 0
+    )
+
+    static let heroDefault = ShellRouteOptions(
+        round: true,
+        heightVH: ShellHeroSheetMotion.defaultInitialDetentVH,
+        detentsVH: ShellHeroSheetMotion.defaultDetentsVH,
+        initialDetentVH: ShellHeroSheetMotion.defaultInitialDetentVH,
+        initialDetentIndex: ShellHeroSheetMotion.nearestDetentIndex(
+            heightVH: ShellHeroSheetMotion.defaultInitialDetentVH,
+            detentsVH: ShellHeroSheetMotion.defaultDetentsVH
+        )
+    )
 
     var dictionary: [String: Any] {
         [
             "round": round,
             "height": Double(heightVH),
+            "detents": detentsVH.map { Double($0) },
+            "initialDetent": Double(initialDetentVH),
         ]
     }
 
-    static func fromDictionary(_ value: [String: Any]) -> ShellRouteOptions {
-        ShellRouteOptions(
+    static func fromDictionary(
+        _ value: [String: Any],
+        routeType: ShellRouteType? = nil
+    ) -> ShellRouteOptions {
+        let fallback = routeType == .heroSheet ? heroDefault : `default`
+        let explicitHeight = number(value["height"]).map { CGFloat(truncating: $0) }
+        let rawDetents = (value["detents"] as? [Any])?.compactMap {
+            number($0).map { CGFloat(truncating: $0) }
+        }
+        let sortedDetents = rawDetents?.filter { $0 > 0 && $0 <= 100 }
+            .sorted()
+            .reduce(into: [CGFloat]()) { result, value in
+                if result.last != value { result.append(value) }
+            }
+        let detents = sortedDetents?.isEmpty == false
+            ? sortedDetents!
+            : (explicitHeight.map { [$0] } ?? fallback.detentsVH)
+        let requestedInitial = number(value["initialDetent"]).map {
+            CGFloat(truncating: $0)
+        } ?? explicitHeight ?? fallback.initialDetentVH
+        let initialIndex = ShellHeroSheetMotion.nearestDetentIndex(
+            heightVH: requestedInitial,
+            detentsVH: detents
+        )
+        let initial = detents[initialIndex]
+        return ShellRouteOptions(
             round: bool(value["round"]) ?? true,
-            heightVH: number(value["height"]).map { CGFloat(truncating: $0) } ?? 60
+            heightVH: initial,
+            detentsVH: detents,
+            initialDetentVH: initial,
+            initialDetentIndex: initialIndex
         )
     }
 }
@@ -486,8 +559,10 @@ struct ShellTransitionSpec {
     }
 
     var usesCustomAnimator: Bool {
-        explicitlyRequested ||
+        baseEffectiveStyle != .none && (
+            explicitlyRequested ||
             ![ShellTransitionStyle.default, .none].contains(baseEffectiveStyle)
+        )
     }
 
     func durationMilliseconds(for direction: ShellTransitionDirection) -> Int {
@@ -559,9 +634,9 @@ struct ShellTransitionSpec {
             routeConfig: (value["routeConfig"] as? [String: Any]).map(
                 ShellRouteConfig.fromDictionary
             ) ?? .default,
-            routeOptions: (value["routeOptions"] as? [String: Any]).map(
-                ShellRouteOptions.fromDictionary
-            ) ?? .default,
+            routeOptions: (value["routeOptions"] as? [String: Any]).map {
+                ShellRouteOptions.fromDictionary($0, routeType: routeType)
+            } ?? (routeType == .heroSheet ? .heroDefault : .default),
             explicitlyRequested: bool(value["explicitlyRequested"])
                 ?? (routeType != nil || requested != .default),
             initialReason: value["initialReason"] as? String
@@ -576,9 +651,11 @@ struct ShellTransitionSpec {
             defaultValue: [:]
         )
         let routeType = try parseRouteType(options["routeType"])
+        let transparent = bool(options["transparent"]) ?? false
         let explicitlyRequested = !animated ||
             options["transition"] != nil ||
-            routeType != nil
+            routeType != nil ||
+            transparent
 
         let requestedStyle: ShellTransitionStyle
         if let styleValue = transition["style"] {
@@ -599,10 +676,13 @@ struct ShellTransitionSpec {
             )
         }
 
+        let defaultTransitionDuration = routeType == .bottomSheet
+            ? ShellBottomSheetMotion.defaultDurationMilliseconds
+            : 300
         let transitionDuration = try boundedInt(
             transition["durationMs"],
             field: "transition.durationMs",
-            fallback: 300,
+            fallback: defaultTransitionDuration,
             range: 0 ... 5_000
         )
         let timeout = try boundedInt(
@@ -612,8 +692,14 @@ struct ShellTransitionSpec {
             range: 80 ... 1_500
         )
 
-        let routeConfig = try parseRouteConfig(options["routeConfig"])
-        let routeOptions = try parseRouteOptions(options["routeOptions"])
+        var routeConfig = try parseRouteConfig(options["routeConfig"])
+        if transparent || routeType == .heroSheet {
+            routeConfig = routeConfig.transparentized()
+        }
+        let routeOptions = try parseRouteOptions(
+            options["routeOptions"],
+            routeType: routeType
+        )
         let sharedElements = try parseSharedElements(
             arrayValue: transition["sharedElements"],
             legacyValue: transition["sharedElement"]
@@ -633,12 +719,14 @@ struct ShellTransitionSpec {
 
         var popGesture = try parsePopGesture(transition["popGesture"])
         let routeDefaultDirection: ShellPopGestureSpec.Direction? =
-            routeType == .bottomSheet ? .vertical : nil
+            routeType == .bottomSheet || routeType == .heroSheet ? .vertical : nil
         let direction = routeConfig.popGestureDirection
             ?? routeDefaultDirection
             ?? popGesture.direction
         let fullScreen = routeConfig.fullscreenDrag
-            ?? (routeType == .bottomSheet ? true : popGesture.fullScreen)
+            ?? (routeType == .bottomSheet || routeType == .heroSheet
+                ? true
+                : popGesture.fullScreen)
         popGesture = ShellPopGestureSpec(
             enabled: popGesture.enabled,
             direction: direction,
@@ -655,10 +743,11 @@ struct ShellTransitionSpec {
         let reverseDuration = routeConfig.reverseTransitionDurationMilliseconds
             ?? duration
 
+        let nativeAnimationEnabled = animated && routeType != .heroSheet
         return ShellTransitionSpec(
             requestedStyle: requestedStyle,
-            baseEffectiveStyle: animated ? requestedStyle : .none,
-            fallbackStyle: animated ? fallback : .none,
+            baseEffectiveStyle: nativeAnimationEnabled ? requestedStyle : .none,
+            fallbackStyle: nativeAnimationEnabled ? fallback : .none,
             durationMilliseconds: duration,
             reverseDurationMilliseconds: reverseDuration,
             readyTimeoutMilliseconds: timeout,
@@ -740,16 +829,85 @@ struct ShellTransitionSpec {
         )
     }
 
-    private static func parseRouteOptions(_ rawValue: Any?) throws -> ShellRouteOptions {
+    private static func parseRouteOptions(
+        _ rawValue: Any?,
+        routeType: ShellRouteType?
+    ) throws -> ShellRouteOptions {
         let value = try object(rawValue, field: "routeOptions", defaultValue: [:])
-        return ShellRouteOptions(
-            round: bool(value["round"]) ?? true,
-            heightVH: try boundedCGFloat(
+        let explicitHeight: CGFloat?
+        if value["height"] == nil {
+            explicitHeight = nil
+        } else {
+            explicitHeight = try boundedCGFloat(
                 value["height"],
                 field: "routeOptions.height",
-                fallback: 60,
+                fallback: ShellBottomSheetMotion.defaultHeightVH,
                 range: 1 ... 100
             )
+        }
+        let detents: [CGFloat]
+        if let rawDetents = value["detents"] {
+            guard let values = rawDetents as? [Any],
+                  values.count >= 1,
+                  values.count <= ShellHeroSheetMotion.maximumDetents else {
+                throw LynxRouteError.invalidArgument(
+                    "routeOptions.detents 数量必须在 1...\(ShellHeroSheetMotion.maximumDetents) 之间"
+                )
+            }
+            detents = try values.enumerated().map { index, rawValue in
+                try boundedCGFloat(
+                    rawValue,
+                    field: "routeOptions.detents[\(index)]",
+                    fallback: 0,
+                    range: 1 ... 100
+                )
+            }
+            guard zip(detents, detents.dropFirst()).allSatisfy({ pair in
+                pair.0 < pair.1
+            }) else {
+                throw LynxRouteError.invalidArgument(
+                    "routeOptions.detents 必须严格递增"
+                )
+            }
+        } else if let explicitHeight {
+            detents = [explicitHeight]
+        } else if routeType == .heroSheet {
+            detents = ShellHeroSheetMotion.defaultDetentsVH
+        } else {
+            detents = [ShellBottomSheetMotion.defaultHeightVH]
+        }
+        if routeType == .heroSheet, detents.count < 2 {
+            throw LynxRouteError.invalidArgument("heroSheet 至少需要两个 detent")
+        }
+        if routeType == .heroSheet,
+           abs((detents.last ?? 0) - 100) >= 0.0001 {
+            throw LynxRouteError.invalidArgument(
+                "heroSheet 的最后一个 detent 必须是 100vh 全屏"
+            )
+        }
+        let usesHeroDefaults = routeType == .heroSheet &&
+            value["detents"] == nil && explicitHeight == nil
+        let requestedInitial = try boundedCGFloat(
+            value["initialDetent"],
+            field: "routeOptions.initialDetent",
+            fallback: usesHeroDefaults
+                ? ShellHeroSheetMotion.defaultInitialDetentVH
+                : (explicitHeight ?? detents.last ?? ShellBottomSheetMotion.defaultHeightVH),
+            range: 1 ... 100
+        )
+        guard let initialIndex = detents.firstIndex(where: {
+            abs($0 - requestedInitial) < 0.0001
+        }) else {
+            throw LynxRouteError.invalidArgument(
+                "routeOptions.initialDetent 必须是 detents 中的一个值"
+            )
+        }
+        return ShellRouteOptions(
+            round: bool(value["round"]) ?? true,
+            heightVH: requestedInitial,
+            detentsVH: detents,
+            initialDetentVH: requestedInitial,
+            initialDetentIndex: initialIndex
         )
     }
 

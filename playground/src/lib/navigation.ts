@@ -26,6 +26,7 @@ export type TransitionStyle =
 /** 与微信 Skyline preset-route 对齐的公开名称。 */
 export type SkylineRouteType =
   | 'wx://bottom-sheet'
+  | 'wx://hero-sheet'
   | 'wx://upwards'
   | 'wx://zoom'
   | 'wx://cupertino-modal'
@@ -127,10 +128,14 @@ export interface SkylineRouteConfig {
   popGestureDirection?: 'horizontal' | 'vertical' | 'multi'
 }
 
-/** 当前官方预设中公开的动态选项；height 单位为 vh。 */
+/** Sheet 动态选项；height/detents/initialDetent 单位均为 vh。 */
 export interface SkylineRouteOptions {
   round?: boolean
   height?: number
+  /** 严格递增的 Sheet 高度档位；最多 4 个。 */
+  detents?: number[]
+  /** 必须是 detents 中的一个值；省略时 bottomSheet 取最大档，heroSheet 取 56vh 默认档。 */
+  initialDetent?: number
 }
 
 /** 所有会修改原生栈的命令共用选项。 */
@@ -153,6 +158,8 @@ export interface OpenNavigationOptions extends NavigationCommandOptions {
    * 原生导航栏返回和 NativeModules.close 始终保留。
    */
   backGestureEnabled?: boolean
+  /** 原生只提供透明全屏承载；页面内容是否移动由 Lynx 自己决定。 */
+  transparent?: boolean
   /** Skyline 预设名；双端映射为当前平台可稳定实现的原生转场。 */
   routeType?: SkylineRouteType
   routeConfig?: SkylineRouteConfig
@@ -262,6 +269,7 @@ export type TransitionPreset =
   | 'zoom'
   | 'modal'
   | 'bottomSheet'
+  | 'heroSheet'
   | 'cupertinoModal'
   | 'cupertinoModalInside'
   | 'modalNavigation'
@@ -288,6 +296,7 @@ export interface BasicTransitionPresetRequest extends PresetRequestBase {
     | 'zoom'
     | 'modal'
     | 'bottomSheet'
+    | 'heroSheet'
     | 'cupertinoModal'
     | 'cupertinoModalInside'
     | 'modalNavigation'
@@ -472,7 +481,7 @@ function normalizeSharedElement(item: SharedElementRouteItem): SharedElementSpec
 
 function presetTransition(
   request: TransitionPresetRequest,
-): Pick<OpenNavigationOptions, 'routeType' | 'transition'> {
+): Pick<OpenNavigationOptions, 'routeType' | 'transition' | 'animated' | 'transparent'> {
   switch (request.preset) {
     case 'shared': {
       const items = 'elements' in request ? request.elements : [request]
@@ -516,6 +525,13 @@ function presetTransition(
       return { routeType: 'wx://zoom' }
     case 'bottomSheet':
       return { routeType: 'wx://bottom-sheet' }
+    case 'heroSheet':
+      return {
+        routeType: 'wx://hero-sheet',
+        transparent: true,
+        // heroSheet 的入场/退场动画由 Lynx 页面执行，原生只立即切换承载层。
+        animated: false,
+      }
     case 'cupertinoModal':
       return { routeType: 'wx://cupertino-modal' }
     case 'cupertinoModalInside':

@@ -8,18 +8,6 @@ import UIKit
  * 交还 UIKit。所有插值都在主线程执行，不逐帧调用 NativeModules/JS。
  */
 final class ShellNavigationAnimator: NSObject, UIViewControllerAnimatedTransitioning {
-    /**
-     * iOS sheet 的公开视觉特征：来源页后退、轻微下沉并出现连续圆角。
-     *
-     * 这里不依赖 UIKit 私有转场参数；数值只负责在自定义 UINavigationController
-     * 转场中复现稳定层级感，并且会在返回或手势取消时完整恢复。
-     */
-    private static let bottomSheetBackdropTransform = CGAffineTransform(
-        translationX: 0,
-        y: 10
-    ).scaledBy(x: 0.94, y: 0.94)
-    private static let bottomSheetBackdropCornerRadius: CGFloat = 18
-
     private let operation: UINavigationController.Operation
     private let requestedStyle: ShellTransitionStyle
     private var effectiveStyle: ShellTransitionStyle
@@ -221,7 +209,13 @@ final class ShellNavigationAnimator: NSObject, UIViewControllerAnimatedTransitio
         cleanup = {
             plans.reversed().forEach { $0.cleanup() }
         }
-        let timing = UISpringTimingParameters(dampingRatio: 0.92)
+        let timing: UITimingCurveProvider
+        if spec.routeType == .bottomSheet, operation == .pop {
+            // Page Sheet 关闭只沿 Y 轴离场，不使用 spring，避免越过终点后回弹抖动。
+            timing = UICubicTimingParameters(animationCurve: .easeIn)
+        } else {
+            timing = UISpringTimingParameters(dampingRatio: 0.92)
+        }
         let animator = UIViewPropertyAnimator(
             duration: transitionDuration(using: transitionContext),
             timingParameters: timing
@@ -232,15 +226,22 @@ final class ShellNavigationAnimator: NSObject, UIViewControllerAnimatedTransitio
         animator.addCompletion { [weak self, weak fromView, weak toView] _ in
             guard let self else { return }
             let cancelled = transitionContext.transitionWasCancelled
-            fromView?.alpha = 1
-            fromView?.transform = .identity
-            fromView?.layer.cornerRadius = 0
-            fromView?.clipsToBounds = false
+            let preserveBottomSheetTerminalState = self.operation == .pop &&
+                self.spec.routeType == .bottomSheet &&
+                ShellBottomSheetMotion.preservesTerminalState(
+                    transitionCancelled: cancelled
+                )
+            if !preserveBottomSheetTerminalState {
+                fromView?.alpha = 1
+                fromView?.transform = .identity
+                fromView?.layer.cornerRadius = 0
+                fromView?.clipsToBounds = false
+                self.cleanup?()
+            }
             toView?.alpha = 1
             toView?.transform = .identity
             toView?.layer.cornerRadius = 0
             toView?.clipsToBounds = false
-            self.cleanup?()
             self.cleanup = nil
             self.completionFinalizer?(!cancelled)
             self.completionFinalizer = nil
@@ -484,6 +485,7 @@ final class ShellNavigationAnimator: NSObject, UIViewControllerAnimatedTransitio
         container: UIView,
         isPush: Bool
     ) -> AnimationPlan? {
+        guard routeType != .heroSheet else { return nil }
         let fromLynx = fromController as? LynxContainerViewController
         let toLynx = toController as? LynxContainerViewController
         let fromContent = fromView === fromController.view
@@ -501,16 +503,31 @@ final class ShellNavigationAnimator: NSObject, UIViewControllerAnimatedTransitio
         let secondaryPresented: PresetViewState
         switch routeType {
         case .bottomSheet:
+            let dismissed = ShellBottomSheetMotion.state(progress: 0)
+            let presented = ShellBottomSheetMotion.state(progress: 1)
             primaryDismissed = PresetViewState(
                 transform: CGAffineTransform(
                     translationX: 0,
-                    y: max(movingContent.bounds.height, height * 0.6)
+                    y: max(
+                        movingContent.bounds.height,
+                        height * spec.routeOptions.heightVH / 100
+                    ) * dismissed.sheetTranslationFraction
                 )
             )
             secondaryPresented = PresetViewState(
-                transform: Self.bottomSheetBackdropTransform,
-                cornerRadius: Self.bottomSheetBackdropCornerRadius
+                transform: CGAffineTransform(
+                    translationX: 0,
+                    y: presented.backdropTranslationY
+                ).scaledBy(
+                    x: presented.backdropScale,
+                    y: presented.backdropScale
+                ),
+                cornerRadius: presented.backdropCornerRadius
             )
+
+        case .heroSheet:
+            // heroSheet 的内容和关闭动画归 Lynx 页面；这里不再提供原生 renderer。
+            return nil
 
         case .upwards:
             primaryDismissed = PresetViewState(

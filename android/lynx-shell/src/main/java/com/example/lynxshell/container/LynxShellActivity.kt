@@ -28,6 +28,7 @@ import com.example.lynxshell.routing.LynxRouteParser
 import com.example.lynxshell.transition.AndroidTransitionTicket
 import com.example.lynxshell.transition.LynxTransitionCoordinator
 import com.example.lynxshell.transition.LynxTransitionIntent
+import com.example.lynxshell.transition.LynxRoutePreset
 import com.example.lynxshell.transition.LynxTransitionRuntime
 import com.example.lynxshell.transition.LynxTransitionSpec
 import com.example.lynxshell.transition.LynxTransitionStatus
@@ -192,15 +193,34 @@ class LynxShellActivity : AppCompatActivity() {
         }
 
         val background = Color.parseColor(request.backgroundColor)
-        // fullscreen 表示 edge-to-edge：系统栏保持可见并透明覆盖在 Lynx 内容上。
-        // hideStatusBar 是独立的显式能力，不能再由 fullscreen 隐式触发。
-        window.statusBarColor = if (request.fullscreen) Color.TRANSPARENT else background
-        window.navigationBarColor = if (request.fullscreen) Color.TRANSPARENT else background
-        window.decorView.setBackgroundColor(background)
-        WindowCompat.setDecorFitsSystemWindows(window, !request.fullscreen)
+        val transitionTicket = LynxTransitionRuntime.ticket(
+            LynxTransitionIntent.transactionID(intent),
+        )
+        val isBottomSheet = transitionTicket?.spec?.routePreset?.isSheet == true
+        val isHeroSheet = transitionTicket?.spec?.routePreset == LynxRoutePreset.HERO_SHEET
+        val isTransparentRoute = isHeroSheet || transitionTicket?.spec?.routeConfig?.opaque == false
+        val sourceBackdropColor = transitionTicket?.sourceBackdropColor ?: Color.BLACK
+        // heroSheet 的最后一档必须能真正铺到状态栏下方；即使业务请求没有显式
+        // fullscreen，也由原生预设保证 edge-to-edge。状态栏仍保持可见，只有
+        // hideStatusBar 才会真正隐藏系统图标。
+        val edgeToEdge = request.fullscreen || isTransparentRoute
+        window.statusBarColor = when {
+            isTransparentRoute || request.fullscreen -> Color.TRANSPARENT
+            isBottomSheet -> sourceBackdropColor
+            else -> background
+        }
+        window.navigationBarColor = if (edgeToEdge) Color.TRANSPARENT else background
+        window.decorView.setBackgroundColor(
+            when {
+                isTransparentRoute -> Color.TRANSPARENT
+                isBottomSheet -> sourceBackdropColor
+                else -> background
+            },
+        )
+        WindowCompat.setDecorFitsSystemWindows(window, !edgeToEdge)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isStatusBarContrastEnforced = !request.fullscreen
-            window.isNavigationBarContrastEnforced = !request.fullscreen
+            window.isStatusBarContrastEnforced = !edgeToEdge
+            window.isNavigationBarContrastEnforced = !edgeToEdge
         }
         if (request.hideStatusBar) {
             // 只有页面显式请求隐藏时才使用 Window 级兜底。
@@ -209,7 +229,11 @@ class LynxShellActivity : AppCompatActivity() {
             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         }
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            isAppearanceLightStatusBars = isLightColor(background)
+            isAppearanceLightStatusBars = if (isTransparentRoute || isBottomSheet) {
+                transitionTicket?.sourceLightStatusBars ?: isLightColor(sourceBackdropColor)
+            } else {
+                isLightColor(background)
+            }
             isAppearanceLightNavigationBars = isLightColor(background)
             if (request.hideStatusBar) {
                 hide(WindowInsetsCompat.Type.statusBars())
@@ -223,7 +247,7 @@ class LynxShellActivity : AppCompatActivity() {
         toolbar.title = request.title
         toolbar.visibility = if (request.showToolbar) android.view.View.VISIBLE else android.view.View.GONE
         toolbar.setNavigationOnClickListener { requestToolbarBack() }
-        container.setBackgroundColor(background)
+        container.setBackgroundColor(if (isTransparentRoute) Color.TRANSPARENT else background)
     }
 
     /**

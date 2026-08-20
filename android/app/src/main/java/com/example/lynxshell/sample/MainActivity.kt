@@ -17,12 +17,14 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 启动首页固定保留为原生壳调试页；不再自动打开旧的 main.lynx.bundle。
-        // OTA 验收从下方“打开 OTA”按钮进入，便于明确区分原生壳与远程 Bundle 页面。
         setContentView(R.layout.activity_launcher)
 
+        findViewById<MaterialButton>(R.id.open_playground_button).setOnClickListener {
+            openPlaygroundHome()
+        }
+
         // 真实 OTA 验收入口：不读取 APK assets/ota，直接把 appId + bundleName 交给 Router。
-        // 旧的 main.lynx.bundle 手工入口已从首页移除，避免验收时误触进入 Sparkling Go。
+        // OTA 入口继续使用 appId + bundleName，与本地 Playground 首页保持边界清晰。
         findViewById<MaterialButton>(R.id.open_ota_button).setOnClickListener {
             runCatching {
                 LynxRouter.open(
@@ -49,6 +51,28 @@ class MainActivity : AppCompatActivity() {
                 }
                 Toast.makeText(this, text, Toast.LENGTH_LONG).show()
             }
+        }
+
+        // 默认直接进入 Playground 首页；原生验收页通过显式调试参数保留。
+        if (!intent.getBooleanExtra("lynx_shell.show_native_launcher", false) && savedInstanceState == null) {
+            openPlaygroundHome()
+        }
+    }
+
+    private fun openPlaygroundHome() {
+        runCatching {
+            LynxRouter.open(
+                context = this,
+                bundle = "assets://bundles/main.lynx.bundle",
+                params = mapOf("source" to "android-playground-home"),
+                options = mapOf(
+                    "title" to "Sparkling Go",
+                    "fullscreen" to true,
+                    "showToolbar" to false,
+                ),
+            )
+        }.onFailure { error ->
+            Toast.makeText(this, error.message ?: "Playground 首页打开失败", Toast.LENGTH_LONG).show()
         }
     }
 

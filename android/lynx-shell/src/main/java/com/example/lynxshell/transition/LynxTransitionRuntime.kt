@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
 import android.os.Build
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.lynxshell.R
 import com.example.lynxshell.container.LynxShellActivity
 import com.example.lynxshell.model.LynxPageRequest
@@ -71,7 +72,8 @@ object LynxTransitionRuntime {
             context = context,
             requested = spec.style,
             durationMs = spec.durationMs,
-            animated = options.animated,
+            // heroSheet 是透明宿主模式：原生不移动 liveContent，动画完全由 Lynx 页面负责。
+            animated = options.animated && spec.routePreset != LynxRoutePreset.HERO_SHEET,
         )
         val resolvedSpec = spec.copy(
             durationMs = motion.durationMs,
@@ -101,6 +103,12 @@ object LynxTransitionRuntime {
             sourceEntryID = sourceEntryID,
             targetEntryID = targetEntryID,
             spec = resolvedSpec,
+            sourceLightStatusBars = sourceActivity?.let {
+                WindowInsetsControllerCompat(
+                    it.window,
+                    it.window.decorView,
+                ).isAppearanceLightStatusBars
+            },
             reason = initialReason,
         )
         register(ticket)
@@ -117,15 +125,15 @@ object LynxTransitionRuntime {
         // allowEnterRouteSnapshotting 是硬边界：false 时即使页面非 opaque 或
         // maintainState=false 也不能暗中截图。需要 source route 的 renderer 会带明确
         // reason 降级，主 route 自身仍可继续播放内容层动画。
-        val shouldSnapshot = motion.style != LynxTransitionStyle.NONE &&
+        val requiresSourceSnapshot =
+            motion.style == LynxTransitionStyle.SHARED_ELEMENT ||
+                motion.style == LynxTransitionStyle.OPEN_CONTAINER ||
+                resolvedSpec.routePreset != null ||
+                !resolvedSpec.routeConfig.opaque ||
+                !resolvedSpec.routeConfig.maintainState
+        val shouldSnapshot = (motion.style != LynxTransitionStyle.NONE || requiresSourceSnapshot) &&
             resolvedSpec.routeConfig.allowEnterRouteSnapshotting
         if (!shouldSnapshot) {
-            val requiresSourceSnapshot =
-                motion.style == LynxTransitionStyle.SHARED_ELEMENT ||
-                    motion.style == LynxTransitionStyle.OPEN_CONTAINER ||
-                    resolvedSpec.routePreset != null ||
-                    !resolvedSpec.routeConfig.opaque ||
-                    !resolvedSpec.routeConfig.maintainState
             if (motion.style != LynxTransitionStyle.NONE && requiresSourceSnapshot) {
                 return launchWithoutSnapshot(
                     context,
@@ -170,62 +178,114 @@ object LynxTransitionRuntime {
             )
         }
 
-        // PixelCopy 异步完成；NativeModules.open 的 callback 只表示事务已接受，不阻塞动画。
-        LynxSnapshotter.captureWindow(sourceActivity) { result ->
-            result.onSuccess { windowBitmap ->
-                val frozenElements = mutableListOf<AndroidSharedElementSnapshot>()
-                var elementFailure: String? = null
-                requiredElements.getOrThrow().forEach { required ->
-                    if (elementFailure != null) return@forEach
-                    val bitmap = LynxSnapshotter.cropWindowBitmap(
-                        sourceActivity,
-                        windowBitmap,
-                        required.rectOnScreen,
-                    )
-                    val token = bitmap?.let(LynxSnapshotStore::put)
-                    if (token == null) {
-                        elementFailure = "snapshot_unavailable:${required.key}"
-                    } else {
-                        frozenElements += AndroidSharedElementSnapshot(
-                            key = required.key,
-                            rectOnScreen = Rect(required.rectOnScreen),
-                            snapshotToken = token,
+        // tap 回调刚结束时来源节点仍可能保持按压/高亮态。下一原生绘制帧再 PixelCopy，
+        // 让来源页先恢复稳定外观，避免目标 Activity 用“按下状态”快照造成开场闪烁。
+        // NativeModules.open 的 callback 仍只表示事务已接受，不等待截图或动画完成。
+        sourceActivity.window.decorView.postOnAnimation {
+            LynxSnapshotter.captureWindow(sourceActivity) { result ->
+                result.onSuccess { windowBitmap ->
+                    val frozenElements = mutableListOf<AndroidSharedElementSnapshot>()
+                    var elementFailure: String? = null
+                    requiredElements.getOrThrow().forEach { required ->
+                        if (elementFailure != null) return@forEach
+                        val bitmap = LynxSnapshotter.cropWindowBitmap(
+                            sourceActivity,
+                            windowBitmap,
+                            required.rectOnScreen,
                         )
+                        val token = bitmap?.let(LynxSnapshotStore::put)
+                        if (token == null) {
+                            elementFailure = "snapshot_unavailable:${required.key}"
+                        } else {
+                            frozenElements += AndroidSharedElementSnapshot(
+                                key = required.key,
+                                rectOnScreen = Rect(required.rectOnScreen),
+                                snapshotToken = token,
+                            )
+                        }
                     }
-                }
-                if (elementFailure != null) {
-                    frozenElements.forEach { LynxSnapshotStore.remove(it.snapshotToken) }
-                    launchWithoutSnapshot(
+                    if (elementFailure != null) {
+                        frozenElements.forEach { LynxSnapshotStore.remove(it.snapshotToken) }
+                        launchWithoutSnapshot(
+                            context,
+                            sourceActivity,
+                            intent,
+                            ticket,
+                            acceptance,
+                            requireNotNull(elementFailure),
+                        )
+                        return@onSuccess
+                    }
+                    if (
+                        !LynxSnapshotter.clearWindowRects(
+                            sourceActivity,
+                            windowBitmap,
+                            requiredElements.getOrThrow().map { it.rectOnScreen },
+                        )
+                    ) {
+                        frozenElements.forEach { LynxSnapshotStore.remove(it.snapshotToken) }
+                        launchWithoutSnapshot(
+                            context,
+                            sourceActivity,
+                            intent,
+                            ticket,
+                            acceptance,
+                            "source_underlay_redaction_failed",
+                        )
+                        return@onSuccess
+                    }
+                    val windowToken = LynxSnapshotStore.put(windowBitmap)
+                    if (windowToken == null) {
+                        frozenElements.forEach { LynxSnapshotStore.remove(it.snapshotToken) }
+                        launchWithoutSnapshot(
+                            context,
+                            sourceActivity,
+                            intent,
+                            ticket,
+                            acceptance,
+                            "snapshot_unavailable",
+                        )
+                        return@onSuccess
+                    }
+                    val lruEvictedRequiredSnapshot =
+                        LynxSnapshotStore.get(windowToken) == null ||
+                            frozenElements.any {
+                                LynxSnapshotStore.get(it.snapshotToken) == null
+                            }
+                    if (lruEvictedRequiredSnapshot) {
+                        LynxSnapshotStore.remove(windowToken)
+                        frozenElements.forEach { LynxSnapshotStore.remove(it.snapshotToken) }
+                        launchWithoutSnapshot(
+                            context,
+                            sourceActivity,
+                            intent,
+                            ticket,
+                            acceptance,
+                            "snapshot_budget_exceeded",
+                        )
+                        return@onSuccess
+                    }
+
+                    val first = frozenElements.firstOrNull()
+                    val preparedTicket = ticket.copy(
+                        sourceElements = frozenElements,
+                        // 兼容旧 coordinator/进程内诊断字段。
+                        sourceRectOnScreen = first?.let { Rect(it.rectOnScreen) },
+                        sourceWindowSnapshotToken = windowToken,
+                        sourceElementSnapshotToken = first?.snapshotToken,
+                        sourceWindowWidth = windowBitmap.width,
+                        sourceWindowHeight = windowBitmap.height,
+                        sourceBackdropColor = LynxSnapshotter.sampleTopEdgeColor(windowBitmap),
+                    )
+                    replaceTicket(preparedTicket)
+                    launchPrepared(
                         context,
                         sourceActivity,
                         intent,
-                        ticket,
+                        preparedTicket,
                         acceptance,
-                        requireNotNull(elementFailure),
                     )
-                    return@onSuccess
-                }
-                if (
-                    !LynxSnapshotter.clearWindowRects(
-                        sourceActivity,
-                        windowBitmap,
-                        requiredElements.getOrThrow().map { it.rectOnScreen },
-                    )
-                ) {
-                    frozenElements.forEach { LynxSnapshotStore.remove(it.snapshotToken) }
-                    launchWithoutSnapshot(
-                        context,
-                        sourceActivity,
-                        intent,
-                        ticket,
-                        acceptance,
-                        "source_underlay_redaction_failed",
-                    )
-                    return@onSuccess
-                }
-                val windowToken = LynxSnapshotStore.put(windowBitmap)
-                if (windowToken == null) {
-                    frozenElements.forEach { LynxSnapshotStore.remove(it.snapshotToken) }
+                }.onFailure {
                     launchWithoutSnapshot(
                         context,
                         sourceActivity,
@@ -234,54 +294,7 @@ object LynxTransitionRuntime {
                         acceptance,
                         "snapshot_unavailable",
                     )
-                    return@onSuccess
                 }
-                val lruEvictedRequiredSnapshot =
-                    LynxSnapshotStore.get(windowToken) == null ||
-                        frozenElements.any {
-                            LynxSnapshotStore.get(it.snapshotToken) == null
-                        }
-                if (lruEvictedRequiredSnapshot) {
-                    LynxSnapshotStore.remove(windowToken)
-                    frozenElements.forEach { LynxSnapshotStore.remove(it.snapshotToken) }
-                    launchWithoutSnapshot(
-                        context,
-                        sourceActivity,
-                        intent,
-                        ticket,
-                        acceptance,
-                        "snapshot_budget_exceeded",
-                    )
-                    return@onSuccess
-                }
-
-                val first = frozenElements.firstOrNull()
-                val preparedTicket = ticket.copy(
-                    sourceElements = frozenElements,
-                    // 兼容旧 coordinator/进程内诊断字段。
-                    sourceRectOnScreen = first?.let { Rect(it.rectOnScreen) },
-                    sourceWindowSnapshotToken = windowToken,
-                    sourceElementSnapshotToken = first?.snapshotToken,
-                    sourceWindowWidth = windowBitmap.width,
-                    sourceWindowHeight = windowBitmap.height,
-                )
-                replaceTicket(preparedTicket)
-                launchPrepared(
-                    context,
-                    sourceActivity,
-                    intent,
-                    preparedTicket,
-                    acceptance,
-                )
-            }.onFailure {
-                launchWithoutSnapshot(
-                    context,
-                    sourceActivity,
-                    intent,
-                    ticket,
-                    acceptance,
-                    "snapshot_unavailable",
-                )
             }
         }
         return Result.success(acceptance)
@@ -333,7 +346,7 @@ object LynxTransitionRuntime {
             context = context,
             requested = invocationSpec.style,
             durationMs = invocationSpec.reverseDurationMs,
-            animated = animated,
+            animated = animated && invocationSpec.routePreset != LynxRoutePreset.HERO_SHEET,
         )
         val source = snapshotTicket ?: currentTicket
         val resolvedSpec = invocationSpec.copy(
@@ -365,6 +378,8 @@ object LynxTransitionRuntime {
             sourceElementSnapshotToken = source?.sourceElementSnapshotToken,
             sourceWindowWidth = source?.sourceWindowWidth ?: 0,
             sourceWindowHeight = source?.sourceWindowHeight ?: 0,
+            sourceBackdropColor = source?.sourceBackdropColor,
+            sourceLightStatusBars = source?.sourceLightStatusBars,
             reason = motion.reason ?: reasonOverride ?: inheritedReason,
         )
         register(ticket)

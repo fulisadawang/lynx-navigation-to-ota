@@ -21,7 +21,8 @@ ReactLynx 页面
             │         └─ AppHomeHandler / SessionExitHandler
             └─ iOS LynxShellModule.swift
                  └─ ShellNavigator
-                      ├─ UINavigationController session/entry
+                      ├─ 根 UINavigationController + 系统 Sheet 内部导航栈
+                      ├─ 两个原生容器合并为一个逻辑 session/entry 栈
                       ├─ UserDefaults 页面结果/恢复快照
                       └─ ShellAppHomeHandler
             └─ HarmonyOS LynxShellModule.ets（HAR）
@@ -53,6 +54,9 @@ ReactLynx 页面
 
 宿主锚点是当前 session 第一个 Lynx 页面之前的原生页面。所有批量操作都限定在当前
 session；Android 不调用 `finishAffinity()`，iOS 不替换未知业务 App 的 window root。
+在 iOS 15+，`wx://bottom-sheet` 虽由 `UISheetPresentationController` 呈现，但 Sheet
+entry 及其内部后续页面仍按 `order` 接在根导航栈之后；查询、返回、清栈、结果和恢复快照
+不会把 Sheet 背后的根页面误判为当前页。
 
 ## 3. 推荐：通过 TypeScript wrapper 调用
 

@@ -36,13 +36,14 @@ enum class LynxTransitionStyle(val wireName: String) {
 }
 
 /**
- * Skyline preset-route 的七个公开预设。
+ * Skyline preset-route 的官方预设与壳扩展 heroSheet。
  *
  * 这里保留独立身份，绝不能只映射成 slide/zoom 后丢失语义；真正的 renderer 会按该
  * 枚举选择不同的布局、遮罩、圆角和反向动画。
  */
 enum class LynxRoutePreset(val wireName: String) {
     BOTTOM_SHEET("wx://bottom-sheet"),
+    HERO_SHEET("wx://hero-sheet"),
     UPWARDS("wx://upwards"),
     ZOOM("wx://zoom"),
     CUPERTINO_MODAL("wx://cupertino-modal"),
@@ -55,6 +56,9 @@ enum class LynxRoutePreset(val wireName: String) {
             entries.firstOrNull { it.wireName == value }
                 ?: throw IllegalArgumentException("不支持的 routeType: $value")
     }
+
+    val isSheet: Boolean
+        get() = this == BOTTOM_SHEET || this == HERO_SHEET
 }
 
 /** 共享元素或容器的矩形外观；单位均为 Android 逻辑像素。 */
@@ -221,8 +225,30 @@ data class LynxRouteConfig(
 /** 当前 Skyline bottom-sheet 暴露的动态参数；height 单位为 vh。 */
 data class LynxRouteOptions(
     val round: Boolean = true,
-    val heightVh: Float = 60f,
-)
+    val heightVh: Float = LynxBottomSheetMotion.DEFAULT_HEIGHT_VH,
+    val detentsVh: List<Float> = listOf(LynxBottomSheetMotion.DEFAULT_HEIGHT_VH),
+    val initialDetentVh: Float = LynxBottomSheetMotion.DEFAULT_HEIGHT_VH,
+    val initialDetentIndex: Int = 0,
+) {
+    val isMultiDetent: Boolean get() = detentsVh.size > 1
+
+    companion object {
+        fun forPreset(routePreset: LynxRoutePreset?): LynxRouteOptions =
+            if (routePreset == LynxRoutePreset.HERO_SHEET) {
+                LynxRouteOptions(
+                    heightVh = LynxHeroSheetMotion.DEFAULT_INITIAL_DETENT_VH,
+                    detentsVh = LynxHeroSheetMotion.DEFAULT_DETENTS_VH,
+                    initialDetentVh = LynxHeroSheetMotion.DEFAULT_INITIAL_DETENT_VH,
+                    initialDetentIndex = LynxHeroSheetMotion.nearestDetentIndex(
+                        LynxHeroSheetMotion.DEFAULT_INITIAL_DETENT_VH,
+                        LynxHeroSheetMotion.DEFAULT_DETENTS_VH,
+                    ),
+                )
+            } else {
+                LynxRouteOptions()
+            }
+    }
+}
 
 /**
  * Android 端冻结后的完整转场配置。
@@ -259,15 +285,37 @@ data class LynxTransitionSpec(
             val routePreset = options.optionalString("routeType")
                 ?.let(LynxRoutePreset::fromWireName)
             val transition = options.optionalObject("transition")
+            val transparent = options.optBoolean("transparent", false)
             // animated=false 也是调用方明确要求“无动画”，必须进入 Runtime 的双重
             // Window suppress 通道，不能因为没写 transition 而落回系统默认 Window 动画。
-            val explicitlyRequested = routePreset != null || transition != null || !animated
+            val explicitlyRequested =
+                routePreset != null || transition != null || transparent || !animated
             val routeConfigValue = options.optionalObject("routeConfig")
-            val routeConfig = routeConfigValue?.let(::parseRouteConfig)
+            var routeConfig = routeConfigValue?.let(::parseRouteConfig)
                 ?: LynxRouteConfig()
+            if (routePreset?.isSheet == true || transparent) {
+                routeConfig = routeConfig.copy(
+                    opaque = if (routeConfigValue?.has("opaque") == true) {
+                        if (transparent || routePreset == LynxRoutePreset.HERO_SHEET) {
+                            false
+                        } else {
+                            routeConfig.opaque
+                        }
+                    } else {
+                        false
+                    },
+                    barrierDismissible = if (
+                        routeConfigValue?.has("barrierDismissible") == true
+                    ) {
+                        routeConfig.barrierDismissible
+                    } else {
+                        true
+                    },
+                )
+            }
             val routeOptions = options.optionalObject("routeOptions")
-                ?.let(::parseRouteOptions)
-                ?: LynxRouteOptions()
+                ?.let { parseRouteOptions(it, routePreset) }
+                ?: LynxRouteOptions.forPreset(routePreset)
 
             val requestedStyle = transition?.optionalString("style")
                 ?.let(LynxTransitionStyle::fromWireName)
@@ -284,9 +332,14 @@ data class LynxTransitionSpec(
 
             val openContainer = transition?.optionalObject("openContainer")
                 ?.let(::parseOpenContainer)
+            val defaultTransitionDuration = if (routePreset?.isSheet == true) {
+                LynxBottomSheetMotion.DEFAULT_DURATION_MS
+            } else {
+                DEFAULT_ANDROID_TRANSITION_DURATION_MS
+            }
             val transitionDuration = transition?.optionalLong("durationMs")
                 ?: openContainer?.transitionDurationMs
-                ?: DEFAULT_ANDROID_TRANSITION_DURATION_MS
+                ?: defaultTransitionDuration
             val duration = routeConfig.transitionDurationMs ?: transitionDuration
             requireDuration(duration, "transitionDuration/durationMs")
             val reverseDuration = routeConfig.reverseTransitionDurationMs ?: duration
@@ -303,7 +356,7 @@ data class LynxTransitionSpec(
             var popGesture = popGestureValue?.let(::parsePopGesture)
                 ?: LynxPopGestureSpec()
             if (
-                routePreset == LynxRoutePreset.BOTTOM_SHEET &&
+                routePreset?.isSheet == true &&
                 popGestureValue?.has("direction") != true &&
                 routeConfigValue?.has("popGestureDirection") != true
             ) {
@@ -311,7 +364,7 @@ data class LynxTransitionSpec(
                 popGesture = popGesture.copy(direction = LynxPopGestureDirection.VERTICAL)
             }
             if (
-                routePreset == LynxRoutePreset.BOTTOM_SHEET &&
+                routePreset?.isSheet == true &&
                 popGestureValue?.has("fullScreen") != true &&
                 routeConfigValue?.has("fullscreenDrag") != true
             ) {
@@ -362,6 +415,7 @@ data class LynxTransitionSpec(
                 LynxRoutePreset.BOTTOM_SHEET,
                 LynxRoutePreset.UPWARDS,
                 -> LynxTransitionStyle.SLIDE_UP
+                LynxRoutePreset.HERO_SHEET -> LynxTransitionStyle.SLIDE_UP
                 LynxRoutePreset.ZOOM -> LynxTransitionStyle.ZOOM
                 LynxRoutePreset.CUPERTINO_MODAL,
                 LynxRoutePreset.MODAL,
@@ -496,14 +550,72 @@ data class LynxTransitionSpec(
                     ?.also { requireDuration(it, "routeConfig.reverseTransitionDuration") },
             )
 
-        private fun parseRouteOptions(value: JSONObject): LynxRouteOptions {
-            val height = value.optionalFloat("height", 60f)
-            require(height > 0f && height <= 100f) {
-                "routeOptions.height 必须在 (0, 100](vh)"
+        private fun parseRouteOptions(
+            value: JSONObject,
+            routePreset: LynxRoutePreset?,
+        ): LynxRouteOptions {
+            val explicitHeight = value.optionalFloatOrNull("height")?.also {
+                require(it > 0f && it <= 100f) {
+                    "routeOptions.height 必须在 (0, 100](vh)"
+                }
+            }
+            val rawDetents = value.optionalArray("detents")
+            val usesHeroDefaults = routePreset == LynxRoutePreset.HERO_SHEET &&
+                rawDetents == null && explicitHeight == null
+            val detents = rawDetents?.let { array ->
+                require(array.length() in 1..LynxHeroSheetMotion.MAX_DETENTS) {
+                    "routeOptions.detents 数量必须在 1..${LynxHeroSheetMotion.MAX_DETENTS}"
+                }
+                (0 until array.length()).map { index ->
+                    val detent = when (val raw = array.get(index)) {
+                        is Number -> raw.toFloat()
+                        is String -> raw.toFloatOrNull()
+                        else -> null
+                    } ?: throw IllegalArgumentException(
+                        "routeOptions.detents[$index] 必须是数字",
+                    )
+                    require(detent > 0f && detent <= 100f) {
+                        "routeOptions.detents[$index] 必须在 (0, 100](vh)"
+                    }
+                    detent
+                }.also { values ->
+                    require(values.zipWithNext().all { (left, right) -> left < right }) {
+                        "routeOptions.detents 必须严格递增"
+                    }
+                }
+            } ?: when {
+                explicitHeight != null -> listOf(explicitHeight)
+                routePreset == LynxRoutePreset.HERO_SHEET ->
+                    LynxHeroSheetMotion.DEFAULT_DETENTS_VH
+                else -> listOf(LynxBottomSheetMotion.DEFAULT_HEIGHT_VH)
+            }
+            if (routePreset == LynxRoutePreset.HERO_SHEET) {
+                require(detents.size >= 2) {
+                    "heroSheet 至少需要两个 detent"
+                }
+                require(kotlin.math.abs(detents.last() - 100f) < 0.0001f) {
+                    "heroSheet 的最后一个 detent 必须是 100vh 全屏"
+                }
+            }
+            val requestedInitial = value.optionalFloatOrNull("initialDetent")
+                ?: explicitHeight
+                ?: if (usesHeroDefaults) {
+                    LynxHeroSheetMotion.DEFAULT_INITIAL_DETENT_VH
+                } else {
+                    detents.last()
+                }
+            val initialIndex = detents.indexOfFirst {
+                kotlin.math.abs(it - requestedInitial) < 0.0001f
+            }
+            require(initialIndex >= 0) {
+                "routeOptions.initialDetent 必须是 detents 中的一个值"
             }
             return LynxRouteOptions(
                 round = value.optBoolean("round", true),
-                heightVh = height,
+                heightVh = requestedInitial,
+                detentsVh = detents,
+                initialDetentVh = requestedInitial,
+                initialDetentIndex = initialIndex,
             )
         }
 

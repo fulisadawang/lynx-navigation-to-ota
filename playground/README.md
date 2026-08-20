@@ -82,7 +82,7 @@ main.lynx.bundle
 - 跨真实 Activity / UIViewController 的多 share-element；
 - Open Container 裁剪双内容容器；
 - fade、slide、none；
-- Skyline 七种 routeType；
+- Skyline 七种 routeType 与 heroSheet 多档位扩展；
 - Bundle 预取、消费与取消；
 - 一次性业务 ready、`onRouteDone` 和原生转场状态查询；
 - edge 返回完成与取消。

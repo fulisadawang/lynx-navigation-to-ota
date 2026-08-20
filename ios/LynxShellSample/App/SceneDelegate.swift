@@ -11,7 +11,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         options connectionOptions: UIScene.ConnectionOptions
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
-        // 原生 Launcher 始终作为宿主页锚点；启动后不再自动 push main.lynx.bundle。
+        // 原生 Launcher 始终作为宿主页锚点；默认冷启动在 Window 就绪后 push Playground。
         let rootController = LauncherViewController()
         let navigationController = UINavigationController(rootViewController: rootController)
         navigationController.navigationBar.prefersLargeTitles = true
@@ -43,9 +43,29 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.makeKeyAndVisible()
         self.window = window
 
+        var shouldOpenBottomSheetDemo = false
+        var shouldOpenHeroSheetDemo = false
+#if DEBUG
+        shouldOpenBottomSheetDemo = ProcessInfo.processInfo.arguments.contains(
+            "--bottom-sheet-demo"
+        )
+        shouldOpenHeroSheetDemo = ProcessInfo.processInfo.arguments.contains(
+            "--hero-sheet-demo"
+        )
+#endif
         if let url = connectionOptions.urlContexts.first?.url {
             // 根控制器完成显示后再执行 push / alert，避免冷启动深链出现层级告警。
             DispatchQueue.main.async { [weak self] in self?.openDeepLink(url) }
+        } else if shouldOpenHeroSheetDemo {
+#if DEBUG
+            DispatchQueue.main.async { [weak self] in self?.openHeroSheetDemo() }
+#endif
+        } else if shouldOpenBottomSheetDemo {
+#if DEBUG
+            DispatchQueue.main.async { [weak self] in self?.openBottomSheetDemo() }
+#endif
+        } else if !ProcessInfo.processInfo.arguments.contains("--show-native-launcher") {
+            DispatchQueue.main.async { [weak self] in self?.openPlaygroundHome() }
         }
     }
 
@@ -76,6 +96,121 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 .presentShellAlert(title: "无法打开 Lynx 页面", message: error.localizedDescription)
         }
     }
+
+    private func openPlaygroundHome() {
+        do {
+            _ = try LynxRouter.open(
+                bundle: "assets://bundles/main.lynx.bundle",
+                params: ["source": "ios-playground-home"],
+                options: [
+                    "title": "Sparkling Go",
+                    "fullscreen": true,
+                    "showNavigationBar": false,
+                ]
+            )
+        } catch {
+            (window?.rootViewController as? UINavigationController)?.topViewController?
+                .presentShellAlert(
+                    title: "无法打开 Playground 首页",
+                    message: error.localizedDescription
+                )
+        }
+    }
+
+#if DEBUG
+    /** 自动化验收入口：先建立来源页面，再由公开 Router 打开 iOS 系统 Page Sheet。 */
+    private func openBottomSheetDemo() {
+        do {
+            _ = try LynxRouter.open(
+                bundle: "assets://bundles/transition-gallery.lynx.bundle",
+                params: ["source": "ios-bottom-sheet-demo"],
+                options: [
+                    "title": "原生容器转场",
+                    "fullscreen": true,
+                    "showNavigationBar": false,
+                ]
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                do {
+                    _ = try LynxRouter.open(
+                        bundle: "assets://bundles/transition-detail.lynx.bundle",
+                        params: [
+                            "title": "bottomSheet",
+                            "transition_kind": "bottomSheet",
+                            "force_theme_style": "light",
+                            "container_bg_color": "#F4F4F5",
+                        ],
+                        options: [
+                            "routeKey": "transition-bottomSheet",
+                            "routeType": "wx://bottom-sheet",
+                        ]
+                    )
+                } catch {
+                    self?.presentLaunchError(error)
+                }
+            }
+        } catch {
+            presentLaunchError(error)
+        }
+    }
+
+    /** 自动化验收入口：直接打开 Lynx 自己控制滚动的透明 heroSheet。 */
+    private func openHeroSheetDemo() {
+        do {
+            _ = try LynxRouter.open(
+                bundle: "assets://bundles/transition-gallery.lynx.bundle",
+                params: ["source": "ios-hero-sheet-demo"],
+                options: [
+                    "title": "原生容器转场",
+                    "fullscreen": true,
+                    "showNavigationBar": false,
+                ]
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                do {
+                    _ = try LynxRouter.open(
+                        bundle: "assets://bundles/transition-detail.lynx.bundle",
+                        params: [
+                            "title": "heroSheet",
+                            "transition_kind": "heroSheet",
+                            "force_theme_style": "light",
+                            "container_bg_color": "#F4F4F5",
+                        ],
+                        options: [
+                            "routeKey": "transition-heroSheet",
+                            "routeType": "wx://hero-sheet",
+                            "transparent": true,
+                            "animated": false,
+                            "transition": [
+                                "popGesture": [
+                                    "enabled": true,
+                                    "direction": "vertical",
+                                    "fullScreen": true,
+                                ],
+                            ],
+                            "routeOptions": [
+                                "detents": [28, 56, 100],
+                                "initialDetent": 56,
+                            ],
+                        ]
+                    )
+                } catch {
+                    self?.presentLaunchError(error)
+                }
+            }
+        } catch {
+            presentLaunchError(error)
+        }
+    }
+
+    private func presentLaunchError(_ error: Error) {
+        (window?.rootViewController as? UINavigationController)?.topViewController?
+            .presentShellAlert(
+                title: "无法打开 Bottom Sheet 验收页",
+                message: error.localizedDescription
+            )
+    }
+#endif
 
     /**
      * Sample 配置入口：优先读取进程环境，随后读取 Info.plist。

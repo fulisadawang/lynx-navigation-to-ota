@@ -46,6 +46,9 @@ data class AndroidTransitionTicket(
     val sourceElementSnapshotToken: String? = null,
     val sourceWindowWidth: Int = 0,
     val sourceWindowHeight: Int = 0,
+    /** Page Sheet 覆盖系统栏时沿用来源页外观，避免目标页先把状态栏刷成另一种颜色。 */
+    val sourceBackdropColor: Int? = null,
+    val sourceLightStatusBars: Boolean? = null,
     val reason: String? = null,
     val createdAtElapsedMs: Long = SystemClock.elapsedRealtime(),
 )

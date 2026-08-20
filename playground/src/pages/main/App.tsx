@@ -28,9 +28,11 @@ const CATEGORIES: Category[] = [
     icon: '\u{1F9ED}',
     color: '#25f4ee',
     items: [
+      { title: '示例总览', description: '按分类搜索并打开全部 Playground 示例', bundle: 'showcase.lynx.bundle', icon: '\u{1F4DA}' },
       { title: '官方 Bundle 示例', description: '搜索并打开 go.lynxjs.org 的 565 个示例', bundle: 'go-bundles.lynx.bundle', icon: '\u{1F9EA}' },
       { title: '导航栈', description: '测试 popTo、清栈、主页与重定向', bundle: 'nav-chain.lynx.bundle', icon: '\u{26D3}' },
       { title: '原生容器转场', description: '共享元素、Open Container、预置路由与跟手返回', bundle: 'transition-gallery.lynx.bundle', icon: '\u{1F3AC}' },
+      { title: '原生转场目标页', description: '直接打开转场目标页，查看 ready 与原生状态', bundle: 'transition-detail.lynx.bundle', icon: '\u{1F3AF}' },
       { title: '参数传递', description: '通过 queryItems 传递自定义参数', bundle: 'nav-basic.lynx.bundle', icon: '\u{27A1}' },
       { title: '路由预设', description: '常用 Scheme 配置示例', bundle: 'scheme-presets.lynx.bundle', icon: '\u{1F3A8}' },
       { title: '路由构建器', description: '构建并测试任意 Scheme 配置', bundle: 'scheme-builder.lynx.bundle', icon: '\u{1F527}' },
@@ -43,6 +45,7 @@ const CATEGORIES: Category[] = [
     items: [
       { title: '设备与系统信息', description: '系统、设备、语言、SDK 与无障碍信息', bundle: 'gp-device.lynx.bundle', icon: '\u{1F4BB}' },
       { title: '屏幕与安全区', description: '屏幕尺寸、安全区和状态栏参数', bundle: 'gp-screen.lynx.bundle', icon: '\u{1F4D0}' },
+      { title: '导航目标容器', description: '查看容器 ID、Scheme 参数与自定义参数', bundle: 'gp-container.lynx.bundle', icon: '\u{1F4E6}' },
     ],
   },
   {

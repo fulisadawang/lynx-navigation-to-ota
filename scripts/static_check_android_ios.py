@@ -613,6 +613,7 @@ def transition_contract() -> None:
     )
     route_types = [
         "wx://bottom-sheet",
+        "wx://hero-sheet",
         "wx://upwards",
         "wx://zoom",
         "wx://cupertino-modal",
@@ -622,7 +623,7 @@ def transition_contract() -> None:
     ]
     require(
         all(route_type in navigation and route_type in gallery for route_type in route_types),
-        "Playground 七种 Skyline preset-route 均有 typed 映射与可点击演示",
+        "Playground Skyline preset-route 与 heroSheet 均有 typed 映射与可点击演示",
     )
     require(
         "shuttleOnPush" in navigation
@@ -652,6 +653,13 @@ def transition_contract() -> None:
         and "round?: boolean" in navigation
         and "height?: number" in navigation,
         "Playground 完整声明 routeConfig 与 bottom-sheet routeOptions",
+    )
+    require(
+        "detents?: number[]" in navigation
+        and "initialDetent?: number" in navigation
+        and "| 'heroSheet'" in navigation
+        and "detents: [28, 56, 100]" in gallery,
+        "Playground heroSheet 提供严格档位参数与默认三档演示",
     )
     require(
         "closedCornerRadius: 20" not in navigation
@@ -967,8 +975,14 @@ def route_and_provider() -> None:
         and 'bool(first(query, "fullscreen"), true)' in android_route
         and "getBooleanExtra(LynxPageRequest.EXTRA_FULLSCREEN, true)" in android_route
         and "getBooleanExtra(LynxPageRequest.EXTRA_HIDE_STATUS_BAR, false)" in android_route
-        and "Color.TRANSPARENT else background" in android_activity
-        and "WindowCompat.setDecorFitsSystemWindows(window, !request.fullscreen)" in android_activity
+        and (
+            "Color.TRANSPARENT else background" in android_activity
+            or "isHeroSheet || request.fullscreen -> Color.TRANSPARENT" in android_activity
+        )
+        and (
+            "WindowCompat.setDecorFitsSystemWindows(window, !request.fullscreen)" in android_activity
+            or "WindowCompat.setDecorFitsSystemWindows(window, !edgeToEdge)" in android_activity
+        )
         and "WindowManager.LayoutParams.FLAG_FULLSCREEN" in android_activity
         and (
             "fullscreenSwitch.isChecked = true" in android_launcher

@@ -14,8 +14,9 @@ import kotlin.math.abs
 interface LynxCompatEdgeGestureDelegate {
     fun onCompatEdgeStart(): Boolean
     fun onCompatEdgeProgress(progress: Float)
+    fun onCompatEdgeDelta(deltaPx: Float) {}
     fun onCompatEdgeCancel()
-    fun onCompatEdgeFinish()
+    fun onCompatEdgeFinish(velocityPxPerSecond: Float)
 }
 
 /**
@@ -51,6 +52,17 @@ class LynxCompatEdgeBackLayout @JvmOverloads constructor(
             updateGestureExclusion()
         }
     var fullScreenGesture: Boolean = false
+        set(value) {
+            field = value
+            updateGestureExclusion()
+        }
+    /** bottom-sheet 纵向拖拽按可见 Sheet 高度归一化；null 时沿用完整容器尺寸。 */
+    var verticalGestureExtentPx: Float? = null
+        set(value) {
+            field = value?.takeIf { it > 0f }
+        }
+    /** 多档位 heroSheet 允许向上展开；普通返回手势仍只接受向后方向。 */
+    var verticalSheetDragEnabled: Boolean = false
         set(value) {
             field = value
             updateGestureExclusion()
@@ -100,6 +112,10 @@ class LynxCompatEdgeBackLayout @JvmOverloads constructor(
                 val absDy = abs(rawDy)
                 if (activeAxis == GestureAxis.UNDECIDED) {
                     activeAxis = when {
+                        verticalSheetDragEnabled &&
+                            absDy > touchSlop &&
+                            absDy > absDx * 1.2f ->
+                            GestureAxis.VERTICAL
                         rawDx > touchSlop && absDx > absDy * 1.2f ->
                             GestureAxis.HORIZONTAL
                         rawDy > touchSlop && absDy > absDx * 1.2f ->
@@ -115,7 +131,11 @@ class LynxCompatEdgeBackLayout @JvmOverloads constructor(
                         else -> GestureAxis.UNDECIDED
                     }
                 }
-                val forward = if (activeAxis == GestureAxis.VERTICAL) rawDy else rawDx
+                val forward = if (activeAxis == GestureAxis.VERTICAL) {
+                    if (verticalSheetDragEnabled) abs(rawDy) else rawDy
+                } else {
+                    rawDx
+                }
                 val cross = if (activeAxis == GestureAxis.VERTICAL) absDx else absDy
                 if (
                     activeAxis != GestureAxis.UNDECIDED &&
@@ -156,11 +176,16 @@ class LynxCompatEdgeBackLayout @JvmOverloads constructor(
                 } else {
                     event.getX(index)
                 }
-                gestureDelegate?.onCompatEdgeProgress(progress(coordinate))
+                if (activeAxis == GestureAxis.VERTICAL && verticalSheetDragEnabled) {
+                    gestureDelegate?.onCompatEdgeDelta(
+                        forwardVerticalDistance(coordinate),
+                    )
+                } else {
+                    gestureDelegate?.onCompatEdgeProgress(progress(coordinate))
+                }
             }
             MotionEvent.ACTION_UP -> {
                 val currentCoordinate = if (activeAxis == GestureAxis.VERTICAL) event.y else event.x
-                val progress = progress(currentCoordinate)
                 velocityTracker?.computeCurrentVelocity(1_000)
                 val rawVelocity = if (activeAxis == GestureAxis.VERTICAL) {
                     velocityTracker?.getYVelocity(activePointerID) ?: 0f
@@ -172,11 +197,16 @@ class LynxCompatEdgeBackLayout @JvmOverloads constructor(
                 } else {
                     rawVelocity * horizontalDirection()
                 }
-                val forwardVelocityDp = forwardVelocity /
-                    resources.displayMetrics.density
-                val finish = progress >= 0.42f ||
-                    (progress >= 0.12f && forwardVelocityDp >= 700f)
-                finishGesture(commit = finish)
+                if (activeAxis == GestureAxis.VERTICAL && verticalSheetDragEnabled) {
+                    finishSheetGesture(forwardVelocity)
+                } else {
+                    val progress = progress(currentCoordinate)
+                    val forwardVelocityDp = forwardVelocity /
+                        resources.displayMetrics.density
+                    val finish = progress >= 0.42f ||
+                        (progress >= 0.12f && forwardVelocityDp >= 700f)
+                    finishGesture(commit = finish)
+                }
             }
             MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
                 finishGesture(commit = false)
@@ -226,11 +256,13 @@ class LynxCompatEdgeBackLayout @JvmOverloads constructor(
         } else {
             forwardHorizontalDistance(currentCoordinate)
         }
-        val extent = if (activeAxis == GestureAxis.VERTICAL) {
-            height.coerceAtLeast(1)
-        } else {
-            width.coerceAtLeast(1)
+        if (activeAxis == GestureAxis.VERTICAL) {
+            return LynxBottomSheetMotion.dragProgress(
+                distance,
+                verticalGestureExtentPx ?: height.coerceAtLeast(1).toFloat(),
+            )
         }
+        val extent = width.coerceAtLeast(1)
         return (distance / extent).coerceIn(0f, 1f)
     }
 
@@ -245,7 +277,12 @@ class LynxCompatEdgeBackLayout @JvmOverloads constructor(
         layoutDirection == View.LAYOUT_DIRECTION_RTL
 
     private fun finishGesture(commit: Boolean) {
-        if (commit) gestureDelegate?.onCompatEdgeFinish() else gestureDelegate?.onCompatEdgeCancel()
+        if (commit) gestureDelegate?.onCompatEdgeFinish(0f) else gestureDelegate?.onCompatEdgeCancel()
+        resetGesture()
+    }
+
+    private fun finishSheetGesture(velocityPxPerSecond: Float) {
+        gestureDelegate?.onCompatEdgeFinish(velocityPxPerSecond)
         resetGesture()
     }
 

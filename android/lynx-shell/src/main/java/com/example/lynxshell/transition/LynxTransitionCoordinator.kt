@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -47,7 +48,7 @@ class LynxTransitionCoordinator(
     private val underlay: ImageView,
     private val liveContent: ViewGroup,
     private val overlay: FrameLayout,
-    @Suppress("unused") private val targetContent: View,
+    private val targetContent: View,
     restoredAfterRecreation: Boolean,
     private val onSystemBackCommit: () -> Unit,
 ) : LynxCompatEdgeGestureDelegate {
@@ -84,6 +85,8 @@ class LynxTransitionCoordinator(
     private var gateRetryPosted = false
     private var animator: ValueAnimator? = null
     private var barrierView: View? = null
+    private var bottomSheetBackdropDrawable: GradientDrawable? = null
+    private var bottomSheetGrabberView: View? = null
     private var openMorphView: LynxOpenContainerMorphView? = null
     private val sharedProxies = mutableListOf<SharedProxy>()
     private val transientViews = mutableListOf<View>()
@@ -91,6 +94,10 @@ class LynxTransitionCoordinator(
     private var interactiveProgress = 0f
     private var interactiveActive = false
     private var compatTouchDriving = false
+    private var sheetDragActive = false
+    private var sheetDetentIndex: Int? = null
+    private var sheetDragStartHeightPx = 0f
+    private var sheetDragRawHeightPx = 0f
     private var activePopRenderer = PopRenderer.BASIC
     private var pendingCommit: (() -> Unit)? = null
     private val commitGuard = AtomicBoolean(false)
@@ -361,6 +368,7 @@ class LynxTransitionCoordinator(
         entryPending = false
         interactiveActive = false
         compatTouchDriving = false
+        sheetDragActive = false
         interactiveProgress = 0f
         pendingCommit = null
         commitGuard.set(false)
@@ -384,6 +392,8 @@ class LynxTransitionCoordinator(
         animator = null
         clearTransientVisuals()
         removeBarrier()
+        removeBottomSheetGrabber()
+        sheetDragActive = false
         (root as? LynxCompatEdgeBackLayout)?.apply {
             compatGestureEnabled = false
             gestureDelegate = null
@@ -395,6 +405,20 @@ class LynxTransitionCoordinator(
     }
 
     override fun onCompatEdgeStart(): Boolean {
+        if (canStartSheetDetentDrag()) {
+            animator?.cancel()
+            animator = null
+            sheetDragActive = true
+            val options = requireNotNull(ticket).spec.routeOptions
+            val rootHeight = sheetRootHeightPx()
+            sheetDetentIndex = sheetDetentIndex?.coerceIn(0, options.detentsVh.lastIndex)
+                ?: options.initialDetentIndex
+            sheetDragStartHeightPx = liveContent.height.toFloat().takeIf { it > 0f }
+                ?: detentHeightPx(sheetDetentIndex ?: options.initialDetentIndex, rootHeight)
+            sheetDragRawHeightPx = sheetDragStartHeightPx
+            compatTouchDriving = true
+            return true
+        }
         val accepted = beginPop(
             commit = onSystemBackCommit,
             useStoredTransition = true,
@@ -408,12 +432,198 @@ class LynxTransitionCoordinator(
         if (interactiveActive) applyPopProgress(progress)
     }
 
-    override fun onCompatEdgeCancel() {
-        if (interactiveActive) cancelInteractivePop()
+    override fun onCompatEdgeDelta(deltaPx: Float) {
+        if (sheetDragActive) updateSheetDrag(deltaPx)
     }
 
-    override fun onCompatEdgeFinish() {
-        if (interactiveActive) commitInteractivePop()
+    override fun onCompatEdgeCancel() {
+        if (sheetDragActive) {
+            finishSheetDetentDrag(velocityPxPerSecond = 0f, cancelled = true)
+        } else if (interactiveActive) {
+            cancelInteractivePop()
+        }
+    }
+
+    override fun onCompatEdgeFinish(velocityPxPerSecond: Float) {
+        if (sheetDragActive) {
+            finishSheetDetentDrag(velocityPxPerSecond)
+        } else if (interactiveActive) {
+            commitInteractivePop()
+        }
+    }
+
+    private fun canStartSheetDetentDrag(): Boolean {
+        val currentTicket = ticket ?: return false
+        val routeOptions = currentTicket.spec.routeOptions
+        return currentTicket.spec.routePreset == LynxRoutePreset.BOTTOM_SHEET &&
+            routeOptions.isMultiDetent &&
+            canStartInteractiveSystemBack()
+    }
+
+    private fun sheetRootHeightPx(): Float =
+        (root.height.takeIf { it > 0 }
+            ?: activity.resources.displayMetrics.heightPixels).toFloat().coerceAtLeast(1f)
+
+    private fun detentHeightPx(index: Int, rootHeightPx: Float = sheetRootHeightPx()): Float {
+        val detents = ticket?.spec?.routeOptions?.detentsVh ?: return rootHeightPx
+        return (rootHeightPx * detents[index.coerceIn(0, detents.lastIndex)] / 100f)
+            .coerceAtLeast(1f)
+    }
+
+    private fun applySheetHeightPx(heightPx: Float) {
+        val currentTicket = ticket ?: return
+        if (currentTicket.spec.routePreset != LynxRoutePreset.BOTTOM_SHEET) return
+        val params = (liveContent.layoutParams as? FrameLayout.LayoutParams) ?: return
+        val nextHeight = heightPx.roundToInt().coerceAtLeast(1)
+        val fullscreen = false
+        val appliedHeight = nextHeight
+        val targetGravity = Gravity.BOTTOM
+        if (params.height != appliedHeight || params.gravity != targetGravity) {
+            params.height = appliedHeight
+            params.gravity = targetGravity
+            params.topMargin = 0
+            liveContent.layoutParams = params
+            liveContent.requestLayout()
+        }
+        applySheetSurfaceMode(fullscreen, appliedHeight)
+    }
+
+    private fun applySheetSurfaceMode(fullscreen: Boolean, heightPx: Int) {
+        val currentTicket = ticket ?: return
+        if (currentTicket.spec.routePreset != LynxRoutePreset.BOTTOM_SHEET) return
+        val density = activity.resources.displayMetrics.density
+        val rootHeight = sheetRootHeightPx()
+        if (fullscreen) {
+            liveContent.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor((targetContent.background as? ColorDrawable)?.color ?: Color.TRANSPARENT)
+                cornerRadius = 0f
+            }
+            liveContent.clipToOutline = false
+            ViewCompat.setElevation(liveContent, 0f)
+            removeBottomSheetGrabber()
+            barrierView?.alpha = 0f
+            barrierView?.isClickable = false
+            underlay.alpha = 0f
+            resetBottomSheetBackdropMask()
+            return
+        }
+
+        val radiusDp = if (currentTicket.spec.routeOptions.round) {
+            LynxBottomSheetMotion.SHEET_CORNER_RADIUS_DP
+        } else {
+            0f
+        }
+        liveContent.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor((targetContent.background as? ColorDrawable)?.color ?: Color.TRANSPARENT)
+            if (radiusDp > 0f) {
+                val radius = radiusDp * density
+                cornerRadii = floatArrayOf(radius, radius, radius, radius, 0f, 0f, 0f, 0f)
+            } else {
+                cornerRadius = 0f
+            }
+        }
+        liveContent.clipToOutline = true
+        ViewCompat.setElevation(liveContent, 16f * density)
+        ensureBottomSheetGrabber(
+            rootHeight = rootHeight.roundToInt(),
+            sheetHeight = heightPx,
+            density = density,
+        )
+        barrierView?.alpha = 1f
+        barrierView?.isClickable = currentTicket.spec.routeConfig.barrierDismissible
+        underlay.alpha = 1f
+        val motion = LynxBottomSheetMotion.state(1f)
+        underlay.scaleX = motion.backdropScale
+        underlay.scaleY = motion.backdropScale
+        underlay.translationY = motion.backdropTranslationYDp * density
+        applyBottomSheetBackdropCornerRadius(motion.backdropCornerRadiusDp * density)
+    }
+
+    private fun updateSheetDrag(deltaPx: Float) {
+        val options = ticket?.spec?.routeOptions ?: return
+        val rootHeight = sheetRootHeightPx()
+        val minimum = detentHeightPx(0, rootHeight)
+        val maximum = detentHeightPx(options.detentsVh.lastIndex, rootHeight)
+        val rawHeight = sheetDragStartHeightPx - deltaPx
+        sheetDragRawHeightPx = rawHeight
+        val visibleHeight = when {
+            rawHeight < minimum -> minimum - (minimum - rawHeight) * 0.22f
+            rawHeight > maximum -> maximum + (rawHeight - maximum) * 0.18f
+            else -> rawHeight
+        }
+        applySheetHeightPx(visibleHeight.coerceAtLeast(1f))
+    }
+
+    private fun finishSheetDetentDrag(
+        velocityPxPerSecond: Float,
+        cancelled: Boolean = false,
+    ) {
+        if (!sheetDragActive) return
+        val options = ticket?.spec?.routeOptions ?: return
+        val rootHeight = sheetRootHeightPx()
+        val minimum = detentHeightPx(0, rootHeight)
+        val dismiss = !cancelled && LynxHeroSheetMotion.shouldDismiss(
+            rawHeightPx = sheetDragRawHeightPx,
+            minimumHeightPx = minimum,
+            velocityPxPerSecond = velocityPxPerSecond,
+        )
+        if (dismiss) {
+            sheetDragActive = false
+            compatTouchDriving = true
+            if (beginPop(
+                    commit = onSystemBackCommit,
+                    useStoredTransition = true,
+                    gestureDriven = true,
+                )
+            ) {
+                commitInteractivePop()
+                return
+            }
+            compatTouchDriving = false
+        }
+
+        val currentHeightVh = sheetDragRawHeightPx / rootHeight * 100f
+        val projectedHeightVh = if (cancelled) {
+            currentHeightVh
+        } else {
+            LynxHeroSheetMotion.projectedHeightVh(
+                currentHeightVh = currentHeightVh,
+                velocityPxPerSecond = velocityPxPerSecond,
+                rootHeightPx = rootHeight,
+            )
+        }
+        val targetIndex = LynxHeroSheetMotion.nearestDetentIndex(
+            heightVh = projectedHeightVh,
+            detentsVh = options.detentsVh,
+        )
+        sheetDragActive = false
+        compatTouchDriving = false
+        sheetDetentIndex = targetIndex
+        settleSheetDetent(targetIndex)
+    }
+
+    private fun settleSheetDetent(targetIndex: Int) {
+        val targetHeight = detentHeightPx(targetIndex)
+        val startHeight = liveContent.height.toFloat().coerceAtLeast(1f)
+        if (abs(targetHeight - startHeight) < 1f) {
+            applySheetHeightPx(targetHeight)
+            updatePredictiveBackAvailability()
+            return
+        }
+        animateProgress(
+            from = 0f,
+            to = 1f,
+            durationMs = 220L,
+            onUpdate = { progress ->
+                applySheetHeightPx(startHeight + (targetHeight - startHeight) * progress)
+            },
+            onEnd = {
+                applySheetHeightPx(targetHeight)
+                updatePredictiveBackAvailability()
+            },
+        )
     }
 
     private fun prepareIncomingTransition() {
@@ -1017,7 +1227,12 @@ class LynxTransitionCoordinator(
         interactiveProgress = 0f
         pendingCommit = null
         clearTransientVisuals()
-        applyFinalPresentation()
+        if (isPersistentPreset(ticket?.spec?.routePreset)) {
+            // 取消返回必须完整恢复 Sheet 打开态，包括圆角、elevation、遮罩和来源页终态。
+            applyPresetEntryProgress(1f)
+        } else {
+            applyFinalPresentation()
+        }
         updatePredictiveBackAvailability()
     }
 
@@ -1040,7 +1255,7 @@ class LynxTransitionCoordinator(
     }
 
     /**
-     * 七个 routeType 的 renderer 在这里保持独立，不再折叠成 slide/zoom。
+     * 官方 routeType 与 heroSheet 的 renderer 在这里保持独立，不再折叠成 slide/zoom。
      */
     private fun applyPresetEntryProgress(progress: Float) {
         val preset = ticket?.spec?.routePreset ?: return
@@ -1050,10 +1265,43 @@ class LynxTransitionCoordinator(
         val rootWidth = root.width.coerceAtLeast(1).toFloat()
         when (preset) {
             LynxRoutePreset.BOTTOM_SHEET -> {
+                val motion = LynxBottomSheetMotion.state(p)
                 liveContent.alpha = 1f
-                liveContent.translationY = liveContent.height.coerceAtLeast(1) * (1f - p)
-                barrierView?.alpha = p
+                liveContent.translationY = liveContent.height.coerceAtLeast(1) *
+                    motion.sheetTranslationFraction
+                bottomSheetGrabberView?.apply {
+                    translationY = liveContent.translationY
+                    alpha = motion.barrierAlpha
+                }
+                barrierView?.alpha = motion.barrierAlpha
                 underlay.alpha = 1f
+                underlay.scaleX = motion.backdropScale
+                underlay.scaleY = motion.backdropScale
+                underlay.translationY = motion.backdropTranslationYDp * density
+                applyBottomSheetBackdropCornerRadius(
+                    motion.backdropCornerRadiusDp * density,
+                )
+            }
+            LynxRoutePreset.HERO_SHEET -> {
+                // heroSheet 是透明宿主模式：liveContent 不做任何原生位移、缩放或
+                // alpha 动画，首屏入场、滚动和下拉关闭全部由 Lynx 页面负责。
+                liveContent.alpha = 1f
+                liveContent.translationX = 0f
+                liveContent.translationY = 0f
+                liveContent.scaleX = 1f
+                liveContent.scaleY = 1f
+                liveContent.background = null
+                liveContent.clipToOutline = false
+                ViewCompat.setElevation(liveContent, 0f)
+                removeBottomSheetGrabber()
+                barrierView?.alpha = 0f
+                barrierView?.isClickable = false
+                underlay.alpha = 1f
+                underlay.scaleX = 1f
+                underlay.scaleY = 1f
+                underlay.translationX = 0f
+                underlay.translationY = 0f
+                resetBottomSheetBackdropMask()
             }
             LynxRoutePreset.UPWARDS -> {
                 liveContent.alpha = 0.96f + 0.04f * p
@@ -1164,6 +1412,9 @@ class LynxTransitionCoordinator(
         underlay.translationY = 0f
         underlay.scaleX = 1f
         underlay.scaleY = 1f
+        if (ticket?.spec?.routePreset?.isSheet == true) {
+            applyBottomSheetBackdropCornerRadius(0f)
+        }
     }
 
     private fun configurePresetFrame() {
@@ -1174,16 +1425,40 @@ class LynxTransitionCoordinator(
             restoreOriginalLiveLayout()
             return
         }
+        if (preset == LynxRoutePreset.HERO_SHEET) {
+            // heroSheet 不是真正的原生 Sheet：目标 Lynx 页面本身是全屏透明
+            // 内容层，首屏露出多少由页面自己的 scroll-view 决定。
+            liveContent.layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.TOP,
+            )
+            liveContent.translationY = 0f
+            liveContent.background = null
+            liveContent.clipToOutline = false
+            ViewCompat.setElevation(liveContent, 0f)
+            removeBottomSheetGrabber()
+            removeBarrier()
+            configureSourceUnderlay(currentTicket)
+            return
+        }
         val rootWidth = root.width.takeIf { it > 0 }
             ?: activity.resources.displayMetrics.widthPixels
         val rootHeight = root.height.takeIf { it > 0 }
             ?: activity.resources.displayMetrics.heightPixels
         val density = activity.resources.displayMetrics.density
         val margin = (12f * density).roundToInt()
+        if (preset.isSheet && sheetDetentIndex == null) {
+            sheetDetentIndex = currentTicket.spec.routeOptions.initialDetentIndex
+        }
+        val sheetHeightVh = currentTicket.spec.routeOptions.detentsVh[
+            (sheetDetentIndex ?: currentTicket.spec.routeOptions.initialDetentIndex)
+                .coerceIn(0, currentTicket.spec.routeOptions.detentsVh.lastIndex)
+        ]
         val params = when (preset) {
             LynxRoutePreset.BOTTOM_SHEET -> FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                (rootHeight * currentTicket.spec.routeOptions.heightVh / 100f)
+                (rootHeight * sheetHeightVh / 100f)
                     .roundToInt()
                     .coerceAtLeast(1),
                 Gravity.BOTTOM,
@@ -1213,7 +1488,11 @@ class LynxTransitionCoordinator(
         liveContent.layoutParams = params
         val radiusDp = when (preset) {
             LynxRoutePreset.BOTTOM_SHEET ->
-                if (currentTicket.spec.routeOptions.round) 24f else 0f
+                if (currentTicket.spec.routeOptions.round) {
+                    LynxBottomSheetMotion.SHEET_CORNER_RADIUS_DP
+                } else {
+                    0f
+                }
             LynxRoutePreset.CUPERTINO_MODAL,
             LynxRoutePreset.CUPERTINO_MODAL_INSIDE,
             -> 26f
@@ -1223,8 +1502,10 @@ class LynxTransitionCoordinator(
         }
         liveContent.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            setColor(Color.WHITE)
-            if (preset == LynxRoutePreset.BOTTOM_SHEET && radiusDp > 0f) {
+            val targetColor = (targetContent.background as? ColorDrawable)?.color
+                ?: Color.TRANSPARENT
+            setColor(if (preset.isSheet) targetColor else Color.WHITE)
+            if (preset.isSheet && radiusDp > 0f) {
                 val r = radiusDp * density
                 cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
             } else {
@@ -1233,6 +1514,15 @@ class LynxTransitionCoordinator(
         }
         liveContent.clipToOutline = true
         ViewCompat.setElevation(liveContent, 16f * density)
+        if (preset.isSheet) {
+            ensureBottomSheetGrabber(
+                rootHeight = rootHeight,
+                sheetHeight = params.height,
+                density = density,
+            )
+        } else {
+            removeBottomSheetGrabber()
+        }
         ensureBarrier()
         configureSourceUnderlay(currentTicket)
     }
@@ -1291,6 +1581,9 @@ class LynxTransitionCoordinator(
         underlay.setImageBitmap(bitmap)
         underlay.visibility = View.VISIBLE
         underlay.alpha = 1f
+        if (currentTicket.spec.routePreset?.isSheet != true) {
+            resetBottomSheetBackdropMask()
+        }
     }
 
     private fun clearSourceUnderlay() {
@@ -1301,6 +1594,66 @@ class LynxTransitionCoordinator(
         underlay.translationY = 0f
         underlay.scaleX = 1f
         underlay.scaleY = 1f
+        resetBottomSheetBackdropMask()
+    }
+
+    private fun applyBottomSheetBackdropCornerRadius(radiusPx: Float) {
+        val drawable = bottomSheetBackdropDrawable ?: GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(Color.BLACK)
+        }.also {
+            bottomSheetBackdropDrawable = it
+            underlay.background = it
+        }
+        drawable.cornerRadius = radiusPx.coerceAtLeast(0f)
+        underlay.clipToOutline = radiusPx > 0f
+    }
+
+    private fun resetBottomSheetBackdropMask() {
+        underlay.clipToOutline = false
+        underlay.background = null
+        bottomSheetBackdropDrawable = null
+    }
+
+    private fun ensureBottomSheetGrabber(
+        rootHeight: Int,
+        sheetHeight: Int,
+        density: Float,
+    ) {
+        val grabber = bottomSheetGrabberView ?: View(activity).apply {
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.parseColor("#B5B5B7"))
+                cornerRadius = 2.5f * density
+            }
+            ViewCompat.setElevation(this, 18f * density)
+        }.also { view ->
+            val overlayIndex = root.indexOfChild(overlay).takeIf { it >= 0 }
+                ?: root.childCount
+            root.addView(view, overlayIndex)
+            bottomSheetGrabberView = view
+        }
+        grabber.layoutParams = FrameLayout.LayoutParams(
+            (36f * density).roundToInt().coerceAtLeast(1),
+            (5f * density).roundToInt().coerceAtLeast(1),
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL,
+        ).apply {
+            topMargin = (rootHeight - sheetHeight + 8f * density).roundToInt()
+                .coerceAtLeast(0)
+        }
+        grabber.translationY = liveContent.translationY
+        grabber.alpha = if (entryPending) 0f else 1f
+        grabber.visibility = View.VISIBLE
+        grabber.bringToFront()
+        overlay.bringToFront()
+    }
+
+    private fun removeBottomSheetGrabber() {
+        bottomSheetGrabberView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        bottomSheetGrabberView = null
     }
 
     private fun finishEntryVisual() {
@@ -1568,6 +1921,7 @@ class LynxTransitionCoordinator(
         underlay.translationY = 0f
         underlay.scaleX = 1f
         underlay.scaleY = 1f
+        resetBottomSheetBackdropMask()
     }
 
     private fun removeBarrier() {
@@ -1576,6 +1930,7 @@ class LynxTransitionCoordinator(
     }
 
     private fun restoreOriginalLiveLayout() {
+        removeBottomSheetGrabber()
         liveContent.layoutParams = copyLayoutParams(originalLiveLayout)
         liveContent.background = originalLiveBackground
         liveContent.clipToOutline = originalClipToOutline
@@ -1606,7 +1961,12 @@ class LynxTransitionCoordinator(
         var cancelled = false
         animator = ValueAnimator.ofFloat(from, to).apply {
             duration = durationMs
-            interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
+            interpolator = if (ticket?.spec?.routePreset?.isSheet == true) {
+                // iOS sheet 的高阻尼 spring 近似：快速离底、无明显回弹、末段平滑收敛。
+                PathInterpolator(0.16f, 1f, 0.3f, 1f)
+            } else {
+                PathInterpolator(0.2f, 0f, 0f, 1f)
+            }
             addUpdateListener { onUpdate(it.animatedValue as Float) }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationCancel(animation: Animator) {
@@ -1718,13 +2078,37 @@ class LynxTransitionCoordinator(
             gestureDirection = ticket?.spec?.popGesture?.direction
                 ?: LynxPopGestureDirection.HORIZONTAL
             fullScreenGesture = ticket?.spec?.popGesture?.fullScreen == true
+            verticalGestureExtentPx = if (ticket?.spec?.routePreset == LynxRoutePreset.BOTTOM_SHEET) {
+                bottomSheetGestureExtentPx()
+            } else {
+                null
+            }
+            verticalSheetDragEnabled = interactiveAvailable &&
+                ticket?.spec?.routePreset == LynxRoutePreset.BOTTOM_SHEET &&
+                ticket?.spec?.routeOptions?.isMultiDetent == true &&
+                gestureDirection != LynxPopGestureDirection.HORIZONTAL
+            // heroSheet 的上滑是 Lynx scroll-view 自己的职责；原生只提供透明
+            // Activity/VC 承载，不能在这里抢走纵向触摸流。
             compatGestureEnabled = interactiveAvailable &&
+                ticket?.spec?.routePreset != LynxRoutePreset.HERO_SHEET &&
                 (
                     Build.VERSION.SDK_INT < 34 ||
                         fullScreenGesture ||
                         gestureDirection != LynxPopGestureDirection.HORIZONTAL
                     )
         }
+    }
+
+    private fun bottomSheetGestureExtentPx(): Float {
+        val measured = liveContent.height.toFloat()
+        if (measured > 0f) return measured
+        val layoutHeight = liveContent.layoutParams?.height ?: 0
+        if (layoutHeight > 0) return layoutHeight.toFloat()
+        val rootHeight = root.height.takeIf { it > 0 }
+            ?: activity.resources.displayMetrics.heightPixels
+        val heightVh = ticket?.spec?.routeOptions?.heightVh
+            ?: LynxBottomSheetMotion.DEFAULT_HEIGHT_VH
+        return (rootHeight * heightVh / 100f).coerceAtLeast(1f)
     }
 
     private fun canStartInteractiveSystemBack(): Boolean {
@@ -1768,6 +2152,7 @@ class LynxTransitionCoordinator(
     private fun isPersistentPreset(preset: LynxRoutePreset?): Boolean =
         preset in setOf(
             LynxRoutePreset.BOTTOM_SHEET,
+            LynxRoutePreset.HERO_SHEET,
             LynxRoutePreset.CUPERTINO_MODAL,
             LynxRoutePreset.CUPERTINO_MODAL_INSIDE,
             LynxRoutePreset.MODAL_NAVIGATION,

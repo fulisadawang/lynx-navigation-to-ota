@@ -48,9 +48,10 @@ xcodegen generate
 pod install
 ```
 
-当前默认首页是 `LynxShellSample/UI/LauncherViewController` 原生壳验收页，不会自动进入
-旧的 `main.lynx.bundle`。页面提供 OTA 打开和本地 OTA Bundle 删除入口；业务深链仍然由
-`LynxRouter` 解析并进入 Native Page Stack。普通本地 Bundle 仍可放在：
+当前冷启动默认从原生宿主页自动进入 `main.lynx.bundle` Playground；
+`LynxShellSample/UI/LauncherViewController` 继续作为宿主页锚点，提供“打开 Playground”、
+OTA 打开和本地 OTA Bundle 删除入口。调试时传 `--show-native-launcher` 可停留在原生页，
+业务深链仍优先由 `LynxRouter` 解析并进入 Native Page Stack。普通本地 Bundle 可放在：
 
 ```text
 LynxShellSample/Resources/Bundles
@@ -133,6 +134,11 @@ iOS 始终保持“一页 Lynx = 一个 `LynxContainerViewController`”，并�
 支持多元素、shuttle 和内置矩形曲线；Open Container 使用裁剪双内容容器。目标节点
 由 Lynx 首屏门禁后原生测量。显式 routeType/transition 的 push、pop、手势和
 fallback 都不会再叠加 UIKit 默认动画。
+
+`wx://bottom-sheet` 继续使用 iOS 15+ `UISheetPresentationController`（iOS 13/14 由壳
+fallback）。`wx://hero-sheet` 则使用普通全屏透明 VC：原生只负责 bottom-up 进场/退出和
+来源快照，Lynx 页面自己的 scroll-view 负责 peek 到全屏的连续滚动和顶部导航渐变，不再
+把 hero 映射成 UIKit custom detents，也不让 VC 的纵向手势抢占 Lynx 滚动。
 
 页面调用、七种 preset、`onRouteDone`、`prepareRoute / markTransitionReady /
 getTransitionState`、两阶段提交和降级规则见根目录

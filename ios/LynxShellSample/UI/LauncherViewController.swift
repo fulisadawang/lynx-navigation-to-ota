@@ -4,9 +4,9 @@ import UIKit
 /**
  * iOS 原生壳首页。
  *
- * 默认启动只展示 Native Page Stack 验收入口，不再自动进入 main.lynx.bundle，也不保留
- * URL/initData/globalProps 调试表单。按钮直接调用 LynxRouter 的真实 OTA open/delete API；
- * 若宿主没有提供安全配置，则展示真实“未配置”错误，不伪造下载、清理或回滚成功。
+ * 默认冷启动由 SceneDelegate 直接进入本地 Playground；本控制器作为宿主页锚点和
+ * Native Page Stack / OTA 诊断入口继续保留。若宿主没有提供安全配置，则展示真实
+ * “未配置”错误，不伪造下载、清理或回滚成功。
  */
 final class LauncherViewController: UIViewController {
     private let scrollView = UIScrollView()
@@ -69,15 +69,23 @@ final class LauncherViewController: UIViewController {
         contentStack.addArrangedSubview(titleLabel)
 
         let introLabel = makeLabel(
-            text: "当前首页只验收 Native Page Stack OTA，不再进入旧的 main.lynx.bundle。",
+            text: "默认进入 Playground 首页；需要时可从这里打开本地页面或 Native Page Stack OTA。",
             style: .body
         )
         introLabel.textColor = .secondaryLabel
         contentStack.setCustomSpacing(8, after: titleLabel)
         contentStack.addArrangedSubview(introLabel)
 
-        let card = makeOtaCard()
+        let playgroundButton = makeButton(
+            title: "打开 Playground 首页",
+            filled: true,
+            action: #selector(openPlaygroundHome)
+        )
         contentStack.setCustomSpacing(28, after: introLabel)
+        contentStack.addArrangedSubview(playgroundButton)
+
+        let card = makeOtaCard()
+        contentStack.setCustomSpacing(16, after: playgroundButton)
         contentStack.addArrangedSubview(card)
     }
 
@@ -202,6 +210,25 @@ final class LauncherViewController: UIViewController {
             )
         } catch {
             presentShellAlert(title: "无法打开 OTA 页面", message: error.localizedDescription)
+        }
+    }
+
+    @objc private func openPlaygroundHome() {
+        do {
+            _ = try LynxRouter.open(
+                bundle: "assets://bundles/main.lynx.bundle",
+                params: ["source": "ios-playground-home"],
+                options: [
+                    "title": "Sparkling Go",
+                    "fullscreen": true,
+                    "showNavigationBar": false,
+                ]
+            )
+        } catch {
+            presentShellAlert(
+                title: "无法打开 Playground 首页",
+                message: error.localizedDescription
+            )
         }
     }
 

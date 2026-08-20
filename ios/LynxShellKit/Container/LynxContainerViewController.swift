@@ -13,11 +13,15 @@ final class LynxContainerViewController: UIViewController {
     let navigationEntryID: String
     let navigationParentEntryID: String?
     let navigationOrder: Int
+    let usesSystemSheetPresentation: Bool
     var routeKey: String { request.resolvedRouteKey }
     /** route preset 的 barrier 与 Lynx 内容分层，避免半屏/模态页面退栈后突然铺满全屏。 */
     private let barrierControl = UIControl()
     private let contentHostView = UIView()
+    private let sheetGrabberView = UIView()
     private var transitionBackdropView: UIView?
+    /** iOS 13/14 自绘 Sheet 在手势期间覆盖 routeOptions.heightVH。 */
+    private var fallbackSheetHeightVH: CGFloat?
     private let errorView = ShellErrorView()
     private let loadingView = ShellLoadingView()
     private var lynxView: LynxView?
@@ -38,7 +42,8 @@ final class LynxContainerViewController: UIViewController {
         navigationEntryID: String = UUID().uuidString,
         navigationParentEntryID: String? = nil,
         navigationOrder: Int = 0,
-        preparedBundleData: Data? = nil
+        preparedBundleData: Data? = nil,
+        usesSystemSheetPresentation: Bool = false
     ) {
         self.request = request
         self.navigationSessionID = navigationSessionID
@@ -46,6 +51,7 @@ final class LynxContainerViewController: UIViewController {
         self.navigationParentEntryID = navigationParentEntryID
         self.navigationOrder = navigationOrder
         self.preparedBundleData = preparedBundleData
+        self.usesSystemSheetPresentation = usesSystemSheetPresentation
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -96,6 +102,13 @@ final class LynxContainerViewController: UIViewController {
             loadingView.topAnchor.constraint(equalTo: contentHostView.topAnchor),
             loadingView.bottomAnchor.constraint(equalTo: contentHostView.bottomAnchor),
         ])
+
+        sheetGrabberView.backgroundColor = .tertiaryLabel
+        sheetGrabberView.layer.cornerRadius = 2.5
+        sheetGrabberView.isUserInteractionEnabled = false
+        sheetGrabberView.isAccessibilityElement = false
+        sheetGrabberView.isHidden = true
+        contentHostView.addSubview(sheetGrabberView)
         layoutPresetContainer()
     }
 
@@ -116,12 +129,19 @@ final class LynxContainerViewController: UIViewController {
         // UIKit 的 VC 生命周期是 iOS 端 Native Page Stack 的事实源；这里同步 Lynx
         // Runtime，而不是让页面自己猜测“被覆盖”和“被销毁”的区别。
         lynxView?.onEnterBackground()
+        let isDismissingPresentedNavigation = navigationController?.isBeingDismissed == true
+        let isLeavingContainer = isMovingFromParent || isBeingDismissed ||
+            isDismissingPresentedNavigation
         sendLifecycle(
-            state: isMovingFromParent ? "detached" : "covered",
-            reason: isMovingFromParent ? "uikit_view_will_disappear_pop" : "uikit_view_will_disappear_cover"
+            state: isLeavingContainer ? "detached" : "covered",
+            reason: (isBeingDismissed || isDismissingPresentedNavigation)
+                ? "uikit_sheet_will_dismiss"
+                : (isMovingFromParent
+                    ? "uikit_view_will_disappear_pop"
+                    : "uikit_view_will_disappear_cover")
         )
         // 下一个页面会在自己的 viewWillAppear 中决定导航栏状态。
-        if isMovingFromParent {
+        if isLeavingContainer {
             let animateChrome = animated &&
                 ShellNavigator.shared.allowsSystemChromeAnimation(for: self)
             navigationController?.setNavigationBarHidden(
@@ -139,7 +159,8 @@ final class LynxContainerViewController: UIViewController {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        if isMovingFromParent {
+        if isMovingFromParent || isBeingDismissed ||
+            navigationController?.isBeingDismissed == true {
             sendLifecycle(state: "destroyed", reason: "uikit_view_did_disappear_pop")
             ShellMessageHub.unregister(pageId: navigationEntryID)
             ShellNavigator.shared.entryDidClose(navigationEntryID)
@@ -147,6 +168,10 @@ final class LynxContainerViewController: UIViewController {
                   navigationController?.topViewController !== self {
             // maintainState=false：离场动画用 snapshot，settle 后释放真实 LynxView。
             suspendLynxContent()
+        }
+        if usesSystemSheetPresentation,
+           navigationController?.presentingViewController == nil {
+            ShellNavigator.shared.systemSheetDidDisappear(self)
         }
         // 系统侧滑/导航栏 Back 不经过 Native Module；在生命周期回调中补一次快照同步。
         ShellNavigator.shared.navigationStackDidChange()
@@ -335,6 +360,17 @@ final class LynxContainerViewController: UIViewController {
         return transitionBackdropView
     }
 
+    /** 仅供 iOS 13/14 fallback 的原生多档位吸附，不影响系统 Page Sheet。 */
+    func applyFallbackSheetHeight(_ heightVH: CGFloat) {
+        guard !usesSystemSheetPresentation,
+              request.transitionSpec.routeType == .bottomSheet else {
+            return
+        }
+        fallbackSheetHeightVH = heightVH
+        loadViewIfNeeded()
+        layoutPresetContainer()
+    }
+
     /**
      * UINavigationController 完成 push 后会移除 fromView。半屏/模态目标因此持有一张
      * 静态 backdrop，保证透明根视图后仍显示进入前页面，而不改变导航栈语义。
@@ -368,6 +404,9 @@ final class LynxContainerViewController: UIViewController {
         if let navigationParentEntryID {
             value["parentEntryID"] = navigationParentEntryID
         }
+        if usesSystemSheetPresentation {
+            value["systemSheetPresentation"] = true
+        }
         return value
     }
 
@@ -378,17 +417,22 @@ final class LynxContainerViewController: UIViewController {
         contentHostView.backgroundColor = contentColor
 
         let routeType = request.transitionSpec.routeType
+        let isHeroSheet = routeType == .heroSheet
         let routeConfig = request.transitionSpec.routeConfig
-        let isPartial = routeType?.isPartialContainer == true
-        let opaque = routeConfig.opaque ?? !isPartial
+        let isTransparentRoute = isHeroSheet || routeConfig.opaque == false
+        let isPartial = !usesSystemSheetPresentation &&
+            routeType?.isPartialContainer == true &&
+            !isHeroSheet
+        let opaque = isTransparentRoute ? false : (routeConfig.opaque ?? !isPartial)
         view.isOpaque = opaque
         view.backgroundColor = opaque ? contentColor : .clear
+        contentHostView.backgroundColor = isTransparentRoute ? .clear : contentColor
         barrierControl.backgroundColor = UIColor(
             shellHex: routeConfig.barrierColor ?? "#00000066"
         ) ?? UIColor.black.withAlphaComponent(0.4)
-        barrierControl.isHidden = !isPartial || opaque
+        barrierControl.isHidden = isHeroSheet || !isPartial || opaque
         barrierControl.isUserInteractionEnabled =
-            isPartial && (routeConfig.barrierDismissible ?? true)
+            isPartial && !isHeroSheet && (routeConfig.barrierDismissible ?? true)
         barrierControl.isAccessibilityElement = barrierControl.isUserInteractionEnabled
         barrierControl.accessibilityTraits = .button
         barrierControl.accessibilityLabel = routeConfig.barrierLabel ?? "关闭页面"
@@ -701,18 +745,37 @@ final class LynxContainerViewController: UIViewController {
 
         let routeType = request.transitionSpec.routeType
         let options = request.transitionSpec.routeOptions
+        let isFullscreenHero = routeType == .heroSheet
         let frame: CGRect
         let radius: CGFloat
+        if usesSystemSheetPresentation {
+            contentHostView.frame = bounds
+            contentHostView.layer.cornerRadius = 0
+            contentHostView.clipsToBounds = false
+            sheetGrabberView.isHidden = true
+            lynxView?.frame = contentHostView.bounds
+            errorView.frame = contentHostView.bounds
+            return
+        }
         switch routeType {
         case .bottomSheet:
-            let height = max(1, bounds.height * options.heightVH / 100)
+            let height = max(
+                1,
+                bounds.height * (fallbackSheetHeightVH ?? options.heightVH) / 100
+            )
             frame = CGRect(
                 x: 0,
                 y: bounds.maxY - height,
                 width: bounds.width,
                 height: height
             )
-            radius = options.round ? 20 : 0
+            radius = options.round ? ShellBottomSheetMotion.sheetCornerRadius : 0
+
+        case .heroSheet:
+            // heroSheet 的偏移与滚动由 Lynx 页面自己控制；VC 只提供
+            // 全屏透明承载，来源页快照仍由转场层放在下面。
+            frame = bounds
+            radius = 0
 
         case .cupertinoModal, .cupertinoModalInside:
             frame = bounds.inset(
@@ -752,7 +815,23 @@ final class LynxContainerViewController: UIViewController {
         }
         contentHostView.layer.cornerRadius = radius
         contentHostView.layer.cornerCurve = .continuous
-        contentHostView.clipsToBounds = radius > 0
+        contentHostView.clipsToBounds = radius > 0 && !isFullscreenHero
+        barrierControl.isHidden = isFullscreenHero
+        barrierControl.isUserInteractionEnabled = !isFullscreenHero &&
+            (routeType?.isPartialContainer == true) &&
+            (request.transitionSpec.routeConfig.barrierDismissible ?? true)
+        if routeType == .bottomSheet, options.round, !isFullscreenHero {
+            sheetGrabberView.isHidden = false
+            sheetGrabberView.frame = CGRect(
+                x: max((contentHostView.bounds.width - 36) / 2, 0),
+                y: 8,
+                width: 36,
+                height: 5
+            )
+            contentHostView.bringSubviewToFront(sheetGrabberView)
+        } else {
+            sheetGrabberView.isHidden = true
+        }
         lynxView?.frame = contentHostView.bounds
         errorView.frame = contentHostView.bounds
     }
@@ -764,4 +843,5 @@ final class LynxContainerViewController: UIViewController {
         }
         _ = ShellNavigator.shared.close()
     }
+
 }

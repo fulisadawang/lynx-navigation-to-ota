@@ -65,6 +65,10 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
         case vertical
     }
     private var activeGestureAxis: GestureAxis = .horizontal
+    private var activeGestureExtent: CGFloat?
+    private var fallbackSheetDragActive = false
+    private var fallbackSheetDragStartHeight: CGFloat = 0
+    private var fallbackSheetDragRawHeight: CGFloat = 0
     /** 进入首个 Lynx VC 前记录宿主系统侧滑开关，退出 Lynx 页面后原样恢复。 */
     private var hostInteractivePopGestureEnabled: Bool?
     /** 进入 Lynx 栈前记录宿主的系统侧滑 delegate，离开时恢复，避免污染宿主页面。 */
@@ -85,6 +89,9 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
     func install(on navigationController: UINavigationController) {
         if self.navigationController === navigationController { return }
         if let old = self.navigationController {
+            // 系统 Sheet 内部也可能承载一个 UINavigationController。切换容器前必须
+            // 把旧容器的系统手势 delegate/开关原样归还，不能把根导航器的状态带进 Sheet。
+            releaseBackGestureOwnership()
             old.view.removeGestureRecognizer(edgePan)
             old.view.removeGestureRecognizer(fullPan)
         }
@@ -99,6 +106,13 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
         fullPan.isEnabled = false
         navigationController.view.addGestureRecognizer(edgePan)
         navigationController.view.addGestureRecognizer(fullPan)
+    }
+
+    /** 系统 Page Sheet 的下拉关闭完全交给 UIKit，壳不叠加 edge/full-screen pop。 */
+    func suspendBackGestureForSystemSheet() {
+        edgePan.isEnabled = false
+        fullPan.isEnabled = false
+        navigationController?.interactivePopGestureRecognizer?.isEnabled = false
     }
 
     /** 在创建目标 VC 之前冻结 transactionID，供 globalProps 首屏读取。 */
@@ -525,6 +539,7 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
                 return false
             }
             activeGestureAxis = .horizontal
+            activeGestureExtent = nil
             return velocity.x >= max(abs(velocity.y), 80)
         }
 
@@ -551,17 +566,36 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
                 crossVelocity = velocity.x
             }
         }
-        // 全屏/纵向返回必须先形成明确的“向后”意图；轻微抖动不能抢走
-        // Lynx scroll-view 的点击或滚动手势。
-        guard primaryVelocity >= max(abs(crossVelocity), 80),
-              scrollViewsAllowPop(
-                  at: location,
-                  in: navigationController.view,
-                  axis: axis
-              ) else {
+        let translation = pan.translation(in: navigationController.view)
+        let resolvedPrimary = abs(primaryVelocity) >= 1
+            ? primaryVelocity
+            : (axis == .vertical ? translation.y : translation.x)
+        let resolvedCross = abs(primaryVelocity) >= 1
+            ? crossVelocity
+            : (axis == .vertical ? translation.x : translation.y)
+        let isFallbackMultiDetentSheet =
+            !current.usesSystemSheetPresentation &&
+            current.request.transitionSpec.routeType == .bottomSheet &&
+            current.request.transitionSpec.routeOptions.detentsVH.count > 1 &&
+            axis == .vertical
+        // 普通返回必须形成明确的“向后”意图；iOS 13/14 fallback 的多档 Sheet
+        // 还允许向上展开，因此该分支使用速度绝对值判断轴向意图。
+        let hasPrimaryIntent = isFallbackMultiDetentSheet
+            ? abs(resolvedPrimary) >= max(abs(resolvedCross), 20)
+            : resolvedPrimary >= max(abs(resolvedCross), 20)
+        let isAtScrollBoundary = scrollViewsAllowPop(
+            at: location,
+            in: navigationController.view,
+            axis: axis
+        )
+        guard hasPrimaryIntent, isAtScrollBoundary else {
             return false
         }
         activeGestureAxis = axis
+        activeGestureExtent = bottomSheetGestureExtent(
+            axis: axis,
+            controller: current
+        )
         return true
     }
 
@@ -633,9 +667,14 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
             dimension = max(bounds.width, 1)
         case .vertical:
             distance = translation.y
-            dimension = max(bounds.height, 1)
+            dimension = max(activeGestureExtent ?? bounds.height, 1)
         }
-        let progress = min(max(distance / dimension, 0), 1)
+        let progress = activeGestureExtent == nil
+            ? min(max(distance / dimension, 0), 1)
+            : ShellBottomSheetMotion.dragProgress(
+                distance: distance,
+                sheetHeight: dimension
+            )
 
         switch gesture.state {
         case .began:
@@ -643,36 +682,42 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
                   navigationController.viewControllers.count > 1 else {
                 return
             }
-            let target = navigationController.viewControllers[
-                navigationController.viewControllers.count - 2
-            ]
-            let transaction = makeProgrammaticPop(from: source, to: target)
-            if transaction.effective == .sharedElement {
-                let eligibleKeys = Set(
-                    transaction.spec.sharedElements
-                        .filter(\.transitionOnGesture)
-                        .map(\.key)
-                )
-                if eligibleKeys.isEmpty {
-                    transaction.effective = transaction.spec.fallbackStyle
-                    transaction.reason = "gesture_shared_element_unavailable"
-                } else if eligibleKeys.count < transaction.spec.sharedElements.count {
-                    transaction.interactiveSharedElementKeys = eligibleKeys
-                }
+            if isFallbackMultiDetentSheet(source), activeGestureAxis == .vertical {
+                fallbackSheetDragActive = true
+                fallbackSheetDragStartHeight = source.transitionContentView.bounds.height
+                fallbackSheetDragRawHeight = fallbackSheetDragStartHeight
+                return
             }
-            transaction.interaction = UIPercentDrivenInteractiveTransition()
-            transaction.interaction?.completionCurve = .easeOut
-            active = transaction
-            updateState(for: transaction, status: .accepted, progress: 0)
-            navigationController.popViewController(animated: true)
+            beginInteractivePop(from: source, in: navigationController)
 
         case .changed:
+            if fallbackSheetDragActive {
+                guard let source = navigationController.topViewController as?
+                    LynxContainerViewController else { return }
+                updateFallbackSheetDrag(
+                    distance: translation.y,
+                    source: source,
+                    containerHeight: max(bounds.height, 1)
+                )
+                return
+            }
             guard let transaction = active, let interaction = transaction.interaction else { return }
             interaction.update(progress)
             transaction.animator?.updateInteractiveProgress(progress)
             updateState(for: transaction, status: .running, progress: progress)
 
         case .ended:
+            if fallbackSheetDragActive {
+                guard let source = navigationController.topViewController as?
+                    LynxContainerViewController else { return }
+                finishFallbackSheetDrag(
+                    velocity: gesture.velocity(in: navigationController.view).y,
+                    source: source,
+                    containerHeight: max(bounds.height, 1)
+                )
+                activeGestureExtent = nil
+                return
+            }
             guard let transaction = active, let interaction = transaction.interaction else { return }
             let rawVelocity = gesture.velocity(in: navigationController.view)
             let velocity = max(
@@ -682,21 +727,174 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
             let shouldFinish = progress >= 0.42 || (progress >= 0.12 && velocity >= 700)
             updateState(for: transaction, status: .settling, progress: progress)
             transaction.animator?.settleInteractive(completed: shouldFinish)
+            if transaction.spec.routeType == .bottomSheet {
+                // 完成时直接向下加速离场；取消时平滑回到打开态，不共用一条 spring 曲线。
+                interaction.completionCurve = shouldFinish ? .easeIn : .easeOut
+            }
             if shouldFinish {
                 interaction.finish()
             } else {
                 interaction.cancel()
             }
+            activeGestureExtent = nil
 
         case .cancelled, .failed:
+            if fallbackSheetDragActive {
+                guard let source = navigationController.topViewController as?
+                    LynxContainerViewController else { return }
+                finishFallbackSheetDrag(
+                    velocity: 0,
+                    source: source,
+                    containerHeight: max(bounds.height, 1),
+                    cancelled: true
+                )
+                activeGestureExtent = nil
+                return
+            }
             guard let transaction = active, let interaction = transaction.interaction else { return }
             updateState(for: transaction, status: .settling, progress: progress)
             transaction.animator?.settleInteractive(completed: false)
             interaction.cancel()
+            activeGestureExtent = nil
 
         default:
             break
         }
+    }
+
+    private func isFallbackMultiDetentSheet(
+        _ controller: LynxContainerViewController
+    ) -> Bool {
+        !controller.usesSystemSheetPresentation &&
+            controller.request.transitionSpec.routeType == .bottomSheet &&
+            controller.request.transitionSpec.routeOptions.detentsVH.count > 1
+    }
+
+    private func updateFallbackSheetDrag(
+        distance: CGFloat,
+        source: LynxContainerViewController,
+        containerHeight: CGFloat
+    ) {
+        let detents = source.request.transitionSpec.routeOptions.detentsVH
+        guard detents.count > 1 else { return }
+        let minimum = containerHeight * detents[0] / 100
+        let maximum = containerHeight * detents[detents.count - 1] / 100
+        let rawHeight = fallbackSheetDragStartHeight - distance
+        fallbackSheetDragRawHeight = rawHeight
+        let visibleHeight: CGFloat
+        if rawHeight < minimum {
+            visibleHeight = minimum - (minimum - rawHeight) * 0.22
+        } else if rawHeight > maximum {
+            visibleHeight = maximum + (rawHeight - maximum) * 0.18
+        } else {
+            visibleHeight = rawHeight
+        }
+        source.applyFallbackSheetHeight(
+            max(visibleHeight, 1) / containerHeight * 100
+        )
+    }
+
+    private func finishFallbackSheetDrag(
+        velocity: CGFloat,
+        source: LynxContainerViewController,
+        containerHeight: CGFloat,
+        cancelled: Bool = false
+    ) {
+        guard fallbackSheetDragActive else { return }
+        let detents = source.request.transitionSpec.routeOptions.detentsVH
+        guard detents.count > 1 else {
+            fallbackSheetDragActive = false
+            return
+        }
+        let minimum = containerHeight * detents[0] / 100
+        if !cancelled,
+           ShellHeroSheetMotion.shouldDismiss(
+               rawHeight: fallbackSheetDragRawHeight,
+               minimumHeight: minimum,
+               velocityPointsPerSecond: velocity
+           ) {
+            fallbackSheetDragActive = false
+            beginInteractivePop(
+                from: source,
+                in: navigationController,
+                finishImmediately: true
+            )
+            return
+        }
+
+        let currentHeightVH = fallbackSheetDragRawHeight / containerHeight * 100
+        let projectedHeightVH = cancelled
+            ? currentHeightVH
+            : ShellHeroSheetMotion.projectedHeightVH(
+                currentHeightVH: currentHeightVH,
+                velocityPointsPerSecond: velocity,
+                containerHeight: containerHeight
+            )
+        let targetIndex = ShellHeroSheetMotion.nearestDetentIndex(
+            heightVH: projectedHeightVH,
+            detentsVH: detents
+        )
+        let targetHeightVH = detents[targetIndex]
+        fallbackSheetDragActive = false
+        let animator = UIViewPropertyAnimator(
+            duration: 0.22,
+            timingParameters: UISpringTimingParameters(dampingRatio: 0.92)
+        )
+        animator.addAnimations {
+            source.applyFallbackSheetHeight(targetHeightVH)
+        }
+        animator.addCompletion { _ in
+            source.applyFallbackSheetHeight(targetHeightVH)
+        }
+        animator.startAnimation()
+    }
+
+    private func beginInteractivePop(
+        from source: LynxContainerViewController,
+        in navigationController: UINavigationController?,
+        finishImmediately: Bool = false
+    ) {
+        guard let navigationController,
+              navigationController.viewControllers.count > 1 else {
+            return
+        }
+        let target = navigationController.viewControllers[
+            navigationController.viewControllers.count - 2
+        ]
+        let transaction = makeProgrammaticPop(from: source, to: target)
+        if transaction.effective == .sharedElement {
+            let eligibleKeys = Set(
+                transaction.spec.sharedElements
+                    .filter(\.transitionOnGesture)
+                    .map(\.key)
+            )
+            if eligibleKeys.isEmpty {
+                transaction.effective = transaction.spec.fallbackStyle
+                transaction.reason = "gesture_shared_element_unavailable"
+            } else if eligibleKeys.count < transaction.spec.sharedElements.count {
+                transaction.interactiveSharedElementKeys = eligibleKeys
+            }
+        }
+        transaction.interaction = UIPercentDrivenInteractiveTransition()
+        transaction.interaction?.completionCurve = .easeOut
+        active = transaction
+        updateState(for: transaction, status: .accepted, progress: 0)
+        navigationController.popViewController(animated: true)
+        guard finishImmediately,
+              let interaction = transaction.interaction else { return }
+        transaction.animator?.settleInteractive(completed: true)
+        interaction.finish()
+    }
+
+    private func bottomSheetGestureExtent(
+        axis: GestureAxis,
+        controller: LynxContainerViewController
+    ) -> CGFloat? {
+        guard axis == .vertical,
+              controller.request.transitionSpec.routeType == .bottomSheet else {
+            return nil
+        }
+        return max(controller.transitionContentView.bounds.height, 1)
     }
 
     private func push(

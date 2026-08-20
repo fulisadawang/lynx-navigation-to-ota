@@ -66,6 +66,7 @@ navigateWithPreset({
 | 页面 preset | 原生 routeType |
 |---|---|
 | `bottomSheet` | `wx://bottom-sheet` |
+| `heroSheet` | `wx://hero-sheet`（壳扩展，多档位 Sheet） |
 | `up` / `upwards` | `wx://upwards` |
 | `zoom` | `wx://zoom` |
 | `cupertinoModal` | `wx://cupertino-modal` |
@@ -99,6 +100,22 @@ navigateWithPreset({
 ```
 
 普通页面不要重复填写这些参数，原生预设已有稳定默认值。
+
+多档位 `heroSheet` 使用同一组 Sheet 参数；`detents` 必须严格递增，单位为 vh，最多
+4 档。省略 `initialDetent` 时，`bottomSheet` 选择最大档，`heroSheet` 的默认配置为
+`[28, 56, 92]` 并从 `56vh` 打开：
+
+```ts
+navigateWithPreset({
+  bundle: 'product-detail.lynx.bundle',
+  preset: 'heroSheet',
+  routeOptions: {
+    round: true,
+    detents: [28, 56, 92],
+    initialDetent: 56,
+  },
+})
+```
 
 ### 2.2 Share Element：同 key 自动配对
 
@@ -311,10 +328,10 @@ pop 与其严格反向；跟手返回时由同一个 progress 驱动，取消后
 官方公开了打开态容器的属性与前向转场；反向 pop、跟手取消以及真实 Activity/VC
 栈提交是本壳为保证双端可退出性补充的原生协议，不描述为微信内部实现细节。
 
-## 5. 七种 Preset Route
+## 5. Preset Route 与 heroSheet
 
-所有 routeType 都先归一化为原生 `ShellPresetRouteSpec`，再由 Android/iOS 各自的
-renderer 绘制。`routeConfig` 支持：
+七种官方 routeType 与壳扩展 `heroSheet` 都先归一化为原生
+`ShellPresetRouteSpec`，再由 Android/iOS 各自的 renderer 绘制。`routeConfig` 支持：
 
 ```ts
 interface SkylineRouteConfig {
@@ -334,12 +351,32 @@ interface SkylineRouteConfig {
 }
 ```
 
-`bottom-sheet` 默认 `height=60vh`、`round=true`。页面高度、屏幕安全区、状态栏和
-原生导航栏都由当前 Activity/VC 可见区域计算，不使用设计稿坐标。
+`open` 还支持顶层 `transparent?: boolean`。它只把原生 VC/Activity 变成透明承载层；页面
+是否从底部进入、如何移动和何时退出，仍由页面自己的动画 owner 决定。
 
-iOS 的 `bottom-sheet` 会让来源页缩小、轻微下沉并保留连续圆角；push 完成后该终态
-由目标 VC 的背景快照持续承载。关闭或交互返回时，可见背景快照会先恢复到全屏，
-返回取消则恢复为后退终态，避免系统页面与快照切换时出现跳变。
+`bottom-sheet` 默认采用 iOS Page Sheet 形态：`height=92vh`、`round=true`，并显示 grabber。
+页面高度、屏幕安全区、状态栏和原生导航栏都由当前 Activity/VC 可见区域计算，不使用设计稿
+坐标。
+
+`hero-sheet` 保留 `detents=[28,56,100]`、初始 `56vh` 的跨端 routeOptions contract，
+但它不是原生高度 Sheet：目标页由透明全屏 Activity/VC 承载，页面自身通过顶部 peek spacer
+和 `scroll-view` 连续上移到状态栏下方。Lynx 自己控制 surface 的底部入场、顶部导航渐变、
+下拉退出和取消回弹；原生只在退出动画完成后无动画移除承载层，来源页保持原位，不做缩放、
+下移或“后退”遮罩。
+
+`bottom-sheet` 仍可以传 `routeOptions.detents` 获得原生多档高度吸附；heroSheet 的上滑
+不由原生 detent 手势消费，以免抢走 Lynx 页面滚动。内容在顶部时的下拉关闭由 Lynx
+main-thread touch handler 跟手完成，不参与上滑内容滚动。
+
+- iOS 15+ 直接使用 `UISheetPresentationController`。默认 92vh 映射 `.large()`；iOS 16+
+  对显式较小高度使用 custom detent，iOS 15 回退 `.medium()`。圆角、来源页缩放、系统遮罩、
+  下拉跟手、完成/取消曲线和程序化向下关闭全部由 UIKit 执行，不再叠加壳自定义 pop animator。
+- iOS 的 `heroSheet` 使用普通全屏透明 VC；原生不执行 hero 位移和 dismiss pan，Lynx
+  surface/`scroll-view` 控制底部入场、peek、连续上滑、顶部导航渐变和下拉退出。
+  `bottomSheet` 才进入 `UISheetPresentationController`/iOS 13/14 fallback。
+- Android 的 `heroSheet` 使用全屏透明 `liveContent`；原生不修改 hero 内容高度、不添加抓手、
+  不缩放或下移来源页，纵向触摸直接交给 Lynx 页面。普通 `bottomSheet` 继续保留来源页
+  `0.94` 缩放、下沉和 detent 速度投影。
 
 需要区分 API 字段“已接收”与底层运行时是否能够 1:1 等价：
 
@@ -547,12 +584,10 @@ transition-gallery.lynx.bundle
 
 ## 12. 验收边界
 
-构建通过只证明协议与原生代码可编译，不能单独证明动画视觉质量。本轮已在 iPhone
-16 Pro 模拟器运行并逐帧复核丰富 Share Element 的 push/pop，以及 Open Container 和
-预置路由的可逆路径。Android 已在 OnePlus 8 / Android 13 真机逐项运行 Share
-Element、Open Container、fade、slide 和七种 Skyline routeType，并验证系统 Back 与
-兼容 edge 手势进入同一个原生 pop renderer；单机结果仍不能代替 Android 版本、厂商和
-刷新率矩阵。
+构建通过只证明协议与原生代码可编译，不能单独证明动画视觉质量。本轮 iOS 在 iPhone
+16 Pro Simulator 运行并确认透明 hero 的来源页快照；Android 在 OnePlus 8 / Android 13
+真机确认 hero 的底部入场、来源页固定、Lynx 上滑到全屏、状态栏导航渐变，以及普通 fade
+恢复 source snapshot 后不再白闪。其它高级转场仍按下表区分代码/构建证据与完整设备矩阵。
 
 已验证：
 
@@ -560,21 +595,16 @@ Element、Open Container、fade、slide 和七种 Skyline routeType，并验证�
 - 16 个 Lynx Bundle 构建；
 - Android `:app:assembleDebug`；
 - iOS Simulator Debug 构建、安装和运行；
-- Share Element 封面/标题/价格 push 与原轨迹 pop；
-- Open Container push/pop 的 frame、圆角、颜色和内容淡入淡出使用同一进度；
+- Share Element、Open Container、七种 routeType 的代码路径和协议静态检查；
 - Android 默认全屏、无 Material Toolbar、状态栏 Window fullscreen；
 - Android 对象型 NativeModule callback 不再返回 `null`，转场状态可读；
-- Android Share Element push 终态为 `completed`，系统 Back 从 2 层回到 1 层；
-- Android Open Container push/pop 命中 `open_container` renderer，未再因非关键图片
-  错误降级为 `target_not_ready`；
-- Android fade、slide 和七种 Skyline routeType 的 push，以及系统 Back 原路 pop；
-- Android 13 左边缘手势进入与系统 Back 相同的反向 renderer；
-- Android 返回尾帧抽帧未再出现三个共享元素同时留白；
+- Android hero 与普通 fade 的真机运行态；
 - Android/iOS/HarmonyOS 静态回归。
 
 仍需用户真机验收：
 
 - Android 三键导航和 Android 14+ Predictive Back；
+- Share Element、Open Container、其它 routeType 的最新真机视觉回归；
 - iOS 真机 edge pan 完成、取消、快速反向拖动；
 - 七个 routeType 的 iOS 真机 push/pop；
 - 多共享元素层级、弧线、shuttle、目标缺失降级；

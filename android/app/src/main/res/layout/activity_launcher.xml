@@ -22,13 +22,23 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="当前首页只验收 Activity-first OTA，不再进入旧的 main.lynx.bundle。"
+            android:text="默认进入 Playground 首页；需要时可从这里打开本地页面或 Activity-first OTA。"
             android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/open_playground_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:minHeight="56dp"
+            android:text="打开 Playground 首页"
+            android:textSize="16sp"
+            app:cornerRadius="12dp" />
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="16dp"
             app:cardBackgroundColor="@android:color/white"
             app:cardCornerRadius="16dp"
             app:strokeColor="?attr/colorPrimary"

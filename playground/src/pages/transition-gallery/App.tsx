@@ -46,6 +46,7 @@ function TransitionGalleryContent() {
 
   const runBasicPreset = (
     preset: Exclude<TransitionPreset, 'shared' | 'container'>,
+    routeOptions?: { round?: boolean; height?: number; detents?: number[]; initialDetent?: number },
   ) => {
     'background only'
     setStatus(`正在提交 ${preset} 预设…`)
@@ -55,6 +56,7 @@ function TransitionGalleryContent() {
         preset,
         routeKey: `transition-${preset}`,
         params: commonParams(preset),
+        routeOptions,
       },
       (result) => showResult(preset, result),
     )
@@ -338,6 +340,11 @@ function TransitionGalleryContent() {
             { label: 'wx://upwards', preset: 'upwards' },
             { label: 'wx://zoom', preset: 'zoom' },
             { label: 'wx://bottom-sheet', preset: 'bottomSheet' },
+            {
+              label: 'wx://hero-sheet · 28/56/100vh',
+              preset: 'heroSheet',
+              routeOptions: { detents: [28, 56, 100], initialDetent: 56 },
+            },
             { label: 'wx://cupertino-modal', preset: 'cupertinoModal' },
             { label: 'wx://cupertino-modal-inside', preset: 'cupertinoModalInside' },
             { label: 'wx://modal-navigation', preset: 'modalNavigation' },
@@ -346,7 +353,17 @@ function TransitionGalleryContent() {
             <view
               key={item.label}
               className={dk('transition-preset')}
-              bindtap={() => runBasicPreset(item.preset)}
+              bindtap={() => runBasicPreset(
+                item.preset,
+                'routeOptions' in item
+                  ? {
+                      ...item.routeOptions,
+                      detents: item.routeOptions.detents
+                        ? Array.from(item.routeOptions.detents)
+                        : undefined,
+                    }
+                  : undefined,
+              )}
               accessibility-element
               accessibility-label={`运行 ${item.label} 预置转场`}
               accessibility-traits="button"

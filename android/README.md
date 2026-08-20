@@ -245,7 +245,9 @@ Android 已支持：
 
 Android 始终保持“一页 Lynx = 一个 `LynxShellActivity`”。共享元素和 Open
 Container 由原生 selector、首屏门禁、快照 overlay 与返回状态机实现；ReactLynx
-页面不逐帧驱动。七种 Skyline routeType 由不同原生 renderer 处理；显式自定义转场
+页面不逐帧驱动。七种 Skyline routeType 与 heroSheet 扩展由不同 renderer 处理：heroSheet
+只由原生完成透明宿主的 bottom-up 进场/退出，页面自己的 scroll-view 负责上滑和导航渐变；
+普通 bottomSheet 仍由原生处理 Sheet 高度。显式自定义转场
 在启动和结束 Activity 时都抑制 Window 动画，fallback 也由壳绘制。Android 14+
 接入系统 Predictive Back progress，低版本使用兼容 edge 手势。
 

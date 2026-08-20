@@ -1,8 +1,8 @@
 # 三端验证说明
 
 本轮针对 Android/iOS 的 Skyline 风格 `share-element`、`preset-route`、
-`open-container` 和自定义返回手势完成源码、契约与 compile-only 验收。按用户要求，
-没有安装或启动 App；HarmonyOS 未参与本轮功能改造，只做静态回归。
+`open-container`、透明 `heroSheet` 和自定义返回手势完成源码、契约、构建与部分真机/模拟器
+验收。HarmonyOS 未参与本轮功能改造，只做静态回归。
 
 ## 静态验收
 
@@ -22,14 +22,15 @@ HarmonyOS     : 45 PASS, 0 WARN, 0 FAIL
 
 - 显式自定义转场不使用 Android `ActivityOptions` 或系统 Window 动画；
 - iOS 显式转场不回落 UIKit 默认 animator，系统 edge pop 与壳手势互斥；
-- 七种 `wx://` preset 使用对应原生 renderer，降级结果会真正切换 renderer；
+- 七种官方 `wx://` preset 与壳扩展 `wx://hero-sheet` 使用对应 renderer；heroSheet 的透明宿主
+  只负责承载和栈收口，Lynx 页面负责底部入场、连续滚动、导航渐变与下拉退出；
 - `clearTop / singleTask / back / popTo / closeAll / reLaunch` 只执行一段原生转场，
   中间 Activity/VC 静默提交；
 - 多共享元素 1–8、key 唯一、push/pop shuttle、所有内置 rect tween 与逐元素
   `transitionOnGesture`；
 - Android source underlay 擦除飞跃元素，iOS 使用独立 `shadowHost + clipHost`；
 - Open Container 九项外观参数、`middleColor` 可空且仅参与 `fadeThrough`；
-- `routeConfig`、bottom-sheet `routeOptions`、snapshot flags 和 `maintainState`；
+- `routeConfig`、bottom-sheet/heroSheet `routeOptions`（含多档 detents）、snapshot flags 和 `maintainState`；
 - `completed / degraded / cancelled / failed` 终态事件以及 `animated=false`；
 - TypeScript、Android、iOS NativeModules 契约与中文注释。
 
@@ -56,15 +57,18 @@ transition-detail.lynx.bundle
 a6f66f92f80d633245a0c478d08554e93d6d2ce505fbf4e4a82207ad2ed9cf2e
 ```
 
-## Android 构建
+## Android 构建与真机
 
 由于源码包没有提交 Gradle Wrapper，本机使用缓存的 Gradle 8.11.1、Android Studio
 JBR 与本机 Android SDK 执行：
 
 ```text
-:app:compileDebugKotlin  BUILD SUCCESSFUL
-:app:assembleDebug       BUILD SUCCESSFUL
+:lynx-shell:testDebugUnitTest  BUILD SUCCESSFUL
+:app:installDebug              BUILD SUCCESSFUL
 ```
+
+真机：`a7e90f03 / OnePlus 8 / Android 13`。已运行 hero 首屏、上滑到全屏、状态栏导航渐变，
+并复现普通 `fade` 的 source snapshot 修复，确认淡入期间不再露白。
 
 产物：
 
@@ -108,11 +112,12 @@ OHPM、DevEco、Hvigor、HAP 编译或签名。
 
 ## 未验证与边界
 
-- 按用户要求，本轮没有安装、启动或操作 Android/iOS App；
+- 已安装并操作 Android OnePlus 8，验证 heroSheet bottom-up 进入、来源页固定、Lynx
+  scroll-view 上滑、状态栏下导航渐变，以及普通 fade 的 source snapshot；
 - Android Predictive Back、API 24–33 edge back、iOS edge pan 的完成/取消视觉和帧率
-  仍为 `[待确认]`；
-- 七种 preset、多共享元素、Open Container、Reduce Motion、旋转、滚动冲突、后台恢复
-  的真机矩阵仍为 `[待确认]`；
+  仍为 `[待确认]`；hero 的纵向滚动不再由原生 edge pan 消费；
+- iOS 真机 hero、七种 preset、多共享元素、Open Container、Reduce Motion、旋转、滚动冲突、
+  后台恢复的完整真机矩阵仍为 `[待确认]`；
 - WebView、视频、Surface/Metal 或受保护内容的快照质量不承诺；
 - 真实业务 App 需要安装自己的 Android `SessionExitHandler/AppHomeHandler` 和 iOS
   Home Handler；
@@ -121,5 +126,6 @@ OHPM、DevEco、Hvigor、HAP 编译或签名。
   的是已声明的原生参数、白名单 tween、栈事务、降级与终态事件，不把视觉近似写成微信
   私有运行时 1:1 移植。
 
-因此当前结论是：Android/iOS 源码、Bridge 契约、Bundle 和 Debug compile-only 构建已
-验证；真机视觉/手势矩阵与 HarmonyOS 编译未覆盖，不能描述为三端生产验收完成。
+因此当前结论是：Android/iOS 源码、Bridge 契约、Bundle、Debug 构建，以及 Android hero/
+普通 fade 与 iOS Simulator hero 的运行态已验证；完整真机视觉/手势矩阵与 HarmonyOS 编译
+仍未覆盖，不能描述为三端生产验收完成。

@@ -161,7 +161,7 @@ typealias ShellAppHomeHandler = (
  * `order` 用于恢复原顺序。closeAll 会移除当前 session 及其后的原生/Lynx 页面，
  * 保留进入 Lynx 前的 UINavigationController 前缀。
  */
-final class ShellNavigator {
+final class ShellNavigator: NSObject, UIAdaptivePresentationControllerDelegate {
     static let shared = ShellNavigator()
 
     private weak var navigationController: UINavigationController?
@@ -169,13 +169,19 @@ final class ShellNavigator {
     private let transitionCoordinator = ShellTransitionCoordinator()
     /** nav.delegate 是 weak，必须由导航器强持有组合代理。 */
     private var navigationDelegateMux: ShellNavigationDelegateMux?
+    private weak var systemSheetController: LynxContainerViewController?
+    /** iOS 15+ Sheet 内仍用真实 UINavigationController 承载后续 entry。 */
+    private var systemSheetNavigationController: UINavigationController?
+    private var systemSheetNavigationDelegateMux: ShellNavigationDelegateMux?
     private var lastOperationKey = ""
     private var busyUntilMilliseconds = -Double.greatestFiniteMagnitude
 
     private let snapshotKey = "lynx_shell.navigation.snapshot.v1"
     private let resultKeyPrefix = "lynx_shell.navigation.result."
 
-    private init() {}
+    private override init() {
+        super.init()
+    }
 
     /** 绑定业务 App 实际使用的 UINavigationController。 */
     func attach(_ navigationController: UINavigationController) {
@@ -217,9 +223,13 @@ final class ShellNavigator {
         options: ShellNavigationOptions,
         sourceLynxView: LynxView? = nil
     ) -> LynxNavigationResult {
-        guard let navigationController else {
+        guard let rootNavigationController = navigationController else {
             return failure(1002, "宿主导航器不可用")
         }
+        let navigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        activateTransitionCoordinator(on: navigationController)
         let request = request.withTransitionSpec(options.transitionSpec)
         let source = navigationController.topViewController as? LynxContainerViewController
         let operationScope = source?.navigationSessionID
@@ -234,14 +244,11 @@ final class ShellNavigator {
         }
 
         if let source {
-            let stack = navigationController.viewControllers
-            let sessionControllers = stack.compactMap { controller -> LynxContainerViewController? in
-                guard let lynx = controller as? LynxContainerViewController,
-                      lynx.navigationSessionID == source.navigationSessionID else {
-                    return nil
-                }
-                return lynx
-            }
+            let stack = logicalSessionControllers(
+                sessionID: source.navigationSessionID,
+                root: rootNavigationController
+            )
+            let sessionControllers = stack
             let target = sessionControllers.last(where: { $0.routeKey == routeKey })
 
             switch options.launchMode {
@@ -262,6 +269,17 @@ final class ShellNavigator {
             case .clearTop:
                 if let target,
                    let targetIndex = stack.firstIndex(where: { $0 === target }) {
+                    if target.navigationController !== navigationController {
+                        return clearSystemSheetToRootTarget(
+                            target,
+                            request: request,
+                            launchMode: .clearTop,
+                            options: options,
+                            logicalStack: stack,
+                            targetIndex: targetIndex,
+                            root: rootNavigationController
+                        )
+                    }
                     let affectedCount = stack.count - targetIndex - 1
                     guard affectedCount > 0 else {
                         return success(
@@ -271,7 +289,7 @@ final class ShellNavigator {
                         )
                     }
                     let removedEntries = stack.suffix(from: targetIndex + 1)
-                        .compactMap { $0 as? LynxContainerViewController }
+                        .map { $0 }
                     let ticket = transitionCoordinator.beginPop(
                         // clearTop 是本次 open 的一部分，必须冻结本次 options，
                         // 不能偷偷复用当前页上一次 push 时保存的转场配置。
@@ -282,6 +300,7 @@ final class ShellNavigator {
                         forceCustomAnimator: true
                     )
                     let shouldAnimate = options.animated &&
+                        options.transitionSpec.baseEffectiveStyle != .none &&
                         options.transitionSpec.durationMilliseconds(for: .pop) > 0
                     guard navigationController.popToViewController(
                         target,
@@ -311,6 +330,17 @@ final class ShellNavigator {
             case .singleTask:
                 if let target,
                    let targetIndex = stack.firstIndex(where: { $0 === target }) {
+                    if target.navigationController !== navigationController {
+                        return clearSystemSheetToRootTarget(
+                            target,
+                            request: request,
+                            launchMode: .singleTask,
+                            options: options,
+                            logicalStack: stack,
+                            targetIndex: targetIndex,
+                            root: rootNavigationController
+                        )
+                    }
                     let affectedCount = stack.count - targetIndex - 1
                     guard affectedCount > 0 else {
                         target.replaceRequest(request)
@@ -322,7 +352,7 @@ final class ShellNavigator {
                         )
                     }
                     let removedEntries = stack.suffix(from: targetIndex + 1)
-                        .compactMap { $0 as? LynxContainerViewController }
+                        .map { $0 }
                     let ticket = transitionCoordinator.beginPop(
                         // singleTask 同样属于本次 open，转场必须使用调用方刚传入
                         // 的 options；target 刷新不会反向篡改已经冻结的事务。
@@ -334,6 +364,7 @@ final class ShellNavigator {
                     )
                     target.replaceRequest(request)
                     let shouldAnimate = options.animated &&
+                        options.transitionSpec.baseEffectiveStyle != .none &&
                         options.transitionSpec.durationMilliseconds(for: .pop) > 0
                     guard navigationController.popToViewController(
                         target,
@@ -363,12 +394,16 @@ final class ShellNavigator {
         }
 
         let sessionID = source?.navigationSessionID ?? UUID().uuidString
-        let sessionOrders = navigationController.viewControllers.compactMap {
-            ($0 as? LynxContainerViewController).flatMap {
-                $0.navigationSessionID == sessionID ? $0.navigationOrder : nil
-            }
-        }
+        let sessionOrders = logicalSessionControllers(
+            sessionID: sessionID,
+            root: rootNavigationController
+        ).map(\.navigationOrder)
         let order = (sessionOrders.max() ?? -1) + 1
+        if #available(iOS 15.0, *),
+           request.transitionSpec.routeType == .bottomSheet,
+           systemSheetNavigationController != nil {
+            return failure(1006, "当前 iOS Page Sheet 内不能再次嵌套 Sheet")
+        }
         var preparedData: Data?
         var preparedReason: String?
         if let token = options.preparedRouteToken {
@@ -381,6 +416,20 @@ final class ShellNavigator {
             case .failure:
                 // 预取只是优化。token 失效时仍走普通 Provider，并通过状态说明降级。
                 preparedReason = "prepared_route_expired"
+            }
+        }
+        if request.transitionSpec.routeType == .bottomSheet {
+            if #available(iOS 15.0, *) {
+                return presentSystemBottomSheet(
+                    request: request,
+                    options: options,
+                    source: source,
+                    sessionID: sessionID,
+                    order: order,
+                    preparedData: preparedData,
+                    additionalReason: preparedReason,
+                    navigationController: rootNavigationController
+                )
             }
         }
         let ticket = transitionCoordinator.beginPush(
@@ -397,6 +446,14 @@ final class ShellNavigator {
             navigationOrder: order,
             preparedBundleData: preparedData
         )
+        if request.transitionSpec.routeType == .heroSheet,
+           let source,
+           source.isViewLoaded,
+           let sourceSnapshot = source.view.snapshotView(afterScreenUpdates: false) {
+            // heroSheet 不再经过 ShellNavigationAnimator；透明目标 VC 仍需要一张固定的
+            // 来源画面，否则 UIKit 在移除 fromView 后会把透明区域合成为黑色。
+            controller.installTransitionBackdrop(sourceSnapshot)
+        }
         transitionCoordinator.commitPush(
             target: controller,
             sourceLynxView: sourceLynxView,
@@ -418,8 +475,99 @@ final class ShellNavigator {
         )
     }
 
+    /** iOS 15+ 的 Sheet 直接交给 UIKit，不再进入自定义导航 animator。 */
+    @available(iOS 15.0, *)
+    private func presentSystemBottomSheet(
+        request: LynxPageRequest,
+        options: ShellNavigationOptions,
+        source: LynxContainerViewController?,
+        sessionID: String,
+        order: Int,
+        preparedData: Data?,
+        additionalReason: String?,
+        navigationController: UINavigationController
+    ) -> LynxNavigationResult {
+        guard navigationController.presentedViewController == nil else {
+            return failure(1006, "当前已有原生模态页面")
+        }
+        let controller = LynxContainerViewController(
+            request: request,
+            navigationSessionID: sessionID,
+            navigationEntryID: UUID().uuidString,
+            navigationParentEntryID: source?.navigationEntryID,
+            navigationOrder: order,
+            preparedBundleData: preparedData,
+            usesSystemSheetPresentation: true
+        )
+        let sheetNavigationController = UINavigationController(
+            rootViewController: controller
+        )
+        sheetNavigationController.setNavigationBarHidden(true, animated: false)
+        sheetNavigationController.modalPresentationStyle = .pageSheet
+        sheetNavigationController.isModalInPresentation = !(
+            request.transitionSpec.routeConfig.barrierDismissible ?? true
+        )
+        configureSystemSheet(
+            sheetNavigationController,
+            options: request.transitionSpec.routeOptions
+        )
+        sheetNavigationController.presentationController?.delegate = self
+        systemSheetController = controller
+        systemSheetNavigationController = sheetNavigationController
+        navigationController.present(
+            sheetNavigationController,
+            animated: options.animated
+        ) { [weak self, weak sheetNavigationController] in
+            guard let self, let sheetNavigationController else { return }
+            self.activateTransitionCoordinator(on: sheetNavigationController)
+            self.transitionCoordinator.suspendBackGestureForSystemSheet()
+            self.persistNavigationSnapshot()
+        }
+        // presentationController 可能在 present 调用中重新创建；展示提交后再绑定一次。
+        sheetNavigationController.presentationController?.delegate = self
+        var data: [String: Any] = [
+            "entryID": controller.navigationEntryID,
+            "routeKey": controller.routeKey,
+            "launchMode": options.launchMode.rawValue,
+            "presentation": "UISheetPresentationController",
+            "routeType": request.transitionSpec.routeType?.rawValue
+                ?? ShellRouteType.bottomSheet.rawValue,
+            "status": ShellTransitionState.Status.accepted.rawValue,
+        ]
+        if let additionalReason {
+            data["reason"] = additionalReason
+        }
+        return success("iOS 系统 Page Sheet 已提交", data: data)
+    }
+
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        guard presentationController.presentedViewController ===
+            systemSheetNavigationController else { return }
+        finishSystemSheetDismissal()
+    }
+
+    /** 容器生命周期兜底：防止 UIKit 某些关闭路径未投递 adaptive delegate。 */
+    func systemSheetDidDisappear(_ controller: LynxContainerViewController) {
+        guard controller === systemSheetController else { return }
+        DispatchQueue.main.async { [weak self, weak controller] in
+            guard let self, let controller,
+                  controller === self.systemSheetController,
+                  self.systemSheetNavigationController?.presentingViewController == nil else {
+                return
+            }
+            self.finishSystemSheetDismissal()
+        }
+    }
+
     /** 当前容器显示时切换系统返回手势与壳自定义 edge 手势。 */
     func updateBackGesture(for controller: LynxContainerViewController) {
+        if let controllerNavigation = controller.navigationController {
+            activateTransitionCoordinator(on: controllerNavigation)
+        }
+        if controller.usesSystemSheetPresentation {
+            transitionCoordinator.suspendBackGestureForSystemSheet()
+            return
+        }
         transitionCoordinator.updateBackGesture(for: controller)
     }
 
@@ -455,11 +603,35 @@ final class ShellNavigator {
      * 与 back(delta) 不同，当前页是 session 首页时也允许 pop 到宿主页。
      */
     @discardableResult
-    func close() -> LynxNavigationResult {
-        guard let navigationController else {
+    func close(animated: Bool = true) -> LynxNavigationResult {
+        guard let rootNavigationController = navigationController else {
             return failure(1002, "宿主导航器不可用")
         }
-        if let presented = navigationController.presentedViewController {
+        let navigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        activateTransitionCoordinator(on: navigationController)
+        if let sheet = systemSheetController,
+           navigationController === systemSheetNavigationController,
+           navigationController.topViewController === sheet,
+           navigationController.viewControllers.count == 1 {
+            let options = ShellNavigationOptions(animated: animated)
+            if let rejected = rejectOperation(
+                key: "close:\(sheet.navigationEntryID)",
+                options: options,
+                navigationController: navigationController
+            ) {
+                return rejected
+            }
+            dismissSystemSheet(animated: animated)
+            return success(
+                "当前 iOS 系统 Page Sheet 已关闭",
+                affectedCount: 1,
+                data: ["presentation": "UISheetPresentationController"]
+            )
+        }
+        if navigationController === rootNavigationController,
+           let presented = navigationController.presentedViewController {
             presented.dismiss(animated: true)
             return success("当前模态页面已关闭", affectedCount: 1)
         }
@@ -467,7 +639,7 @@ final class ShellNavigator {
               navigationController.viewControllers.count > 1 else {
             return failure(1002, "当前页面不可关闭")
         }
-        let options = ShellNavigationOptions()
+        let options = ShellNavigationOptions(animated: animated)
         if let rejected = rejectOperation(
             key: "close:\(current.navigationEntryID)",
             options: options,
@@ -485,7 +657,9 @@ final class ShellNavigator {
             target: target,
             routeKey: (target as? LynxContainerViewController)?.routeKey ?? "host"
         )
-        let shouldAnimate = spec.durationMilliseconds(for: .pop) > 0
+        let shouldAnimate = options.animated &&
+            spec.baseEffectiveStyle != .none &&
+            spec.durationMilliseconds(for: .pop) > 0
         guard navigationController.popViewController(animated: shouldAnimate) != nil else {
             transitionCoordinator.failActiveTransition(reason: "native_stack_update_failed")
             return failure(1500, "关闭页面时修改原生导航栈失败")
@@ -511,8 +685,15 @@ final class ShellNavigator {
         options: ShellNavigationOptions
     ) -> LynxNavigationResult {
         guard delta > 0 else { return failure(1001, "delta 必须大于 0") }
-        guard let navigationController,
-              let current = navigationController.topViewController as? LynxContainerViewController else {
+        guard let rootNavigationController = navigationController else {
+            return failure(1002, "宿主导航器不可用")
+        }
+        let navigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        activateTransitionCoordinator(on: navigationController)
+        guard let current = navigationController.topViewController as?
+            LynxContainerViewController else {
             return failure(1002, "当前页面不在 Lynx 导航会话中")
         }
         if let rejected = rejectOperation(
@@ -522,18 +703,47 @@ final class ShellNavigator {
         ) {
             return rejected
         }
-        let sessionControllers = navigationController.viewControllers.compactMap {
-            ($0 as? LynxContainerViewController).flatMap {
-                $0.navigationSessionID == current.navigationSessionID ? $0 : nil
-            }
-        }
+        let sessionControllers = logicalSessionControllers(
+            sessionID: current.navigationSessionID,
+            root: rootNavigationController
+        )
         guard let currentIndex = sessionControllers.lastIndex(where: { $0 === current }),
               currentIndex > 0 else {
+            if current === systemSheetController {
+                if let result = options.result,
+                   let target = previousRootSessionController(
+                    before: current,
+                    root: rootNavigationController
+                   ) {
+                    storeResult(
+                        result,
+                        from: current,
+                        targetEntryID: target.navigationEntryID
+                    )
+                }
+                dismissSystemSheet(animated: options.animated)
+                return success(
+                    "已关闭 iOS 系统 Page Sheet",
+                    affectedCount: 1,
+                    data: ["presentation": "UISheetPresentationController"]
+                )
+            }
             return failure(1005, "当前已是 Lynx session 首页")
         }
         let actualDelta = min(delta, currentIndex)
         let target = sessionControllers[currentIndex - actualDelta]
         let closing = Array(sessionControllers[(currentIndex - actualDelta + 1)...currentIndex])
+        if target.navigationController !== navigationController {
+            return popAcrossSystemSheet(
+                source: current,
+                target: target,
+                closing: closing,
+                requestedDelta: delta,
+                actualDelta: actualDelta,
+                options: options,
+                root: rootNavigationController
+            )
+        }
         let spec = popTransitionSpec(from: current, options: options)
         let ticket = transitionCoordinator.beginPop(
             spec: spec,
@@ -542,6 +752,7 @@ final class ShellNavigator {
             routeKey: target.routeKey
         )
         let shouldAnimate = options.animated &&
+            spec.baseEffectiveStyle != .none &&
             spec.durationMilliseconds(for: .pop) > 0
         guard navigationController.popToViewController(
             target,
@@ -584,8 +795,15 @@ final class ShellNavigator {
         routeKey: String,
         options: ShellNavigationOptions
     ) -> LynxNavigationResult {
-        guard let navigationController,
-              let current = navigationController.topViewController as? LynxContainerViewController else {
+        guard let rootNavigationController = navigationController else {
+            return failure(1002, "宿主导航器不可用")
+        }
+        let navigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        activateTransitionCoordinator(on: navigationController)
+        guard let current = navigationController.topViewController as?
+            LynxContainerViewController else {
             return failure(1002, "当前页面不在 Lynx 导航会话中")
         }
         let normalizedKey = routeKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -598,16 +816,31 @@ final class ShellNavigator {
             return rejected
         }
 
-        let stack = navigationController.viewControllers
+        let stack = logicalSessionControllers(
+            sessionID: current.navigationSessionID,
+            root: rootNavigationController
+        )
         guard let targetIndex = stack.lastIndex(where: { controller in
-            guard let lynx = controller as? LynxContainerViewController else { return false }
-            return lynx.navigationSessionID == current.navigationSessionID &&
-                lynx.routeKey == normalizedKey
-        }), let target = stack[targetIndex] as? LynxContainerViewController else {
+            controller.routeKey == normalizedKey
+        }) else {
             return failure(1003, "当前 Lynx 会话中不存在 routeKey=\(normalizedKey)")
         }
+        let target = stack[targetIndex]
+        if target.navigationController !== navigationController {
+            let closing = Array(stack.suffix(from: targetIndex + 1))
+            return popAcrossSystemSheet(
+                source: current,
+                target: target,
+                closing: closing,
+                requestedDelta: closing.count,
+                actualDelta: closing.count,
+                options: options,
+                root: rootNavigationController,
+                popToRouteKey: normalizedKey
+            )
+        }
         let removedEntries = stack.suffix(from: targetIndex + 1)
-            .compactMap { $0 as? LynxContainerViewController }
+            .map { $0 }
         let affectedCount = stack.count - targetIndex - 1
         guard affectedCount > 0 else {
             return success(
@@ -627,6 +860,7 @@ final class ShellNavigator {
             routeKey: target.routeKey
         )
         let shouldAnimate = options.animated &&
+            spec.baseEffectiveStyle != .none &&
             spec.durationMilliseconds(for: .pop) > 0
         guard navigationController.popToViewController(
             target,
@@ -666,8 +900,14 @@ final class ShellNavigator {
      */
     @discardableResult
     func closeAll(options: ShellNavigationOptions) -> LynxNavigationResult {
-        guard let navigationController,
-              let current = navigationController.topViewController as? LynxContainerViewController else {
+        guard let rootNavigationController = navigationController else {
+            return failure(1002, "宿主导航器不可用")
+        }
+        let navigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        guard let current = navigationController.topViewController as?
+            LynxContainerViewController else {
             return failure(1002, "当前页面不在 Lynx 导航会话中")
         }
         if let rejected = rejectOperation(
@@ -677,9 +917,16 @@ final class ShellNavigator {
         ) {
             return rejected
         }
+        if navigationController === systemSheetNavigationController {
+            return closeSessionUnderSystemSheet(
+                current.navigationSessionID,
+                options: options,
+                root: rootNavigationController
+            )
+        }
         return closeSession(
             current.navigationSessionID,
-            in: navigationController,
+            in: rootNavigationController,
             options: options
         )
     }
@@ -694,8 +941,14 @@ final class ShellNavigator {
         optionsJSON: String,
         navigationOptions: ShellNavigationOptions
     ) -> LynxNavigationResult {
-        guard let navigationController,
-              let current = navigationController.topViewController as? LynxContainerViewController else {
+        guard let rootNavigationController = navigationController else {
+            return failure(1002, "宿主导航器不可用")
+        }
+        let operationNavigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        guard let current = operationNavigationController.topViewController as?
+            LynxContainerViewController else {
             return failure(1002, "当前页面不在 Lynx 导航会话中")
         }
         guard let appHomeHandler else {
@@ -709,38 +962,70 @@ final class ShellNavigator {
         if let rejected = rejectOperation(
             key: "reLaunch:\(current.navigationSessionID)",
             options: navigationOptions,
-            navigationController: navigationController
+            navigationController: operationNavigationController
         ) {
             return rejected
         }
 
-        let stackBeforeHandler = navigationController.viewControllers
-        guard let firstIndex = stackBeforeHandler.firstIndex(where: {
+        let stackBeforeHandler = rootNavigationController.viewControllers
+        let firstIndex = stackBeforeHandler.firstIndex(where: {
             ($0 as? LynxContainerViewController)?.navigationSessionID ==
                 current.navigationSessionID
-        }), firstIndex > 0 else {
+        })
+        if let firstIndex, firstIndex == 0 {
             return failure(1005, "当前 Lynx 会话前没有可返回的宿主页锚点")
         }
-        let expectedAffectedCount = stackBeforeHandler.count - firstIndex
-        let entriesBeforeHandler = stackBeforeHandler.suffix(from: firstIndex)
-            .compactMap { $0 as? LynxContainerViewController }
-        let opened = appHomeHandler(navigationController, options)
+        let systemEntries = systemSheetEntries().filter {
+            $0.navigationSessionID == current.navigationSessionID
+        }
+        guard firstIndex != nil || !systemEntries.isEmpty else {
+            return failure(1002, "当前 Lynx 会话为空")
+        }
+        let rootAffectedCount = firstIndex.map { stackBeforeHandler.count - $0 } ?? 0
+        let rootEntries = firstIndex.map {
+            stackBeforeHandler.suffix(from: $0)
+                .compactMap { $0 as? LynxContainerViewController }
+        } ?? []
+        let expectedAffectedCount = rootAffectedCount + systemEntries.count
+        let entriesBeforeHandler = rootEntries + systemEntries
+        let opened = appHomeHandler(rootNavigationController, options)
         guard opened else {
             return failure(1004, "宿主 AppHomeHandler 拒绝了主页跳转")
         }
         entriesBeforeHandler.forEach { removePendingResult(entryID: $0.navigationEntryID) }
-        let stillContainsSession = navigationController.viewControllers.contains(where: {
+        let stillContainsSession = rootNavigationController.viewControllers.contains(where: {
             ($0 as? LynxContainerViewController)?.navigationSessionID ==
                 current.navigationSessionID
         })
+        let hasSystemSheet = systemSheetNavigationController != nil
+        if hasSystemSheet, stillContainsSession,
+           let remainingFirstIndex = rootNavigationController.viewControllers.firstIndex(where: {
+               ($0 as? LynxContainerViewController)?.navigationSessionID ==
+                   current.navigationSessionID
+           }) {
+            guard remainingFirstIndex > 0 else {
+                return failure(1005, "当前 Lynx 会话前没有可返回的宿主页锚点")
+            }
+            rootNavigationController.setViewControllers(
+                Array(rootNavigationController.viewControllers.prefix(remainingFirstIndex)),
+                animated: false
+            )
+            dismissSystemSheet(animated: navigationOptions.animated)
+            persistNavigationSnapshot()
+            return success("已返回应用主页", affectedCount: expectedAffectedCount)
+        }
+        if hasSystemSheet {
+            dismissSystemSheet(animated: navigationOptions.animated)
+        }
         if stillContainsSession {
+            activateTransitionCoordinator(on: rootNavigationController)
             let closed = closeSession(
                 current.navigationSessionID,
-                in: navigationController,
+                in: rootNavigationController,
                 options: ShellNavigationOptions(animated: false)
             )
             guard closed.isSuccess else { return closed }
-            return success("已返回应用主页", affectedCount: closed.affectedCount)
+            return success("已返回应用主页", affectedCount: expectedAffectedCount)
         }
         persistNavigationSnapshot()
         return success("已返回应用主页", affectedCount: expectedAffectedCount)
@@ -762,8 +1047,14 @@ final class ShellNavigator {
         _ request: LynxPageRequest,
         options: ShellNavigationOptions
     ) -> LynxNavigationResult {
-        guard let navigationController,
-              let current = navigationController.topViewController as? LynxContainerViewController else {
+        guard let rootNavigationController = navigationController else {
+            return failure(1002, "宿主导航器不可用")
+        }
+        let navigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        guard let current = navigationController.topViewController as?
+            LynxContainerViewController else {
             return failure(1002, "redirect 只能从 Lynx 页面发起")
         }
         if let rejected = rejectOperation(
@@ -787,15 +1078,20 @@ final class ShellNavigator {
 
     /** 返回当前 session 的 route、stack、depth、canGoBack 和宿主锚点状态。 */
     func navigationState() -> LynxNavigationResult {
-        guard let navigationController,
-              let current = navigationController.topViewController as? LynxContainerViewController else {
+        guard let rootNavigationController = navigationController else {
+            return failure(1002, "宿主导航器不可用")
+        }
+        let navigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        guard let current = navigationController.topViewController as?
+            LynxContainerViewController else {
             return failure(1002, "当前页面不在 Lynx 导航会话中")
         }
-        let controllers = navigationController.viewControllers.compactMap {
-            ($0 as? LynxContainerViewController).flatMap {
-                $0.navigationSessionID == current.navigationSessionID ? $0 : nil
-            }
-        }.sorted(by: { $0.navigationOrder < $1.navigationOrder })
+        let controllers = logicalSessionControllers(
+            sessionID: current.navigationSessionID,
+            root: rootNavigationController
+        )
         guard let currentIndex = controllers.lastIndex(where: { $0 === current }) else {
             return failure(1002, "当前 entry 不在 session 栈中")
         }
@@ -806,6 +1102,9 @@ final class ShellNavigator {
                 "index": index,
             ]
         }
+        let presentation = navigationController === systemSheetNavigationController
+            ? "UISheetPresentationController"
+            : "UINavigationController"
         return success(
             "导航状态读取成功",
             data: [
@@ -814,7 +1113,8 @@ final class ShellNavigator {
                 "stack": stack,
                 "depth": controllers.count,
                 "canGoBack": currentIndex > 0,
-                "hasHostAnchor": navigationController.viewControllers.first !== controllers.first,
+                "hasHostAnchor": rootNavigationController.viewControllers.first !== controllers.first,
+                "presentation": presentation,
             ]
         )
     }
@@ -837,7 +1137,9 @@ final class ShellNavigator {
      * 没有结果不是错误，返回 hasResult=false；成功读取后 UserDefaults 立即删除。
      */
     func consumeNavigationResult() -> LynxNavigationResult {
-        guard let current = navigationController?.topViewController as? LynxContainerViewController else {
+        guard let rootNavigationController = navigationController,
+              let current = operationNavigationController(root: rootNavigationController)
+                .topViewController as? LynxContainerViewController else {
             return failure(1002, "当前页面不在 Lynx 导航会话中")
         }
         guard var value = consumeStoredResult(entryID: current.navigationEntryID) else {
@@ -871,6 +1173,8 @@ final class ShellNavigator {
     func restoreNavigationStackIfPossible() -> Bool {
         guard let navigationController,
               !(navigationController.topViewController is LynxContainerViewController),
+              navigationController.presentedViewController == nil,
+              systemSheetNavigationController == nil,
               let data = UserDefaults.standard.data(forKey: snapshotKey),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               (root["version"] as? NSNumber)?.intValue == 1,
@@ -881,6 +1185,7 @@ final class ShellNavigator {
 
         var restored: [LynxContainerViewController] = []
         var expectedSessionID: String?
+        var persistedSystemSheetEntryID: String?
         for value in entries.sorted(by: {
             (($0["order"] as? NSNumber)?.intValue ?? 0) <
                 (($1["order"] as? NSNumber)?.intValue ?? 0)
@@ -898,6 +1203,15 @@ final class ShellNavigator {
                 return false
             }
             expectedSessionID = sessionID
+            let restoresAsSystemSheet = (value["systemSheetPresentation"] as? Bool) == true ||
+                request.transitionSpec.routeType == .bottomSheet
+            if restoresAsSystemSheet {
+                guard persistedSystemSheetEntryID == nil else {
+                    clearSavedNavigationState()
+                    return false
+                }
+                persistedSystemSheetEntryID = entryID
+            }
             restored.append(
                 LynxContainerViewController(
                     request: request,
@@ -907,6 +1221,61 @@ final class ShellNavigator {
                     navigationOrder: order
                 )
             )
+        }
+        if #available(iOS 15.0, *),
+           let persistedSystemSheetEntryID,
+           let sheetIndex = restored.firstIndex(where: {
+               $0.navigationEntryID == persistedSystemSheetEntryID
+           }) {
+            let persistedSheet = restored[sheetIndex]
+            let sheetRoot = LynxContainerViewController(
+                request: persistedSheet.request,
+                navigationSessionID: persistedSheet.navigationSessionID,
+                navigationEntryID: persistedSheet.navigationEntryID,
+                navigationParentEntryID: persistedSheet.navigationParentEntryID,
+                navigationOrder: persistedSheet.navigationOrder,
+                usesSystemSheetPresentation: true
+            )
+            let rootEntries = Array(restored.prefix(sheetIndex))
+            let sheetEntries = [sheetRoot] + Array(restored.suffix(from: sheetIndex + 1))
+            navigationController.setViewControllers(
+                navigationController.viewControllers + rootEntries,
+                animated: false
+            )
+            let sheetNavigationController = UINavigationController(
+                rootViewController: sheetRoot
+            )
+            sheetNavigationController.setViewControllers(sheetEntries, animated: false)
+            sheetNavigationController.setNavigationBarHidden(true, animated: false)
+            sheetNavigationController.modalPresentationStyle = .pageSheet
+            sheetNavigationController.isModalInPresentation = !(
+                sheetRoot.request.transitionSpec.routeConfig.barrierDismissible ?? true
+            )
+            configureSystemSheet(
+                sheetNavigationController,
+                options: sheetRoot.request.transitionSpec.routeOptions
+            )
+            systemSheetController = sheetRoot
+            systemSheetNavigationController = sheetNavigationController
+            let presentRestoredSheet = { [weak self, weak navigationController] in
+                guard let self, let navigationController,
+                      self.systemSheetNavigationController === sheetNavigationController,
+                      navigationController.presentedViewController == nil else {
+                    return
+                }
+                navigationController.present(sheetNavigationController, animated: false) {
+                    self.activateTransitionCoordinator(on: sheetNavigationController)
+                    self.transitionCoordinator.suspendBackGestureForSystemSheet()
+                    self.persistNavigationSnapshot()
+                }
+                sheetNavigationController.presentationController?.delegate = self
+            }
+            if navigationController.viewIfLoaded?.window != nil {
+                presentRestoredSheet()
+            } else {
+                DispatchQueue.main.async(execute: presentRestoredSheet)
+            }
+            return true
         }
         navigationController.setViewControllers(
             navigationController.viewControllers + restored,
@@ -919,6 +1288,258 @@ final class ShellNavigator {
     /** 业务登出、版本切换或调试时可显式清除持久导航快照。 */
     func clearSavedNavigationState() {
         UserDefaults.standard.removeObject(forKey: snapshotKey)
+    }
+
+    /** Sheet 是当前可见容器时，Router 的“当前页”必须落在 Sheet 内部导航栈。 */
+    private func operationNavigationController(
+        root: UINavigationController
+    ) -> UINavigationController {
+        systemSheetNavigationController ?? root
+    }
+
+    /** 同一套转场协调器在根导航栈与系统 Sheet 内部导航栈之间按可见容器切换。 */
+    private func activateTransitionCoordinator(on navigationController: UINavigationController) {
+        transitionCoordinator.install(on: navigationController)
+        if navigationController === self.navigationController {
+            if let mux = navigationDelegateMux,
+               navigationController.delegate !== mux {
+                navigationController.delegate = mux
+            }
+            return
+        }
+        if let mux = systemSheetNavigationDelegateMux,
+           navigationController.delegate === mux {
+            return
+        }
+        let mux = ShellNavigationDelegateMux(
+            transitionCoordinator: transitionCoordinator,
+            downstream: navigationController.delegate
+        )
+        systemSheetNavigationDelegateMux = mux
+        navigationController.delegate = mux
+    }
+
+    private func systemSheetEntries() -> [LynxContainerViewController] {
+        systemSheetNavigationController?.viewControllers.compactMap {
+            $0 as? LynxContainerViewController
+        } ?? []
+    }
+
+    /** 根导航栈与系统 Sheet 导航栈共同组成一个连续的逻辑 Lynx session。 */
+    private func logicalSessionControllers(
+        sessionID: String,
+        root: UINavigationController
+    ) -> [LynxContainerViewController] {
+        let rootEntries = root.viewControllers.compactMap {
+            $0 as? LynxContainerViewController
+        }
+        return (rootEntries + systemSheetEntries())
+            .filter { $0.navigationSessionID == sessionID }
+            .sorted { $0.navigationOrder < $1.navigationOrder }
+    }
+
+    private func previousRootSessionController(
+        before controller: LynxContainerViewController,
+        root: UINavigationController
+    ) -> LynxContainerViewController? {
+        logicalSessionControllers(
+            sessionID: controller.navigationSessionID,
+            root: root
+        ).last {
+            $0.navigationOrder < controller.navigationOrder &&
+                $0.navigationController === root
+        }
+    }
+
+    @available(iOS 15.0, *)
+    private func configureSystemSheet(
+        _ navigationController: UINavigationController,
+        options: ShellRouteOptions
+    ) {
+        guard let sheet = navigationController.sheetPresentationController else { return }
+        let detentsVH = options.detentsVH
+        if detentsVH.count == 1, let heightVH = detentsVH.first, heightVH >= 85 {
+            sheet.detents = [.large()]
+            sheet.selectedDetentIdentifier = .large
+        } else if #available(iOS 16.0, *) {
+            let identifiers = detentsVH.enumerated().map { index, heightVH in
+                heightVH >= 99
+                    ? UISheetPresentationController.Detent.Identifier.large
+                    : UISheetPresentationController.Detent.Identifier(
+                        "lynx.sheet.\(index).\(Int(heightVH.rounded()))"
+                    )
+            }
+            sheet.detents = detentsVH.enumerated().map { index, heightVH in
+                if heightVH >= 99 {
+                    return .large()
+                }
+                return .custom(identifier: identifiers[index]) { context in
+                    context.maximumDetentValue * heightVH / 100
+                }
+            }
+            let initialIndex = min(
+                max(options.initialDetentIndex, 0),
+                max(identifiers.count - 1, 0)
+            )
+            sheet.selectedDetentIdentifier = identifiers[initialIndex]
+        } else {
+            // iOS 15 只有 medium/large 两个公开档位；heroSheet 在这里保留可用的
+            // 两档近似，iOS 16+ 才使用完整 custom detents。
+            if detentsVH.count > 1 {
+                sheet.detents = [.medium(), .large()]
+                sheet.selectedDetentIdentifier =
+                    options.initialDetentVH >= 50 ? .large : .medium
+            } else {
+                sheet.detents = [.medium()]
+                sheet.selectedDetentIdentifier = .medium
+            }
+        }
+        sheet.prefersGrabberVisible = true
+        sheet.preferredCornerRadius = options.round ? ShellBottomSheetMotion.sheetCornerRadius : 0
+        sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+        sheet.prefersEdgeAttachedInCompactHeight = true
+        sheet.widthFollowsPreferredContentSizeWhenEdgeAttached = false
+        sheet.largestUndimmedDetentIdentifier = nil
+    }
+
+    private func dismissSystemSheet(animated: Bool) {
+        guard let sheetNavigationController = systemSheetNavigationController else { return }
+        sheetNavigationController.dismiss(animated: animated) { [weak self, weak sheetNavigationController] in
+            guard let self,
+                  self.systemSheetNavigationController === sheetNavigationController else {
+                return
+            }
+            self.finishSystemSheetDismissal()
+        }
+    }
+
+    /** 程序化关闭与系统下拉关闭共用幂等清理。 */
+    private func finishSystemSheetDismissal() {
+        guard systemSheetNavigationController != nil else { return }
+        systemSheetEntries().forEach {
+            removePendingResult(entryID: $0.navigationEntryID)
+        }
+        systemSheetController = nil
+        systemSheetNavigationController = nil
+        systemSheetNavigationDelegateMux = nil
+        if let root = navigationController {
+            activateTransitionCoordinator(on: root)
+            if let current = root.topViewController as? LynxContainerViewController {
+                transitionCoordinator.updateBackGesture(for: current)
+            }
+        }
+        persistNavigationSnapshot()
+    }
+
+    /** back/popTo 跨过 Sheet 根 entry 时，根栈先落到目标，再由 UIKit 向下关闭 Sheet。 */
+    private func popAcrossSystemSheet(
+        source: LynxContainerViewController,
+        target: LynxContainerViewController,
+        closing: [LynxContainerViewController],
+        requestedDelta: Int,
+        actualDelta: Int,
+        options: ShellNavigationOptions,
+        root: UINavigationController,
+        popToRouteKey: String? = nil
+    ) -> LynxNavigationResult {
+        guard let targetIndex = root.viewControllers.firstIndex(where: { $0 === target }) else {
+            return failure(1500, "系统 Page Sheet 的根栈目标已失效")
+        }
+        if let result = options.result {
+            storeResult(result, from: source, targetEntryID: target.navigationEntryID)
+        }
+        closing.forEach { removePendingResult(entryID: $0.navigationEntryID) }
+        root.setViewControllers(Array(root.viewControllers.prefix(targetIndex + 1)), animated: false)
+        dismissSystemSheet(animated: options.animated)
+        persistNavigationSnapshot()
+        var data: [String: Any] = [
+            "targetEntryID": target.navigationEntryID,
+            "targetRouteKey": target.routeKey,
+            "presentation": "UISheetPresentationController",
+        ]
+        if popToRouteKey == nil {
+            data["requestedDelta"] = requestedDelta
+            data["actualDelta"] = actualDelta
+        }
+        return success(
+            popToRouteKey.map { "已回退到 \($0)" } ?? "已回退 \(actualDelta) 页",
+            affectedCount: closing.count,
+            data: data
+        )
+    }
+
+    /** clearTop/singleTask 命中 Sheet 下方 entry 时不在遮罩后偷偷 push/pop。 */
+    private func clearSystemSheetToRootTarget(
+        _ target: LynxContainerViewController,
+        request: LynxPageRequest,
+        launchMode: ShellLaunchMode,
+        options: ShellNavigationOptions,
+        logicalStack: [LynxContainerViewController],
+        targetIndex: Int,
+        root: UINavigationController
+    ) -> LynxNavigationResult {
+        guard let rootIndex = root.viewControllers.firstIndex(where: { $0 === target }) else {
+            return failure(1500, "系统 Page Sheet 的 launchMode 目标已失效")
+        }
+        let removed = Array(logicalStack.suffix(from: targetIndex + 1))
+        if launchMode == .singleTask {
+            target.replaceRequest(request)
+        }
+        removed.forEach { removePendingResult(entryID: $0.navigationEntryID) }
+        root.setViewControllers(Array(root.viewControllers.prefix(rootIndex + 1)), animated: false)
+        dismissSystemSheet(animated: options.animated)
+        persistNavigationSnapshot()
+        return success(
+            launchMode == .singleTask
+                ? "singleTask 已复用并刷新 \(target.routeKey)"
+                : "clearTop 已回到 \(target.routeKey)",
+            affectedCount: removed.count + (launchMode == .singleTask ? 1 : 0),
+            data: entryData(target, launchMode: launchMode).merging(
+                ["presentation": "UISheetPresentationController"],
+                uniquingKeysWith: { current, _ in current }
+            )
+        )
+    }
+
+    /** closeAll 从 Sheet 发起时，Sheet 的下落就是唯一离场动画。 */
+    private func closeSessionUnderSystemSheet(
+        _ sessionID: String,
+        options: ShellNavigationOptions,
+        root: UINavigationController
+    ) -> LynxNavigationResult {
+        let sheetEntries = systemSheetEntries().filter {
+            $0.navigationSessionID == sessionID
+        }
+        let stack = root.viewControllers
+        let firstRootIndex = stack.firstIndex(where: {
+            ($0 as? LynxContainerViewController)?.navigationSessionID == sessionID
+        })
+        if let firstRootIndex {
+            guard firstRootIndex > 0 else {
+                return failure(1005, "当前 Lynx 会话前没有可返回的宿主页锚点")
+            }
+            let rootEntries = stack.suffix(from: firstRootIndex)
+                .compactMap { $0 as? LynxContainerViewController }
+            (rootEntries + sheetEntries).forEach {
+                removePendingResult(entryID: $0.navigationEntryID)
+            }
+            root.setViewControllers(Array(stack.prefix(firstRootIndex)), animated: false)
+            dismissSystemSheet(animated: options.animated)
+            return success(
+                "已关闭全部 Lynx 页面并返回进入前的宿主页",
+                affectedCount: stack.count - firstRootIndex + sheetEntries.count,
+                data: ["presentation": "UISheetPresentationController"]
+            )
+        }
+        guard !sheetEntries.isEmpty else {
+            return failure(1002, "当前 Lynx 会话为空")
+        }
+        dismissSystemSheet(animated: options.animated)
+        return success(
+            "已关闭全部 Lynx 页面并返回进入前的宿主页",
+            affectedCount: sheetEntries.count,
+            data: ["presentation": "UISheetPresentationController"]
+        )
     }
 
     private func closeSession(
@@ -952,6 +1573,7 @@ final class ShellNavigator {
             routeKey: (target as? LynxContainerViewController)?.routeKey ?? "host"
         )
         let shouldAnimate = options.animated &&
+            spec.baseEffectiveStyle != .none &&
             spec.durationMilliseconds(for: .pop) > 0
         navigationController.setViewControllers(remaining, animated: shouldAnimate)
         guard navigationController.topViewController === target else {
@@ -1036,18 +1658,22 @@ final class ShellNavigator {
 
     /** 只保存当前栈顶所属的 Lynx session；未知原生控制器不会被序列化。 */
     private func persistNavigationSnapshot() {
-        guard let navigationController,
-              let current = navigationController.topViewController as? LynxContainerViewController else {
+        guard let rootNavigationController = navigationController else {
             clearSavedNavigationState()
             return
         }
-        let entries = navigationController.viewControllers.compactMap {
-            ($0 as? LynxContainerViewController).flatMap {
-                $0.navigationSessionID == current.navigationSessionID
-                    ? $0.navigationSnapshot
-                    : nil
-            }
+        let activeNavigationController = operationNavigationController(
+            root: rootNavigationController
+        )
+        guard let current = activeNavigationController.topViewController as?
+            LynxContainerViewController else {
+            clearSavedNavigationState()
+            return
         }
+        let entries = logicalSessionControllers(
+            sessionID: current.navigationSessionID,
+            root: rootNavigationController
+        ).map(\.navigationSnapshot)
         let snapshot: [String: Any] = [
             "version": 1,
             "entries": entries,

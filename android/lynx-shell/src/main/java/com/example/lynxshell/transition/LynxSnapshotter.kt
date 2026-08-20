@@ -3,6 +3,7 @@ package com.example.lynxshell.transition
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Build
@@ -11,6 +12,7 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.view.View
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 
 /** Window 快照只在导航点击时生成一次；手势 progress 阶段绝不再分配 Bitmap。 */
 object LynxSnapshotter {
@@ -102,6 +104,27 @@ object LynxSnapshotter {
                 local.height(),
             )
         }.getOrNull()
+    }
+
+    /**
+     * 取来源 Window 顶缘的稳健平均色，供新 Activity 复刻 iOS Sheet 下方未缩放的系统栏。
+     * 多点采样避开时间、信号与电量图标；PixelCopy 不含系统栏时则自然落到页面顶色。
+     */
+    fun sampleTopEdgeColor(bitmap: Bitmap): Int {
+        if (bitmap.width <= 0 || bitmap.height <= 0 || bitmap.isRecycled) return Color.BLACK
+        val y = (bitmap.height / 100).coerceIn(0, bitmap.height - 1)
+        val fractions = floatArrayOf(0.12f, 0.28f, 0.5f, 0.72f, 0.88f)
+        var red = 0
+        var green = 0
+        var blue = 0
+        fractions.forEach { fraction ->
+            val x = (bitmap.width * fraction).roundToInt().coerceIn(0, bitmap.width - 1)
+            val color = bitmap.getPixel(x, y)
+            red += Color.red(color)
+            green += Color.green(color)
+            blue += Color.blue(color)
+        }
+        return Color.rgb(red / fractions.size, green / fractions.size, blue / fractions.size)
     }
 
     /**
