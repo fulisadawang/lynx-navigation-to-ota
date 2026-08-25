@@ -20,7 +20,13 @@ export { default as ShellTemplateResourceFetcher } from './provider/ShellTemplat
 export { default as ShellLynxViewClient } from './client/ShellLynxViewClient';
 export { default as LynxRuntimeInitializer } from './common/LynxRuntimeInitializer';
 export { default as LynxOtaRuntime } from './ota/LynxOtaRuntime';
+export {
+  default as EmbeddedBundleRegistry,
+  EmbeddedBundleIdentity,
+  EmbeddedOnlyRuntime
+} from './ota/EmbeddedBundleRegistry';
 export { default as PageBundleRuntimeRegistry, LynxOtaConfig, OtaPrepareSignal } from './ota/OtaModels';
+export { LynxTabContainer, LynxTabSpec } from './pages/LynxTabContainer';
 export { default as ReleaseTransaction } from './ota/ReleaseTransaction';
 export { LynxShellModule } from './module/LynxShellModule';
 export {

@@ -72,5 +72,6 @@ dependencies {
     // 下面仅是示例启动页自身使用的 Android UI 依赖，不属于 Lynx Runtime。
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("com.google.android.material:material:1.12.0")
 }

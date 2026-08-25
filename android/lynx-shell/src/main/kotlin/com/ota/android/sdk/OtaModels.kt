@@ -737,7 +737,8 @@ class OtaModels private constructor() {
   class Configuration {
     @JvmField val apiBaseUri: URI
     @JvmField val hostApp: HostApp
-    @JvmField val lynxAppId: String
+    /** 全量 latest-bundle-list 不需要宿主预先知道 App ID；失败上报可为空。 */
+    @JvmField val lynxAppId: String?
     @JvmField val environment: Environment
     @JvmField val platform: Platform
     @JvmField val appVersion: String?
@@ -812,7 +813,7 @@ class OtaModels private constructor() {
     ) {
       this.apiBaseUri = apiBaseUri
       this.hostApp = hostApp
-      this.lynxAppId = lynxAppId ?: DEFAULT_LYNX_APP_ID
+      this.lynxAppId = lynxAppId
       this.environment = environment
       this.platform = platform ?: Platform.ANDROID
       this.appVersion = appVersion

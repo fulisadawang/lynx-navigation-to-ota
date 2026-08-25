@@ -6,7 +6,8 @@ enum ShellGlobalPropsFactory {
         for view: UIView,
         request: LynxPageRequest,
         pageId: String? = nil,
-        sessionId: String? = nil
+        sessionId: String? = nil,
+        bundleMetadata: [String: Any]? = nil
     ) -> [String: Any] {
         var props = request.globalProps
         let screen = UIScreen.main
@@ -55,6 +56,11 @@ enum ShellGlobalPropsFactory {
         props["__lynxRouterNavigationModel"] = "native_page_stack"
         props["__lynxRouterPlatformContainer"] = "uikit_view_controller"
         props["__lynxRouterParams"] = queryItems
+        if let bundleMetadata {
+            props["__lynxBundleMeta"] = bundleMetadata
+        } else {
+            props.removeValue(forKey: "__lynxBundleMeta")
+        }
         if let nativeTransition = request.nativeTransition {
             // 必须在 loadTemplate 之前注入，目标页首屏即可读取 transactionID 并按需
             // 调用 NativeModules.LynxShellModule.markTransitionReady。

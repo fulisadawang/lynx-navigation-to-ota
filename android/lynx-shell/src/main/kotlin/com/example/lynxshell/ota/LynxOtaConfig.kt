@@ -17,7 +17,8 @@ import java.net.URI
 data class LynxOtaConfig(
     val apiBaseUri: URI,
     val hostApp: String = "capp",
-    val defaultLynxAppId: String = OtaModels.DEFAULT_LYNX_APP_ID,
+    /** 可选的兼容旧版单 App API 的身份；全量同步不依赖它，也不会自行生成 App ID。 */
+    val defaultLynxAppId: String? = null,
     val environment: String = "PROD",
     val platform: String = "android",
     val appVersion: String? = null,
@@ -50,7 +51,6 @@ data class LynxOtaConfig(
         require(apiBaseUri.userInfo == null && apiBaseUri.query == null && apiBaseUri.fragment == null) {
             "OTA apiBaseUri 不能包含 userInfo、query 或 fragment"
         }
-        require(defaultLynxAppId.isNotBlank()) { "defaultLynxAppId 不能为空" }
         require(pageRefreshIntervalMillis >= 0L) {
             "pageRefreshIntervalMillis 不能为负数"
         }

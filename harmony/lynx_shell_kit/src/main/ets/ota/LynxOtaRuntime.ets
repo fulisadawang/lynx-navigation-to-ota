@@ -9,6 +9,7 @@ import {
   PreparedPageBundle
 } from './OtaModels';
 import ReleaseTransaction from './ReleaseTransaction';
+import EmbeddedBundleRegistry from './EmbeddedBundleRegistry';
 
 /** 把所有会修改 current/state 的事务串行化；网络等待期间不会阻塞 ArkUI 线程。 */
 class OtaOperationQueue {
@@ -31,17 +32,20 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
   private readonly config: LynxOtaConfig;
   private readonly api: OtaApiClient;
   private readonly transaction: ReleaseTransaction;
+  private readonly embeddedBundleRegistry: EmbeddedBundleRegistry;
   private readonly queue: OtaOperationQueue = new OtaOperationQueue();
   private readonly lastPageRefreshAt: Map<string, number> = new Map();
   private readonly pageRefreshInFlight: Set<string> = new Set();
   private fullSyncInFlight: boolean = false;
   private fullSyncPending: boolean = false;
+  private readonly fullSyncWaiters: Array<(success: boolean) => void> = [];
 
   constructor(context: common.UIAbilityContext, config: LynxOtaConfig) {
     config.validate(context);
     this.config = config;
     this.api = new OtaApiClient(config);
     this.transaction = new ReleaseTransaction(config, this.api);
+    this.embeddedBundleRegistry = new EmbeddedBundleRegistry(context);
   }
 
   onApplicationStarted(): void {
@@ -64,15 +68,67 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       this.syncAppBundleAsync(lynxAppId);
       return local;
     }
+    const embedded = await this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
+    if (embedded !== null) {
+      return embedded;
+    }
     // 缺包/损坏不走 30 分钟门控，必须在创建 LynxView 前完成定向 repair。
     return this.queue.run(() => this.transaction.ensureBundleReady(lynxAppId, bundleName, signal));
   }
 
+  /**
+   * Native Tab 专用 cache-only 入口。
+   *
+   * 只读取并校验已经提交的 current，不调用定向清单接口，也不进入 repair 或后台刷新。
+   */
+  async resolveCurrent(
+    lynxAppId: string,
+    bundleName: string
+  ): Promise<PreparedPageBundle | null> {
+    this.validateLogicalAddress(lynxAppId, bundleName);
+    const current = this.transaction.currentBundle(lynxAppId, bundleName);
+    if (current !== null) {
+      return current;
+    }
+    return this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
+  }
+
+  /** cache-first 普通页面使用的后台刷新入口；syncAppBundleAsync 自带 AppId 门控。 */
+  refreshAppBundleIfNeeded(lynxAppId: string): void {
+    this.syncAppBundleAsync(lynxAppId);
+  }
+
+  /** 用户主动刷新使用；等待最后一轮合并后的全量同步完成，再由 Tab Host 重读 current。 */
+  refreshAllBundles(): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      this.fullSyncWaiters.push(resolve);
+      this.syncAllBundlesAsync();
+    });
+  }
+
   rollback(lynxAppId: string, reason: string): Promise<boolean> {
     return this.queue.run(async () => {
-      const restored = this.transaction.rollback(lynxAppId);
-      console.info(`LynxShellOTA rollback appId=${lynxAppId}, restored=${restored}, reason=${reason}`);
-      return restored;
+      const restoredRemote = this.transaction.rollback(lynxAppId);
+      if (restoredRemote) {
+        console.info(`LynxShellOTA rollback appId=${lynxAppId}, restored=previous, reason=${reason}`);
+        return true;
+      }
+      if (!await this.embeddedBundleRegistry.containsApp(lynxAppId)) {
+        console.info(`LynxShellOTA rollback appId=${lynxAppId}, restored=false, reason=${reason}`);
+        return false;
+      }
+      try {
+        // 没有 previous remote 时删除坏的 downloaded current；下一次 prepare 直接读取 rawfile
+        // baseline，不把内置 Bundle 复制到 filesDir。
+        this.transaction.deleteBundles(lynxAppId);
+        this.lastPageRefreshAt.delete(lynxAppId);
+        this.pageRefreshInFlight.delete(lynxAppId);
+        console.info(`LynxShellOTA rollback appId=${lynxAppId}, restored=embedded, reason=${reason}`);
+        return true;
+      } catch (error) {
+        console.error(`LynxShellOTA embedded fallback 失败：${lynxAppId}, ${error}`);
+        return false;
+      }
     });
   }
 
@@ -103,6 +159,7 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       return;
     }
     this.fullSyncInFlight = true;
+    let succeeded = true;
     this.queue.run(async () => {
       const signal = new OtaPrepareSignal();
       const latest = await this.api.fetchLatestBundleLists(signal);
@@ -112,13 +169,23 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       }
     }).catch((error: Error) => {
       // 生命周期刷新失败不能影响已提交 current，后续页面仍可定向 repair。
+      succeeded = false;
       console.error(`LynxShellOTA 全量同步失败：${error.message}`);
     }).finally(() => {
       this.fullSyncInFlight = false;
       if (this.fullSyncPending) {
         this.fullSyncPending = false;
         this.syncAllBundlesAsync();
+        return;
       }
+      const waiters = this.fullSyncWaiters.splice(0, this.fullSyncWaiters.length);
+      waiters.forEach((waiter: (success: boolean) => void) => {
+        try {
+          waiter(succeeded);
+        } catch (error) {
+          console.error(`LynxShellOTA 主动刷新回调失败：${error}`);
+        }
+      });
     });
   }
 

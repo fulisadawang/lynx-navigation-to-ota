@@ -19,5 +19,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".NativeTabDemoActivity"
+            android:exported="false"
+            android:label="原生 Tab 承载 Demo" />
     </application>
 </manifest>

@@ -18,6 +18,7 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
   private readonly preparedUrl: string;
   private readonly preparedFilePath: string;
   private readonly preparedStorageRoot: string;
+  private readonly preparedBytes: ArrayBuffer | null;
   private preparedConsumed: boolean = false;
   private readonly activeRequests: Set<http.HttpRequest> = new Set();
 
@@ -25,13 +26,15 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
     allowHttpInDebug: boolean = false,
     preparedUrl: string = '',
     preparedFilePath: string = '',
-    preparedStorageRoot: string = ''
+    preparedStorageRoot: string = '',
+    preparedBytes: ArrayBuffer | null = null
   ) {
     super();
     this.allowHttpInDebug = allowHttpInDebug;
     this.preparedUrl = preparedUrl;
     this.preparedFilePath = preparedFilePath;
     this.preparedStorageRoot = preparedStorageRoot;
+    this.preparedBytes = preparedBytes;
   }
 
   fetchTemplate(
@@ -50,7 +53,7 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
   private loadBinary(rawUrl: string, callback: AsyncCallback<ArrayBuffer, void>): void {
     if (!this.preparedConsumed && this.preparedUrl.length > 0 && rawUrl === this.preparedUrl) {
       this.preparedConsumed = true;
-      this.loadPreparedFile(callback);
+      this.loadPreparedBundle(callback);
       return;
     }
     if (ShellSecurityPolicy.isRemoteUrl(rawUrl)) {
@@ -61,10 +64,14 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
   }
 
   /**
-   * OTA 根 Bundle 已经在 ReleaseTransaction 中完成 size/SHA 校验；Fetcher 仍二次限制路径、
-   * 普通文件和体积，再把 filesDir 中的文件转为 Lynx 4.0 要求的 ArrayBuffer。
+   * OTA 根 Bundle 已经在 ReleaseTransaction 中完成 size/SHA 校验；Fetcher 对远程文件仍二次
+   * 限制路径、普通文件和体积；embedded rawfile 则直接消费已校验的 ArrayBuffer。
    */
-  private loadPreparedFile(callback: AsyncCallback<ArrayBuffer, void>): void {
+  private loadPreparedBundle(callback: AsyncCallback<ArrayBuffer, void>): void {
+    if (this.preparedBytes !== null) {
+      callback(undefined, this.preparedBytes.slice(0));
+      return;
+    }
     const root = this.preparedStorageRoot.endsWith('/') ?
       this.preparedStorageRoot.substring(0, this.preparedStorageRoot.length - 1) : this.preparedStorageRoot;
     if (root.length === 0 || !this.preparedFilePath.startsWith(`${root}/`)) {

@@ -113,13 +113,17 @@ export interface OtaReleaseRef {
   releaseId: string;
 }
 
-/** Router 容器只消费已校验路径；绝对路径不会写入 ArkUI Router 参数。 */
+/** Router 容器只消费已校验的文件或 rawfile bytes；绝对路径不会写入 ArkUI Router 参数。 */
 export interface PreparedPageBundle {
   lynxAppId: string;
   bundleName: string;
   filePath: string;
+  /** 内置 rawfile 直接读取时使用；远程 OTA 文件保持 bytes 未定义。 */
+  bytes?: ArrayBuffer;
   releaseId: string;
   sha256: string;
+  /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
+  source?: string;
 }
 
 /** 页面关闭时只置位，异步任务完成后必须检查，防止过期结果创建 LynxView。 */
@@ -142,10 +146,14 @@ export interface PageBundleRuntime {
   onApplicationStarted(): void;
   onApplicationForeground(): void;
   prepare(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal): Promise<PreparedPageBundle>;
+  /** 只读已经提交的 current；Tab 切换禁止触发网络、repair 或后台刷新。 */
+  resolveCurrent(lynxAppId: string, bundleName: string): Promise<PreparedPageBundle | null>;
+  /** 普通页面命中 remote current 后的非阻塞 App ID 级 30 分钟后台检查；Tab 不调用。 */
+  refreshAppBundleIfNeeded(lynxAppId: string): void;
   rollback(lynxAppId: string, reason: string): Promise<boolean>;
   deleteBundles(lynxAppId: string): Promise<void>;
   deleteAllBundles(): Promise<void>;
-  /** Provider 只允许读取该受控目录下的 prepared file。 */
+  /** Provider 只允许读取受控 prepared file，或消费已校验的 embedded rawfile bytes。 */
   storageRoot(): string;
 }
 

@@ -36,6 +36,7 @@ import com.example.lynxshell.transition.PreparedRouteStore
 import com.example.lynxshell.ui.ShellErrorView
 import com.example.lynxshell.ui.ShellLoadingView
 import com.example.lynxshell.ota.ActivityBundleRuntime
+import com.example.lynxshell.ota.PreparedActivityBundle
 import com.example.lynxshell.util.JsonObjectCodec
 import com.google.android.material.appbar.MaterialToolbar
 import com.lynx.tasm.LynxError
@@ -349,6 +350,16 @@ class LynxShellActivity : AppCompatActivity() {
             return
         }
 
+        // HTTPS 官方示例是 Direct Remote，不属于 OTA current；远程下载期间显示明确状态，
+        // 避免用户看到无反馈的白屏。显式转场仍由首屏门禁保持 source underlay，不把 Loading
+        // 盖到 BottomSheet/HeroSheet 的转场前画面上。
+        if (
+            LynxPageRequest.isRemoteBundleUrl(request.bundleUrl) &&
+            LynxTransitionIntent.transactionID(intent) == null
+        ) {
+            loadingView.show("正在加载远程 Bundle…")
+        }
+
         renderPreparedPage(
             generation = generation,
             preparedBytes = preparedClaim?.bytes,
@@ -361,6 +372,7 @@ class LynxShellActivity : AppCompatActivity() {
         generation: Long,
         preparedBytes: ByteArray?,
         preparedFile: File?,
+        bundleMetadata: Map<String, Any>? = null,
     ) {
         val provider = ShellTemplateProvider(
             context = applicationContext,
@@ -418,6 +430,7 @@ class LynxShellActivity : AppCompatActivity() {
                 request = request,
                 templateProvider = provider,
                 lynxViewClient = client,
+                bundleMetadata = bundleMetadata,
             )
             // 错误 View 已经在容器中，因此 LynxView 插到最底层。
             container.addView(
@@ -451,38 +464,38 @@ class LynxShellActivity : AppCompatActivity() {
             return
         }
 
-        loadingView.show("正在检查 $appId/$bundleName…")
         bundleFuture = otaExecutor.submit {
+            // 本地 current/baseline 命中时，转场不应该先露出 OTA Loading。
+            // resolveCurrent 只读已经提交的本地状态，不检查 Manifest、不联网；启动/回前台
+            // 的全量同步负责把新的 current 提前准备好。
+            val cached = runCatching { runtime.resolveCurrent(appId, bundleName) }.getOrNull()
+            if (cached != null) {
+                runOnUiThread {
+                    if (!isCurrentGeneration(generation)) return@runOnUiThread
+                    bundleFuture = null
+                    if (cached.source != "embedded_baseline") {
+                        // 页面先使用本地 current；版本检查在后台按 App ID 30 分钟门控执行，
+                        // 不把网络检查放到 BottomSheet/HeroSheet 的首屏门禁前。
+                        runtime.refreshAppBundleIfNeeded(appId)
+                    }
+                    renderPreparedOtaBundle(generation, appId, cached)
+                }
+                return@submit
+            }
+
+            // 只有本地没有可用 Bundle 时才展示 Loading，并进入缺包 repair/下载路径。
+            runOnUiThread {
+                if (isCurrentGeneration(generation)) {
+                    loadingView.show("正在检查 $appId/$bundleName…")
+                }
+            }
             val result = runCatching { runtime.prepare(appId, bundleName) }
             runOnUiThread {
                 if (!isCurrentGeneration(generation)) return@runOnUiThread
                 bundleFuture = null
                 result.fold(
                     onSuccess = { prepared ->
-                        val checked = runCatching {
-                            require(prepared.lynxAppId == appId) {
-                                "OTA prepare 返回了错误的 lynxAppId"
-                            }
-                            require(prepared.bundleName == bundleName) {
-                                "OTA prepare 返回了错误的 bundleName"
-                            }
-                            prepared
-                        }
-                        checked.fold(
-                            onSuccess = { value ->
-                                renderPreparedPage(
-                                    generation = generation,
-                                    preparedBytes = value.bytes,
-                                    preparedFile = value.file,
-                                )
-                            },
-                            onFailure = { error ->
-                                handleTemplateLoadFailure(
-                                    generation,
-                                    error.message ?: "OTA Bundle 身份校验失败",
-                                )
-                            },
-                        )
+                        renderPreparedOtaBundle(generation, appId, prepared)
                     },
                     onFailure = { error ->
                         handleTemplateLoadFailure(
@@ -493,6 +506,44 @@ class LynxShellActivity : AppCompatActivity() {
                 )
             }
         }
+    }
+
+    private fun renderPreparedOtaBundle(
+        generation: Long,
+        appId: String,
+        prepared: PreparedActivityBundle,
+    ) {
+        val checked = runCatching {
+            require(prepared.lynxAppId == appId) {
+                "OTA prepare 返回了错误的 lynxAppId"
+            }
+            require(prepared.bundleName == request.bundleName) {
+                "OTA prepare 返回了错误的 bundleName"
+            }
+            prepared
+        }
+        checked.fold(
+            onSuccess = { value ->
+                renderPreparedPage(
+                    generation = generation,
+                    preparedBytes = value.bytes,
+                    preparedFile = value.file,
+                    bundleMetadata = mapOf(
+                        "lynxAppId" to value.lynxAppId,
+                        "releaseId" to (value.releaseId ?: "unknown"),
+                        "source" to if (otaRecoveryUsed) "rollback_fallback" else value.source,
+                        "bundleName" to value.bundleName,
+                        "sha256" to (value.sha256 ?: ""),
+                    ),
+                )
+            },
+            onFailure = { error ->
+                handleTemplateLoadFailure(
+                    generation,
+                    error.message ?: "OTA Bundle 身份校验失败",
+                )
+            },
+        )
     }
 
     /** 根 Bundle prepare/首屏失败时按 appId 回滚一次并重新准备。 */

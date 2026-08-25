@@ -69,23 +69,47 @@ final class LauncherViewController: UIViewController {
         contentStack.addArrangedSubview(titleLabel)
 
         let introLabel = makeLabel(
-            text: "默认进入 Playground 首页；需要时可从这里打开本地页面或 Native Page Stack OTA。",
+            text: "默认进入 OTA 验收首页；Playground 首页和原生 Tab Demo 也可从这里打开。",
             style: .body
         )
         introLabel.textColor = .secondaryLabel
         contentStack.setCustomSpacing(8, after: titleLabel)
         contentStack.addArrangedSubview(introLabel)
 
-        let playgroundButton = makeButton(
-            title: "打开 Playground 首页",
+        let otaHomeButton = makeButton(
+            title: "打开 OTA 验收首页",
             filled: true,
-            action: #selector(openPlaygroundHome)
+            action: #selector(openOtaAcceptanceHome)
         )
         contentStack.setCustomSpacing(28, after: introLabel)
+        contentStack.addArrangedSubview(otaHomeButton)
+
+        let playgroundButton = makeButton(
+            title: "打开 Playground 首页",
+            filled: false,
+            action: #selector(openPlaygroundHome)
+        )
+        contentStack.setCustomSpacing(12, after: otaHomeButton)
         contentStack.addArrangedSubview(playgroundButton)
 
+        let nativeTabButton = makeButton(
+            title: "打开原生 Tab 承载 Demo",
+            filled: false,
+            action: #selector(openNativeTabDemo)
+        )
+        contentStack.setCustomSpacing(12, after: playgroundButton)
+        contentStack.addArrangedSubview(nativeTabButton)
+
+        let embeddedButton = makeButton(
+            title: "打开 Manifest 中的第一个内置 Bundle",
+            filled: false,
+            action: #selector(openEmbeddedDemo)
+        )
+        contentStack.setCustomSpacing(12, after: nativeTabButton)
+        contentStack.addArrangedSubview(embeddedButton)
+
         let card = makeOtaCard()
-        contentStack.setCustomSpacing(16, after: playgroundButton)
+        contentStack.setCustomSpacing(16, after: embeddedButton)
         contentStack.addArrangedSubview(card)
     }
 
@@ -115,7 +139,7 @@ final class LauncherViewController: UIViewController {
         stack.addArrangedSubview(titleLabel)
 
         let routeLabel = makeLabel(
-            text: "10000001 / home.lynx.bundle\nCI/CD → OSS → latest-bundle-list → 本地 SHA 校验",
+            text: "全量 latest-bundle-list → 按返回的 App ID 存储 → 本地 SHA 校验",
             style: .subheadline
         )
         routeLabel.textColor = .secondaryLabel
@@ -136,7 +160,7 @@ final class LauncherViewController: UIViewController {
         let openButton = makeButton(
             title: "打开 OTA 验收首页",
             filled: true,
-            action: #selector(openOtaPage)
+            action: #selector(openOtaAcceptanceHome)
         )
         stack.setCustomSpacing(20, after: statusLabel)
         stack.addArrangedSubview(openButton)
@@ -200,23 +224,21 @@ final class LauncherViewController: UIViewController {
         return button
     }
 
-    @objc private func openOtaPage() {
+    @objc private func openEmbeddedDemo() {
         do {
-            _ = try LynxRouter.open(
-                lynxAppId: "10000001",
-                bundleName: "home.lynx.bundle",
-                params: ["source": "ios-shell-ota-demo"],
-                options: ["title": "OTA Home"]
+            _ = try LynxRouter.openFirstEmbedded(
+                params: ["source": "ios-embedded-manifest-demo"],
+                options: ["title": "内置 Bundle Demo"]
             )
         } catch {
-            presentShellAlert(title: "无法打开 OTA 页面", message: error.localizedDescription)
+            presentShellAlert(title: "无法打开内置 Bundle", message: error.localizedDescription)
         }
     }
 
     @objc private func openPlaygroundHome() {
         do {
-            _ = try LynxRouter.open(
-                bundle: "assets://bundles/main.lynx.bundle",
+            _ = try LynxRouter.openEmbedded(
+                bundleName: "main.lynx.bundle",
                 params: ["source": "ios-playground-home"],
                 options: [
                     "title": "Sparkling Go",
@@ -230,6 +252,35 @@ final class LauncherViewController: UIViewController {
                 message: error.localizedDescription
             )
         }
+    }
+
+    @objc private func openOtaAcceptanceHome() {
+        do {
+            _ = try LynxRouter.openEmbedded(
+                bundleName: "home.lynx.bundle",
+                params: [
+                    "source": "ios-ota-acceptance-home",
+                    "acceptance": true,
+                ],
+                options: [
+                    "title": "OTA 验收首页",
+                    "fullscreen": true,
+                    "showNavigationBar": false,
+                ]
+            )
+        } catch {
+            presentShellAlert(
+                title: "无法打开 OTA 验收首页",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    @objc private func openNativeTabDemo() {
+        navigationController?.pushViewController(
+            NativeTabBarDemoViewController(),
+            animated: true
+        )
     }
 
     @objc private func deleteAllOtaBundles() {

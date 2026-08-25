@@ -50,6 +50,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.8.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("com.google.android.material:material:1.12.0")
 
     // Lynx 4.0 核心与 JS Runtime。

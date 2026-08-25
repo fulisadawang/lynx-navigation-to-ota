@@ -47,17 +47,8 @@ export default defineConfig({
             process.cwd(),
             '../android/app/src/main/assets/bundles',
           )
-          const androidStaticDestination = path.resolve(
-            process.cwd(),
-            '../android/app/src/main/assets/Bundles/static',
-          )
-
           copyDirectory(source, iosDestination)
           copyDirectory(source, androidBundleDestination)
-
-          // Bundle 内静态资源沿用 iOS 的 asset:///Bundles/ 前缀。
-          // Android 的 assets 路径区分大小写，因此额外同步 static 子目录。
-          copyDirectory(path.join(source, 'static'), androidStaticDestination)
 
           console.log(`Lynx Bundle 已同步到 ${iosDestination}`)
           console.log(`Lynx Bundle 已同步到 ${androidBundleDestination}`)

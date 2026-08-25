@@ -987,7 +987,10 @@ def route_and_provider() -> None:
         and (
             "fullscreenSwitch.isChecked = true" in android_launcher
             or (
-                "open_ota_button" in android_launcher_layout
+                (
+                    "open_ota_button" in android_launcher_layout
+                    or "open_ota_acceptance_button" in android_launcher_layout
+                )
                 and "clear_ota_button" in android_launcher_layout
             )
         ),

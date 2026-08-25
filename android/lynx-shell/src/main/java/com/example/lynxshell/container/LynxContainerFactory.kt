@@ -19,6 +19,7 @@ object LynxContainerFactory {
         request: LynxPageRequest,
         templateProvider: ShellTemplateProvider,
         lynxViewClient: LynxViewClient? = null,
+        bundleMetadata: Map<String, Any>? = null,
     ): LynxView {
         val builder = LynxViewBuilder()
             .setTemplateProvider(templateProvider)
@@ -38,7 +39,7 @@ object LynxContainerFactory {
         return builder.build(activity).also { lynxView ->
             // Lynx 4.0 没有 Builder.setLynxViewClient；必须在 build 后、render 前安装。
             lynxViewClient?.let(lynxView::addLynxViewClient)
-            val globalProps = ShellGlobalPropsFactory.create(activity, request)
+            val globalProps = ShellGlobalPropsFactory.create(activity, request, bundleMetadata)
             lynxView.updateGlobalProps(TemplateData.fromMap(globalProps))
         }
     }

@@ -20,6 +20,15 @@
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<!-- Debug OTA 地址可公开；client token 由 Xcode Scheme 环境变量或构建设置注入。 -->
+	<key>LynxOtaAPIBaseURL</key>
+	<string>https://lynx-ota-server.test.huangbaoche.com</string>
+	<key>LynxOtaClientToken</key>
+	<string>$(LYNX_OTA_CLIENT_TOKEN)</string>
+	<key>LynxOtaEnvironment</key>
+	<string>TEST</string>
+	<key>LynxOtaHostApp</key>
+	<string>capp</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

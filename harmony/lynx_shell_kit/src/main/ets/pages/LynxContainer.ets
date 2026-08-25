@@ -13,7 +13,7 @@ import {
 } from '@lynx/lynx';
 import ShellLynxViewClient from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
-import ShellGlobalPropsFactory from '../common/ShellGlobalPropsFactory';
+import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
 import { ShellViewAppearPayload } from '../common/ShellTypes';
 import ShellWindowController from '../common/ShellWindowController';
 import XElementRuntime from '../common/XElementRuntime';
@@ -193,14 +193,25 @@ export struct LynxContainer {
       return;
     }
     this.preparing = true;
-    this.isLoading = true;
+    // 先尝试 cache-only；本地命中时不让 OTA Loading 盖住页面/转场。
+    this.isLoading = false;
     this.errorMessage = '';
     this.showLynxView = false;
     this.prepareSignal.cancel();
     this.prepareSignal = new OtaPrepareSignal();
     const signal = this.prepareSignal;
     const generation = ++this.prepareGeneration;
-    runtime.prepare(this.request.lynxAppId, this.request.bundleName, signal)
+    runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName)
+      .then((cached: PreparedPageBundle | null) => {
+        if (cached !== null) {
+          if (cached.source !== 'embedded_baseline') {
+            runtime.refreshAppBundleIfNeeded(this.request.lynxAppId);
+          }
+          return cached;
+        }
+        this.isLoading = true;
+        return runtime.prepare(this.request.lynxAppId, this.request.bundleName, signal);
+      })
       .then((prepared: PreparedPageBundle) => {
         if (signal.cancelled || generation !== this.prepareGeneration ||
           !LynxNavigator.hasEntry(this.request.entryID)) {
@@ -211,7 +222,23 @@ export struct LynxContainer {
           this.request.allowHttpInDebug,
           this.request.bundleUrl,
           prepared.filePath,
-          runtime.storageRoot()
+          runtime.storageRoot(),
+          prepared.bytes ?? null
+        );
+        const bundleMetadata: ShellBundleMetadata = {
+          lynxAppId: prepared.lynxAppId,
+          releaseId: prepared.releaseId,
+          source: this.rollbackAttempted ? 'rollback_fallback' : (prepared.source ?? 'ota_current'),
+          bundleName: prepared.bundleName,
+          sha256: prepared.sha256
+        };
+        this.metaData = new MetaData(
+          new TemplateData(this.request.initDataJson),
+          new TemplateData(ShellGlobalPropsFactory.build(
+            this.request.globalPropsJson,
+            this.request,
+            bundleMetadata
+          ))
         );
         this.extraTiming.prepareTemplateEnd = new Date().getTime();
         this.preparing = false;

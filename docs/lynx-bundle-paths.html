@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Lynx 三端内置 Bundle 与 OTA Bundle 的读取路径、存储路径和生命周期说明">
+  <title>Lynx Bundle 路径与 OTA 存储说明</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #121a2d;
+      --panel-2: #17223a;
+      --line: #2a3858;
+      --text: #edf3ff;
+      --muted: #9aa9c5;
+      --blue: #7db4ff;
+      --green: #6ee7b7;
+      --amber: #f8c76d;
+      --red: #ff9a9a;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top right, #1a2c50 0, var(--bg) 42rem);
+      color: var(--text);
+      font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1160px, calc(100% - 40px)); margin: 0 auto; padding: 64px 0 96px; }
+    h1, h2, h3 { line-height: 1.25; letter-spacing: -0.02em; }
+    h1 { max-width: 800px; margin: 0 0 16px; font-size: clamp(34px, 6vw, 66px); }
+    h2 { margin: 56px 0 18px; font-size: 30px; }
+    h3 { margin: 0 0 10px; font-size: 20px; }
+    p { margin: 10px 0; color: var(--muted); }
+    code, pre { font-family: var(--mono); }
+    code { color: var(--blue); }
+    pre {
+      overflow-x: auto;
+      margin: 16px 0 0;
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #0a0f1c;
+      color: #d9e6ff;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .eyebrow {
+      display: inline-flex;
+      padding: 6px 10px;
+      border: 1px solid #315a8e;
+      border-radius: 999px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .lead { max-width: 760px; margin-bottom: 26px; font-size: 20px; color: #c7d5ee; }
+    .callout {
+      margin: 28px 0;
+      padding: 20px 22px;
+      border-left: 4px solid var(--green);
+      border-radius: 12px;
+      background: rgba(110, 231, 183, .08);
+    }
+    .callout p { margin: 0; color: #d8f8eb; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card {
+      min-height: 180px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(23,34,58,.95), rgba(18,26,45,.95));
+    }
+    .card p { font-size: 14px; }
+    .tag { display: inline-block; margin-bottom: 14px; color: var(--green); font: 700 12px var(--mono); }
+    .path { display: block; margin-top: 12px; color: #dce8ff; font: 12px/1.55 var(--mono); overflow-wrap: anywhere; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin: 24px 0;
+    }
+    .flow-step {
+      position: relative;
+      padding: 18px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      font-size: 14px;
+    }
+    .flow-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -18px;
+      top: 50%;
+      z-index: 1;
+      color: var(--amber);
+      font-size: 22px;
+      transform: translateY(-50%);
+    }
+    .flow-step strong { display: block; margin-bottom: 5px; color: var(--amber); }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+    th, td { padding: 15px 16px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: #cbd9f2; background: var(--panel-2); font-size: 13px; }
+    td { color: var(--muted); font-size: 14px; }
+    tr:last-child td { border-bottom: 0; }
+    td code { overflow-wrap: anywhere; }
+    .status { display: inline-flex; align-items: center; gap: 7px; color: var(--green); font-weight: 700; }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 14px var(--green); }
+    .warning { border-left-color: var(--amber); background: rgba(248,199,109,.08); }
+    .warning p { color: #ffedc2; }
+    button { font: inherit; }
+    .interactive {
+      margin-top: 42px;
+      padding: 26px;
+      border: 1px solid #38577f;
+      border-radius: 24px;
+      background: linear-gradient(145deg, rgba(31,53,88,.94), rgba(15,24,43,.98));
+      box-shadow: 0 24px 70px rgba(0,0,0,.24);
+    }
+    .interactive h2 { margin-top: 10px; }
+    .section-kicker { color: var(--amber); font: 700 12px var(--mono); letter-spacing: .12em; }
+    .lab-controls { display: flex; flex-wrap: wrap; gap: 14px; margin: 24px 0; }
+    .control-group { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+    .control-label { color: #cbd9f2; font-size: 13px; font-weight: 700; }
+    .segmented { display: inline-flex; padding: 4px; border: 1px solid var(--line); border-radius: 13px; background: #0b1325; }
+    .segmented button, .action-button, .question-button {
+      border: 1px solid transparent;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: .2s ease;
+    }
+    .segmented button { padding: 7px 11px; font-size: 13px; }
+    .segmented button:hover, .question-button:hover, .action-button:hover { color: var(--text); background: #223454; }
+    .segmented button.active, .action-button.primary { border-color: #5a91d4; background: #28558d; color: #fff; box-shadow: 0 6px 18px rgba(53,108,179,.25); }
+    .action-button { padding: 8px 12px; border-color: var(--line); font-size: 13px; }
+    .sim-grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: 16px; }
+    .sim-card { padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: rgba(9,16,31,.64); }
+    .sim-card h3 { margin-top: 8px; }
+    .sim-card p { font-size: 14px; }
+    .sim-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .sim-header span { color: #cbd9f2; font-size: 13px; font-weight: 700; }
+    .path-line { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 28px 0 18px; }
+    .sim-node {
+      position: relative;
+      min-height: 92px;
+      padding: 12px 10px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #121d33;
+      color: var(--muted);
+      cursor: pointer;
+      text-align: left;
+      transition: .25s ease;
+    }
+    .sim-node:not(:last-child)::after { content: "→"; position: absolute; right: -14px; top: 34px; z-index: 2; color: var(--amber); }
+    .sim-node:hover { transform: translateY(-2px); border-color: #638dc4; color: var(--text); }
+    .sim-node.active { border-color: var(--green); background: rgba(110,231,183,.13); color: #eafff6; box-shadow: 0 0 0 3px rgba(110,231,183,.08); }
+    .sim-node.pulse { animation: nodePulse .65s ease; }
+    .node-number { display: block; margin-bottom: 5px; color: var(--amber); font: 700 11px var(--mono); }
+    .node-title { display: block; font-size: 13px; font-weight: 700; }
+    .node-subtitle { display: block; margin-top: 5px; color: #8fa3c5; font-size: 11px; line-height: 1.35; }
+    .sim-status { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--green); font: 700 12px var(--mono); }
+    .sim-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 13px var(--green); }
+    .sim-answer { min-height: 72px; }
+    .sim-path { min-height: 92px; margin-top: 14px; white-space: pre-wrap; word-break: break-word; }
+    .operation-list { display: grid; gap: 7px; margin: 16px 0 0; padding: 0; list-style: none; }
+    .operation-list li { padding: 8px 10px; border-radius: 9px; background: #101a2c; color: #c7d5ee; font-size: 13px; }
+    .operation-list li::before { content: "✓"; margin-right: 8px; color: var(--green); font-weight: 700; }
+    .question-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+    .question { border: 1px solid var(--line); border-radius: 13px; background: rgba(9,16,31,.6); overflow: hidden; }
+    .question-button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px; color: #dbe7fb; text-align: left; font-size: 13px; font-weight: 700; }
+    .question-button::after { content: "+"; color: var(--amber); font: 20px var(--mono); }
+    .question.open .question-button::after { content: "−"; }
+    .answer { display: none; padding: 0 14px 14px; color: var(--muted); font-size: 13px; }
+    .question.open .answer { display: block; animation: reveal .25s ease both; }
+    .answer code { font-size: 11px; }
+    @keyframes nodePulse { 0% { transform: scale(1); } 45% { transform: scale(1.035); } 100% { transform: scale(1); } }
+    @keyframes reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    footer { margin-top: 70px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    @media (max-width: 860px) {
+      main { width: min(100% - 28px, 720px); padding-top: 40px; }
+      .grid, .grid.two { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .sim-grid { grid-template-columns: 1fr; }
+      .question-grid { grid-template-columns: 1fr; }
+      .path-line { grid-template-columns: 1fr; }
+      .sim-node:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -21px; transform: translateX(-50%); }
+      .flow-step:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -22px; transform: translateX(-50%); }
+      th, td { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <span class="eyebrow">Lynx 4.0 · Bundle Storage</span>
+  <h1>内置 Bundle 与 OTA Bundle，究竟读哪里、存哪里？</h1>
+  <p class="lead">当前生产目标：内置 baseline 只读直取，远程 OTA 才写入应用私有磁盘。内置资源不在 App 启动时复制一份。</p>
+
+  <section class="callout">
+    <p><strong>一句话结论：</strong>APK/HAP/App Bundle 里的内置 Bundle 是发布资产；设备私有目录里的 Bundle 是运行时 OTA 缓存。三端读取内置资源时先做 Manifest、size、SHA-256 校验，远程版本才进入 current/previous/staging 事务。</p>
+  </section>
+
+  <section class="interactive" id="interactive-lab" aria-labelledby="lab-title">
+    <div class="section-kicker">INTERACTIVE LAB / 交互解释器</div>
+    <h2 id="lab-title">不用背，点着走一遍</h2>
+    <p>先选平台，再选你脑子里的场景。下面的路径节点、解释和“会不会写磁盘”会跟着变化。你也可以直接点击任意节点，查看它在当前场景里的职责。</p>
+
+    <div class="lab-controls">
+      <div class="control-group">
+        <span class="control-label">平台</span>
+        <div class="segmented" role="tablist" aria-label="选择平台">
+          <button type="button" class="active" data-platform="android" role="tab" aria-selected="true">Android</button>
+          <button type="button" data-platform="ios" role="tab" aria-selected="false">iOS</button>
+          <button type="button" data-platform="harmony" role="tab" aria-selected="false">HarmonyOS</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <span class="control-label">场景</span>
+        <div class="segmented" role="tablist" aria-label="选择场景">
+          <button type="button" class="active" data-scenario="cold" role="tab" aria-selected="true">首次启动</button>
+          <button type="button" data-scenario="update" role="tab" aria-selected="false">发现 OTA</button>
+          <button type="button" data-scenario="crash" role="tab" aria-selected="false">首屏失败</button>
+          <button type="button" data-scenario="tab" role="tab" aria-selected="false">切换 Tab</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sim-grid">
+      <div class="sim-card">
+        <div class="sim-header">
+          <span id="labScenarioLabel">首次启动 · 内置 baseline</span>
+          <button type="button" class="action-button primary" id="playFlow">播放路径</button>
+        </div>
+        <div class="path-line" aria-label="Bundle 读取路径">
+          <button type="button" class="sim-node active" data-node="asset">
+            <span class="node-number">01</span><span class="node-title">内置资源</span><span class="node-subtitle">assets / rawfile / App Bundle</span>
+          </button>
+          <button type="button" class="sim-node" data-node="manifest">
+            <span class="node-number">02</span><span class="node-title">Manifest</span><span class="node-subtitle">App ID + Release + SHA</span>
+          </button>
+          <button type="button" class="sim-node" data-node="network">
+            <span class="node-number">03</span><span class="node-title">全量接口</span><span class="node-subtitle">latest-bundle-list</span>
+          </button>
+          <button type="button" class="sim-node" data-node="disk">
+            <span class="node-number">04</span><span class="node-title">私有磁盘</span><span class="node-subtitle">releases / states / staging</span>
+          </button>
+          <button type="button" class="sim-node" data-node="lynx">
+            <span class="node-number">05</span><span class="node-title">LynxView</span><span class="node-subtitle">读取 current 或 baseline</span>
+          </button>
+        </div>
+        <p id="labStepText">当前步骤：先读取内置资源。它是 APK/HAP/App Bundle 的只读内容，不会写入 OTA 磁盘。</p>
+      </div>
+
+      <aside class="sim-card" aria-live="polite">
+        <div class="sim-status" id="labStatus">NO-COPY BASELINE</div>
+        <h3 id="labTitle">Android：首次启动先读什么？</h3>
+        <p class="sim-answer" id="labAnswer">内置 Bundle 通过 AssetManager 读成 bytes，校验后直接交给 LynxView。启动同步在后台进行，内置资源不需要先复制到 filesDir。</p>
+        <pre class="sim-path" id="labPath">读取：assets/bundles/lynx/&lt;lynxAppId&gt;/releases/&lt;releaseId&gt;/...
+写入：无（内置 baseline）</pre>
+        <ul class="operation-list" id="labOperations">
+          <li>读取 embedded-bundles.json</li>
+          <li>校验 size / SHA-256</li>
+          <li>直接返回 bytes</li>
+        </ul>
+      </aside>
+    </div>
+
+    <div class="question-grid" aria-label="常见疑问">
+      <article class="question">
+        <button type="button" class="question-button">为什么 assets 不能直接当磁盘文件？</button>
+        <div class="answer">因为 APK assets 是只读打包资源，不是 <code>filesDir</code> 下的普通文件。现在 Android 已经不再强行把它变成文件，而是校验后直接交给 LynxView 使用 bytes。</div>
+      </article>
+      <article class="question">
+        <button type="button" class="question-button">什么时候才会写手机磁盘？</button>
+        <div class="answer">只有远程 OTA Bundle 下载时写入 <code>releases/</code>，事务完成后写 <code>states/&lt;appId&gt;.json</code>。内置 baseline 本身不写磁盘。</div>
+      </article>
+      <article class="question">
+        <button type="button" class="question-button">下次启动到底读哪一份？</button>
+        <div class="answer">有已提交且校验通过的远程 current，就读私有磁盘 current；没有 current，或远程版本失败，就直接读 APK/HAP/App Bundle 里的 baseline。</div>
+      </article>
+      <article class="question">
+        <button type="button" class="question-button">切换 Tab 会不会重新请求网络？</button>
+        <div class="answer">不会。Tab 只能调用 <code>resolveCurrent</code> 读取已提交 current；current 不存在时读取内置 baseline，不触发 repair 或网络检查。</div>
+      </article>
+      <article class="question">
+        <button type="button" class="question-button">为什么远程版本还要落盘？</button>
+        <div class="answer">因为远程版本要跨进程重启保留，还要支持 current、previous、staging、SHA 校验和失败回滚。它和内置 baseline 的职责不同。</div>
+      </article>
+      <article class="question">
+        <button type="button" class="question-button">三端是不是完全一样？</button>
+        <div class="answer">职责一样，读取载体不同：Android 是 AssetManager bytes，iOS 是 App Bundle file URL，HarmonyOS 是 rawfile ArrayBuffer；远程 OTA 都进入各自的私有 Store。</div>
+      </article>
+    </div>
+  </section>
+
+  <h2>1. 当前有哪几层路径？</h2>
+  <div class="grid">
+    <article class="card">
+      <span class="tag">BUILD INPUT</span>
+      <h3>工程 assets 源文件</h3>
+      <p>下载脚本手动执行后写入。重新 assemble 才会进入新 APK。</p>
+      <span class="path">/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/app/src/main/assets/bundles/lynx/</span>
+    </article>
+    <article class="card">
+      <span class="tag">PACKAGE · READ ONLY</span>
+      <h3>APK 内部 assets</h3>
+      <p>随 APK 发布，运行时通过 Android AssetManager 读取，不能被 OTA 改写。</p>
+      <span class="path">assets/bundles/lynx/&lt;lynxAppId&gt;/releases/&lt;releaseId&gt;/...</span>
+    </article>
+    <article class="card">
+      <span class="tag">RUNTIME · WRITABLE</span>
+      <h3>应用私有 OTA Store</h3>
+      <p>只保存远程下载版本、事务状态和 staging 文件；用户清除数据或卸载 App 后消失。</p>
+      <span class="path">&lt;filesDir&gt;/lynx-ota-store/</span>
+    </article>
+  </div>
+
+  <h2>2. 读取与存放流程</h2>
+  <div class="flow">
+    <div class="flow-step"><strong>① 构建期</strong>下载脚本读取全量 API 返回的 App ID、Release 和 Bundle。</div>
+    <div class="flow-step"><strong>② 打包</strong>写入 APK assets / iOS App Bundle / Harmony rawfile。</div>
+    <div class="flow-step"><strong>③ 启动</strong>原生请求全量 latest-bundle-list，App ID 不由宿主猜测。</div>
+    <div class="flow-step"><strong>④ 远程更新</strong>远程 Bundle 写入私有 releases，完整校验后提交 current。</div>
+    <div class="flow-step"><strong>⑤ 页面读取</strong>优先读已提交 current；没有 current 才读内置 baseline。</div>
+  </div>
+
+  <h2>3. 三端现在的读取路径</h2>
+  <table>
+    <thead>
+      <tr><th>平台</th><th>内置 baseline 读取</th><th>远程 OTA 写入</th><th>页面实际消费</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Android</strong></td>
+        <td><code>AssetManager.open("bundles/lynx/...")</code><br>校验后直接以 bytes 交给 LynxView，不复制到 <code>filesDir</code>。</td>
+        <td><code>/data/user/0/&lt;package&gt;/files/lynx-ota-store/releases/</code><br><code>states/&lt;safeAppId&gt;.json</code>、<code>.staging/</code></td>
+        <td>已校验的远程 current；没有 current 时直接读取 APK assets。</td>
+      </tr>
+      <tr>
+        <td><strong>iOS</strong></td>
+        <td><code>Bundle.main/.../Bundles/lynx/...</code><br>直接得到 App Bundle file URL，不复制。</td>
+        <td>默认由 Shell 配置到<br><code>Application Support/lynx-ota-store/</code></td>
+        <td>current file URL；没有 current 时直接读取 App Bundle。</td>
+      </tr>
+      <tr>
+        <td><strong>HarmonyOS</strong></td>
+        <td><code>resourceManager.getRawFileContent("bundles/lynx/...")</code><br>校验后直接以 ArrayBuffer 交给 Provider，不写 <code>filesDir/lynx-embedded</code>。</td>
+        <td><code>&lt;context.filesDir&gt;/lynx-ota-store/releases/</code><br><code>states/</code>、<code>.staging/</code></td>
+        <td>已校验的 current file；没有 current 时直接读取 rawfile ArrayBuffer。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. 一个真实路径例子</h2>
+  <p>当前测试 API 返回的两个 Release 被脚本写入了 assets。下面只是实际返回数据的路径示例，代码没有写死这些 App ID。</p>
+  <pre>工程 assets（构建前）
+android/app/src/main/assets/bundles/lynx/10000001/releases/r20260806_pw0yl6/home.lynx.bundle
+android/app/src/main/assets/bundles/lynx/10000002/releases/r20260806_dhax5q/home.lynx.bundle
+
+Android 远程 OTA（运行时）
+/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/releases/r20260806_pw0yl6/home.lynx.bundle
+/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/releases/r20260806_dhax5q/home.lynx.bundle
+
+Android 状态
+/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/states/10000001.json
+/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/states/10000002.json</pre>
+
+  <h2>5. current、previous、baseline 的关系</h2>
+  <div class="grid two">
+    <article class="card">
+      <span class="tag">REMOTE OTA</span>
+      <h3>有远程更新</h3>
+      <pre>releases/remote-v2/       ← 远程 Bundle
+states/10000001.json      ← current = downloaded/remote-v2
+                           ← previous = downloaded/remote-v1</pre>
+      <p>远程版本完整下载、size/SHA 校验和原子发布后，才切换 current。</p>
+    </article>
+    <article class="card">
+      <span class="tag">EMBEDDED BASELINE</span>
+      <h3>没有远程 current</h3>
+      <pre>APK assets/...             ← 内置 baseline
+应用私有磁盘              ← 不生成 embedded 副本
+页面直接读取 assets/rawfile</pre>
+      <p>如果远程首屏失败且没有可用 previous，Runtime 丢弃坏的远程 current，回到内置资源。</p>
+    </article>
+  </div>
+
+  <section class="callout warning">
+    <p><strong>历史数据说明：</strong>旧版本曾经把内置 Bundle 复制到 Android 的 <code>files/lynx-ota-store/embedded</code>，真机上可能还留有旧目录。新代码启动时会清理这类旧副本；当前生产路径不再创建它。</p>
+  </section>
+
+  <h2>6. 谁负责什么？</h2>
+  <table>
+    <thead><tr><th>组件</th><th>负责</th><th>不负责</th></tr></thead>
+    <tbody>
+      <tr><td><code>sync_ota_bundles_to_assets.mjs</code></td><td>按 <code>--target</code> 把服务端返回的全量 Bundle 下载到 Android/iOS/Harmony 构建资源，校验 size/SHA。</td><td>不负责运行时 current，也不写设备私有目录。</td></tr>
+      <tr><td><code>LynxOtaRuntime</code></td><td>启动/前台全量同步、远程下载、current/previous、回滚。</td><td>不猜 App ID，不把内置 baseline复制到磁盘。</td></tr>
+      <tr><td>Tab Container</td><td>只读取已提交 current 或内置 baseline，切 Tab 不触发网络。</td><td>不请求 OTA、不决定 App ID。</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    文档对应仓库：<code>lynx-navigation-to-ota</code>。路径示例基于 Android debug 包
+    <code>com.example.lynxshell.debug</code>；正式包的 package name 和 filesDir 会随宿主配置变化。
+  </footer>
+</main>
+<script>
+(() => {
+  const platformData = {
+    android: {
+      label: 'Android',
+      baseline: 'AssetManager.open("bundles/lynx/...") → ByteArray',
+      baselinePath: 'assets/bundles/lynx/<lynxAppId>/releases/<releaseId>/...',
+      store: '<filesDir>/lynx-ota-store/',
+      remotePath: '<filesDir>/lynx-ota-store/releases/<releaseId>/...',
+      statePath: '<filesDir>/lynx-ota-store/states/<safeAppId>.json',
+      direct: '校验后直接把 bytes 交给 LynxView；不创建 embedded 磁盘副本。'
+    },
+    ios: {
+      label: 'iOS',
+      baseline: 'Bundle.main URL → Data(contentsOf:)',
+      baselinePath: 'App Bundle/Bundles/lynx/<lynxAppId>/releases/<releaseId>/...',
+      store: 'Application Support/lynx-ota-store/',
+      remotePath: 'Application Support/lynx-ota-store/releases/<releaseId>/...',
+      statePath: 'Application Support/lynx-ota-store/states/<lynxAppId>.json',
+      direct: '直接消费 App Bundle file URL；不复制内置 baseline。'
+    },
+    harmony: {
+      label: 'HarmonyOS',
+      baseline: 'resourceManager.getRawFileContent(...) → ArrayBuffer',
+      baselinePath: 'rawfile/bundles/lynx/<lynxAppId>/releases/<releaseId>/...',
+      store: '<context.filesDir>/lynx-ota-store/',
+      remotePath: '<context.filesDir>/lynx-ota-store/releases/<releaseId>/...',
+      statePath: '<context.filesDir>/lynx-ota-store/states/<lynxAppId>.json',
+      direct: '校验后直接把 ArrayBuffer 交给 Provider；不写 lynx-embedded。'
+    }
+  };
+
+  const scenarios = {
+    cold: {
+      label: '首次启动 · 先读 baseline',
+      status: 'NO-COPY BASELINE',
+      active: 'asset',
+      title: '先读内置 baseline',
+      explain: '内置资源先保证页面能打开；启动全量 OTA 同步在后台进行。即使网络失败，也不影响内置页面。',
+      operations: ['读取 embedded-bundles.json', '校验 size / SHA-256', '直接交付 bytes 或 file URL', '后台触发全量同步'],
+      path: ['asset', 'manifest', 'network', 'lynx']
+    },
+    update: {
+      label: '发现 OTA · 远程版本落盘',
+      status: 'REMOTE CURRENT',
+      active: 'disk',
+      title: '远程 Bundle 才写磁盘',
+      explain: '全量接口返回新 Release 后，所有 Bundle 先进入 staging，全部通过校验后发布到 releases，再提交 current。',
+      operations: ['请求 latest-bundle-list', '下载 changedBundles 到 staging', '校验 size / SHA-256', '提交 current，保留 previous'],
+      path: ['network', 'disk', 'lynx']
+    },
+    crash: {
+      label: '首屏失败 · 回到 baseline',
+      status: 'FALLBACK',
+      active: 'asset',
+      title: '坏版本失败后回退',
+      explain: '先尝试 previous remote；没有可用 previous 时丢弃坏的 downloaded current，直接回到内置 baseline。',
+      operations: ['检测 Lynx 首屏失败', '尝试 previous remote Release', '没有 previous 就删除坏 current', '直接读取内置 baseline'],
+      path: ['lynx', 'disk', 'asset', 'lynx']
+    },
+    tab: {
+      label: '切换 Tab · cache-only',
+      status: 'CACHE ONLY',
+      active: 'lynx',
+      title: 'Tab 切换不重新请求网络',
+      explain: '原生 Tab 容器只调用 resolveCurrent。已有 current 就读 current；没有 current 就读内置 baseline，不触发 repair。',
+      operations: ['调用 resolveCurrent', '读取已提交 current', '没有 current 时读 baseline', '不发起网络请求'],
+      path: ['lynx']
+    }
+  };
+
+  const nodes = {
+    asset: {
+      title: '内置资源',
+      description: '这里是随包 baseline。它来自构建期脚本写入的 assets/rawfile/App Bundle，不是运行时 OTA 下载结果。',
+      path: data => `读取：${data.baselinePath}\n写入：无（只读发布资产）`
+    },
+    manifest: {
+      title: 'Manifest',
+      description: 'Manifest 只负责把 lynxAppId、releaseId、bundlePath、size、SHA 建立映射。目录名不是身份来源。',
+      path: data => `索引：${data.baselinePath.replace(/\/releases.*/, '')}/embedded-bundles.json\n校验：size + SHA-256`
+    },
+    network: {
+      title: '全量接口',
+      description: '启动或回前台才请求全量 latest-bundle-list。返回什么 App ID，就处理什么 App ID，宿主不猜身份。',
+      path: () => 'GET /api/ota/v1/releases/latest-bundle-list\n结果：bundleLists[*].changedBundles[*]'
+    },
+    disk: {
+      title: '私有磁盘',
+      description: '这里只有远程 OTA 的可变数据：staging、releases、current/previous 指针和状态文件。',
+      path: data => `远程 Bundle：${data.remotePath}\n状态：${data.statePath}`
+    },
+    lynx: {
+      title: 'LynxView',
+      description: '页面最终只消费已校验的 current；没有 current 时消费内置 baseline。Tab 只走 cache-only。',
+      path: data => `优先：${data.remotePath}\n兜底：${data.baselinePath}`
+    }
+  };
+
+  const state = { platform: 'android', scenario: 'cold', node: 'asset', timer: null, step: 0 };
+  const $ = id => document.getElementById(id);
+  const nodeButtons = [...document.querySelectorAll('[data-node]')];
+
+  function setSelected(selector, key, value) {
+    document.querySelectorAll(selector).forEach(button => {
+      const selected = button.dataset[key] === value;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-selected', String(selected));
+    });
+  }
+
+  function render() {
+    const data = platformData[state.platform];
+    const scenario = scenarios[state.scenario];
+    const node = nodes[state.node];
+    setSelected('[data-platform]', 'platform', state.platform);
+    setSelected('[data-scenario]', 'scenario', state.scenario);
+    nodeButtons.forEach(button => button.classList.toggle('active', button.dataset.node === state.node));
+
+    $('labScenarioLabel').textContent = `${data.label} · ${scenario.label}`;
+    $('labStatus').textContent = scenario.status;
+    $('labTitle').textContent = `${data.label}：${node.title}`;
+    $('labAnswer').textContent = `${node.description} ${scenario.explain}`;
+    $('labPath').textContent = node.path(data);
+    $('labStepText').textContent = `当前查看：${node.title}。${node.description}`;
+    $('labOperations').innerHTML = scenario.operations.map(item => `<li>${item}</li>`).join('');
+  }
+
+  function stopPlayback() {
+    if (state.timer) window.clearInterval(state.timer);
+    state.timer = null;
+    $('playFlow').textContent = '播放路径';
+  }
+
+  document.querySelectorAll('[data-platform]').forEach(button => {
+    button.addEventListener('click', () => {
+      stopPlayback();
+      state.platform = button.dataset.platform;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-scenario]').forEach(button => {
+    button.addEventListener('click', () => {
+      stopPlayback();
+      state.scenario = button.dataset.scenario;
+      state.node = scenarios[state.scenario].active;
+      render();
+    });
+  });
+
+  nodeButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      state.node = button.dataset.node;
+      button.classList.remove('pulse');
+      void button.offsetWidth;
+      button.classList.add('pulse');
+      render();
+    });
+  });
+
+  $('playFlow').addEventListener('click', () => {
+    if (state.timer) {
+      stopPlayback();
+      return;
+    }
+    const path = scenarios[state.scenario].path;
+    state.step = 0;
+    $('playFlow').textContent = '暂停路径';
+    const advance = () => {
+      state.node = path[state.step];
+      const button = document.querySelector(`[data-node="${state.node}"]`);
+      if (button) {
+        button.classList.remove('pulse');
+        void button.offsetWidth;
+        button.classList.add('pulse');
+      }
+      render();
+      state.step += 1;
+      if (state.step >= path.length) stopPlayback();
+    };
+    advance();
+    state.timer = window.setInterval(advance, 1000);
+  });
+
+  document.querySelectorAll('.question-button').forEach(button => {
+    button.addEventListener('click', () => {
+      button.closest('.question').classList.toggle('open');
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

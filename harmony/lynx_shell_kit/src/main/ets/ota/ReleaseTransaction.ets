@@ -23,6 +23,9 @@ export default class ReleaseTransaction {
   private readonly config: LynxOtaConfig;
   private readonly api: OtaApiClient;
   private readonly root: string;
+  /** 进程内校验结果缓存；不缓存 bytes、不落盘，release/文件指纹/size/SHA 变化自动 miss。 */
+  private readonly validatedBundles: Map<string, number> = new Map();
+  private validationAccessCounter: number = 0;
 
   constructor(config: LynxOtaConfig, api: OtaApiClient) {
     this.config = config;
@@ -79,6 +82,7 @@ export default class ReleaseTransaction {
     }
 
     this.recoverStaging();
+    this.validatedBundles.clear();
     const transactionId = `${new Date().getTime()}-${Math.floor(Math.random() * 1000000)}`;
     const staging = `${this.stagingRoot()}/${snapshot.releaseId}.${transactionId}`;
     this.ensureDirectory(staging);
@@ -172,6 +176,7 @@ export default class ReleaseTransaction {
       previous: undefined
     };
     this.writeState(restored);
+    this.validatedBundles.clear();
     return true;
   }
 
@@ -220,6 +225,7 @@ export default class ReleaseTransaction {
       }
     });
     this.recoverStaging();
+    this.validatedBundles.clear();
   }
 
   /** 永久删除所有 appId 的 OTA 下载目录，再重建空 Store。 */
@@ -231,6 +237,7 @@ export default class ReleaseTransaction {
     this.ensureDirectory(this.releasesRoot());
     this.ensureDirectory(this.statesRoot());
     this.ensureDirectory(this.stagingRoot());
+    this.validatedBundles.clear();
   }
 
   storageRoot(): string {
@@ -304,7 +311,7 @@ export default class ReleaseTransaction {
     }
     if (verify) {
       try {
-        this.verifyFileAgainstArtifact(filePath, artifact);
+        this.verifyCurrentFileAgainstArtifact(filePath, releaseId, lynxAppId, artifact);
       } catch (error) {
         return null;
       }
@@ -314,7 +321,8 @@ export default class ReleaseTransaction {
       bundleName: artifact.bundlePath,
       filePath: filePath,
       releaseId: releaseId,
-      sha256: artifact.bundleSha256
+      sha256: artifact.bundleSha256,
+      source: 'ota_current'
     };
   }
 
@@ -347,6 +355,56 @@ export default class ReleaseTransaction {
       throw new Error(`Bundle 文件大小越界：${artifact.bundlePath}`);
     }
     this.ensureExpectedSha(this.sha256File(filePath), artifact.bundleSha256, artifact.bundlePath);
+  }
+
+  /** 当前页面热路径的 SHA 校验；安装/发布阶段仍使用完整 verifyFileAgainstArtifact。 */
+  private verifyCurrentFileAgainstArtifact(
+    filePath: string,
+    releaseId: string,
+    lynxAppId: string,
+    artifact: OtaBundleArtifact
+  ): void {
+    if (!this.isRegularFile(filePath)) {
+      throw new Error(`Bundle 文件不存在：${artifact.bundlePath}`);
+    }
+    const stat = fs.statSync(filePath);
+    this.ensureDeclaredSize(stat.size, artifact);
+    if (stat.size <= 0 || stat.size > ReleaseTransaction.MAX_BUNDLE_BYTES) {
+      throw new Error(`Bundle 文件大小越界：${artifact.bundlePath}`);
+    }
+    const key = [
+      this.config.environment,
+      this.config.hostApp,
+      this.config.requestPlatform(),
+      lynxAppId,
+      releaseId,
+      artifact.bundlePath,
+      artifact.bundleSha256.toLowerCase(),
+      String(stat.size),
+      String(stat.mtime),
+      String(stat.ctime),
+      stat.ino.toString()
+    ].join('|');
+    if (this.validatedBundles.has(key)) {
+      this.validationAccessCounter += 1;
+      this.validatedBundles.set(key, this.validationAccessCounter);
+      return;
+    }
+    this.ensureExpectedSha(this.sha256File(filePath), artifact.bundleSha256, artifact.bundlePath);
+    this.validationAccessCounter += 1;
+    this.validatedBundles.set(key, this.validationAccessCounter);
+    while (this.validatedBundles.size > ReleaseTransaction.MAX_VALIDATED_BUNDLES) {
+      let oldestKey: string | null = null;
+      let oldestAccess = Number.MAX_SAFE_INTEGER;
+      this.validatedBundles.forEach((access: number, candidate: string) => {
+        if (access < oldestAccess) {
+          oldestAccess = access;
+          oldestKey = candidate;
+        }
+      });
+      if (oldestKey === null) break;
+      this.validatedBundles.delete(oldestKey);
+    }
   }
 
   private ensureDeclaredSize(actual: number, artifact: OtaBundleArtifact): void {
@@ -594,4 +652,5 @@ export default class ReleaseTransaction {
   }
 
   private static readonly MAX_BUNDLE_BYTES: number = 20 * 1024 * 1024;
+  private static readonly MAX_VALIDATED_BUNDLES: number = 128;
 }

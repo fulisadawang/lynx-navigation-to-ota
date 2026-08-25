@@ -45,6 +45,66 @@ Android 还会把 `dist/static` 同步到大小写匹配的
 main.lynx.bundle
 ```
 
+## 本地 OTA 发布流水线
+
+Playground 提供了不写入凭证的全量 OTA 发布脚本。它会读取 `dist/` 下的全部
+`.lynx.bundle`，保留服务端当前完整 Release 中的旧 Bundle，再把 Playground Bundle 全部
+上传到 OSS，生成新的完整快照。它不会自行猜测 `lynxAppId`，必须传入服务端已经存在的 App ID。
+
+流水线顺序为：
+
+```text
+pnpm build
+  -> 读取 dist/*.lynx.bundle
+  -> 拉取 Android/iOS 当前完整 Release
+  -> 按 bundlePath 复用旧 pageId
+  -> 为新增 Bundle 分配 pageId
+  -> ali-oss 上传 Playground 全部 Bundle
+  -> OSS/CDN size + SHA 回读校验
+  -> create DRAFT
+  -> validate
+  -> full publish
+  -> 回读 Android/iOS latest
+```
+
+```bash
+cd playground
+
+# 当前 Android/iOS TEST OTA Demo 使用服务端已存在的 10000001。
+# OSS 配置必须是本地 0600 JSON，文件内容不提交仓库。
+LYNX_OTA_ENV=TEST \
+LYNX_HOST_APP=capp \
+LYNX_APP_ID=10000001 \
+LYNX_PLATFORMS=android,ios \
+LYNX_BUILD_VERSION=codex-YYYYMMDD-playground-all-v1 \
+LYNX_PAGE_ID=1113 \
+LYNX_OSS_CONFIG=/absolute/path/to/oss.local.json \
+LYNX_OSS_REGION=oss-cn-hangzhou \
+LYNX_OSS_BUCKET=fr-static-new \
+LYNX_OSS_PUBLIC_BASE_URL=https://fr-static-new.oss-cn-hangzhou.aliyuncs.com \
+LYNX_OSS_PREFIX=cappLynx/lynx \
+CI_RELEASE_TOKEN='<CI token>' \
+pnpm ota:build-and-publish
+
+# 只检查完整快照，不上传、不创建 Release
+LYNX_OTA_ENV=TEST \
+LYNX_HOST_APP=capp \
+LYNX_APP_ID=10000001 \
+LYNX_PLATFORMS=android,ios \
+LYNX_BUILD_VERSION=codex-YYYYMMDD-playground-all-v1 \
+LYNX_PAGE_ID=1113 \
+LYNX_OSS_REGION=oss-cn-hangzhou \
+LYNX_OSS_BUCKET=fr-static-new \
+LYNX_OSS_PUBLIC_BASE_URL=https://fr-static-new.oss-cn-hangzhou.aliyuncs.com \
+LYNX_OSS_PREFIX=cappLynx/lynx \
+CI_RELEASE_TOKEN='<CI token>' \
+pnpm ota:publish:dry-run -- --dry-run
+```
+
+`LYNX_PAGE_ID=1113` 是基于当前 `10000001` Release 已使用到 `1112` 的下一段起始值；脚本
+仍会按 `bundlePath` 复用已有 pageId。当前脚本不会把 CI token、OSS key 或 secret 放入源码、
+Bundle、日志或文档。
+
 ## 官方 Bundle 示例库
 
 首页点击“官方 Bundle 示例”进入 `go-bundles.lynx.bundle`。页面内置用户提供的

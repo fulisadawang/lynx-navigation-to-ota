@@ -1,6 +1,30 @@
 import LynxShellKit
 import UIKit
 
+/**
+ * iOS Demo 专用的全局导航承载。
+ *
+ * 业务 App 可以选择自己的 UINavigationController；Sample 为了方便验收，始终让宿主
+ * 全局管理 interactive-pop，不依赖每个 Lynx 页面是否声明 transition。
+ */
+final class DemoNavigationController: UINavigationController {
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        enableGlobalBackGesture()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        enableGlobalBackGesture()
+    }
+
+    private func enableGlobalBackGesture() {
+        guard isViewLoaded else { return }
+        interactivePopGestureRecognizer?.delegate = nil
+        interactivePopGestureRecognizer?.isEnabled = viewControllers.count > 1
+    }
+}
+
 /** Scene 只负责建立系统导航栈，并把深链交给统一 Router。 */
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -11,10 +35,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         options connectionOptions: UIScene.ConnectionOptions
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
-        // 原生 Launcher 始终作为宿主页锚点；默认冷启动在 Window 就绪后 push Playground。
+        // 原生 Launcher 始终作为宿主页锚点；默认冷启动在 Window 就绪后 push OTA 验收首页。
         let rootController = LauncherViewController()
-        let navigationController = UINavigationController(rootViewController: rootController)
+        let navigationController = DemoNavigationController(rootViewController: rootController)
         navigationController.navigationBar.prefersLargeTitles = true
+#if DEBUG
+        // Sample 只为验收开启宿主全局返回；生产宿主不应默认覆盖业务自己的手势策略。
+        LynxRouter.setHostManagedBackGesture(true)
+#endif
         // 三端统一入口：iOS 端 Native Page Stack 由 UINavigationController 承载。
         // Demo 不硬编码令牌。业务可从 Info.plist 或进程环境注入配置；配置完整时安装
         // Router 内置 OTA 引擎；即使未配置 OTA，仍可验收本地/HTTPS Direct Bundle。
@@ -45,12 +73,20 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         var shouldOpenBottomSheetDemo = false
         var shouldOpenHeroSheetDemo = false
+        var shouldOpenNativeTabDemo = false
+        var shouldOpenEmbeddedDemo = false
 #if DEBUG
         shouldOpenBottomSheetDemo = ProcessInfo.processInfo.arguments.contains(
             "--bottom-sheet-demo"
         )
         shouldOpenHeroSheetDemo = ProcessInfo.processInfo.arguments.contains(
             "--hero-sheet-demo"
+        )
+        shouldOpenNativeTabDemo = ProcessInfo.processInfo.arguments.contains(
+            "--native-tab-demo"
+        )
+        shouldOpenEmbeddedDemo = ProcessInfo.processInfo.arguments.contains(
+            "--embedded-demo"
         )
 #endif
         if let url = connectionOptions.urlContexts.first?.url {
@@ -64,8 +100,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 #if DEBUG
             DispatchQueue.main.async { [weak self] in self?.openBottomSheetDemo() }
 #endif
+        } else if shouldOpenNativeTabDemo {
+#if DEBUG
+            DispatchQueue.main.async { [weak self] in self?.openNativeTabDemo() }
+#endif
+        } else if shouldOpenEmbeddedDemo {
+#if DEBUG
+            DispatchQueue.main.async { [weak self] in self?.openEmbeddedDemo() }
+#endif
         } else if !ProcessInfo.processInfo.arguments.contains("--show-native-launcher") {
-            DispatchQueue.main.async { [weak self] in self?.openPlaygroundHome() }
+            // 与 Android MainActivity 一致：冷启动默认进入 OTA 验收首页；
+            // Playground main 页面仍通过 Launcher 的独立按钮打开。
+            DispatchQueue.main.async { [weak self] in self?.openOtaAcceptanceHome() }
         }
     }
 
@@ -99,8 +145,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     private func openPlaygroundHome() {
         do {
-            _ = try LynxRouter.open(
-                bundle: "assets://bundles/main.lynx.bundle",
+            _ = try LynxRouter.openEmbedded(
+                bundleName: "main.lynx.bundle",
                 params: ["source": "ios-playground-home"],
                 options: [
                     "title": "Sparkling Go",
@@ -112,6 +158,54 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             (window?.rootViewController as? UINavigationController)?.topViewController?
                 .presentShellAlert(
                     title: "无法打开 Playground 首页",
+                    message: error.localizedDescription
+                )
+        }
+    }
+
+    private func openOtaAcceptanceHome() {
+        do {
+            _ = try LynxRouter.openEmbedded(
+                bundleName: "home.lynx.bundle",
+                params: [
+                    "source": "ios-ota-acceptance-home",
+                    "acceptance": true,
+                ],
+                options: [
+                    "title": "OTA 验收首页",
+                    "fullscreen": true,
+                    "showNavigationBar": false,
+                ]
+            )
+        } catch {
+            (window?.rootViewController as? UINavigationController)?.topViewController?
+                .presentShellAlert(
+                    title: "无法打开 OTA 验收首页",
+                    message: error.localizedDescription
+                )
+        }
+    }
+
+    private func openNativeTabDemo() {
+        guard let navigationController = window?.rootViewController as? UINavigationController else {
+            return
+        }
+        navigationController.pushViewController(
+            NativeTabBarDemoViewController(),
+            animated: false
+        )
+    }
+
+    private func openEmbeddedDemo() {
+        do {
+            _ = try LynxRouter.openFirstEmbedded(
+                params: ["source": "ios-embedded-manifest-debug"],
+                options: ["title": "内置 Bundle Demo"]
+            )
+        } catch {
+            (window?.rootViewController as? UINavigationController)?.topViewController?
+                .presentShellAlert(
+                    title: "无法打开内置 Bundle",
                     message: error.localizedDescription
                 )
         }
@@ -220,14 +314,19 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private static func makeOtaConfiguration() -> LynxOtaConfiguration? {
         let environment = ProcessInfo.processInfo.environment
         let info = Bundle.main.infoDictionary ?? [:]
-        let baseValue = environment["LYNX_OTA_API_BASE_URL"]
-            ?? info["LynxOtaAPIBaseURL"] as? String
-        let token = environment["LYNX_OTA_CLIENT_TOKEN"]
-            ?? info["LynxOtaClientToken"] as? String
+        let baseValue = Self.configurationValue(
+            environment["LYNX_OTA_API_BASE_URL"]
+                ?? info["LynxOtaAPIBaseURL"] as? String
+        )
+        let token = Self.configurationValue(
+            environment["LYNX_OTA_CLIENT_TOKEN"]
+                ?? info["LynxOtaClientToken"] as? String
+        )
         guard let baseValue,
               let apiBaseURL = URL(string: baseValue),
               let token,
-              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+              apiBaseURL.scheme?.lowercased() == "https",
+              apiBaseURL.host?.isEmpty == false else {
             return nil
         }
         return LynxOtaConfiguration(
@@ -241,6 +340,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 ?? "TEST",
             clientToken: token
         )
+    }
+
+    private static func configurationValue(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("$(") else { return nil }
+        return trimmed
     }
 
 }

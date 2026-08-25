@@ -851,6 +851,119 @@
   color: rgba(0, 0, 0, 0.4);
 }
 
+/* Bundle Runtime Metadata */
+.bundle-meta-card {
+  margin: 0 16px 18px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(37, 244, 238, 0.22);
+  background: linear-gradient(135deg, rgba(37, 244, 238, 0.12), rgba(241, 32, 74, 0.09));
+}
+
+.bundle-meta-card--dark {
+  background: linear-gradient(135deg, rgba(37, 244, 238, 0.14), rgba(241, 32, 74, 0.12));
+}
+
+.bundle-meta-card--light {
+  background: linear-gradient(135deg, rgba(37, 244, 238, 0.09), rgba(241, 32, 74, 0.06));
+}
+
+.bundle-meta-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.bundle-meta-status-dot {
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background-color: #20c997;
+}
+
+.bundle-meta-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bundle-meta-title--dark {
+  color: #ffffff;
+}
+
+.bundle-meta-title--light {
+  color: #17191c;
+}
+
+.bundle-meta-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 -6px;
+}
+
+.bundle-meta-item {
+  width: 50%;
+  padding: 0 6px 10px;
+  box-sizing: border-box;
+}
+
+.bundle-meta-item--wide {
+  width: 100%;
+}
+
+.bundle-meta-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.bundle-meta-label--dark {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.bundle-meta-label--light {
+  color: rgba(0, 0, 0, 0.42);
+}
+
+.bundle-meta-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bundle-meta-value--dark {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.bundle-meta-value--light {
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.bundle-meta-hash,
+.bundle-meta-hint {
+  display: block;
+  padding-top: 3px;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bundle-meta-hash--dark,
+.bundle-meta-hint--dark {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.bundle-meta-hash--light,
+.bundle-meta-hint--light {
+  color: rgba(0, 0, 0, 0.38);
+}
+
 /* Home Footer */
 .home-footer {
   display: flex;

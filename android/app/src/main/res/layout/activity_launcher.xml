@@ -22,7 +22,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="默认进入 Playground 首页；需要时可从这里打开本地页面或 Activity-first OTA。"
+            android:text="默认进入 10000001 OTA 验收首页；需要时可从这里切回普通 Playground 或原生容器 Demo。"
             android:textAppearance="?attr/textAppearanceBodyLarge" />
 
         <com.google.android.material.button.MaterialButton
@@ -31,7 +31,29 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:minHeight="56dp"
-            android:text="打开 Playground 首页"
+            android:text="打开 Playground 首页（OTA）"
+            android:textSize="16sp"
+            app:cornerRadius="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/open_ota_acceptance_button"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="52dp"
+            android:text="打开 OTA 验收首页（10000001）"
+            android:textSize="16sp"
+            app:cornerRadius="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/open_native_tab_demo_button"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="52dp"
+            android:text="打开原生 Tab 承载 Demo"
             android:textSize="16sp"
             app:cornerRadius="12dp" />
 
@@ -61,16 +83,17 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="10000001 / home.lynx.bundle\nCI/CD → OSS → latest-bundle-list → 本地 SHA 校验"
+                    android:text="全量 latest-bundle-list → 按返回的 App ID 存储 → 本地 SHA 校验"
                     android:textAppearance="?attr/textAppearanceBodyMedium" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/open_ota_button"
+                    android:id="@+id/manual_sync_all_ota_button"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:minHeight="56dp"
-                    android:text="打开 OTA 验收首页"
+                    android:layout_marginTop="12dp"
+                    android:minHeight="52dp"
+                    android:text="手动触发全量 OTA 同步"
                     android:textSize="16sp"
                     app:cornerRadius="12dp" />
 

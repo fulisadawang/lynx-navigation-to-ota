@@ -12,6 +12,8 @@ public enum LynxRouter {
     public static func install(to navigationController: UINavigationController) {
         LynxShell.bootstrap()
         LynxShell.attach(to: navigationController)
+        // 即使宿主没有配置远程 OTA，也要让带 appId 的内置 Bundle 可以按 Registry 打开。
+        LynxShell.installOtaRuntime(LynxEmbeddedOnlyRuntime())
     }
 
     /**
@@ -34,13 +36,27 @@ public enum LynxRouter {
 
     /** App 每次回前台调用；按业务约定不做时间门控，触发 host 全量同步。 */
     public static func onApplicationForeground() {
-        guard let runtime = LynxShell.otaRuntime() else { return }
+        guard let runtime = LynxShell.otaRuntime() as? LynxOtaRuntime else { return }
         Task { await runtime.synchronizeAllBundles() }
+    }
+
+    /** Demo/宿主主动刷新全量 OTA；返回是否完成了一次可用的全量同步。 */
+    public static func refreshAllOtaBundles() async -> Bool {
+        guard let runtime = LynxShell.otaRuntime() as? LynxOtaRuntime else { return false }
+        return await runtime.synchronizeAllBundles()
     }
 
     /** 只暴露是否已配置，不暴露 clientToken、服务地址或磁盘目录。 */
     public static var isOtaInstalled: Bool {
-        LynxShell.otaRuntime() != nil
+        LynxShell.otaRuntime() is LynxOtaRuntime
+    }
+
+    /**
+     * 仅供宿主 Demo/Coordinator 使用：让宿主 UINavigationController 统一管理返回手势。
+     * 业务 App 默认保持 false，继续使用壳按页面的转场/手势策略。
+     */
+    public static func setHostManagedBackGesture(_ enabled: Bool) {
+        LynxShell.setHostManagedBackGesture(enabled)
     }
 
     /**
@@ -78,6 +94,56 @@ public enum LynxRouter {
         otaOptions["bundleName"] = bundleName
         let optionsJSON = try optionsJSON(params: params, options: otaOptions)
         return try LynxShell.open(bundleName, optionsJSON: optionsJSON)
+    }
+
+    /** Demo/宿主发现入口：App ID 和 BundleName 来自内置 Manifest，不由代码猜测。 */
+    @discardableResult
+    public static func openFirstEmbedded(
+        params: [String: Any] = [:],
+        options: [String: Any] = [:]
+    ) throws -> LynxShellResult {
+        guard let identity = EmbeddedBundleRegistry().firstIdentity() else {
+            throw NSError(
+                domain: "LynxShellEmbedded",
+                code: 1007,
+                userInfo: [NSLocalizedDescriptionKey: "内置 Manifest 没有可用 Bundle"]
+            )
+        }
+        return try open(
+            lynxAppId: identity.lynxAppId,
+            bundleName: identity.bundleName,
+            params: params,
+            options: options
+        )
+    }
+
+    /** 按 embedded Manifest 的 BundleName 找到对应 App ID，再走统一 OTA/embedded 选择链路。 */
+    @discardableResult
+    public static func openEmbedded(
+        bundleName: String,
+        params: [String: Any] = [:],
+        options: [String: Any] = [:]
+    ) throws -> LynxShellResult {
+        guard let identity = EmbeddedBundleRegistry().identity(bundleName: bundleName) else {
+            throw NSError(
+                domain: "LynxShellEmbedded",
+                code: 1008,
+                userInfo: [NSLocalizedDescriptionKey: "内置 Manifest 没有找到 Bundle：\(bundleName)"]
+            )
+        }
+        return try open(
+            lynxAppId: identity.lynxAppId,
+            bundleName: identity.bundleName,
+            params: params,
+            options: options
+        )
+    }
+
+    /** 返回 embedded Manifest 中的真实 Bundle 身份，供 Native Tab Descriptor 使用。 */
+    public static func embeddedIdentity(
+        bundleName: String
+    ) -> (lynxAppId: String, bundleName: String)? {
+        EmbeddedBundleRegistry().identity(bundleName: bundleName)
     }
 
     /** 直接删除指定 appId 的下载 Bundle；embedded 描述和 App 内置资源保留。 */

@@ -1,6 +1,62 @@
 import Foundation
 
+/// 进程内 Bundle 完整性校验结果缓存；不保存 Bundle bytes，也不写入磁盘。
+struct OtaBundleValidationCache<Key: Hashable & Sendable>: Sendable {
+    private let maxEntries: Int
+    private var entries: [Key: UInt64] = [:]
+    private var accessCounter: UInt64 = 0
+
+    init(maxEntries: Int = 128) {
+        precondition(maxEntries > 0, "Bundle 校验缓存容量必须大于 0")
+        self.maxEntries = maxEntries
+    }
+
+    mutating func contains(_ key: Key) -> Bool {
+        guard entries[key] != nil else { return false }
+        accessCounter &+= 1
+        entries[key] = accessCounter
+        return true
+    }
+
+    mutating func insert(_ key: Key) {
+        accessCounter &+= 1
+        entries[key] = accessCounter
+        trimIfNeeded()
+    }
+
+    mutating func remove(_ key: Key) {
+        entries.removeValue(forKey: key)
+    }
+
+    mutating func removeAll(where shouldRemove: (Key) -> Bool) {
+        entries.keys.filter(shouldRemove).forEach { entries.removeValue(forKey: $0) }
+    }
+
+    mutating func removeAll() {
+        entries.removeAll(keepingCapacity: true)
+    }
+
+    var count: Int { entries.count }
+
+    private mutating func trimIfNeeded() {
+        while entries.count > maxEntries {
+            guard let oldest = entries.min(by: { $0.value < $1.value })?.key else { return }
+            entries.removeValue(forKey: oldest)
+        }
+    }
+}
+
 public actor OtaSDK {
+    private struct BundleValidationKey: Hashable, Sendable {
+        let app: String
+        let lynxAppId: String
+        let releaseId: String
+        let bundleName: String
+        let expectedSha256: String
+        let fileSize: Int64
+        let modificationTime: TimeInterval
+    }
+
     private struct DownloadOutcome: Sendable {
         let installed: OtaInstalledRelease
         let summary: OtaBundleSyncSummary
@@ -13,6 +69,7 @@ public actor OtaSDK {
     private let bundleRuntime: BundleRuntime
     private let downloader: OtaBundleDownloading
     private let checksumValidator: OtaChecksumValidating
+    private var validatedBundleCache = OtaBundleValidationCache<BundleValidationKey>()
 
     private var lifecycleState: OtaLifecycleState = .idle(current: nil)
 
@@ -48,12 +105,14 @@ public actor OtaSDK {
     /// 直接删除指定 appId 的下载版本；embedded 描述和 App 内置资源保留。
     public func deleteDownloadedBundles(lynxAppId: String) async throws {
         try await releaseTransaction.deleteDownloadedBundles(app: configuration.app, lynxAppId: lynxAppId)
+        validatedBundleCache.removeAll { $0.lynxAppId == lynxAppId }
         lifecycleState = .idle(current: nil)
     }
 
     /// 直接删除全部 appId 的下载版本；不会建立 `.delete-*` 备份目录。
     public func deleteAllDownloadedBundles() async throws {
         try await releaseTransaction.deleteAllDownloadedBundles()
+        validatedBundleCache.removeAll()
         lifecycleState = .idle(current: nil)
     }
 
@@ -92,11 +151,47 @@ public actor OtaSDK {
             return nil
         }
         let localURL = URL(fileURLWithPath: bundle.localFilePath)
-        guard let actualChecksum = try? checksumValidator.sha256(for: localURL),
-              actualChecksum.lowercased() == bundle.bundleSha256.lowercased() else {
+        guard (try? verifyCurrentBundle(
+            localURL: localURL,
+            releaseId: release.context.releaseId,
+            lynxAppId: lynxAppId,
+            bundleName: bundle.bundleName,
+            expectedSha256: bundle.bundleSha256
+        )) == true else {
             return nil
         }
         return localURL
+    }
+
+    private func verifyCurrentBundle(
+        localURL: URL,
+        releaseId: String,
+        lynxAppId: String,
+        bundleName: String,
+        expectedSha256: String
+    ) throws -> Bool {
+        let attributes = try FileManager.default.attributesOfItem(atPath: localURL.path)
+        let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? -1
+        let modificationTime = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let key = BundleValidationKey(
+            app: configuration.app.rawValue,
+            lynxAppId: lynxAppId,
+            releaseId: releaseId,
+            bundleName: bundleName,
+            expectedSha256: expectedSha256.lowercased(),
+            fileSize: fileSize,
+            modificationTime: modificationTime
+        )
+        if validatedBundleCache.contains(key) {
+            return true
+        }
+        guard let actualChecksum = try? checksumValidator.sha256(for: localURL),
+              actualChecksum.lowercased() == expectedSha256.lowercased() else {
+            validatedBundleCache.remove(key)
+            return false
+        }
+        validatedBundleCache.insert(key)
+        return true
     }
 
     /// Bundle miss 时拉取 host 下完整 latest snapshot，再返回已激活 bundle。

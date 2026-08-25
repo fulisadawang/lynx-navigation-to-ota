@@ -27,6 +27,9 @@ class ReleaseTransaction @JvmOverloads constructor(
   private val capacityProbe: CapacityProbe = CapacityProbe.FILE_STORE,
   private val clock: Clock = Clock.SYSTEM,
 ) {
+  /** 只保存本进程已经完成的 Bundle SHA 校验结果，不保存 Bundle 内容。 */
+  private val bundleValidationCache = BundleValidationCache()
+
   /** 一个宿主内的唯一存储作用域；appId 不能跨环境/宿主/平台复用状态。 */
   data class ReleaseScope(
     @JvmField val env: OtaModels.Environment,
@@ -431,6 +434,7 @@ class ReleaseTransaction @JvmOverloads constructor(
         File(storageRoot, "staged-release-${OtaModels.safeFileName(lynxAppId)}.json"),
         File(storageRoot, "previous-release-${OtaModels.safeFileName(lynxAppId)}.json"),
       ).forEach { cleanupRecursively(it) }
+      bundleValidationCache.clear()
     }
   }
 
@@ -453,6 +457,7 @@ class ReleaseTransaction @JvmOverloads constructor(
           cleanupRecursively(file)
         }
       }
+      bundleValidationCache.clear()
     }
   }
 
@@ -534,8 +539,22 @@ class ReleaseTransaction @JvmOverloads constructor(
     }
     val localPath = localPathFor(scope, release, bundle)
     if (!localPath.isFile) return null
-    if (verify && !OtaIO.sha256(localPath).equals(bundle.bundleSha256, ignoreCase = true)) {
-      throw transactionError("Bundle 校验失败：$bundleName", "bundle_checksum_failed")
+    if (verify) {
+      val cacheKey = BundleValidationCache.Key(
+        scope = validationScopeKey(scope),
+        releaseId = release.context.releaseId,
+        bundlePath = bundle.bundlePath,
+        expectedSha256 = bundle.bundleSha256,
+        fileSize = localPath.length(),
+        lastModifiedMillis = localPath.lastModified(),
+      )
+      if (!bundleValidationCache.contains(cacheKey)) {
+        if (!OtaIO.sha256(localPath).equals(bundle.bundleSha256, ignoreCase = true)) {
+          bundleValidationCache.remove(cacheKey)
+          throw transactionError("Bundle 校验失败：$bundleName", "bundle_checksum_failed")
+        }
+        bundleValidationCache.put(cacheKey)
+      }
     }
     return localPath
   }
@@ -1002,6 +1021,13 @@ class ReleaseTransaction @JvmOverloads constructor(
     return release.context.env == scope.env && release.context.hostApp == scope.hostApp &&
       release.context.lynxAppId == scope.lynxAppId && release.context.platform == scope.platform
   }
+
+  private fun validationScopeKey(scope: ReleaseScope): String = listOf(
+    scope.env.wireValue,
+    scope.hostApp.wireValue,
+    scope.platform.wireValue,
+    scope.lynxAppId,
+  ).joinToString("|")
 
   private fun validateReleaseScope(scope: ReleaseScope, release: OtaModels.InstalledRelease) {
     if (!matchesScope(scope, release)) throw transactionError("Release scope 不一致", "scope_mismatch")

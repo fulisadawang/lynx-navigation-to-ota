@@ -357,6 +357,40 @@ export type OpenResponse = NavigateResponse<Record<string, unknown>>
 type Callback<T = unknown> = (result: NavigateResponse<T>) => void
 
 const RESERVED_ROUTE_QUERY_KEYS = new Set(['bundle', 'url', 'route_key'])
+/** 当前 Playground OTA TEST 归属的服务端 App ID；发布脚本只接受服务端已有 ID。 */
+const PLAYGROUND_OTA_APP_ID = '10000001'
+
+function localBundleName(value: string): string | undefined {
+  let normalized = value.trim()
+  if (/^https?:\/\//i.test(normalized)) return undefined
+  normalized = normalized.replace(/^assets:\/\//i, '').replace(/^bundles\//i, '')
+  if (normalized.includes('://')) return undefined
+  return normalized.toLowerCase().endsWith('.lynx.bundle') ? normalized : undefined
+}
+
+function otaIdentityForBundle(value: string): Record<string, string> {
+  const bundleName = localBundleName(value)
+  return bundleName
+    ? { lynxAppId: PLAYGROUND_OTA_APP_ID, bundleName }
+    : {}
+}
+
+/** 给 Playground 内部手写 hybrid/lynxshell 路由补上 OTA 逻辑身份。 */
+function withPlaygroundOtaIdentity(route: string): string {
+  if (!/^(?:hybrid:\/\/lynxview_page|lynxshell:\/\/open)\?/i.test(route)) return route
+  if (/[?&](?:lynxAppId|appId|lynx_app_id)=/i.test(route)) return route
+  const match = route.match(/[?&](?:bundle|url)=([^&]*)/i)
+  if (!match) return route
+  let rawBundle = match[1]
+  try {
+    rawBundle = decodeURIComponent(rawBundle)
+  } catch {
+    return route
+  }
+  const identity = otaIdentityForBundle(rawBundle)
+  if (!identity.bundleName) return route
+  return `${route}&lynxAppId=${encodeURIComponent(identity.lynxAppId)}&bundleName=${encodeURIComponent(identity.bundleName)}`
+}
 
 function queryValue(value: unknown): string {
   if (
@@ -415,8 +449,10 @@ export function navigate(
 ): void {
   const params = safeRouteParams(request.options?.params || {})
   const routeKey = request.options?.routeKey
+  const otaIdentity = otaIdentityForBundle(request.path)
   const query = queryString({
     ...params,
+    ...otaIdentity,
     bundle: request.path,
     ...(routeKey ? { route_key: routeKey } : {}),
   })
@@ -663,7 +699,7 @@ export function open(
   request: OpenRequest,
   callback?: Callback,
 ): void {
-  invokeRoute('open', request.scheme, request.options || {}, callback)
+  invokeRoute('open', withPlaygroundOtaIdentity(request.scheme), request.options || {}, callback)
 }
 
 /** 关闭当前容器；即使当前页是 session 首页也可以返回宿主页。 */
@@ -752,8 +788,10 @@ export function redirect(
 ): void {
   const params = safeRouteParams(request.options?.params || {})
   const routeKey = request.options?.routeKey
+  const otaIdentity = otaIdentityForBundle(request.path)
   const query = queryString({
     ...params,
+    ...otaIdentity,
     bundle: request.path,
     ...(routeKey ? { route_key: routeKey } : {}),
   })
@@ -804,7 +842,7 @@ export function prepareRoute(
   callback: Callback<PreparedRoute>,
 ): void {
   shellModule().prepareRoute(
-    request.scheme,
+    withPlaygroundOtaIdentity(request.scheme),
     JSON.stringify(request.options || {}),
     (result: NativeResult<PreparedRoute>) => callback(normalizeShellResult(result)),
   )

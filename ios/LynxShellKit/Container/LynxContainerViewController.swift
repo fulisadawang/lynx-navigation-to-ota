@@ -27,6 +27,7 @@ final class LynxContainerViewController: UIViewController {
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
     private var preparedBundleData: Data?
+    private var bundleRuntimeMetadata: [String: Any]?
     private var loadGeneration = UUID()
     private var firstScreenObserver: LynxFirstScreenObserver?
     private var firstScreenReady = false
@@ -116,8 +117,11 @@ final class LynxContainerViewController: UIViewController {
         super.viewWillAppear(animated)
         let animateChrome = animated &&
             ShellNavigator.shared.allowsSystemChromeAnimation(for: self)
+        let hostManagesNavigationChrome = LynxShell.hostManagesBackGesture()
         navigationController?.setNavigationBarHidden(
-            request.fullscreen || !request.showNavigationBar,
+            hostManagesNavigationChrome
+                ? false
+                : (request.fullscreen || !request.showNavigationBar),
             animated: animateChrome
         )
         ShellNavigator.shared.updateBackGesture(for: self)
@@ -155,6 +159,9 @@ final class LynxContainerViewController: UIViewController {
         super.viewDidAppear(animated)
         lynxView?.onEnterForeground()
         sendLifecycle(state: "active", reason: "uikit_view_did_appear")
+        // viewWillAppear/didShow 可能仍处于 UIKit transitionCoordinator 生命周期内；
+        // 这里再触发一次，交给协调器的有界重试在转场真正收口后落下返回手势状态。
+        ShellNavigator.shared.updateBackGesture(for: self)
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -194,7 +201,8 @@ final class LynxContainerViewController: UIViewController {
                 for: contentHostView,
                 request: request,
                 pageId: navigationEntryID,
-                sessionId: navigationSessionID
+                sessionId: navigationSessionID,
+                bundleMetadata: bundleRuntimeMetadata
             )
             LynxNativeRuntime.updateGlobalProps(globalProps, in: lynxView)
         }
@@ -309,7 +317,8 @@ final class LynxContainerViewController: UIViewController {
                 for: contentHostView,
                 request: request,
                 pageId: navigationEntryID,
-                sessionId: navigationSessionID
+                sessionId: navigationSessionID,
+                bundleMetadata: bundleRuntimeMetadata
             ),
             in: lynxView
         )
@@ -453,6 +462,7 @@ final class LynxContainerViewController: UIViewController {
         }
         firstScreenReady = false
         firstScreenFailed = false
+        bundleRuntimeMetadata = nil
         loadingView.hide()
         errorView.hide()
         templateProvider?.cancel()
@@ -465,6 +475,9 @@ final class LynxContainerViewController: UIViewController {
         if request.isOtaRequest {
             prepareOtaBundle(generation: generation)
         } else {
+            if RemoteBundlePolicy.isRemote(request.bundleURL) && !request.transitionSpec.explicitlyRequested {
+                loadingView.show(message: "正在加载远程 Bundle…")
+            }
             renderLynxView(generation: generation)
         }
     }
@@ -480,10 +493,26 @@ final class LynxContainerViewController: UIViewController {
             handleTemplateLoadFailure(generation: generation, message: "OTA 页面未配置 Router 内置 OTA runtime")
             return
         }
-        loadingView.show(message: "正在检查 \(appId)/\(bundleName)…")
         otaPrepareTask = Task { [weak self] in
             do {
-                let prepared = try await runtime.prepare(lynxAppId: appId, bundleName: bundleName)
+                let cached = try await runtime.resolveCurrent(
+                    lynxAppId: appId,
+                    bundleName: bundleName
+                )
+                let prepared: PreparedOtaBundle
+                if let cached {
+                    prepared = cached
+                    if cached.source != "embedded_baseline" {
+                        await runtime.refreshAppBundleIfNeeded(lynxAppId: appId)
+                    }
+                } else {
+                    await MainActor.run { [weak self] in
+                        guard let self, generation == self.loadGeneration,
+                              !self.request.transitionSpec.explicitlyRequested else { return }
+                        self.loadingView.show(message: "正在检查 \(appId)/\(bundleName)…")
+                    }
+                    prepared = try await runtime.prepare(lynxAppId: appId, bundleName: bundleName)
+                }
                 try Task.checkCancellation()
                 let data = try await Task.detached(priority: .userInitiated) {
                     try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
@@ -502,6 +531,12 @@ final class LynxContainerViewController: UIViewController {
                         return
                     }
                     self.preparedBundleData = data
+                    self.bundleRuntimeMetadata = [
+                        "lynxAppId": prepared.lynxAppId,
+                        "releaseId": prepared.releaseId ?? "unknown",
+                        "source": self.otaRecoveryUsed ? "rollback_fallback" : prepared.source,
+                        "bundleName": prepared.bundleName
+                    ]
                     self.loadingView.hide()
                     self.renderLynxView(generation: generation)
                 }
@@ -544,7 +579,8 @@ final class LynxContainerViewController: UIViewController {
             for: contentHostView,
             request: request,
             pageId: navigationEntryID,
-            sessionId: navigationSessionID
+            sessionId: navigationSessionID,
+            bundleMetadata: bundleRuntimeMetadata
         )
         let createdView = LynxNativeRuntime.makeView(
             provider: provider,

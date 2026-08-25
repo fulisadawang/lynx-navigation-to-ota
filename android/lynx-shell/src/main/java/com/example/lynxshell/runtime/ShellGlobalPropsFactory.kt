@@ -13,7 +13,11 @@ import java.util.Locale
 
 /** 构造两端约定的宿主全局参数；系统保留字段不允许页面覆盖。 */
 object ShellGlobalPropsFactory {
-    fun create(activity: Activity, request: LynxPageRequest): HashMap<String, Any> {
+    fun create(
+        activity: Activity,
+        request: LynxPageRequest,
+        bundleMetadata: Map<String, Any>? = null,
+    ): HashMap<String, Any> {
         val metrics = activity.resources.displayMetrics
         val insets = ViewCompat.getRootWindowInsets(activity.window.decorView)
         val systemBars = insets?.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -80,6 +84,7 @@ object ShellGlobalPropsFactory {
         props["__lynxRouterNavigationModel"] = "native_page_stack"
         props["__lynxRouterPlatformContainer"] = "android_activity"
         props["__lynxRouterParams"] = queryItems
+        bundleMetadata?.let { props["__lynxBundleMeta"] = HashMap(it) }
         // 目标页在首屏 Bundle 执行前即可读取 transactionID，并据此调用 markTransitionReady。
         LynxTransitionIntent.globalProps(activity.intent)?.let {
             props["nativeTransition"] = it

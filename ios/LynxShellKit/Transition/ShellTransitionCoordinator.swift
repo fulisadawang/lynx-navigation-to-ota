@@ -73,6 +73,7 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
     private var hostInteractivePopGestureEnabled: Bool?
     /** 进入 Lynx 栈前记录宿主的系统侧滑 delegate，离开时恢复，避免污染宿主页面。 */
     private weak var hostInteractivePopGestureDelegate: UIGestureRecognizerDelegate?
+    private var hostInteractivePopGestureDelegateCaptured = false
     private var active: Transaction?
     private(set) var state: ShellTransitionState = .idle
 
@@ -325,10 +326,24 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
 
     /** 容器显示时在系统 edge 与壳自定义 edge 之间只启用一个。 */
     func updateBackGesture(for controller: LynxContainerViewController) {
+        updateBackGesture(for: controller, retryCount: 0)
+    }
+
+    private func updateBackGesture(
+        for controller: LynxContainerViewController,
+        retryCount: Int
+    ) {
         guard let navigationController else { return }
         // 目标 VC 的 viewWillAppear 会在交互转场尚未结束时触发。此时必须继续由源
         // 手势驱动；完成/取消后 didShow 会用最终可见 VC 再调用本方法。
-        guard !isBusy, navigationController.transitionCoordinator == nil else { return }
+        if isBusy || navigationController.transitionCoordinator != nil {
+            guard retryCount < 8 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak controller] in
+                guard let self, let controller else { return }
+                self.updateBackGesture(for: controller, retryCount: retryCount + 1)
+            }
+            return
+        }
         applyBackGesture(for: controller, in: navigationController)
     }
 
@@ -340,13 +355,10 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
             hostInteractivePopGestureEnabled =
                 navigationController.interactivePopGestureRecognizer?.isEnabled
         }
-        // UINavigationController 被壳接管 delegate 后，UIKit 默认的 interactive-pop
-        // delegate 在部分系统版本不会再允许启动。Lynx 页面可见期间由壳做同等边界判断，
-        // 离开 Lynx 栈时在 releaseBackGestureOwnership() 中恢复宿主 delegate。
-        if let systemPop = navigationController.interactivePopGestureRecognizer,
-           systemPop.delegate !== self {
-            hostInteractivePopGestureDelegate = systemPop.delegate
-            systemPop.delegate = self
+        if !hostInteractivePopGestureDelegateCaptured {
+            hostInteractivePopGestureDelegate =
+                navigationController.interactivePopGestureRecognizer?.delegate
+            hostInteractivePopGestureDelegateCaptured = true
         }
         let canGoBack = controller.request.backGestureEnabled &&
             navigationController.viewControllers.count > 1
@@ -354,15 +366,39 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
             controller.request.transitionSpec.popGesture.enabled
         let spec = controller.request.transitionSpec
         let style = spec.baseEffectiveStyle
-        let usesCustom = gestureAllowed && spec.usesCustomAnimator && style != .none
+        let isStandardHorizontalPop = spec.routeType == nil &&
+            spec.popGesture.direction == .horizontal &&
+            !spec.popGesture.fullScreen
+        // 普通页面也使用壳的 edge-pan 交互返回。这样不依赖 UIKit 私有
+        // interactive-pop delegate 与 ShellNavigationDelegateMux 的组合行为。
+        let usesCustom = gestureAllowed &&
+            (spec.usesCustomAnimator || isStandardHorizontalPop) &&
+            style != .none
         let usesFullPan = usesCustom && (
             spec.popGesture.fullScreen ||
                 spec.popGesture.direction != .horizontal
         )
+
+        if let systemPop = navigationController.interactivePopGestureRecognizer {
+            if usesCustom {
+                // 自定义横向转场需要壳接管系统 recognizer 的 shouldBegin；系统 recognizer
+                // 本身保持关闭，避免和 edgePan 同时消费一次返回手势。
+                if systemPop.delegate !== self {
+                    systemPop.delegate = self
+                }
+            } else if systemPop.delegate !== self {
+                // 普通横向页面也由同一个协调器做边界判断；关键是必须在转场收口后
+                // 设置，避免 UIKit 后续把 recognizer delegate/开关重置成上一页状态。
+                systemPop.delegate = self
+            }
+        }
         edgePan.isEnabled = usesCustom && !usesFullPan
         fullPan.isEnabled = usesFullPan
         navigationController.interactivePopGestureRecognizer?.isEnabled =
-            gestureAllowed && !usesCustom && style != .none
+            // 普通横向页面交给 UIKit；即使调用方关闭了入场动画，也不能因此
+            // 把返回手势一起关闭。BottomSheet/heroSheet 使用 vertical popGesture，
+            // 不会进入这条系统横向路径。
+            gestureAllowed && !usesCustom
     }
 
     /**
@@ -384,6 +420,13 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
         }
         hostInteractivePopGestureEnabled = nil
         hostInteractivePopGestureDelegate = nil
+        hostInteractivePopGestureDelegateCaptured = false
+    }
+
+    /** 宿主开启全局 UINavigationController 返回时，壳释放所有 recognizer 所有权。 */
+    func relinquishBackGestureOwnership() {
+        releaseBackGestureOwnership()
+        navigationController?.interactivePopGestureRecognizer?.isEnabled = true
     }
 
     func animationController(
@@ -520,8 +563,7 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
         // 处理，避免同一个手势被两个 percent-driven 事务同时消费。
         if gestureRecognizer === navigationController.interactivePopGestureRecognizer {
             let spec = current.request.transitionSpec
-            return spec.baseEffectiveStyle != .none &&
-                !spec.usesCustomAnimator &&
+            return !spec.usesCustomAnimator &&
                 spec.popGesture.direction == .horizontal &&
                 !spec.popGesture.fullScreen
         }
@@ -861,7 +903,11 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
         let target = navigationController.viewControllers[
             navigationController.viewControllers.count - 2
         ]
-        let transaction = makeProgrammaticPop(from: source, to: target)
+        let transaction = makeProgrammaticPop(
+            from: source,
+            to: target,
+            forceCustomAnimator: true
+        )
         if transaction.effective == .sharedElement {
             let eligibleKeys = Set(
                 transaction.spec.sharedElements
@@ -952,13 +998,15 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
 
     private func makeProgrammaticPop(
         from source: LynxContainerViewController,
-        to target: UIViewController
+        to target: UIViewController,
+        forceCustomAnimator: Bool = false
     ) -> Transaction {
         makePopTransaction(
             spec: source.request.transitionSpec,
             from: source,
             to: target,
-            routeKey: (target as? LynxContainerViewController)?.routeKey ?? "host"
+            routeKey: (target as? LynxContainerViewController)?.routeKey ?? "host",
+            forceCustomAnimator: forceCustomAnimator
         )
     }
 

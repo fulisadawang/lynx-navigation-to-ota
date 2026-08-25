@@ -33,9 +33,9 @@ export default defineConfig({
     },
   },
   output: {
-    // iOS 以 folder reference 的方式把 Bundles 整体拷入 App。
-    // 静态图片因此也必须从 Bundles 子目录解析。
-    assetPrefix: 'asset:///Bundles/',
+    // 使用小写 bundles 作为跨端逻辑资源前缀；iOS Provider 会把 bundles/ 映射到
+    // App Bundle 内实际的 Bundles folder reference，Android/HarmonyOS 保持小写路径。
+    assetPrefix: 'asset:///bundles/',
     filename: {
       bundle: '[name].lynx.bundle',
     },

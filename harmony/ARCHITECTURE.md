@@ -2,7 +2,9 @@
 
 ## 启动层
 
-`LynxAbilityStage` 只初始化 ImageKnife 文件缓存。`EntryAbility` 负责 Service/LynxEnv 初始化、WindowStage 保存、系统配置更新和深链暂存。
+`LynxAbilityStage` 只保留 Stage 生命周期入口。ImageKnife、Service、LynxEnv 与 XElement 统一由
+HAR 的 `LynxRuntimeInitializer` 初始化，保证 Entry 只直接依赖 `@lynx/lynx-shell-kit`；
+`EntryAbility` 负责 WindowStage 保存、OTA 配置、系统配置更新和深链暂存。
 
 初始化顺序固定为：
 

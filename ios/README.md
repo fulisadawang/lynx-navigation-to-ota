@@ -48,10 +48,11 @@ xcodegen generate
 pod install
 ```
 
-当前冷启动默认从原生宿主页自动进入 `main.lynx.bundle` Playground；
-`LynxShellSample/UI/LauncherViewController` 继续作为宿主页锚点，提供“打开 Playground”、
-OTA 打开和本地 OTA Bundle 删除入口。调试时传 `--show-native-launcher` 可停留在原生页，
-业务深链仍优先由 `LynxRouter` 解析并进入 Native Page Stack。普通本地 Bundle 可放在：
+当前冷启动默认从原生宿主页自动进入与 Android 一致的 `10000001/home.lynx.bundle` OTA
+验收首页；`LynxShellSample/UI/LauncherViewController` 继续作为宿主页锚点，提供“打开 OTA
+验收首页”“打开 Playground”“打开原生 Tab Demo”和本地 OTA Bundle 删除入口。调试时传
+`--show-native-launcher` 可停留在原生页，业务深链仍优先由 `LynxRouter` 解析并进入 Native
+Page Stack。普通本地 Bundle 可放在：
 
 ```text
 LynxShellSample/Resources/Bundles
@@ -81,6 +82,35 @@ try LynxRouter.install(to: navigationController, otaConfiguration: ota)
 
 随后使用 `LynxRouter.open(lynxAppId:bundleName:params:)`。命中本地 current 会立即打开并
 后台检查，缺包/损坏时显示原生 Loading；直接 HTTPS Bundle 不进入 OTA Store。
+
+Sample Debug 的 OTA 配置约定：`Info-Debug.plist` 提供测试环境 API 地址，
+`LynxOtaClientToken` 只从 `LYNX_OTA_CLIENT_TOKEN` 环境变量或 Xcode Build Setting 注入。
+Xcode 的 Run Scheme 可在 **Arguments > Environment Variables** 增加同名变量；命令行构建也可
+使用 `xcodebuild ... LYNX_OTA_CLIENT_TOKEN="$LYNX_OTA_CLIENT_TOKEN"`。没有注入 token 时，
+Router 会明确安装 `LynxEmbeddedOnlyRuntime`，只读 embedded Manifest，不会请求 OTA，这不是
+服务端接口失败。
+
+Sample 默认首页通过 embedded Manifest 按 `bundleName=main.lynx.bundle` 解析真实
+`lynxAppId`，再进入同一套 OTA/embedded 选择链路，不再用 `assets://` 绕过 OTA。打开时先
+`resolveCurrent` cache-first；命中 remote current 后按 App ID 30 分钟门控后台检查，Tab 只读
+`resolveCurrent`。current 首屏失败时先恢复 previous；没有 previous 但存在 embedded baseline
+时删除该 App ID 的坏 downloaded current，下一次加载直接回到 App Bundle baseline。
+
+普通横向页面默认开启 iOS 左侧边缘侧滑返回，由壳统一的 edge gesture 驱动可交互 pop；只有
+显式 `backGestureEnabled=false` 才关闭。自定义横向转场复用同一套 edge gesture，
+`bottomSheet`/`heroSheet` 仍分别使用下拉/纵向关闭，不会被横向手势抢占。
+
+### Sample 全局导航与 Native Tab Demo
+
+Debug Sample 使用 `DemoNavigationController` 作为全局原生导航承载：Lynx 页面打开后显示
+原生 `UINavigationBar`、标题、返回按钮和全局 `interactivePopGestureRecognizer`。这只是 Demo
+验收模式；业务 App 默认仍由自己的 Coordinator 决定导航栏和返回手势。
+
+Native Tab Demo 的两个 Tab 都从 embedded Manifest 解析 `main.lynx.bundle` 的真实 App ID，
+再调用 `resolveCurrent` cache-only 读取同一个 OTA current。Tab Home/Settings 只通过
+`native_tab_id` 改变页面展示状态，不更换 Bundle；因此 Tab Home 与单独打开 Playground
+`main.lynx.bundle` 的 Bundle、releaseId 和内容来源一致。Demo 顶部“刷新 OTA”会先做一次全量
+同步，再让两个 Tab 重新读取已经提交的 current。
 
 ## 默认沉浸式容器
 

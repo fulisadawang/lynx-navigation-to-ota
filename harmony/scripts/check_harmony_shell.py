@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -98,6 +99,8 @@ def expected_files() -> None:
         "lynx_shell_kit/src/main/ets/common/ShellTypes.ets",
         "lynx_shell_kit/src/main/ets/module/LynxShellModule.ets",
         "lynx_shell_kit/src/main/ets/pages/LynxContainer.ets",
+        "lynx_shell_kit/src/main/ets/pages/LynxTabContainer.ets",
+        "lynx_shell_kit/src/main/ets/ota/EmbeddedBundleRegistry.ets",
         "lynx_shell_kit/src/main/ets/ota/OtaModels.ets",
         "lynx_shell_kit/src/main/ets/ota/OtaJson.ets",
         "lynx_shell_kit/src/main/ets/ota/OtaApiClient.ets",
@@ -106,6 +109,7 @@ def expected_files() -> None:
         "lynx_shell/src/main/resources/base/profile/main_pages.json",
         "lynx_shell_kit/src/main/module.json5",
         "lynx_shell/src/main/resources/rawfile/bundles/README.md",
+        "lynx_shell/src/main/resources/rawfile/bundles/lynx/embedded-bundles.json",
         "scripts/sync_bundle.sh",
         "examples/lynx-shell-module.d.ts",
         "integration/sparkling/README.md",
@@ -397,8 +401,13 @@ def comments_and_structure() -> None:
     index = read("lynx_shell/src/main/ets/pages/Index.ets")
     require(all(name in index for name in ["Scroll()", "Column(", "Text(", "Button("]), "HarmonyOS 启动页使用原生 ArkUI 组件")
     require(
-        "TextInput(" not in index and "ShellConstants.DEFAULT_ROUTE" not in index,
-        "HarmonyOS 默认首页不再暴露输入地址或 main.lynx.bundle 入口",
+        "TextInput(" not in index and all(marker in index for marker in [
+            "otaTestAppId: string = '10000001'",
+            "otaHomeBundleName: string = 'home.lynx.bundle'",
+            "playgroundBundleName: string = 'main.lynx.bundle'",
+            "openDefaultOtaHome()",
+        ]),
+        "HarmonyOS 默认精确进入 10000001/home，Launcher 保留 main 与原生 Tabs 入口",
     )
     require(
         all(marker in index for marker in ["原生壳", "OTA 验收入口", "删除全部 OTA Bundle", "platform=android", "后端开放 harmony"]),
@@ -415,22 +424,150 @@ def comments_and_structure() -> None:
     provider = shell_read("src/main/ets/provider/ShellTemplateResourceFetcher.ets")
     transaction = shell_read("src/main/ets/ota/ReleaseTransaction.ets")
     runtime = shell_read("src/main/ets/ota/LynxOtaRuntime.ets")
-    require(all(marker in router for marker in ["openOta(", "deleteOtaBundles(", "deleteAllOtaBundles("]), "HarmonyOS Router 暴露 appId + bundleName OTA 与删除 API")
+    require(all(marker in router for marker in [
+        "openOta(", "openEmbedded(", "embeddedIdentity(", "refreshAllOtaBundles(",
+        "deleteOtaBundles(", "deleteAllOtaBundles("
+    ]), "HarmonyOS Router 暴露 Manifest 身份、主动刷新、appId + bundleName OTA 与删除 API")
     require(all(marker in container for marker in ["prepareOtaBundle", "正在准备 OTA 页面", "attemptRollback", "PreparedPageBundle"]), "HarmonyOS 容器先 prepare/Loading 后创建 LynxView，首屏失败只回滚一次")
-    require(all(marker in provider for marker in ["loadPreparedFile", "preparedStorageRoot", "ArrayBuffer", "NOFOLLOW"]), "HarmonyOS Provider 把受控 prepared file 读取为 Lynx ArrayBuffer")
+    require(
+        all(marker in provider for marker in ["loadPreparedBundle", "preparedStorageRoot", "ArrayBuffer"]) and
+        ("preparedBytes" in provider or "NOFOLLOW" in provider),
+        "HarmonyOS Provider 读取 direct rawfile bytes 或受控 prepared file 为 Lynx ArrayBuffer",
+    )
     require(
         all(marker in transaction for marker in [".staging", "bundleSha256", "fs.fsyncSync", "deleteAllBundles"])
         and ("current:" in transaction or "currentReleaseId" in transaction)
         and ("previous:" in transaction or "previousReleaseId" in transaction),
         "HarmonyOS ReleaseTransaction 包含 staging/SHA/state/current-previous/直接删除",
     )
-    require(all(marker in runtime for marker in ["syncAllBundlesAsync", "pageRefreshIntervalMillis", "ensureBundleReady", "rollback("]), "HarmonyOS OTA Runtime 对齐启动全量、页面 30 分钟、repair 与 rollback")
+    require(all(marker in runtime for marker in [
+        "syncAllBundlesAsync", "refreshAllBundles", "fullSyncWaiters", "pageRefreshIntervalMillis",
+        "ensureBundleReady", "embeddedBundleRegistry.containsApp", "transaction.deleteBundles", "rollback("
+    ]), "HarmonyOS OTA Runtime 对齐启动/主动全量、页面 30 分钟、repair 与 previous/embedded rollback")
     ota_models = shell_read("src/main/ets/ota/OtaModels.ets")
     require("platform: string = 'harmony'" in ota_models and "serverPlatform: string = ''" in ota_models,
             "HarmonyOS OTA 保留宿主平台，并支持可撤销的服务端 platform 兼容值")
     require("requestPlatform()" in ota_models and "config.requestPlatform()" in shell_read("src/main/ets/ota/OtaApiClient.ets") and
             "config.requestPlatform()" in transaction,
             "HarmonyOS OTA 请求、Manifest 与 Release 校验统一使用服务端 platform")
+
+
+def native_tab_ota_parity() -> None:
+    index = read("lynx_shell/src/main/ets/pages/Index.ets")
+    tab = shell_read("src/main/ets/pages/LynxTabContainer.ets")
+    router = shell_read("src/main/ets/routing/LynxRouter.ets")
+    runtime = shell_read("src/main/ets/ota/LynxOtaRuntime.ets")
+    registry = shell_read("src/main/ets/ota/EmbeddedBundleRegistry.ets")
+    transaction = shell_read("src/main/ets/ota/ReleaseTransaction.ets")
+    initializer = shell_read("src/main/ets/common/LynxRuntimeInitializer.ets")
+    ability_stage = read("lynx_shell/src/main/ets/entryability/LynxAbilityStage.ets")
+
+    require(
+        all(marker in index for marker in [
+            "LynxRouter.openEmbedded(",
+            "LynxRouter.embeddedIdentity(this.playgroundBundleName, this.otaTestAppId)",
+            "lynxAppId: this.tabLynxAppId",
+            "bundleName: this.tabBundleName",
+            "native_tab_id",
+        ]) and "lynxAppId: ''" not in index and "bundleName: ''" not in index,
+        "HarmonyOS Home/Playground/两个原生 Tab 均使用 Manifest 解析出的非空 OTA 身份",
+    )
+    require(
+        all(marker in index for marker in [
+            "LynxRouter.refreshAllOtaBundles()",
+            "this.tabReloadGeneration += 1",
+            "refreshGeneration: this.tabReloadGeneration",
+            "OTA 同步失败，保留当前 Tab 版本",
+        ]),
+        "HarmonyOS 主动 OTA 成功后才重载 Tab，失败保留当前实例",
+    )
+    require(
+        "runtime.resolveCurrent(" in tab and "runtime.prepare(" not in tab and
+        "runtime.refreshAppBundleIfNeeded(" not in tab,
+        "HarmonyOS Tab 严格 cache-only，不调用 repair 或页面后台刷新",
+    )
+    require(
+        all(marker in tab for marker in [
+            "source: prepared.source ?? 'ota_current'",
+            "loadPolicy: 'cache_only'",
+            "__lynxRouterNavigationModel'] = 'native_tab_host'",
+            "__lynxRouterPlatformContainer'] = 'arkui_tab_container'",
+        ]) and "'tab_cache'" not in tab,
+        "HarmonyOS Tab 保留真实 Bundle source，并单独标记 cache-only 与原生 Tab 容器",
+    )
+    require(
+        all(marker in tab for marker in [
+            "@Prop @Watch('onRefreshGenerationChanged')",
+            "reloadFromCurrent()",
+            "aboutToBeDeleted()",
+            "ShellMessageHub.unregister(this.request.entryID)",
+        ]),
+        "HarmonyOS Tab 支持显式重建、最终销毁清理和普通切换实例复用",
+    )
+    disappear_match = re.search(r"aboutToDisappear\(\): void \{(?P<body>.*?)\n  \}", tab, re.DOTALL)
+    require(
+        disappear_match is not None and "prepareGeneration +=" not in disappear_match.group("body"),
+        "HarmonyOS 快速切换 Tab 不会取消首次 cache-only 解析并永久卡 Loading",
+    )
+    require(
+        all(marker in router for marker in ["openEmbedded(", "embeddedIdentity(", "refreshAllOtaBundles("]) and
+        all(marker in registry for marker in ["identity(", "containsApp(", "storageRoot(): string"]),
+        "HarmonyOS Router/Registry 具备精确 Manifest 身份和可等待主动刷新接缝",
+    )
+    require(
+        all(marker in runtime for marker in [
+            "refreshAllBundles(): Promise<boolean>", "fullSyncWaiters", "fullSyncPending",
+            "embeddedBundleRegistry.containsApp", "restored=embedded",
+        ]),
+        "HarmonyOS 全量同步合并并通知等待者，无 previous 时回 rawfile baseline",
+    )
+    require(
+        all(marker in transaction for marker in [
+            "source: 'ota_current'", "String(stat.mtime)", "String(stat.ctime)", "stat.ino.toString()"
+        ]),
+        "HarmonyOS 进程内 SHA 缓存包含 release、size、mtime、ctime 与 inode 文件指纹",
+    )
+    require(
+        "ImageKnife.getInstance().initFileCache(context)" in initializer and
+        "@ohos/imageknifepro" not in ability_stage,
+        "HarmonyOS ImageKnife 由唯一 HAR Module 初始化，Entry 只依赖 LynxShellKit",
+    )
+
+    manifest_path = ROOT / "lynx_shell/src/main/resources/rawfile/bundles/lynx/embedded-bundles.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    apps = manifest.get("apps", [])
+    expected_app = next((app for app in apps if app.get("lynxAppId") == "10000001"), None)
+    expected_names = {item.get("bundleName") for item in expected_app.get("bundles", [])} if expected_app else set()
+    require(
+        expected_app is not None and {"home.lynx.bundle", "main.lynx.bundle"}.issubset(expected_names),
+        "HarmonyOS embedded baseline 包含 10000001 的 home 与 main 验收 Bundle",
+    )
+
+    resource_errors: list[str] = []
+    identities: set[tuple[str, str]] = set()
+    for app in apps:
+        app_id = str(app.get("lynxAppId", ""))
+        for bundle in app.get("bundles", []):
+            bundle_name = str(bundle.get("bundleName", ""))
+            identity = (app_id, bundle_name)
+            if identity in identities:
+                resource_errors.append(f"重复身份 {app_id}/{bundle_name}")
+            identities.add(identity)
+            asset_path = ROOT / "lynx_shell/src/main/resources/rawfile" / str(bundle.get("assetPath", ""))
+            if not asset_path.is_file():
+                resource_errors.append(f"资源不存在 {asset_path.relative_to(ROOT)}")
+                continue
+            payload = asset_path.read_bytes()
+            expected_sha = str(bundle.get("sha256", "")).removeprefix("sha256:").lower()
+            if len(payload) != bundle.get("size"):
+                resource_errors.append(f"size 不一致 {app_id}/{bundle_name}")
+            if hashlib.sha256(payload).hexdigest() != expected_sha:
+                resource_errors.append(f"sha256 不一致 {app_id}/{bundle_name}")
+    require(
+        not resource_errors,
+        "HarmonyOS embedded Manifest 与 rawfile 的身份/size/SHA 全量一致" if not resource_errors
+        else "; ".join(resource_errors[:8]),
+    )
 
 
 def structural_text(text: str) -> str:
@@ -516,6 +653,7 @@ def main() -> int:
         manifest_and_permissions,
         sparkling_boundary,
         comments_and_structure,
+        native_tab_ota_parity,
         delimiter_and_script_syntax,
     ]
     for check in checks:

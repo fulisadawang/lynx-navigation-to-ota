@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Lynx
 
 /**
@@ -269,5 +270,144 @@ private enum TemplateError: LocalizedError {
         case .emptyBundle: return "Bundle 内容为空"
         case .bundleTooLarge: return "Bundle 超过 20MB 限制"
         }
+    }
+}
+
+/** 多个内置 Lynx App 共用的资源索引；不通过目录扫描猜测 lynxAppId。 */
+struct EmbeddedBundleDescriptor {
+    let lynxAppId: String
+    let releaseId: String
+    let bundleName: String
+    let fileURL: URL
+    let size: Int
+    let sha256: String
+}
+
+/**
+ * 读取 App Bundle 中的 embedded registry，并按 Manifest 校验 size/SHA。
+ *
+ * Manifest 的逻辑 assetPath 使用 `bundles/...`；iOS 的 `Bundles` folder reference
+ * 已经是资源根目录，因此实际 URL 会去掉这一层前缀。
+ */
+final class EmbeddedBundleRegistry {
+    private struct Manifest: Decodable {
+        let schemaVersion: Int
+        let apps: [App]
+    }
+
+    private struct App: Decodable {
+        let lynxAppId: String
+        let releaseId: String
+        let bundles: [ManifestBundle]
+    }
+
+    private struct ManifestBundle: Decodable {
+        let bundleName: String
+        let assetPath: String
+        let size: Int
+        let sha256: String
+    }
+
+    private let resourceBundle: Foundation.Bundle
+    private let entries: [App]
+
+    init(resourceBundle: Foundation.Bundle = .main) {
+        self.resourceBundle = resourceBundle
+        guard let manifestURL = resourceBundle.url(
+            forResource: "embedded-bundles",
+            withExtension: "json",
+            subdirectory: "Bundles/lynx"
+        ) else {
+            entries = []
+            return
+        }
+        do {
+            let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
+            guard manifest.schemaVersion == 1 else {
+                throw NSError(domain: "LynxShellEmbedded", code: 1001, userInfo: [
+                    NSLocalizedDescriptionKey: "内置 Bundle Manifest schemaVersion 不支持"
+                ])
+            }
+            entries = manifest.apps
+        } catch {
+            // Manifest 存在但损坏时不能静默把错误 Bundle 当普通资源使用。
+            fatalError("内置 Bundle Manifest 读取失败：\(error.localizedDescription)")
+        }
+    }
+
+    func resolve(lynxAppId: String, bundleName: String) throws -> EmbeddedBundleDescriptor? {
+        guard let app = entries.first(where: { $0.lynxAppId == lynxAppId }),
+              let bundle = app.bundles.first(where: { $0.bundleName == bundleName }) else {
+            return nil
+        }
+        let logicalPath = try validateAssetPath(bundle.assetPath)
+        let shaBody = String(bundle.sha256.dropFirst("sha256:".count))
+        guard bundle.sha256.hasPrefix("sha256:"),
+              shaBody.count == 64,
+              shaBody.allSatisfy({ $0.isHexDigit }) else {
+            throw NSError(domain: "LynxShellEmbedded", code: 1006, userInfo: [
+                NSLocalizedDescriptionKey: "内置 Bundle sha256 格式错误：\(bundle.sha256)"
+            ])
+        }
+        guard let resourceRoot = resourceBundle.resourceURL else {
+            throw NSError(domain: "LynxShellEmbedded", code: 1002, userInfo: [
+                NSLocalizedDescriptionKey: "App Bundle 缺少资源根目录"
+            ])
+        }
+        let fileURL = resourceRoot
+            .appendingPathComponent("Bundles", isDirectory: true)
+            .appendingPathComponent(logicalPath, isDirectory: false)
+        let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+        guard data.count == bundle.size else {
+            throw NSError(domain: "LynxShellEmbedded", code: 1003, userInfo: [
+                NSLocalizedDescriptionKey: "内置 Bundle size 校验失败：\(bundle.assetPath)"
+            ])
+        }
+        let actual = "sha256:\(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined())"
+        guard actual.caseInsensitiveCompare(bundle.sha256) == .orderedSame else {
+            throw NSError(domain: "LynxShellEmbedded", code: 1004, userInfo: [
+                NSLocalizedDescriptionKey: "内置 Bundle SHA-256 校验失败：\(bundle.assetPath)"
+            ])
+        }
+        return EmbeddedBundleDescriptor(
+            lynxAppId: app.lynxAppId,
+            releaseId: app.releaseId,
+            bundleName: bundle.bundleName,
+            fileURL: fileURL,
+            size: bundle.size,
+            sha256: bundle.sha256
+        )
+    }
+
+    func firstIdentity() -> (lynxAppId: String, bundleName: String)? {
+        guard let app = entries.first, let bundle = app.bundles.first else { return nil }
+        return (app.lynxAppId, bundle.bundleName)
+    }
+
+    /** 按内置 Manifest 查找 Bundle 身份，供 Demo/宿主避免自行猜测 App ID。 */
+    func identity(bundleName: String) -> (lynxAppId: String, bundleName: String)? {
+        for app in entries where app.bundles.contains(where: { $0.bundleName == bundleName }) {
+            return (app.lynxAppId, bundleName)
+        }
+        return nil
+    }
+
+    /** 判断 App ID 是否存在随包 baseline；只查 Manifest，不读取或复制 Bundle。 */
+    func containsApp(lynxAppId: String) -> Bool {
+        entries.contains { $0.lynxAppId == lynxAppId }
+    }
+
+    private func validateAssetPath(_ value: String) throws -> String {
+        let segments = value.split(separator: "/", omittingEmptySubsequences: false)
+        guard value.hasPrefix("bundles/"),
+              value.lowercased().hasSuffix(".lynx.bundle"),
+              !value.hasPrefix("/"),
+              !value.contains("\\"),
+              !segments.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else {
+            throw NSError(domain: "LynxShellEmbedded", code: 1005, userInfo: [
+                NSLocalizedDescriptionKey: "内置 Bundle assetPath 不安全：\(value)"
+            ])
+        }
+        return String(value.dropFirst("bundles/".count))
     }
 }

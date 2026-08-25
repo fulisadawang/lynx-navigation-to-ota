@@ -22,6 +22,50 @@ interface Category {
   items: DemoItem[]
 }
 
+interface BundleRuntimeMeta {
+  lynxAppId?: string
+  releaseId?: string
+  source?: string
+  bundleName?: string
+  sha256?: string
+}
+
+function readBundleRuntimeMeta(): BundleRuntimeMeta {
+  const globalProps = ((lynx.__globalProps || {}) as unknown) as Record<string, unknown>
+  const raw = globalProps.__lynxBundleMeta
+  if (raw && typeof raw === 'object') {
+    const value = raw as Record<string, unknown>
+    return {
+      lynxAppId: typeof value.lynxAppId === 'string' ? value.lynxAppId : undefined,
+      releaseId: typeof value.releaseId === 'string' ? value.releaseId : undefined,
+      source: typeof value.source === 'string' ? value.source : undefined,
+      bundleName: typeof value.bundleName === 'string' ? value.bundleName : undefined,
+      sha256: typeof value.sha256 === 'string' ? value.sha256 : undefined,
+    }
+  }
+
+  const queryItems = globalProps.queryItems
+  const query = queryItems && typeof queryItems === 'object'
+    ? queryItems as Record<string, unknown>
+    : {}
+  return {
+    lynxAppId: typeof query.lynxAppId === 'string' ? query.lynxAppId : undefined,
+    bundleName: typeof query.bundleName === 'string' ? query.bundleName : undefined,
+    source: 'direct_asset',
+  }
+}
+
+function bundleSourceLabel(source: string | undefined): string {
+  switch (source) {
+    case 'embedded_baseline': return '内置 baseline'
+    case 'ota_current': return 'OTA current'
+    case 'rollback_fallback': return '回滚 fallback'
+    case 'tab_cache': return 'Tab cache-only'
+    case 'direct_asset': return 'Direct Asset'
+    default: return source || '未提供来源'
+  }
+}
+
 const CATEGORIES: Category[] = [
   {
     name: '路由与导航',
@@ -75,6 +119,7 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
   const [openResult, setOpenResult] = useState('')
   const [recentUrls, setRecentUrls] = useState<string[]>([])
   const isDark = resolved === 'dark'
+  const bundleMeta = readBundleRuntimeMeta()
 
   useEffect(() => {
     if (props.showPage) {
@@ -228,6 +273,37 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
           </view>
         </view>
 
+        {/* Bundle Runtime Metadata */}
+        <view className={dk('bundle-meta-card')}>
+          <view className="bundle-meta-header">
+            <view className="bundle-meta-status-dot" />
+            <text className={dk('bundle-meta-title')}>当前实际加载的 Bundle</text>
+          </view>
+          <view className="bundle-meta-grid">
+            <view className="bundle-meta-item">
+              <text className={dk('bundle-meta-label')}>App ID</text>
+              <text className={dk('bundle-meta-value')}>{bundleMeta.lynxAppId || '—'}</text>
+            </view>
+            <view className="bundle-meta-item">
+              <text className={dk('bundle-meta-label')}>Release</text>
+              <text className={dk('bundle-meta-value')}>{bundleMeta.releaseId || '未提供'}</text>
+            </view>
+            <view className="bundle-meta-item bundle-meta-item--wide">
+              <text className={dk('bundle-meta-label')}>来源</text>
+              <text className={dk('bundle-meta-value')}>{bundleSourceLabel(bundleMeta.source)}</text>
+            </view>
+            <view className="bundle-meta-item bundle-meta-item--wide">
+              <text className={dk('bundle-meta-label')}>Bundle</text>
+              <text className={dk('bundle-meta-value')}>{bundleMeta.bundleName || 'main.lynx.bundle'}</text>
+            </view>
+          </view>
+          {bundleMeta.sha256 ? (
+            <text className={dk('bundle-meta-hash')}>{bundleMeta.sha256}</text>
+          ) : (
+            <text className={dk('bundle-meta-hint')}>OTA 页面会显示服务端 releaseId；切换版本后重开页面即可核对</text>
+          )}
+        </view>
+
         {/* Open Page Card */}
         <view className={dk('card')}>
           <view className="card-header-row">
@@ -339,7 +415,7 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
         {/* Version Footer */}
         <view className="home-footer">
           <text className={dk('home-footer-text')}>
-            Sparkling Playground · Lynx 4.0
+            Sparkling Playground · Lynx 4.0 · {bundleSourceLabel(bundleMeta.source)}
           </text>
         </view>
       </view>
@@ -605,6 +681,21 @@ function MainContent() {
   const hasNativeNavBar = queryItems.hide_nav_bar !== '1'
   const topInset = hasNativeNavBar ? 0 : (Number(gp.topHeight) || 0)
   const bottomInset = Number(gp.bottomHeight) || 0
+
+  // Native Tab Host mode: the host owns tab selection and bottom chrome. Lynx only
+  // renders the requested tab content, so an Android Fragment/iOS UIViewController/
+  // Harmony Container can keep this page alive without duplicating a Lynx TabBar.
+  const nativeTabId = String(queryItems.native_tab_id || '').toLowerCase()
+  if (nativeTabId === 'home' || nativeTabId === 'settings') {
+    return (
+      <view
+        className={`app-root ${isDark ? 'app-root--dark' : 'app-root--light'}`}
+      >
+        <HomePage showPage={nativeTabId === 'home'} topInset={topInset} />
+        <SettingsPage showPage={nativeTabId === 'settings'} topInset={topInset} />
+      </view>
+    )
+  }
 
   return (
     <view

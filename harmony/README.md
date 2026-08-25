@@ -242,6 +242,54 @@ OTA 与直连边界：
   Provider 接缝的临时内存边界，尚未等价于 Android 的流式落盘上限，需待目标 SDK 提供文件流
   API 后再收敛。
 
+### 与 Android 最终 OTA 策略对齐
+
+- Ability 启动/回前台：调用一次全量 `latest-bundle-list`，后台更新所有服务端返回的 App ID；
+  不把这次全量请求放进 Tab 切换。
+- 普通页面：先 `resolveCurrent` 读取已校验的 current 或 rawfile baseline；命中 remote current
+  后通过 App ID 级 30 分钟门控后台检查，首屏不等待网络。
+- 原生 Tab：只读 `resolveCurrent`，没有 active Bundle 就显示可重试错误，不 repair、不发网络请求；
+  用户主动刷新或下一次冷启动再消费已提交的新 current。
+- `ReleaseTransaction` 的 Bundle SHA 校验结果只保存在进程内有界 Map，Key 包含环境、App ID、
+  release、bundlePath、期望 SHA、文件大小、mtime、ctime 和 inode；不缓存 bytes、不落盘，
+  Release/文件指纹变化自动失效。
+- 首屏失败时先尝试 previous；没有 previous 但 Manifest 存在 rawfile baseline 时删除坏的
+  downloaded current，下一次 `prepare` 直接读 rawfile，不复制 baseline 到应用私有目录。
+
+### Demo 与 Android/iOS 的可见行为契约
+
+Harmony Sample 只使用平台原生 ArkUI 承载，行为与 Android/iOS 当前验收 Demo 对齐：
+
+```text
+冷启动（没有外部 deep link）
+  -> Manifest 精确解析 10000001/home.lynx.bundle
+  -> 统一 OTA current / embedded baseline 选择链路
+
+Playground 首页
+  -> Manifest 精确解析 10000001/main.lynx.bundle
+
+ArkUI Tabs Home / Settings
+  -> 同一个 10000001/main.lynx.bundle
+  -> 只调用 resolveCurrent
+  -> source 保留 ota_current / embedded_baseline
+  -> loadPolicy 单独标记 cache_only
+
+用户点击“刷新 OTA”
+  -> 等待全量 latest-bundle-list 和原子提交完成
+  -> 成功才递增 refreshGeneration，重建两个 LynxView
+  -> 失败保留当前 Tab 实例和版本
+```
+
+Tab 普通切换不会递增 `refreshGeneration`，因此保留 LynxView、滚动和页面状态，也不会触发网络。
+Manifest 身份缺失时直接显示错误，不静默降级成 `assets://` 直读。
+
+当前 checkout 已执行 `ohpm install`、`assembleHar` 和 `assembleApp`，HAR 与完整 App 均构建成功；
+`python3 scripts/check_harmony_shell.py --quiet` 为 `80 PASS / 0 WARN / 0 FAIL`。Pura 90 / HarmonyOS
+6.1.1(24) 模拟器已验证冷启动 `10000001/home.lynx.bundle`、Home Tab 的
+`10000001 / r20260823_qc8ffc / embedded baseline / main.lynx.bundle`、Settings 内容和 Tab 切换；
+普通 Home/Settings 往返前后 OTA 同步日志计数保持不变。主动刷新失败时旧 Tab/Release 保留。
+当前本机与模拟器无法连通测试 OTA 域名，因此在线刷新成功、remote current 和回滚仍需网络恢复后验收。
+
 它与 Android `LynxRouter.open(context, bundle, params)`、iOS
 `LynxRouter.open(bundle:params:)` 对齐；不需要预注册 routeId，也不引入 Fragment。
 

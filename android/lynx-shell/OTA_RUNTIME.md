@@ -11,7 +11,6 @@ LynxRouter.install(
     LynxOtaConfig(
         apiBaseUri = URI.create("https://lynx-ota-server.example.com"),
         hostApp = "capp",
-        defaultLynxAppId = "10000001",
         environment = "PROD",
         platform = "android",
         clientToken = BuildConfig.LYNX_OTA_CLIENT_TOKEN,
@@ -26,8 +25,8 @@ LynxRouter.install(
 ```kotlin
 LynxRouter.open(
     context = activity,
-    lynxAppId = "10000002",
-    bundleName = "pay.lynx.bundle",
+    lynxAppId = returnedBundle.lynxAppId,
+    bundleName = returnedBundle.bundleName,
     params = mapOf("orderNo" to "A1001"),
 )
 ```
@@ -38,6 +37,10 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 ## 生命周期和下载策略
 
 - Application 启动、回到前台：每次异步同步宿主下所有 appId，不走 30 分钟门控。
+- 全量响应中的 `bundleLists[*].lynxAppId` 是唯一身份来源；宿主不需要预置默认 App ID，SDK
+  按返回身份分别保存 current/previous 和 Bundle 文件。
+- APK 内置 baseline 只从 `AssetManager` 直接读取并校验，不复制到 `filesDir`；磁盘 Store
+  只保存远程下载的 Release 和事务状态。
 - 本地 current 通过 SHA 校验：合法旧版本立即打开，当前 appId 只有超过默认 30 分钟才在后台更新。
 - 本地缺包或 SHA 不一致：Activity 显示原生 Loading，只同步当前 appId，完成下载、大小/SHA
   校验和原子激活后再创建 LynxView；这条修复链路不受 30 分钟限制。
@@ -70,7 +73,7 @@ Release 目录，不把下载 Bundle 的绝对路径写入 state。
 
 ```kotlin
 // 只删除一个 appId 的 releases、staging 和下载指针
-LynxRouter.deleteOtaBundles("10000001") { success, message -> }
+LynxRouter.deleteOtaBundles(returnedBundle.lynxAppId) { success, message -> }
 
 // 删除 releases 下全部 appId 的 Bundle
 LynxRouter.deleteAllOtaBundles { success, message -> }
@@ -79,7 +82,7 @@ LynxRouter.deleteAllOtaBundles { success, message -> }
 Lynx 页面侧对应：
 
 ```ts
-NativeModules.LynxShellModule.deleteOtaBundles?.('10000001', (result) => {
+NativeModules.LynxShellModule.deleteOtaBundles?.(returnedBundle.lynxAppId, (result) => {
   if (result.code === 0) console.log('指定 appId 的 Bundle 已删除');
 });
 NativeModules.LynxShellModule.deleteAllOtaBundles?.((result) => {

@@ -7,7 +7,10 @@
   "scripts": {
     "build": "rspeedy build",
     "dev": "rspeedy dev",
-    "preview": "rspeedy preview"
+    "preview": "rspeedy preview",
+    "ota:publish": "node scripts/publish-ota-bundle.mjs",
+    "ota:publish:dry-run": "node scripts/publish-ota-bundle.mjs --dry-run",
+    "ota:build-and-publish": "pnpm build && node scripts/publish-ota-bundle.mjs"
   },
   "dependencies": {
     "@lynx-js/react": "0.116.5"
@@ -18,6 +21,7 @@
     "@lynx-js/rspeedy": "0.13.6",
     "@lynx-js/types": "3.7.0",
     "@rsbuild/core": "1.7.2",
+    "ali-oss": "6.23.0",
     "@types/react": "18.3.28",
     "typescript": "5.9.3"
   },

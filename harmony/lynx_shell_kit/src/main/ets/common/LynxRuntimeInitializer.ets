@@ -5,6 +5,7 @@ import { LynxDevToolService } from '@lynx/lynx_devtool_service';
 import { LynxHttpService } from '@lynx/lynx_http_service';
 import { LynxImageService } from '@lynx/lynx_image_service';
 import { LynxLogService } from '@lynx/lynx_log_service';
+import { ImageKnife } from '@ohos/imageknifepro';
 import ShellConstants from './ShellConstants';
 import XElementRuntime from './XElementRuntime';
 
@@ -22,6 +23,8 @@ export default class LynxRuntimeInitializer {
       return;
     }
 
+    // ImageKnife 是 HAR 的传递实现依赖；由 HAR 初始化，Entry 不需要直接声明第二个依赖。
+    ImageKnife.getInstance().initFileCache(context);
     LLog.useSysLog(true);
     LynxRuntimeInitializer.registerServices();
     LynxEnv.initialize(context);

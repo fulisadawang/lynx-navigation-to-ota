@@ -561,6 +561,10 @@ final class ShellNavigator: NSObject, UIAdaptivePresentationControllerDelegate {
 
     /** 当前容器显示时切换系统返回手势与壳自定义 edge 手势。 */
     func updateBackGesture(for controller: LynxContainerViewController) {
+        if LynxShell.hostManagesBackGesture() {
+            transitionCoordinator.relinquishBackGestureOwnership()
+            return
+        }
         if let controllerNavigation = controller.navigationController {
             activateTransitionCoordinator(on: controllerNavigation)
         }

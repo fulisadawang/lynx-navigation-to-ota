@@ -180,7 +180,7 @@ class OtaSdk {
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun reportPageOpen(pageId: Int, lynxAppId: String?, bundlePath: String?) {
-    val scopedLynxAppId = lynxAppId ?: configuration.lynxAppId
+    val scopedLynxAppId = lynxAppId ?: configuration.lynxAppId ?: return
     val current = getCurrentRelease(scopedLynxAppId) ?: return
     var matchedBundle: OtaModels.InstalledBundle? = null
     for (bundle in current.bundles) {
@@ -212,11 +212,13 @@ class OtaSdk {
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun rollback(reason: String): OtaModels.InstalledRelease? {
-    val current = getCurrentRelease(configuration.lynxAppId)
+    val configuredLynxAppId = configuration.lynxAppId
+      ?: throw OtaSdkException("rollback(reason) 需要明确的 lynxAppId；全量 OTA 配置不提供默认 App ID")
+    val current = getCurrentRelease(configuredLynxAppId)
     val scope = ReleaseTransaction.ReleaseScope(
       configuration.environment,
       configuration.hostApp,
-      configuration.lynxAppId,
+      configuredLynxAppId,
       configuration.platform,
     )
     val restored = releaseTransaction.rollback(scope)
@@ -282,7 +284,7 @@ class OtaSdk {
   /** 新增按 appId 的 rollback 入口，旧 rollback(reason) 继续保留。 */
   @Throws(IOException::class, OtaSdkException::class)
   fun rollback(lynxAppId: String, reason: String): OtaModels.InstalledRelease? {
-    if (lynxAppId == configuration.lynxAppId) {
+    if (configuration.lynxAppId != null && lynxAppId == configuration.lynxAppId) {
       return rollback(reason)
     }
     val restored = releaseTransaction.rollback(scopeFor(lynxAppId))
@@ -764,7 +766,7 @@ class OtaSdk {
   }
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
-  private fun reportLatestBundleListFailure(lynxAppId: String, error: Throwable, reasonCode: String) {
+  private fun reportLatestBundleListFailure(lynxAppId: String?, error: Throwable, reasonCode: String) {
     report(
       OtaModels.ReportEvent.CHECK_RESULT,
       null,

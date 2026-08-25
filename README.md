@@ -42,6 +42,9 @@ LynxNativeShells-4.0-XElement-Full-Android-iOS-Harmony/
 仓库已提供一份可直接发布的静态 API 文档页：
 
 - 本地文件：[docs/index.html](docs/index.html)
+- Bundle 路径说明：[docs/lynx-bundle-paths.html](docs/lynx-bundle-paths.html)
+- Bundle/OTA 验收清单：[docs/lynx-bundle-ota-test-checklist.md](docs/lynx-bundle-ota-test-checklist.md)
+- Bundle 版本可见性测试：[docs/lynx-bundle-version-visibility-test-case.md](docs/lynx-bundle-version-visibility-test-case.md)
 - 在线入口：`https://fulisadawang.github.io/lynx-navigation-to-ota/`
 - 页面内容：接口搜索与切换、请求头、全量/定向 `latest-bundle-list`、Manifest、策略匹配、
   结果上报、Bundle 校验、错误处理和三端状态。

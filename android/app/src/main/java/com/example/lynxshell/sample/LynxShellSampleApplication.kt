@@ -29,7 +29,6 @@ class LynxShellSampleApplication : Application() {
             LynxOtaConfig(
                 apiBaseUri = URI.create("https://lynx-ota-server.test.huangbaoche.com"),
                 hostApp = "capp",
-                defaultLynxAppId = "10000001",
                 environment = "TEST",
                 platform = "android",
                 clientToken = BuildConfig.LYNX_OTA_CLIENT_TOKEN,

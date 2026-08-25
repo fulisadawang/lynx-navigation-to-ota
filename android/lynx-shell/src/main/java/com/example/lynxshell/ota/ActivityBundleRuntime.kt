@@ -22,6 +22,20 @@ interface ActivityBundleRuntime {
     fun onApplicationForeground() = Unit
 
     /**
+     * 用户明确要求刷新时执行一次全量 OTA 同步；完成后由 Tab Host 重新读取本地 current。
+     * 默认实现用于 embedded-only 宿主，不发网络请求。
+     */
+    fun refreshAllBundles(onComplete: (success: Boolean) -> Unit = {}) {
+        onComplete(false)
+    }
+
+    /**
+     * 页面命中本地 OTA current 后的非阻塞 App ID 级后台检查。
+     * Native Tab 不调用此方法；OTA runtime 自己负责 30 分钟门控。
+     */
+    fun refreshAppBundleIfNeeded(lynxAppId: String) = Unit
+
+    /**
      * 为一次页面打开准备指定 appId 下的 Bundle。
      *
      * 典型实现先读取已提交 current；如果有可用旧版本可以立即返回，并在后台刷新当前
@@ -30,6 +44,12 @@ interface ActivityBundleRuntime {
      */
     @Throws(Exception::class)
     fun prepare(lynxAppId: String, bundleName: String): PreparedActivityBundle
+
+    /**
+     * 只读取启动同步后已经提交的 current；绝不下载、检查 Manifest 或触发后台刷新。
+     * Native Tab Container 只能使用这个 cache-only 入口，避免每次切 Tab 都访问网络。
+     */
+    fun resolveCurrent(lynxAppId: String, bundleName: String): PreparedActivityBundle? = null
 
     /**
      * 页面首屏失败时按 appId 回滚一次。没有可回滚版本时返回 false，避免误报成功。
@@ -51,6 +71,8 @@ data class PreparedActivityBundle(
     val bytes: ByteArray? = null,
     val releaseId: String? = null,
     val sha256: String? = null,
+    /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
+    val source: String = "ota_current",
 ) {
     init {
         require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }

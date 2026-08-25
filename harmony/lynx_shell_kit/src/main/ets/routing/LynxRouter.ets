@@ -11,6 +11,10 @@ import LynxRouteParser from './LynxRouteParser';
 import LynxNavigator from './LynxNavigator';
 import LynxOtaRuntime from '../ota/LynxOtaRuntime';
 import PageBundleRuntimeRegistry, { LynxOtaConfig } from '../ota/OtaModels';
+import EmbeddedBundleRegistry, {
+  EmbeddedBundleIdentity,
+  EmbeddedOnlyRuntime
+} from '../ota/EmbeddedBundleRegistry';
 
 /**
  * HarmonyOS 端与 Android `LynxRouter`、iOS `LynxRouter` 对齐的统一门面。
@@ -19,11 +23,14 @@ import PageBundleRuntimeRegistry, { LynxOtaConfig } from '../ota/OtaModels';
  * 业务只传 Bundle 与 params，不注册 routeId；旧的 LynxNavigator 仍导出给已有宿主使用。
  */
 export default class LynxRouter {
+  private static embeddedBundleRegistry: EmbeddedBundleRegistry | null = null;
+
   /** Application/Ability 创建第一个 Lynx Page 前调用一次。 */
   static install(context: common.UIAbilityContext, otaConfig?: LynxOtaConfig): LynxOtaRuntime | null {
     LynxRuntimeInitializer.initialize(context);
+    LynxRouter.embeddedBundleRegistry = new EmbeddedBundleRegistry(context);
     if (otaConfig === undefined) {
-      PageBundleRuntimeRegistry.install(null);
+      PageBundleRuntimeRegistry.install(new EmbeddedOnlyRuntime(context));
       return null;
     }
     const runtime = new LynxOtaRuntime(context, otaConfig);
@@ -35,6 +42,15 @@ export default class LynxRouter {
   /** 宿主回到前台时调用；每次触发全量 latest-bundle-list，不受页面 30 分钟门控影响。 */
   static onApplicationForeground(): void {
     PageBundleRuntimeRegistry.current()?.onApplicationForeground();
+  }
+
+  /** 用户主动刷新全量 OTA；成功后 Tab Host 才重新读取已经提交的 current。 */
+  static refreshAllOtaBundles(): Promise<boolean> {
+    const runtime = PageBundleRuntimeRegistry.current();
+    if (!(runtime instanceof LynxOtaRuntime)) {
+      return Promise.resolve(false);
+    }
+    return runtime.refreshAllBundles();
   }
 
   /**
@@ -98,10 +114,54 @@ export default class LynxRouter {
     return LynxNavigator.openResult(parsed.request, false, optionsJSON);
   }
 
+  /** Demo/宿主发现入口：App ID 和 BundleName 来自 rawfile Manifest，不由代码猜测。 */
+  static async openFirstEmbedded(
+    params: ShellRouterPayload = {},
+    options: ShellRouterPayload = {}
+  ): Promise<ShellBridgeResult> {
+    const embedded = await LynxRouter.embeddedBundleRegistry?.firstAvailable();
+    if (embedded === null || embedded === undefined) {
+      return { code: 1004, message: '内置 Manifest 没有可用 Bundle' };
+    }
+    return LynxRouter.openOta(embedded.lynxAppId, embedded.bundleName, params, options);
+  }
+
+  /**
+   * 按 embedded Manifest 的 BundleName 解析真实 App ID，再进入统一 OTA/current/baseline 链路。
+   * preferredLynxAppId 只用于明确选择同名 Bundle 所属 App；不存在时不做猜测或降级直读 assets。
+   */
+  static async openEmbedded(
+    bundleName: string,
+    params: ShellRouterPayload = {},
+    options: ShellRouterPayload = {},
+    preferredLynxAppId: string = ''
+  ): Promise<ShellBridgeResult> {
+    const identity = await LynxRouter.embeddedIdentity(bundleName, preferredLynxAppId);
+    if (identity === null) {
+      return {
+        code: 1004,
+        message: `内置 Manifest 没有找到 Bundle：${bundleName}`
+      };
+    }
+    return LynxRouter.openOta(identity.lynxAppId, identity.bundleName, params, options);
+  }
+
+  /** 返回 embedded Manifest 的稳定身份，供 Native Tab Descriptor 使用。 */
+  static embeddedIdentity(
+    bundleName: string,
+    preferredLynxAppId: string = ''
+  ): Promise<EmbeddedBundleIdentity | null> {
+    const registry = LynxRouter.embeddedBundleRegistry;
+    if (registry === null) {
+      return Promise.resolve(null);
+    }
+    return registry.identity(bundleName, preferredLynxAppId);
+  }
+
   /** 永久删除指定 appId 的磁盘 OTA Bundle，不生成备份目录。 */
   static deleteOtaBundles(lynxAppId: string): Promise<ShellBridgeResult> {
     const runtime = PageBundleRuntimeRegistry.current();
-    if (runtime === null) {
+    if (!(runtime instanceof LynxOtaRuntime)) {
       const result: ShellBridgeResult = { code: 1004, message: '当前没有安装 HarmonyOS OTA runtime' };
       return Promise.resolve(result);
     }
@@ -117,7 +177,7 @@ export default class LynxRouter {
   /** 永久删除所有 appId 的磁盘 OTA Bundle；HAP rawfile 不受影响。 */
   static deleteAllOtaBundles(): Promise<ShellBridgeResult> {
     const runtime = PageBundleRuntimeRegistry.current();
-    if (runtime === null) {
+    if (!(runtime instanceof LynxOtaRuntime)) {
       const result: ShellBridgeResult = { code: 1004, message: '当前没有安装 HarmonyOS OTA runtime' };
       return Promise.resolve(result);
     }

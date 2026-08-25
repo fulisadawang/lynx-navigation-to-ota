@@ -23,7 +23,9 @@ class LynxOtaRuntime(
     private val config: LynxOtaConfig,
 ) : ActivityBundleRuntime {
     private val appContext = context.applicationContext
-    private val sdk = OtaSdk(config.toSdkConfiguration(appContext))
+    private val sdkConfiguration = config.toSdkConfiguration(appContext)
+    private val sdk = OtaSdk(sdkConfiguration)
+    private val embeddedBundleRegistry = EmbeddedBundleRegistry(appContext)
     /** 生命周期刷新与页面后台刷新共用队列，避免同一个 SDK 实例并发提交激活事务。 */
     private val refreshExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "lynx-shell-ota-refresh").apply { isDaemon = true }
@@ -35,6 +37,8 @@ class LynxOtaRuntime(
     /** 全量同步不做 30 分钟限流；只合并重叠生命周期回调，避免同一时间并发请求。 */
     private var fullSyncInFlight = false
     private var fullSyncPending = false
+    private val fullSyncWaiters = ArrayList<(Boolean) -> Unit>()
+    private var legacyEmbeddedCleanupCompleted = false
 
     override fun onApplicationStarted() {
         syncAllBundlesAsync()
@@ -51,8 +55,9 @@ class LynxOtaRuntime(
      * 请求仍在执行，只合并为一次 pending 请求；当前请求结束后仍会补发，不会永久丢掉这次
      * 生命周期事件。
      */
-    fun syncAllBundlesAsync() {
+    fun syncAllBundlesAsync(onComplete: ((success: Boolean) -> Unit)? = null) {
         val shouldStart = synchronized(refreshStateLock) {
+            onComplete?.let(fullSyncWaiters::add)
             if (fullSyncInFlight) {
                 fullSyncPending = true
                 false
@@ -64,27 +69,56 @@ class LynxOtaRuntime(
         if (!shouldStart) return
 
         refreshExecutor.execute {
+            var success = false
             try {
+                cleanupLegacyEmbeddedCopies()
                 runCatching { sdk.syncLatestBundleLists() }
                     .onSuccess { result ->
+                        success = true
                         // 全量接口已经检查了返回快照中的 appId；页面紧接着打开时无需再
                         // 为同一个 appId 额外请求一次定向接口。
                         markPageRefreshSuccess(result.results.keys)
+                        Log.i(TAG, "全量 OTA 同步完成：收到 ${result.results.size} 个 App ID")
                     }
                     .onFailure { error ->
                         // 生命周期同步失败不能阻塞已有本地 Bundle；页面打开时仍可定向修复。
                         Log.w(TAG, "全量 OTA 同步失败，保留当前本地版本", error)
                     }
             } finally {
-                val shouldRunPending = synchronized(refreshStateLock) {
+                val (shouldRunPending, waiters) = synchronized(refreshStateLock) {
                     fullSyncInFlight = false
                     val pending = fullSyncPending
                     fullSyncPending = false
-                    pending
+                    if (pending) {
+                        pending to emptyList()
+                    } else {
+                        val callbacks = fullSyncWaiters.toList()
+                        fullSyncWaiters.clear()
+                        false to callbacks
+                    }
                 }
-                if (shouldRunPending) syncAllBundlesAsync()
+                if (shouldRunPending) {
+                    // 有新的生命周期/主动刷新请求排队时，等最后一轮同步完成后再通知调用方。
+                    syncAllBundlesAsync()
+                } else if (waiters.isNotEmpty()) {
+                    Handler(Looper.getMainLooper()).post {
+                        waiters.forEach { callback ->
+                            runCatching { callback(success) }
+                        }
+                    }
+                }
             }
         }
+    }
+
+    /** 用户主动刷新使用的公开入口；完成后通知 Tab Host 重新读取本地 current。 */
+    override fun refreshAllBundles(onComplete: (success: Boolean) -> Unit) {
+        syncAllBundlesAsync(onComplete)
+    }
+
+    /** 页面命中 OTA current 后，按 appId 的 30 分钟门控后台检查；不阻塞当前页面。 */
+    override fun refreshAppBundleIfNeeded(lynxAppId: String) {
+        syncAppBundleAsync(lynxAppId)
     }
 
     /** 按 appId 异步直接删除磁盘中的全部 OTA Bundle。 */
@@ -175,6 +209,7 @@ class LynxOtaRuntime(
     }
 
     override fun prepare(lynxAppId: String, bundleName: String): PreparedActivityBundle {
+        cleanupLegacyEmbeddedCopies()
         // current() 已经在 Router 内置 SDK 中做本地 SHA 校验；损坏文件不会直接交给 LynxView。
         val localFile = runCatching { sdk.current(lynxAppId, bundleName) }.getOrNull()
         if (localFile != null && localFile.isFile && localFile.canRead()) {
@@ -182,6 +217,9 @@ class LynxOtaRuntime(
             syncAppBundleAsync(lynxAppId)
             return prepared(lynxAppId, bundleName, localFile, current)
         }
+
+        // APK 内置 Bundle 是无网络的 baseline；若启动全量同步尚未完成，先交付内置版本。
+        resolveEmbedded(lynxAppId, bundleName)?.let { return it }
 
         // 缺包或校验失败时只请求当前 appId；Activity 会在这段时间显示原生 Loading。
         val repairedFile = sdk.ensureBundleReady(lynxAppId, bundleName)
@@ -191,8 +229,67 @@ class LynxOtaRuntime(
         return prepared(lynxAppId, bundleName, repairedFile, sdk.current(lynxAppId))
     }
 
+    override fun resolveCurrent(
+        lynxAppId: String,
+        bundleName: String,
+    ): PreparedActivityBundle? {
+        cleanupLegacyEmbeddedCopies()
+        val localFile = runCatching { sdk.current(lynxAppId, bundleName) }.getOrNull()
+        if (localFile != null && localFile.isFile && localFile.canRead()) {
+            return prepared(lynxAppId, bundleName, localFile, sdk.current(lynxAppId))
+        }
+        return resolveEmbedded(lynxAppId, bundleName)
+    }
+
     override fun rollback(lynxAppId: String, reason: String): Boolean {
-        return sdk.rollback(lynxAppId, reason) != null
+        val restoredRemote = runCatching { sdk.rollback(lynxAppId, reason) }.getOrNull()
+        if (restoredRemote != null) return true
+        if (!embeddedBundleRegistry.containsApp(lynxAppId)) return false
+        return runCatching {
+            // 没有 previous remote release 时丢弃坏的 downloaded current；下一次 prepare
+            // 会直接从 APK assets 读取 baseline，不需要把 baseline 复制到磁盘。
+            sdk.deleteDownloadedBundles(lynxAppId)
+            true
+        }.getOrDefault(false)
+    }
+
+    private fun resolveEmbedded(lynxAppId: String, bundleName: String): PreparedActivityBundle? {
+        return embeddedBundleRegistry.resolve(lynxAppId, bundleName)?.let { embedded ->
+            PreparedActivityBundle(
+                lynxAppId = embedded.lynxAppId,
+                bundleName = embedded.bundleName,
+                bytes = embedded.bytes,
+                releaseId = embedded.releaseId,
+                sha256 = embedded.sha256,
+                source = "embedded_baseline",
+            )
+        }
+    }
+
+    /** 删除旧版本曾生成的 embedded 副本；新版本 baseline 始终直接读取 APK assets。 */
+    private fun cleanupLegacyEmbeddedCopies() {
+        synchronized(refreshStateLock) {
+            if (legacyEmbeddedCleanupCompleted) return
+            val legacyEmbeddedRoot = File(sdkConfiguration.storageDirectory, "embedded")
+            if (legacyEmbeddedRoot.exists()) legacyEmbeddedRoot.deleteRecursively()
+            sdkConfiguration.storageDirectory.listFiles()
+                ?.filter { it.name.startsWith("embedded-release-") }
+                ?.forEach { it.delete() }
+            sdkConfiguration.storageDirectory.listFiles()
+                ?.filter { it.name.startsWith("current-release-") }
+                ?.forEach { pointer ->
+                    val content = runCatching { pointer.readText(Charsets.UTF_8) }.getOrNull().orEmpty()
+                    if (content.contains("/embedded/")) pointer.delete()
+                }
+            sdkConfiguration.storageDirectory.resolve("states").listFiles()
+                ?.forEach { state ->
+                    val content = runCatching { state.readText(Charsets.UTF_8) }.getOrNull().orEmpty()
+                    if (Regex("\\\"current\\\"\\s*:\\s*\\{\\s*\\\"kind\\\"\\s*:\\s*\\\"embedded\\\"").containsMatchIn(content)) {
+                        state.delete()
+                    }
+                }
+            legacyEmbeddedCleanupCompleted = true
+        }
     }
 
     /** 宿主退出时释放后台队列；Application 通常只需在进程结束时由系统回收。 */

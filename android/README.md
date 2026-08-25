@@ -51,7 +51,9 @@ cd playground
 pnpm build
 ```
 
-构建会把 16 个 Bundle 与静态资源自动同步到 Android assets。默认首页为：
+构建会把 16 个普通 Playground Bundle 与静态资源自动同步到 Android assets。当前 Sample 的
+默认首页已经切到 OTA 验收用例 `10000001/home.lynx.bundle`；普通 Playground 首页仍保留
+在原生 Launcher 的“打开 Playground 首页”按钮中。普通资源入口为：
 
 ```text
 app/src/main/assets/bundles/main.lynx.bundle
@@ -83,7 +85,6 @@ LynxRouter.install(
     LynxOtaConfig(
         apiBaseUri = URI.create("https://lynx-ota-server.example.com"),
         hostApp = "capp",
-        defaultLynxAppId = "10000001",
         environment = "PROD",
         platform = "android",
         clientToken = BuildConfig.LYNX_OTA_CLIENT_TOKEN,
@@ -100,24 +101,74 @@ LynxRouter.install(
 如果业务已经有自己的 OTA 实现，仍可注入 `ActivityBundleRuntime`；这是扩展口，不是
 Router 的必选依赖。
 
+### 全量 OTA 同步与 embedded baseline
+
+Android 原生已经有全量同步接口，运行时不需要再实现一套请求层。`Application`
+启动和回到前台时，`LynxRouter` 会调用 `LynxOtaRuntime.onApplicationForeground()`，内部
+统一走 `OtaSdk.syncLatestBundleLists()`：一次请求当前环境、宿主和平台下全部 App 的
+`latest-bundle-list`，再由 SDK 完成 Manifest、Bundle 下载、size/SHA 校验和原子激活。
+
+Android Demo 的“手动触发全量 OTA 同步”按钮也只调用同一个
+`LynxRouter.onApplicationForeground()`，用于验收，不会额外请求接口。请求失败时保留已经
+激活的 current 和 APK 内置 Bundle。
+
+三端 Demo 的构建期下载脚本位于 `android/app/scripts/sync_ota_bundles_to_assets.mjs`。它复用原生
+`OtaApiClient` 的全量接口契约，把响应里的所有 App ID 和 `changedBundles` 下载到目标平台
+资源目录；脚本不接受 `--app-id`，不会写死任何身份。全部 Bundle 校验成功后才替换目标
+embedded 目录。
+
+```bash
+LYNX_OTA_CLIENT_TOKEN='<本机临时注入，不要写入 Git>' \
+node android/app/scripts/sync_ota_bundles_to_assets.mjs \
+  --target android \
+  --base-url 'https://lynx-ota-server.test.huangbaoche.com' \
+  --env TEST \
+  --host-app capp \
+  --platform android
+```
+
+iOS 使用 `--target ios --platform ios`；HarmonyOS 使用
+`--target harmony --platform android`（当前服务端尚未开放 `platform=harmony`，Harmony
+Demo 的 `serverPlatform` 也采用这个兼容值）。
+
+脚本完成后再执行 `:app:assembleDebug`。安装后的 App 启动/回前台仍由原生
+`LynxRouter.onApplicationForeground()` 走同一全量接口，OTA current 写入应用私有 Store，
+不会改写 APK assets。手动安装运行可用 `android/app/scripts/run_ota_demo.sh`。
+
+`android/app/src/main/assets/bundles/lynx/embedded-bundles.json` 只描述随 APK 发布的
+baseline（按 `lynxAppId + bundleName` 定位）；它不是运行时 OTA 下载目录。OTA 下载内容
+写入应用私有 OTA Store，下一次打开页面时优先使用已校验的 current，embedded 仅作为
+安装包 baseline 和回滚兜底。
+
+Android 的 embedded baseline 不会在启动时复制到 `filesDir`。命中内置 Bundle 时由
+`EmbeddedBundleRegistry` 直接从 APK `AssetManager` 读取、校验 size/SHA 后以 bytes 交给
+LynxView；应用私有磁盘只保存远程 OTA 的 `releases`、`states`、`current/previous` 和
+`.staging`。
+
 页面跳转只传逻辑身份和参数，不注册 route 映射，也不传手机文件路径：
 
 ```kotlin
+val returnedBundle = /* 从全量同步结果或业务路由参数取得 */
 LynxRouter.open(
     context = activity,
-    lynxAppId = "10000001",
-    bundleName = "home.lynx.bundle",
+    lynxAppId = returnedBundle.lynxAppId,
+    bundleName = returnedBundle.bundleName,
     params = mapOf("source" to "native"),
 )
 ```
 
-`LynxShellActivity` 的顺序与 `base-sparkling` 的稳定做法一致：本地有可用 current 时先
-直接创建 `LynxView`，同一 `appId` 默认每 30 分钟最多后台刷新一次；本地没有 Bundle 或校验失败时，先显示
-原生“正在检查 appId/bundleName…” Loading，等待 OTA SDK 下载、大小/SHA 校验和原子激活，
-再创建 `LynxView`，此修复请求不受 30 分钟限制。Application 启动和回到前台则由宿主主动触发一次全量
+`LynxShellActivity` 的顺序与 `base-sparkling` 的稳定做法一致：本地有可用 current/baseline 时先
+通过 cache-only 读取直接创建 `LynxView`，不先显示 Loading；命中远程 current 后，页面会在后台
+按 appId 30 分钟门控发起一次页面级版本检查，不阻塞当前页面；
+本地没有 Bundle 或校验失败时，才显示原生“正在检查 appId/bundleName…” Loading，等待 OTA SDK
+下载、大小/SHA 校验和原子激活，再创建 `LynxView`。Application 启动和回到前台则由宿主主动触发一次全量
 `latest-bundle-list`，后台更新所有有变化的 appId。Bundle 首屏失败时最多按 appId 回滚一次
 并重试，避免坏版本无限循环。没有 current 且没有 runtime 时会直接进入可重试的错误态，
 不会创建空白色 LynxView。
+
+HTTPS 官方 Bundle 示例是 Direct Remote，不携带 `lynxAppId/bundleName`，也不属于 APK
+assets 或 OTA manifest。远程下载期间显示“正在加载远程 Bundle…”；如果业务希望完全离线，
+必须先把对应官方 Bundle 纳入自己的 OTA 全量清单，而不是给 HTTPS URL 强行添加 appId。
 
 ### 键盘布局策略
 
@@ -194,7 +245,7 @@ Release：
 Router 提供两个仅针对“已下载文件”的直接删除入口：
 
 ```kotlin
-LynxRouter.deleteOtaBundles("10000001") { success, message ->
+LynxRouter.deleteOtaBundles(returnedBundle.lynxAppId) { success, message ->
     // 只删除该 appId 在 files/lynx-ota-store/releases 下的 Bundle
 }
 LynxRouter.deleteAllOtaBundles { success, message ->

@@ -143,6 +143,34 @@ struct PreparedOtaBundle {
     let bundleName: String
     let fileURL: URL
     let releaseId: String?
+    /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
+    let source: String
+
+    init(
+        lynxAppId: String,
+        bundleName: String,
+        fileURL: URL,
+        releaseId: String?,
+        source: String = "ota_current"
+    ) {
+        self.lynxAppId = lynxAppId
+        self.bundleName = bundleName
+        self.fileURL = fileURL
+        self.releaseId = releaseId
+        self.source = source
+    }
+}
+
+/** 页面容器只依赖这个最小能力；无 OTA 服务配置时由 embedded-only runtime 实现。 */
+protocol LynxBundleRuntime {
+    func prepare(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle
+    func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle?
+    /** 普通页面命中 remote current 后的非阻塞 App ID 级 30 分钟后台检查；Tab 不调用。 */
+    func refreshAppBundleIfNeeded(lynxAppId: String) async
+    func rollback(lynxAppId: String, reason: String) async throws -> Bool
+    func reportPageOpen(lynxAppId: String, bundleName: String) async
+    func deleteBundles(lynxAppId: String) async throws
+    func deleteAllBundles() async throws
 }
 
 /**
@@ -183,8 +211,9 @@ private actor OtaSDKGate {
  * 启动/回前台使用 host 全量接口；页面命中 current 时立即返回并按 appId 30 分钟门控后台
  * 刷新；缺包或 SHA 损坏时忽略门控，等待定向下载、校验和原子激活。
  */
-public actor LynxOtaRuntime {
+public actor LynxOtaRuntime: LynxBundleRuntime {
     private let sdk: OtaSDK
+    private let embeddedBundleRegistry: EmbeddedBundleRegistry
     private let sdkGate = OtaSDKGate()
     private let pageRefreshInterval: TimeInterval
     private var lastPageRefreshAt: [String: Date] = [:]
@@ -195,15 +224,17 @@ public actor LynxOtaRuntime {
 
     public init(configuration: LynxOtaConfiguration) throws {
         sdk = OtaSDK(configuration: try configuration.makeSDKConfigurationForRuntime())
+        embeddedBundleRegistry = EmbeddedBundleRegistry()
         pageRefreshInterval = configuration.pageRefreshInterval
     }
 
     /** App 启动和每次回前台都执行；并发触发时合并为当前任务之后再补一次。 */
-    func synchronizeAllBundles() async {
-        if fullSyncTask != nil {
+    func synchronizeAllBundles() async -> Bool {
+        if let existingTask = fullSyncTask {
             fullSyncPending = true
-            return
+            return await existingTask.value != nil
         }
+        var succeeded = true
         repeat {
             fullSyncPending = false
             let task = Task<OtaHostBundleListSyncResult?, Never> { [weak self] in
@@ -218,12 +249,15 @@ public actor LynxOtaRuntime {
             if let result = await task.value {
                 let now = Date()
                 for appId in result.results.keys { lastPageRefreshAt[appId] = now }
+            } else {
+                succeeded = false
             }
             if fullSyncTaskID == taskID {
                 fullSyncTask = nil
                 fullSyncTaskID = nil
             }
         } while fullSyncPending
+        return succeeded
     }
 
     /** 页面打开：有 current 立即交付；缺失/损坏才等待网络修复。 */
@@ -234,6 +268,20 @@ public actor LynxOtaRuntime {
         }) {
             schedulePageRefreshIfNeeded(lynxAppId: lynxAppId)
             return try await prepared(lynxAppId: lynxAppId, bundleName: bundleName, url: localURL)
+        }
+
+        // App Bundle 内置版本是无网络 baseline；启动全量同步尚未完成时可先直接交付。
+        if let embedded = try embeddedBundleRegistry.resolve(
+            lynxAppId: lynxAppId,
+            bundleName: bundleName
+        ) {
+            return PreparedOtaBundle(
+                lynxAppId: embedded.lynxAppId,
+                bundleName: embedded.bundleName,
+                fileURL: embedded.fileURL,
+                releaseId: embedded.releaseId,
+                source: "embedded_baseline"
+            )
         }
 
         // 缺包/损坏不受 30 分钟门控影响，等待内置 OTA 引擎完整校验和激活。
@@ -247,11 +295,56 @@ public actor LynxOtaRuntime {
         return try await prepared(lynxAppId: lynxAppId, bundleName: bundleName, url: repairedURL)
     }
 
+    /**
+     * 只读取启动/前台同步后已经提交的 current；不会触发定向网络刷新或 repair。
+     * Native Tab 容器只能使用这个入口，切换 Tab 不应重新检查每个 Bundle。
+     */
+    func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
+        guard let localURL = try await withSDK({ sdk in
+            await sdk.current(lynxAppId: lynxAppId, bundleName: bundleName)
+        }) else {
+            guard let embedded = try embeddedBundleRegistry.resolve(
+                lynxAppId: lynxAppId,
+                bundleName: bundleName
+            ) else {
+                return nil
+            }
+            return PreparedOtaBundle(
+                lynxAppId: embedded.lynxAppId,
+                bundleName: embedded.bundleName,
+                fileURL: embedded.fileURL,
+                releaseId: embedded.releaseId,
+                source: "embedded_baseline"
+            )
+        }
+        return try await prepared(lynxAppId: lynxAppId, bundleName: bundleName, url: localURL)
+    }
+
+    /** cache-first 普通页面使用的后台刷新入口；schedulePageRefreshIfNeeded 自带 AppId 门控。 */
+    func refreshAppBundleIfNeeded(lynxAppId: String) async {
+        schedulePageRefreshIfNeeded(lynxAppId: lynxAppId)
+    }
+
     /** 首屏失败最多由容器调用一次；恢复 previous/embedded 后重新走 prepare。 */
     func rollback(lynxAppId: String, reason: String) async throws -> Bool {
         try validateAppId(lynxAppId)
-        return try await withSDK { sdk in
-            try await sdk.rollback(lynxAppId: lynxAppId, reason: reason) != nil
+        let restoredRemote = try await withSDK { sdk in
+            try await sdk.rollback(lynxAppId: lynxAppId, reason: reason)
+        }
+        if restoredRemote != nil { return true }
+        guard embeddedBundleRegistry.containsApp(lynxAppId: lynxAppId) else { return false }
+
+        // 没有 previous remote release 时丢弃坏的 downloaded current；下一次 prepare
+        // 会直接从 App Bundle 读取 baseline，不需要把 baseline 复制到沙盒磁盘。
+        do {
+            try await withSDK { sdk in
+                try await sdk.deleteDownloadedBundles(lynxAppId: lynxAppId)
+            }
+            lastPageRefreshAt.removeValue(forKey: lynxAppId)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -371,4 +464,55 @@ public actor LynxOtaRuntime {
             throw LynxOtaError.invalidIdentity("lynxAppId 不能为空且不能超过 256 个字符")
         }
     }
+}
+
+/** 没有 API 地址或 clientToken 时仍可消费 App Bundle 内置版本，不会发起网络请求。 */
+actor LynxEmbeddedOnlyRuntime: LynxBundleRuntime {
+    private let registry: EmbeddedBundleRegistry
+
+    init(registry: EmbeddedBundleRegistry = EmbeddedBundleRegistry()) {
+        self.registry = registry
+    }
+
+    func prepare(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle {
+        guard let embedded = try registry.resolve(
+            lynxAppId: lynxAppId,
+            bundleName: bundleName
+        ) else {
+            throw LynxOtaError.unreadableBundle("embedded/\(lynxAppId)/\(bundleName)")
+        }
+        return PreparedOtaBundle(
+            lynxAppId: embedded.lynxAppId,
+            bundleName: embedded.bundleName,
+            fileURL: embedded.fileURL,
+            releaseId: embedded.releaseId,
+            source: "embedded_baseline"
+        )
+    }
+
+    func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        guard let embedded = try registry.resolve(
+            lynxAppId: lynxAppId,
+            bundleName: bundleName
+        ) else {
+            return nil
+        }
+        return PreparedOtaBundle(
+            lynxAppId: embedded.lynxAppId,
+            bundleName: embedded.bundleName,
+            fileURL: embedded.fileURL,
+            releaseId: embedded.releaseId,
+            source: "embedded_baseline"
+        )
+    }
+
+    func refreshAppBundleIfNeeded(lynxAppId: String) async {}
+
+    func rollback(lynxAppId: String, reason: String) async throws -> Bool { false }
+
+    func reportPageOpen(lynxAppId: String, bundleName: String) async {}
+
+    func deleteBundles(lynxAppId: String) async throws {}
+
+    func deleteAllBundles() async throws {}
 }

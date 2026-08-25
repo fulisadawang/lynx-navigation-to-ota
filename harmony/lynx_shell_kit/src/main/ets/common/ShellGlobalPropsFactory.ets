@@ -3,9 +3,23 @@ import ShellJson from './ShellJson';
 import ShellConstants from './ShellConstants';
 import LynxPageRequest from '../model/LynxPageRequest';
 
+/** 页面可见的真实 Bundle 身份；loadPolicy 与 source 分离，避免把 cache-only 当成来源。 */
+export interface ShellBundleMetadata {
+  lynxAppId: string;
+  releaseId: string;
+  source: string;
+  bundleName: string;
+  sha256: string;
+  loadPolicy?: string;
+}
+
 /** 构建传给 Lynx 的 globalProps，保留业务字段并补充稳定宿主信息。 */
 export default class ShellGlobalPropsFactory {
-  static build(businessJson: string, request?: LynxPageRequest): Object {
+  static build(
+    businessJson: string,
+    request?: LynxPageRequest,
+    bundleMetadata?: ShellBundleMetadata
+  ): Object {
     const business = ShellJson.parseObject(businessJson) as Record<string, Object>;
     const currentDisplay = display.getDefaultDisplaySync();
     business['platform'] = 'harmony';
@@ -36,6 +50,9 @@ export default class ShellGlobalPropsFactory {
     business['__lynxRouterNavigationModel'] = 'native_page_stack';
     business['__lynxRouterPlatformContainer'] = 'arkui_page';
     business['__lynxRouterParams'] = queryItems;
+    if (bundleMetadata !== undefined) {
+      business['__lynxBundleMeta'] = bundleMetadata;
+    }
     return business;
   }
 

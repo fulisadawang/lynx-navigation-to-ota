@@ -5,6 +5,7 @@ import android.content.Context
 import com.example.lynxshell.bridge.LynxRouterMessageHandler
 import com.example.lynxshell.bridge.ShellMessageHub
 import com.example.lynxshell.ota.ActivityBundleRuntime
+import com.example.lynxshell.ota.EmbeddedBundleRuntime
 import com.example.lynxshell.routing.LynxNavigationOptions
 import com.example.lynxshell.routing.LynxNavigationResult
 import com.example.lynxshell.routing.LynxNavigator
@@ -25,8 +26,9 @@ object LynxRouter {
         activityBundleRuntime: ActivityBundleRuntime? = null,
     ) {
         LynxShell.initialize(application)
-        LynxShell.installActivityBundleRuntime(activityBundleRuntime)
-        activityBundleRuntime?.onApplicationStarted()
+        val runtime = activityBundleRuntime ?: EmbeddedBundleRuntime(application)
+        LynxShell.installActivityBundleRuntime(runtime)
+        runtime.onApplicationStarted()
     }
 
     /**
@@ -47,6 +49,19 @@ object LynxRouter {
      */
     fun onApplicationForeground() {
         LynxShell.activityBundleRuntime()?.onApplicationForeground()
+    }
+
+    /**
+     * 用户主动刷新 OTA；同步完成后回调，页面容器可以重新读取已经提交的 current。
+     * Tab 切换不会调用此方法，因此不会因为切换 Tab 重复访问网络。
+     */
+    fun refreshAllOtaBundles(onComplete: (success: Boolean) -> Unit = {}) {
+        val runtime = LynxShell.activityBundleRuntime()
+        if (runtime == null) {
+            onComplete(false)
+        } else {
+            runtime.refreshAllBundles(onComplete)
+        }
     }
 
     /** 按 appId 直接删除 Router 内置 OTA 的全部下载 Bundle；只适合诊断/验收入口。 */

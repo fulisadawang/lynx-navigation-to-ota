@@ -12,9 +12,9 @@ import kotlin.math.roundToInt
 /**
  * OTA 页面准备阶段的原生 Loading Surface。
  *
- * Loading 必须在创建 LynxView 之前出现：下载、校验和 current 激活期间不能让空的
- * LynxView 或主题默认背景先露出来，否则页面转场会出现白/黑闪烁。首屏回调到达后由
- * LynxShellActivity 隐藏本 View。
+ * 只有缺包、修复或 Direct Remote 下载时才显示；本地 current/baseline 命中时不应该
+ * 先盖住转场画面。下载、校验和 current 激活期间不能让空的 LynxView 或主题默认背景
+ * 先露出来，否则页面转场会出现白/黑闪烁。首屏回调到达后由 LynxShellActivity 隐藏本 View。
  */
 class ShellLoadingView(context: Context) : LinearLayout(context) {
     private val messageView = TextView(context)
