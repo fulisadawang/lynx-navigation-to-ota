@@ -20,6 +20,17 @@ import org.json.JSONObject
  * Activity 的 Intent extra、Registry 或 Provider 细节，也不需要预注册 routeId。
  */
 object LynxRouter {
+    /** Debug Sample 的一次性首屏故障注入；Release 构建不会消费该标记。 */
+    @JvmStatic
+    fun debugFailNextFirstScreen() {
+        if (BuildConfig.DEBUG) LynxDebugFaults.failNextFirstScreen = true
+    }
+
+    internal fun consumeDebugFirstScreenFailure(): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        return LynxDebugFaults.consumeFirstScreenFailure()
+    }
+
     /** Application.onCreate 中调用一次；Runtime 初始化本身幂等。 */
     fun install(
         application: Application,
@@ -228,5 +239,16 @@ object LynxRouter {
         } else {
             "assets://bundles/$normalized"
         }
+    }
+}
+
+internal object LynxDebugFaults {
+    @Volatile
+    var failNextFirstScreen: Boolean = false
+
+    fun consumeFirstScreenFailure(): Boolean {
+        if (!failNextFirstScreen) return false
+        failNextFirstScreen = false
+        return true
     }
 }

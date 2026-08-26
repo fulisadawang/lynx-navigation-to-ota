@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.lynxshell.LynxRouter
+import com.example.lynxshell.ota.EmbeddedBundleRegistry
 import com.google.android.material.button.MaterialButton
 
 /**
@@ -15,8 +16,6 @@ import com.google.android.material.button.MaterialButton
  */
 class MainActivity : AppCompatActivity() {
     private companion object {
-        // 与服务端 TEST OTA demo 以及 lynx-ota-demo-10000001 保持一致。
-        const val OTA_TEST_APP_ID = "10000001"
         const val OTA_TEST_BUNDLE_NAME = "home.lynx.bundle"
         const val PLAYGROUND_OTA_BUNDLE_NAME = "main.lynx.bundle"
     }
@@ -60,6 +59,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 默认直接进入 OTA 验收首页；普通 Playground 入口仍保留在原生 Launcher 按钮中。
+        // 真机验收可通过显式 debug intent 直接进入原生 Tab，避免依赖 Lynx 页面点击坐标。
+        if (BuildConfig.DEBUG && intent.getBooleanExtra("lynx_shell.open_native_tab", false) && savedInstanceState == null) {
+            startActivity(Intent(this, NativeTabDemoActivity::class.java))
+            return
+        }
+        if (BuildConfig.DEBUG && intent.getBooleanExtra("lynx_shell.open_playground", false) && savedInstanceState == null) {
+            if (intent.getBooleanExtra("lynx_shell.fail_first_screen", false)) {
+                LynxRouter.debugFailNextFirstScreen()
+            }
+            openPlaygroundHome()
+            return
+        }
         if (!intent.getBooleanExtra("lynx_shell.show_native_launcher", false) && savedInstanceState == null) {
             openOtaAcceptanceHome()
         }
@@ -67,9 +78,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun openOtaAcceptanceHome() {
         runCatching {
+            val appId = demoOtaAppId()
             LynxRouter.open(
                 context = this,
-                lynxAppId = OTA_TEST_APP_ID,
+                lynxAppId = appId,
                 bundleName = OTA_TEST_BUNDLE_NAME,
                 params = mapOf(
                     "source" to "android-ota-acceptance-home",
@@ -79,6 +91,7 @@ class MainActivity : AppCompatActivity() {
                     "title" to "OTA 验收首页",
                     "fullscreen" to true,
                     "showToolbar" to false,
+                    "backGestureEnabled" to true,
                 ),
             )
         }.onFailure { error ->
@@ -88,21 +101,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun openPlaygroundHome() {
         runCatching {
+            val appId = demoOtaAppId()
             LynxRouter.open(
                 context = this,
-                lynxAppId = OTA_TEST_APP_ID,
+                lynxAppId = appId,
                 bundleName = PLAYGROUND_OTA_BUNDLE_NAME,
                 params = mapOf("source" to "android-playground-ota-home"),
                 options = mapOf(
                     "title" to "Playground OTA 首页",
                     "fullscreen" to true,
                     "showToolbar" to false,
+                    "backGestureEnabled" to true,
                 ),
             )
         }.onFailure { error ->
             Toast.makeText(this, error.message ?: "Playground OTA 首页打开失败", Toast.LENGTH_LONG).show()
         }
     }
+
+    /** Demo 的 appId 只从 APK 内置 Manifest 推导，不按 bundle 文件名猜测或自行生成。 */
+    private fun demoOtaAppId(): String =
+        EmbeddedBundleRegistry(this).uniqueAppIdForBundles(
+            setOf(OTA_TEST_BUNDLE_NAME, PLAYGROUND_OTA_BUNDLE_NAME),
+        ) ?: error("内置 Manifest 中没有唯一的 OTA Demo appId")
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

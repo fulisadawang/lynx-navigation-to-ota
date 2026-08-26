@@ -75,7 +75,7 @@ implementation(project(":lynx-shell"))
 
 当前 Android Router 已经内置 OTA SDK 源码和默认 `LynxOtaRuntime`，三方不需要再额外
 引入 `sdk-0.1.0.jar`，也不需要自己实现 `ActivityBundleRuntime`。OTA 的 Manifest、下载、
-大小/SHA 校验、staging、current/previous、原子激活和回滚都在 `lynx-shell` AAR 内完成。
+大小/SHA 校验、staging、current/previous、原子激活、候选版本和回滚都在 `lynx-shell` AAR 内完成。
 
 Application 中只需要安装一次：
 
@@ -97,6 +97,8 @@ LynxRouter.install(
 本机验收可以把 `lynx.ota.clientToken` 写入 Android 根目录下的
 `ota.local.properties`（该文件已加入 `.gitignore`）；CI/发布环境使用
 `LYNX_OTA_CLIENT_TOKEN` 环境变量时会优先采用环境变量，令牌不会进入源码和文档。
+如果 token 为空，Router 保持 embedded-only：启动、前台和页面缺包路径都不会发 OTA 请求，
+不会使用 SDK 的默认测试令牌。
 
 如果业务已经有自己的 OTA 实现，仍可注入 `ActivityBundleRuntime`；这是扩展口，不是
 Router 的必选依赖。
@@ -140,6 +142,10 @@ baseline（按 `lynxAppId + bundleName` 定位）；它不是运行时 OTA 下�
 写入应用私有 OTA Store，下一次打开页面时优先使用已校验的 current，embedded 仅作为
 安装包 baseline 和回滚兜底。
 
+Demo 不再根据文件名猜 appId：`MainActivity` 和 `NativeTabDemoActivity` 只使用 Manifest
+中唯一匹配 `home.lynx.bundle + main.lynx.bundle` 的 identity。生产宿主仍应从自己的业务/OTA
+响应拿到完整的 `lynxAppId + bundleName`，因为同名 Bundle 可以属于多个 appId。
+
 Android 的 embedded baseline 不会在启动时复制到 `filesDir`。命中内置 Bundle 时由
 `EmbeddedBundleRegistry` 直接从 APK `AssetManager` 读取、校验 size/SHA 后以 bytes 交给
 LynxView；应用私有磁盘只保存远程 OTA 的 `releases`、`states`、`current/previous` 和
@@ -165,6 +171,19 @@ LynxRouter.open(
 `latest-bundle-list`，后台更新所有有变化的 appId。Bundle 首屏失败时最多按 appId 回滚一次
 并重试，避免坏版本无限循环。没有 current 且没有 runtime 时会直接进入可重试的错误态，
 不会创建空白色 LynxView。
+
+普通 Activity 页面可选开启候选版本模式：
+
+```kotlin
+LynxOtaConfig(
+    /* ... */
+    candidateActivationEnabled = true,
+)
+```
+
+开启后是 `stage candidate -> 页面首次访问进入 trial -> 首屏成功后 healthy promote`；
+`current` 在健康确认前保持旧版本。首屏失败只丢弃 candidate，不回滚稳定 current；进程重启
+会清理未完成的 trial。Native Tab 始终只读 current，不消费 candidate，也不在切换时联网。
 
 HTTPS 官方 Bundle 示例是 Direct Remote，不携带 `lynxAppId/bundleName`，也不属于 APK
 assets 或 OTA manifest。远程下载期间显示“正在加载远程 Bundle…”；如果业务希望完全离线，
@@ -224,6 +243,19 @@ adb shell am start \
   --ez lynx_shell.show_native_launcher true
 ```
 
+Debug 真机验收可直接进入指定入口：
+
+```bash
+adb shell am start -S -f 0x10008000 \
+  -n com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity \
+  --ez lynx_shell.open_playground true
+adb shell am start -S -f 0x10008000 \
+  -n com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity \
+  --ez lynx_shell.open_native_tab true
+```
+
+这两个 intent 仅是 Debug Sample 的验收入口，Release 构建忽略。
+
 工程未携带 Gradle Wrapper 二进制。Android Studio 可使用本机 Gradle 配置；需要命令行 Wrapper 时，在具备 Gradle 的环境中生成后再提交工程。
 
 ## 远程 Bundle
@@ -275,6 +307,18 @@ AppInfo 和媒体结果中的嵌套 Map/List；否则 Lynx 4.0 会让 JS 收到 
 `HashMap contained in JavaOnlyArray`。
 
 `integration/sparkling/*.sample` 仅保留为历史参考，不进入默认 SourceSet。
+
+## Android OTA 验收
+
+JVM 故障矩阵脚本：
+
+```bash
+bash scripts/ota-fault/run.sh --platform android --tier sdk --case all
+```
+
+本地真机验收使用 adb 做精确的清理、启动、进程终止和截图，使用 AndroMeld 观察已连接设备。
+当前工程没有配置 Espresso/UIAutomator instrumentation target，因此报告不会把 JVM 或静态结果
+冒充 Android UI 自动化结果。完整结果见 [Android OTA 测试报告](../docs/android-ota-test-report.html)。
 
 ## 高级导航
 

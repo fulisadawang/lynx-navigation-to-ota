@@ -223,7 +223,8 @@ class OtaModels private constructor() {
     NO_RELEASE,
     SKIPPED,
     ALREADY_ACTIVE,
-    UPDATED
+    UPDATED,
+    CANDIDATE,
   }
 
   class ReleaseVersionRange(
@@ -507,6 +508,28 @@ class OtaModels private constructor() {
     }
   }
 
+  /** 已完成下载和完整性校验、但尚未替换 current 的候选 Release。 */
+  enum class CandidateStatus(@JvmField val wireValue: String) {
+    PENDING("pending"),
+    TRIAL("trial");
+
+    companion object {
+      @JvmStatic
+      fun fromWire(raw: String): CandidateStatus {
+        return entries.firstOrNull { it.wireValue.equals(raw, ignoreCase = true) }
+          ?: throw IllegalArgumentException("未知候选状态：$raw")
+      }
+    }
+  }
+
+  class CandidateSnapshot(
+    @JvmField val release: InstalledRelease,
+    @JvmField val status: CandidateStatus,
+    @JvmField val failureCount: Int,
+    @JvmField val createdAt: Instant,
+    @JvmField val trialStartedAt: Instant?,
+  )
+
   class ReportPayload(
     @JvmField val env: Environment,
     @JvmField val hostApp: HostApp,
@@ -696,6 +719,7 @@ class OtaModels private constructor() {
     @JvmField val installed: InstalledRelease?,
     @JvmField val summary: BundleSyncSummary?,
     @JvmField val message: String?,
+    @JvmField val candidate: CandidateSnapshot? = null,
   ) {
     companion object {
       @JvmStatic
@@ -721,6 +745,22 @@ class OtaModels private constructor() {
       ): LatestBundleListUpdateResult {
         return LatestBundleListUpdateResult(UpdateResultType.UPDATED, previous, installed, summary, null)
       }
+
+      @JvmStatic
+      fun candidate(
+        previous: InstalledRelease?,
+        candidate: CandidateSnapshot,
+        summary: BundleSyncSummary,
+      ): LatestBundleListUpdateResult {
+        return LatestBundleListUpdateResult(
+          UpdateResultType.CANDIDATE,
+          previous,
+          candidate.release,
+          summary,
+          null,
+          candidate,
+        )
+      }
     }
   }
 
@@ -732,6 +772,8 @@ class OtaModels private constructor() {
     fun alreadyActiveCount(): Int = results.values.count { it.type == UpdateResultType.ALREADY_ACTIVE }
 
     fun skippedCount(): Int = results.values.count { it.type == UpdateResultType.SKIPPED }
+
+    fun candidateCount(): Int = results.values.count { it.type == UpdateResultType.CANDIDATE }
   }
 
   class Configuration {
@@ -754,6 +796,8 @@ class OtaModels private constructor() {
     @JvmField val otaClientToken: String
     /** Android 端使用 File，避免把桌面文件类型暴露到宿主工程。 */
     @JvmField val storageDirectory: File
+    /** 开启后最新 Release 先进入 candidate/trial，健康确认后才替换 current。 */
+    @JvmField val candidateActivationEnabled: Boolean
 
     constructor(
       apiBaseUri: URI,
@@ -790,6 +834,7 @@ class OtaModels private constructor() {
       lynxSdkVersion,
       DEFAULT_OTA_CLIENT_TOKEN,
       storageDirectory,
+      false,
     )
 
     constructor(
@@ -810,6 +855,7 @@ class OtaModels private constructor() {
       lynxSdkVersion: String?,
       otaClientToken: String?,
       storageDirectory: File,
+      candidateActivationEnabled: Boolean = false,
     ) {
       this.apiBaseUri = apiBaseUri
       this.hostApp = hostApp
@@ -828,6 +874,7 @@ class OtaModels private constructor() {
       this.lynxSdkVersion = lynxSdkVersion
       this.otaClientToken = if (otaClientToken.isNullOrBlank()) DEFAULT_OTA_CLIENT_TOKEN else otaClientToken
       this.storageDirectory = storageDirectory
+      this.candidateActivationEnabled = candidateActivationEnabled
       require(apiBaseUri.scheme.equals("https", ignoreCase = true) && apiBaseUri.host?.isNotBlank() == true) {
         "OTA API 必须使用 HTTPS 且包含 Host"
       }

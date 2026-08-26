@@ -53,6 +53,9 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 - 并发任务只写各自的 staging `.part` 文件；全部任务完成后才按 Manifest 顺序发布文件并
   提交 current/previous。任一任务失败都会取消其余任务并清理 staging，不会激活半成品。
 - 首屏渲染失败：按 appId 回滚一次并重试，禁止坏版本无限循环。
+- 可选 candidate 模式：`stage candidate -> trial -> 首屏健康确认 -> promote current`；
+  Native Tab 不消费 candidate，进程重启会清理未完成 trial。
+- 无 clientToken 时为 embedded-only，启动/前台/页面缺包均不发 OTA 请求。
 
 ## 存储边界
 
@@ -61,6 +64,7 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 ```text
 <application filesDir>/lynx-ota-store/
 ├── states/<safeAppId>.json
+├── states/<safeAppId>.candidate.json   # candidate 模式才存在
 ├── releases/<releaseId>/<bundlePath>
 └── .staging/                   # 事务完成后不应被路由读取
 ```
@@ -68,6 +72,10 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 `states/<appId>.json` 保存 `current/previous={kind,releaseId}` 指针；Bundle 本体位于已发布的
 Release 目录，不把下载 Bundle 的绝对路径写入 state。
 路由只读取已提交 current，不读取 `.part` 或 `.staging`。
+
+candidate 文件只保存逻辑 scope、releaseId、状态和 trial 时间；它不会改变 current。普通
+Activity 首屏成功后由 runtime promote，首屏失败由容器 discard；Tab 永远只调用
+`resolveCurrent`。
 
 验收页或 Lynx 页面可以调用以下入口直接删除磁盘内容：
 
@@ -100,3 +108,5 @@ NativeModules.LynxShellModule.deleteAllOtaBundles?.((result) => {
 OTA 核心源码位于 `src/main/kotlin/com/ota/android/sdk`，由 Router AAR 一起编译和发布；
 `ActivityBundleRuntime` 仍然保留为可选扩展口，允许已有宿主替换网络层，但不再是三方接入
 内置 OTA 的必需步骤。
+
+Android 端对等测试和真机证据见仓库根目录 `docs/android-ota-test-report.html`。

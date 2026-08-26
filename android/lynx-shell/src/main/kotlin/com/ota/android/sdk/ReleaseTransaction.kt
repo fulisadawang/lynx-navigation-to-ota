@@ -26,6 +26,7 @@ class ReleaseTransaction @JvmOverloads constructor(
   private val storageRoot: File,
   private val capacityProbe: CapacityProbe = CapacityProbe.FILE_STORE,
   private val clock: Clock = Clock.SYSTEM,
+  private val faultInjector: TransactionFaultInjecting = TransactionFaultInjecting.NONE,
 ) {
   /** 只保存本进程已经完成的 Bundle SHA 校验结果，不保存 Bundle 内容。 */
   private val bundleValidationCache = BundleValidationCache()
@@ -63,14 +64,33 @@ class ReleaseTransaction @JvmOverloads constructor(
     @JvmField val scope: ReleaseScope,
     @JvmField val targetManifest: OtaModels.ReleaseManifest,
     @JvmField val embeddedDescriptor: OtaModels.InstalledRelease? = null,
+    /** true 时只发布 release 目录并写 candidate，不修改 current/previous。 */
+    @JvmField val stageAsCandidate: Boolean = false,
   ) {
     constructor(scope: ReleaseScope, targetManifest: OtaModels.ReleaseManifest) : this(scope, targetManifest, null)
+  }
+
+  enum class TransactionFaultPoint {
+    BEFORE_STATE_COMMIT,
+    AFTER_STATE_COMMIT,
+    BEFORE_ROLLBACK_COMMIT,
+    AFTER_ROLLBACK_COMMIT,
+  }
+
+  fun interface TransactionFaultInjecting {
+    fun check(point: TransactionFaultPoint)
+
+    companion object {
+      @JvmField
+      val NONE: TransactionFaultInjecting = TransactionFaultInjecting { }
+    }
   }
 
   enum class InstallResultType {
     UPDATED,
     ALREADY_ACTIVE,
     SKIPPED,
+    CANDIDATE,
     FAILED,
   }
 
@@ -272,6 +292,31 @@ class ReleaseTransaction @JvmOverloads constructor(
         publishReleaseDirectory(stagingDirectory, targetDirectory, request.scope, request.targetManifest)
         val installed = readPublishedRelease(request.scope, request.targetManifest.releaseId)
           ?: throw transactionError("发布后的 Release Manifest 不可读", "release_publish_failed")
+        if (request.stageAsCandidate) {
+          writeCandidateAtomic(
+            CandidateRecord(
+              scope = request.scope,
+              release = ReleaseRef(RefKind.DOWNLOADED, request.targetManifest.releaseId),
+              status = OtaModels.CandidateStatus.PENDING,
+              failureCount = 0,
+              createdAt = clock.now(),
+              trialStartedAt = null,
+            ),
+          )
+          return@withStorageLock InstallOutcome(
+            InstallResultType.CANDIDATE,
+            oldCurrent,
+            installed,
+            fromReleaseId = oldCurrent?.context?.releaseId,
+            toReleaseId = installed.context.releaseId,
+            copiedBundleCount = copiedBundleCount,
+            copiedBytes = copiedBytes,
+            downloadedBundleCount = downloadedBundleCount,
+            downloadedBytes = downloadedBytes,
+            writtenBytes = writtenBytes,
+          )
+        }
+        faultInjector.check(TransactionFaultPoint.BEFORE_STATE_COMMIT)
         writeStateAtomic(
           StateRecord(
             request.scope,
@@ -280,6 +325,7 @@ class ReleaseTransaction @JvmOverloads constructor(
             oldCurrentRef,
           ),
         )
+        faultInjector.check(TransactionFaultPoint.AFTER_STATE_COMMIT)
         return@withStorageLock InstallOutcome(
           InstallResultType.UPDATED,
           oldCurrent,
@@ -329,6 +375,119 @@ class ReleaseTransaction @JvmOverloads constructor(
     return resolveCurrentUnsafe(state.scope, state)
   }
 
+  /** 读取持久化 candidate；不会改变 current，也不会把 pending 自动变成 trial。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun candidate(scope: ReleaseScope): OtaModels.CandidateSnapshot? {
+    val record = readCandidate(scope.lynxAppId) ?: return null
+    ensureCandidateScope(record, scope)
+    val release = resolveRef(scope, record.release) ?: return null
+    if (!isUsableRelease(release, scope)) return null
+    return candidateSnapshot(record, release)
+  }
+
+  /** 页面真正使用候选版本时才进入 trial；重复调用保持幂等。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun beginCandidateTrial(scope: ReleaseScope): OtaModels.CandidateSnapshot {
+    return withStorageLock {
+      ensureDirectories()
+      val record = readCandidate(scope.lynxAppId)
+        ?: throw transactionError("当前没有可用 candidate", "candidate_missing")
+      ensureCandidateScope(record, scope)
+      val release = resolveRef(scope, record.release)
+        ?: throw transactionError("candidate Release 不存在", "candidate_missing")
+      if (!isUsableRelease(release, scope)) {
+        throw transactionError("candidate Release 不可用", "candidate_invalid")
+      }
+      if (record.status == OtaModels.CandidateStatus.TRIAL) {
+        return@withStorageLock candidateSnapshot(record, release)
+      }
+      val trial = record.copy(
+        status = OtaModels.CandidateStatus.TRIAL,
+        trialStartedAt = clock.now(),
+      )
+      writeCandidateAtomic(trial)
+      candidateSnapshot(trial, release)
+    }
+  }
+
+  /** 健康确认后原子 promote：candidate -> current，旧 current -> previous。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun confirmCandidate(scope: ReleaseScope): OtaModels.InstalledRelease {
+    return withStorageLock {
+      ensureDirectories()
+      val record = readCandidate(scope.lynxAppId)
+        ?: throw transactionError("当前没有可确认的 candidate", "candidate_missing")
+      ensureCandidateScope(record, scope)
+      if (record.status != OtaModels.CandidateStatus.TRIAL) {
+        throw transactionError("candidate 尚未进入 trial", "candidate_not_in_trial")
+      }
+      val candidate = resolveRef(scope, record.release)
+        ?: throw transactionError("candidate Release 不存在", "candidate_missing")
+      if (!isUsableRelease(candidate, scope)) {
+        throw transactionError("candidate Release 不可用", "candidate_invalid")
+      }
+      val oldState = readState(scope.lynxAppId)
+      ensureStateScope(oldState, scope)
+      val oldCurrent = resolveCurrentUnsafe(scope, oldState)
+      val previous = oldCurrent?.let { referenceForRelease(scope, it) }
+        ?: resolveEmbedded(scope)?.let { referenceForRelease(scope, it) }
+      val next = StateRecord(
+        scope = scope,
+        generation = (oldState?.generation ?: 0L) + 1L,
+        current = record.release,
+        previous = previous?.takeUnless { it == record.release },
+      )
+      faultInjector.check(TransactionFaultPoint.BEFORE_STATE_COMMIT)
+      writeStateAtomic(next)
+      faultInjector.check(TransactionFaultPoint.AFTER_STATE_COMMIT)
+      removeCandidateAtomic(scope.lynxAppId)
+      candidate
+    }
+  }
+
+  /** 丢弃 candidate；若它未被 current/previous 引用，同时清理其下载目录。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun discardCandidate(scope: ReleaseScope) {
+    withStorageLock {
+      ensureDirectories()
+      val record = readCandidate(scope.lynxAppId) ?: return@withStorageLock
+      ensureCandidateScope(record, scope)
+      val currentState = readState(scope.lynxAppId)
+      ensureStateScope(currentState, scope)
+      removeCandidateAtomic(scope.lynxAppId)
+      val referenced = setOfNotNull(
+        currentState?.current,
+        currentState?.previous,
+      ).any { it == record.release }
+      if (!referenced && record.release.kind == RefKind.DOWNLOADED) {
+        cleanupRecursively(releaseDirectory(record.release.releaseId))
+      }
+    }
+  }
+
+  /** 进程重启时清理未完成的 trial；pending candidate 仍可等待页面首次访问。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun recoverInterruptedCandidate(scope: ReleaseScope) {
+    val record = readCandidate(scope.lynxAppId) ?: return
+    ensureCandidateScope(record, scope)
+    if (record.status == OtaModels.CandidateStatus.TRIAL) {
+      discardCandidate(scope)
+    }
+  }
+
+  /** 按 candidate 的 Release 读取指定 Bundle，不消费 current。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun candidateBundle(scope: ReleaseScope, bundleName: String): File? {
+    if (bundleName.isBlank() || bundleName.indexOf('\u0000') >= 0 || bundleName.contains('\\')) {
+      throw transactionError("Bundle 名称不安全：$bundleName", "unsafe_bundle_path")
+    }
+    val record = readCandidate(scope.lynxAppId) ?: return null
+    ensureCandidateScope(record, scope)
+    val release = resolveRef(scope, record.release) ?: return null
+    if (!isUsableRelease(release, scope)) return null
+    return resolveBundleFromRelease(scope, release, bundleName, verify = true)
+  }
+
   @Throws(IOException::class, OtaSdkException::class)
   /**
    * 路由热路径也必须验证 SHA；否则损坏的 current 会先进入 LynxView，再依赖渲染失败回滚，
@@ -364,9 +523,12 @@ class ReleaseTransaction @JvmOverloads constructor(
       val embedded = resolveEmbedded(scope)
       val restored = when {
         previous != null && isUsableRelease(previous, scope) -> previous
-        embedded != null && isUsableRelease(embedded, scope) -> embedded
+        embedded != null &&
+          isUsableRelease(embedded, scope) &&
+          (state.current.kind != RefKind.EMBEDDED || state.current.releaseId != embedded.context.releaseId) -> embedded
         else -> return@withStorageLock null
       }
+      faultInjector.check(TransactionFaultPoint.BEFORE_ROLLBACK_COMMIT)
       writeStateAtomic(
         state.copy(
           generation = state.generation + 1L,
@@ -374,6 +536,7 @@ class ReleaseTransaction @JvmOverloads constructor(
           previous = null,
         ),
       )
+      faultInjector.check(TransactionFaultPoint.AFTER_ROLLBACK_COMMIT)
       restored
     }
   }
@@ -401,6 +564,9 @@ class ReleaseTransaction @JvmOverloads constructor(
       if (state?.scope?.lynxAppId == lynxAppId) {
         if (state.current.kind == RefKind.DOWNLOADED) releaseIds += state.current.releaseId
         state.previous?.takeIf { it.kind == RefKind.DOWNLOADED }?.let { releaseIds += it.releaseId }
+      }
+      readCandidate(lynxAppId)?.let { candidate ->
+        if (candidate.release.kind == RefKind.DOWNLOADED) releaseIds += candidate.release.releaseId
       }
 
       // 兼容旧 pointer layout：pointer 文件名按 appId 生成，内容再做一次 scope 校验。
@@ -433,6 +599,7 @@ class ReleaseTransaction @JvmOverloads constructor(
         File(storageRoot, "current-release-${OtaModels.safeFileName(lynxAppId)}.json"),
         File(storageRoot, "staged-release-${OtaModels.safeFileName(lynxAppId)}.json"),
         File(storageRoot, "previous-release-${OtaModels.safeFileName(lynxAppId)}.json"),
+        candidatePath(lynxAppId),
       ).forEach { cleanupRecursively(it) }
       bundleValidationCache.clear()
     }
@@ -451,7 +618,8 @@ class ReleaseTransaction @JvmOverloads constructor(
         if (file.isFile && (
             file.name.startsWith("current-release-") ||
               file.name.startsWith("staged-release-") ||
-              file.name.startsWith("previous-release-")
+              file.name.startsWith("previous-release-") ||
+              file.name.endsWith(".candidate.json")
           )
         ) {
           cleanupRecursively(file)
@@ -528,6 +696,15 @@ class ReleaseTransaction @JvmOverloads constructor(
       throw transactionError("Bundle 名称不安全：$bundleName", "unsafe_bundle_path")
     }
     val release = current(scope) ?: return null
+    return resolveBundleFromRelease(scope, release, bundleName, verify)
+  }
+
+  private fun resolveBundleFromRelease(
+    scope: ReleaseScope,
+    release: OtaModels.InstalledRelease,
+    bundleName: String,
+    verify: Boolean,
+  ): File? {
     val exact = release.bundles.filter { it.bundlePath == bundleName }
     val bundle = when {
       exact.size == 1 -> exact[0]
@@ -1060,6 +1237,78 @@ class ReleaseTransaction @JvmOverloads constructor(
     }
   }
 
+  private fun candidateSnapshot(
+    record: CandidateRecord,
+    release: OtaModels.InstalledRelease,
+  ): OtaModels.CandidateSnapshot = OtaModels.CandidateSnapshot(
+    release = release,
+    status = record.status,
+    failureCount = record.failureCount,
+    createdAt = record.createdAt,
+    trialStartedAt = record.trialStartedAt,
+  )
+
+  private fun candidatePath(lynxAppId: String): File {
+    return File(
+      File(storageRoot, "states"),
+      "${OtaModels.safeFileName(lynxAppId)}.candidate.json",
+    )
+  }
+
+  private fun readCandidate(lynxAppId: String): CandidateRecord? {
+    val path = candidatePath(lynxAppId)
+    if (!path.isFile) return null
+    return try {
+      val map = OtaJson.asObject(OtaJson.parse(path.readText(Charsets.UTF_8)), path.toString())
+      val scopeMap = OtaJson.asObject(map["scope"], "candidate.scope")
+      CandidateRecord(
+        scope = ReleaseScope(
+          OtaModels.Environment.fromWire(OtaModels.stringValue(scopeMap["env"])),
+          OtaModels.HostApp.fromWire(OtaModels.stringValue(scopeMap["hostApp"])),
+          OtaModels.stringValue(scopeMap["lynxAppId"]),
+          OtaModels.Platform.fromWire(OtaModels.stringValue(scopeMap["platform"])),
+        ),
+        release = parseRef(OtaJson.asObject(map["release"], "candidate.release")),
+        status = OtaModels.CandidateStatus.fromWire(OtaModels.stringValue(map["status"])),
+        failureCount = (map["failureCount"] as? Number)?.toInt() ?: 0,
+        createdAt = Instant.parse(OtaModels.stringValue(map["createdAt"])),
+        trialStartedAt = (map["trialStartedAt"] as? String)?.let(Instant::parse),
+      )
+    } catch (error: OtaSdkException) {
+      throw error
+    } catch (error: RuntimeException) {
+      throw OtaSdkException("candidate 状态解析失败：$path", error, "storage_recovery_failed")
+    }
+  }
+
+  private fun writeCandidateAtomic(record: CandidateRecord) {
+    val map = linkedMapOf<String, Any?>(
+      "schemaVersion" to 1,
+      "scope" to mapOf(
+        "env" to record.scope.env.wireValue,
+        "hostApp" to record.scope.hostApp.wireValue,
+        "lynxAppId" to record.scope.lynxAppId,
+        "platform" to record.scope.platform.wireValue,
+      ),
+      "release" to record.release.toJsonMap(),
+      "status" to record.status.wireValue,
+      "failureCount" to record.failureCount,
+      "createdAt" to record.createdAt.toString(),
+      "trialStartedAt" to record.trialStartedAt?.toString(),
+    )
+    writeAtomic(candidatePath(record.scope.lynxAppId), OtaJson.stringify(map))
+  }
+
+  private fun removeCandidateAtomic(lynxAppId: String) {
+    cleanupRecursively(candidatePath(lynxAppId))
+  }
+
+  private fun ensureCandidateScope(record: CandidateRecord, expected: ReleaseScope) {
+    if (record.scope != expected) {
+      throw transactionError("candidate scope 与当前配置不一致", "scope_mismatch")
+    }
+  }
+
   private fun readState(lynxAppId: String): StateRecord? {
     val path = statePath(lynxAppId)
     if (!path.isFile) return null
@@ -1344,6 +1593,15 @@ class ReleaseTransaction @JvmOverloads constructor(
     val generation: Long,
     val current: ReleaseRef,
     val previous: ReleaseRef?,
+  )
+
+  private data class CandidateRecord(
+    val scope: ReleaseScope,
+    val release: ReleaseRef,
+    val status: OtaModels.CandidateStatus,
+    val failureCount: Int,
+    val createdAt: Instant,
+    val trialStartedAt: Instant?,
   )
 
   private data class ReleaseRef(val kind: RefKind, val releaseId: String) {

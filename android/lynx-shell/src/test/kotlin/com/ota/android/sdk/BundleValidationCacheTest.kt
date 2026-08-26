@@ -7,12 +7,13 @@ import org.junit.Test
 
 class BundleValidationCacheTest {
   private fun key(
+    scope: String = "TEST|capp|android|10000001",
     releaseId: String = "r1",
     sha256: String = "sha256:one",
     size: Long = 10,
     mtime: Long = 20,
   ) = BundleValidationCache.Key(
-    scope = "TEST|capp|android|10000001",
+    scope = scope,
     releaseId = releaseId,
     bundlePath = "main.lynx.bundle",
     expectedSha256 = sha256,
@@ -40,6 +41,14 @@ class BundleValidationCacheTest {
     assertFalse(cache.contains(key(sha256 = "sha256:two")))
     assertFalse(cache.contains(key(size = 11)))
     assertFalse(cache.contains(key(mtime = 21)))
+  }
+
+  @Test
+  fun `same file fingerprint from a different release scope misses`() {
+    val cache = BundleValidationCache()
+    cache.put(key())
+
+    assertFalse(cache.contains(key(scope = "PROD|capp|android|10000001")))
   }
 
   @Test

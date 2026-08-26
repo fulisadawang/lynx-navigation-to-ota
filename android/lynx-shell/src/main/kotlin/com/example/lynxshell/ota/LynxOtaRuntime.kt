@@ -26,6 +26,7 @@ class LynxOtaRuntime(
     private val sdkConfiguration = config.toSdkConfiguration(appContext)
     private val sdk = OtaSdk(sdkConfiguration)
     private val embeddedBundleRegistry = EmbeddedBundleRegistry(appContext)
+    private val otaEnabled = !config.clientToken.isNullOrBlank()
     /** 生命周期刷新与页面后台刷新共用队列，避免同一个 SDK 实例并发提交激活事务。 */
     private val refreshExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "lynx-shell-ota-refresh").apply { isDaemon = true }
@@ -41,11 +42,11 @@ class LynxOtaRuntime(
     private var legacyEmbeddedCleanupCompleted = false
 
     override fun onApplicationStarted() {
-        syncAllBundlesAsync()
+        if (otaEnabled) syncAllBundlesAsync()
     }
 
     override fun onApplicationForeground() {
-        syncAllBundlesAsync()
+        if (otaEnabled) syncAllBundlesAsync()
     }
 
     /**
@@ -56,6 +57,12 @@ class LynxOtaRuntime(
      * 生命周期事件。
      */
     fun syncAllBundlesAsync(onComplete: ((success: Boolean) -> Unit)? = null) {
+        if (!otaEnabled) {
+            onComplete?.let { callback ->
+                Handler(Looper.getMainLooper()).post { callback(false) }
+            }
+            return
+        }
         val shouldStart = synchronized(refreshStateLock) {
             onComplete?.let(fullSyncWaiters::add)
             if (fullSyncInFlight) {
@@ -113,12 +120,12 @@ class LynxOtaRuntime(
 
     /** 用户主动刷新使用的公开入口；完成后通知 Tab Host 重新读取本地 current。 */
     override fun refreshAllBundles(onComplete: (success: Boolean) -> Unit) {
-        syncAllBundlesAsync(onComplete)
+        if (!otaEnabled) onComplete(false) else syncAllBundlesAsync(onComplete)
     }
 
     /** 页面命中 OTA current 后，按 appId 的 30 分钟门控后台检查；不阻塞当前页面。 */
     override fun refreshAppBundleIfNeeded(lynxAppId: String) {
-        syncAppBundleAsync(lynxAppId)
+        if (otaEnabled) syncAppBundleAsync(lynxAppId)
     }
 
     /** 按 appId 异步直接删除磁盘中的全部 OTA Bundle。 */
@@ -221,12 +228,63 @@ class LynxOtaRuntime(
         // APK 内置 Bundle 是无网络的 baseline；若启动全量同步尚未完成，先交付内置版本。
         resolveEmbedded(lynxAppId, bundleName)?.let { return it }
 
+        if (!otaEnabled) {
+            throw IllegalStateException("OTA 未配置 clientToken，且没有可用的 embedded Bundle：$lynxAppId/$bundleName")
+        }
+
         // 缺包或校验失败时只请求当前 appId；Activity 会在这段时间显示原生 Loading。
         val repairedFile = sdk.ensureBundleReady(lynxAppId, bundleName)
         if (!repairedFile.isFile || !repairedFile.canRead()) {
             throw IllegalStateException("OTA SDK 返回的 Bundle 不可读：${repairedFile.absolutePath}")
         }
         return prepared(lynxAppId, bundleName, repairedFile, sdk.current(lynxAppId))
+    }
+
+    /** 普通 Activity 页面可消费 candidate；Native Tab 仍只调用 resolveCurrent。 */
+    override fun resolvePage(
+        lynxAppId: String,
+        bundleName: String,
+    ): PreparedActivityBundle? {
+        if (config.candidateActivationEnabled) {
+            val candidate = runCatching { sdk.candidate(lynxAppId) }.getOrNull()
+            if (candidate != null) {
+                val trial = runCatching {
+                    if (candidate.status == OtaModels.CandidateStatus.PENDING) {
+                        sdk.beginCandidateTrial(lynxAppId)
+                    } else {
+                        candidate
+                    }
+                }.getOrNull()
+                if (trial != null) {
+                    val candidateFile = runCatching {
+                        sdk.candidateBundle(lynxAppId, bundleName)
+                    }.getOrNull()
+                    if (candidateFile != null && candidateFile.isFile && candidateFile.canRead()) {
+                        val bundle = trial.release.bundles.firstOrNull {
+                            it.bundlePath == bundleName || it.bundlePath.substringAfterLast('/') == bundleName
+                        }
+                        return PreparedActivityBundle(
+                            lynxAppId = lynxAppId,
+                            bundleName = bundleName,
+                            file = candidateFile,
+                            releaseId = trial.release.context.releaseId,
+                            sha256 = bundle?.bundleSha256,
+                            source = "candidate_trial",
+                        )
+                    }
+                }
+            }
+        }
+        return resolveCurrent(lynxAppId, bundleName)
+    }
+
+    override fun confirmCandidateHealthy(lynxAppId: String): Boolean {
+        if (!config.candidateActivationEnabled) return false
+        return runCatching {
+            sdk.confirmCandidateHealthy(lynxAppId)
+            clearPageRefreshGate(lynxAppId)
+            true
+        }.getOrDefault(false)
     }
 
     override fun resolveCurrent(
@@ -242,6 +300,14 @@ class LynxOtaRuntime(
     }
 
     override fun rollback(lynxAppId: String, reason: String): Boolean {
+        if (config.candidateActivationEnabled && runCatching { sdk.candidate(lynxAppId) }.getOrNull() != null) {
+            return runCatching {
+                // candidate/trial 失败时只丢弃候选，不回滚掉仍然稳定的 current。
+                sdk.discardCandidate(lynxAppId)
+                clearPageRefreshGate(lynxAppId)
+                true
+            }.getOrDefault(false)
+        }
         val restoredRemote = runCatching { sdk.rollback(lynxAppId, reason) }.getOrNull()
         if (restoredRemote != null) return true
         if (!embeddedBundleRegistry.containsApp(lynxAppId)) return false
@@ -307,6 +373,9 @@ class LynxOtaRuntime(
         bundleName = bundleName,
         file = file,
         releaseId = current?.context?.releaseId,
+        sha256 = current?.bundles?.firstOrNull {
+            it.bundlePath == bundleName || it.bundlePath.substringAfterLast('/') == bundleName
+        }?.bundleSha256,
     )
 
     private companion object {

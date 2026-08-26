@@ -17,6 +17,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.lynxshell.R
 import com.example.lynxshell.LynxShell
+import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.model.PageOrientation
@@ -73,6 +74,9 @@ class LynxShellActivity : AppCompatActivity() {
     private var bundleFuture: Future<*>? = null
     /** 一个页面 generation 最多自动回滚一次，避免坏版本形成无限重试。 */
     private var otaRecoveryUsed = false
+    /** 当前 generation 交付给 Lynx 的 Bundle 元数据；首屏健康确认只消费一次。 */
+    private var bundleRuntimeMetadata: Map<String, Any>? = null
+    private var firstScreenReadyGeneration: Long? = null
     /** 当前页面的键盘布局策略；默认保持 Android 系统行为。 */
     private var keyboardBehavior = KeyboardBehavior.SYSTEM
     private var baseContainerPaddingLeft = 0
@@ -322,6 +326,8 @@ class LynxShellActivity : AppCompatActivity() {
         }
         lynxView = null
         lynxViewClient = null
+        bundleRuntimeMetadata = null
+        firstScreenReadyGeneration = null
         contentGeneration += 1L
         val generation = contentGeneration
 
@@ -399,12 +405,19 @@ class LynxShellActivity : AppCompatActivity() {
                  */
                 private fun notifyTargetVisualReady() {
                     runOnUiThread {
-                        if (!isFinishing && !isDestroyed) {
-                            if (isCurrentGeneration(generation)) loadingView.hide()
-                            transitionCoordinator.onFirstScreen(
-                                lynxView = lynxView ?: return@runOnUiThread,
-                                generation = generation,
-                            )
+                        if (!isCurrentGeneration(generation)) return@runOnUiThread
+                        if (LynxRouter.consumeDebugFirstScreenFailure()) {
+                            handleTemplateLoadFailure(generation, "Debug 注入：OTA 首屏失败")
+                            return@runOnUiThread
+                        }
+                        loadingView.hide()
+                        transitionCoordinator.onFirstScreen(
+                            lynxView = lynxView ?: return@runOnUiThread,
+                            generation = generation,
+                        )
+                        if (firstScreenReadyGeneration != generation) {
+                            firstScreenReadyGeneration = generation
+                            confirmCandidateHealthyIfNeeded(generation)
                         }
                     }
                 }
@@ -420,7 +433,10 @@ class LynxShellActivity : AppCompatActivity() {
                 override fun onReceivedError(error: LynxError) {
                     runOnUiThread {
                         if (!isFinishing && !isDestroyed) {
-                            transitionCoordinator.onLoadError()
+                            handleTemplateLoadFailure(
+                                generation,
+                                "Lynx 首屏加载失败：$error",
+                            )
                         }
                     }
                 }
@@ -468,12 +484,12 @@ class LynxShellActivity : AppCompatActivity() {
             // 本地 current/baseline 命中时，转场不应该先露出 OTA Loading。
             // resolveCurrent 只读已经提交的本地状态，不检查 Manifest、不联网；启动/回前台
             // 的全量同步负责把新的 current 提前准备好。
-            val cached = runCatching { runtime.resolveCurrent(appId, bundleName) }.getOrNull()
+            val cached = runCatching { runtime.resolvePage(appId, bundleName) }.getOrNull()
             if (cached != null) {
                 runOnUiThread {
                     if (!isCurrentGeneration(generation)) return@runOnUiThread
                     bundleFuture = null
-                    if (cached.source != "embedded_baseline") {
+                    if (cached.source != "embedded_baseline" && cached.source != "candidate_trial") {
                         // 页面先使用本地 current；版本检查在后台按 App ID 30 分钟门控执行，
                         // 不把网络检查放到 BottomSheet/HeroSheet 的首屏门禁前。
                         runtime.refreshAppBundleIfNeeded(appId)
@@ -524,17 +540,24 @@ class LynxShellActivity : AppCompatActivity() {
         }
         checked.fold(
             onSuccess = { value ->
+                bundleRuntimeMetadata = mapOf(
+                    "lynxAppId" to value.lynxAppId,
+                    "releaseId" to (value.releaseId ?: "unknown"),
+                    // 只有实际恢复到 embedded baseline 才标记 fallback；previous
+                    // remote release 仍然必须保持 ota_current，便于手机端识别真实来源。
+                    "source" to if (otaRecoveryUsed && value.source == "embedded_baseline") {
+                        "rollback_fallback"
+                    } else {
+                        value.source
+                    },
+                    "bundleName" to value.bundleName,
+                    "sha256" to (value.sha256 ?: ""),
+                )
                 renderPreparedPage(
                     generation = generation,
                     preparedBytes = value.bytes,
                     preparedFile = value.file,
-                    bundleMetadata = mapOf(
-                        "lynxAppId" to value.lynxAppId,
-                        "releaseId" to (value.releaseId ?: "unknown"),
-                        "source" to if (otaRecoveryUsed) "rollback_fallback" else value.source,
-                        "bundleName" to value.bundleName,
-                        "sha256" to (value.sha256 ?: ""),
-                    ),
+                    bundleMetadata = bundleRuntimeMetadata,
                 )
             },
             onFailure = { error ->
@@ -550,9 +573,28 @@ class LynxShellActivity : AppCompatActivity() {
     private fun handleTemplateLoadFailure(generation: Long, message: String) {
         if (!isCurrentGeneration(generation)) return
         loadingView.hide()
-        if (request.isOtaRequest() && attemptOtaRecovery(generation, message)) return
+        if (
+            request.isOtaRequest() &&
+            firstScreenReadyGeneration != generation &&
+            attemptOtaRecovery(generation, message)
+        ) return
         if (::transitionCoordinator.isInitialized) transitionCoordinator.onLoadError()
         errorView.show(message)
+    }
+
+    /** candidate 页面首屏成功后才 promote；Native Tab 永远不调用此路径。 */
+    private fun confirmCandidateHealthyIfNeeded(generation: Long) {
+        if (!isCurrentGeneration(generation)) return
+        val metadata = bundleRuntimeMetadata ?: return
+        if (metadata["source"] != "candidate_trial") return
+        val appId = request.lynxAppId ?: return
+        val runtime = LynxShell.activityBundleRuntime() ?: return
+        otaExecutor.execute {
+            val confirmed = runCatching { runtime.confirmCandidateHealthy(appId) }.getOrDefault(false)
+            if (!confirmed) {
+                android.util.Log.w(TAG, "candidate 首屏已显示，但健康确认失败：$appId")
+            }
+        }
     }
 
     private fun attemptOtaRecovery(generation: Long, reason: String): Boolean {
@@ -730,5 +772,9 @@ class LynxShellActivity : AppCompatActivity() {
                 0.114 * Color.blue(color)
             ) / 255.0
         return luminance > 0.6
+    }
+
+    private companion object {
+        const val TAG = "LynxShellActivity"
     }
 }

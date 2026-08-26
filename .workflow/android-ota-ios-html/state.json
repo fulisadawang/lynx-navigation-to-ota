@@ -1,0 +1,66 @@
+{
+  "title": "Android OTA \u4e0e iOS \u4e00\u81f4\u6027\u5b9e\u73b0\u3001\u771f\u673a\u9a8c\u6536\u548c HTML \u62a5\u544a",
+  "slug": "android-ota-ios-html",
+  "created_at": "2026-08-26T02:34:37+00:00",
+  "status": "completed",
+  "approval": {
+    "required": true,
+    "granted": true,
+    "notes": "用户已授权 mixed lineup；真实 OTA 仅通过运行时环境传入凭证，不落盘。"
+  },
+  "packets": [
+    {
+      "id": "android-code-map",
+      "role": "code-mapper",
+      "status": "completed",
+      "result": "packets/android-code-map.md"
+    },
+    {
+      "id": "android-test-contract",
+      "role": "test-engineer",
+      "status": "completed",
+      "result": "packets/android-test-contract.md"
+    },
+    {
+      "id": "android-test-harness",
+      "role": "test-automator",
+      "status": "completed",
+      "result": "packets/android-test-harness.md"
+    }
+  ],
+  "verification": {
+    "status": "complete",
+    "checks": [
+      {
+        "name": "android_jvm",
+        "status": "passed",
+        "evidence": "26 tests, 0 failures, 0 errors"
+      },
+      {
+        "name": "android_build_install",
+        "status": "passed",
+        "evidence": "assembleDebug and installDebug succeeded on IN2010"
+      },
+      {
+        "name": "real_ota_manifest",
+        "status": "passed",
+        "evidence": "latest-bundle-list returned 2 server identities"
+      },
+      {
+        "name": "android_device_flow",
+        "status": "passed",
+        "evidence": "embedded baseline, next cold-start OTA current, Tab, refresh and embedded rollback observed"
+      },
+      {
+        "name": "static_and_report",
+        "status": "passed",
+        "evidence": "111 static PASS; standalone HTML self-check passed; secret scan passed"
+      },
+      {
+        "name": "known_boundaries",
+        "status": "documented",
+        "evidence": "no live release delta; no Android instrumentation runner; remote-previous force-stop remains deferred"
+      }
+    ]
+  }
+}

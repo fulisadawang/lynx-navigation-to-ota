@@ -51,6 +51,13 @@ interface ActivityBundleRuntime {
      */
     fun resolveCurrent(lynxAppId: String, bundleName: String): PreparedActivityBundle? = null
 
+    /** 普通 Activity 页面可选择消费 candidate；Native Tab 固定使用 resolveCurrent。 */
+    fun resolvePage(lynxAppId: String, bundleName: String): PreparedActivityBundle? =
+        resolveCurrent(lynxAppId, bundleName)
+
+    /** candidate 页面首屏健康后由容器调用；默认 runtime 没有 candidate。 */
+    fun confirmCandidateHealthy(lynxAppId: String): Boolean = false
+
     /**
      * 页面首屏失败时按 appId 回滚一次。没有可回滚版本时返回 false，避免误报成功。
      */

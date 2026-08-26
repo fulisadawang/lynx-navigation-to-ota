@@ -262,6 +262,40 @@ class OtaSdk {
     return releaseTransaction.current(scopeFor(lynxAppId)) ?: getCurrentRelease(lynxAppId)
   }
 
+  /** 返回持久化 candidate；current 读取入口不会消费候选版本。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun candidate(lynxAppId: String): OtaModels.CandidateSnapshot? {
+    return releaseTransaction.candidate(scopeFor(lynxAppId))
+  }
+
+  /** 页面真正使用 candidate 时进入 trial；重复调用保持幂等。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun beginCandidateTrial(lynxAppId: String): OtaModels.CandidateSnapshot {
+    return releaseTransaction.beginCandidateTrial(scopeFor(lynxAppId))
+  }
+
+  /** 健康确认后原子 promote candidate，并把旧 current 写入 previous。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun confirmCandidateHealthy(lynxAppId: String): OtaModels.InstalledRelease {
+    return releaseTransaction.confirmCandidate(scopeFor(lynxAppId))
+  }
+
+  @Throws(IOException::class, OtaSdkException::class)
+  fun discardCandidate(lynxAppId: String) {
+    releaseTransaction.discardCandidate(scopeFor(lynxAppId))
+  }
+
+  @Throws(IOException::class, OtaSdkException::class)
+  fun recoverInterruptedCandidate(lynxAppId: String) {
+    releaseTransaction.recoverInterruptedCandidate(scopeFor(lynxAppId))
+  }
+
+  /** 按 candidate 的 Release 精确读取 Bundle，不改变 current。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun candidateBundle(lynxAppId: String, bundleName: String): File? {
+    return releaseTransaction.candidateBundle(scopeFor(lynxAppId), bundleName)
+  }
+
   /** 路由进入 Lynx 容器前的 Bundle 门禁，失败不会读取 staging/part 文件。 */
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun ensureBundleReady(lynxAppId: String, bundleName: String): File {
@@ -305,6 +339,12 @@ class OtaSdk {
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   private fun updateToLatestBundleList(latest: OtaModels.LatestBundleList): OtaModels.LatestBundleListUpdateResult {
+    val latestScope = ReleaseTransaction.ReleaseScope.fromManifest(latest.asManifest())
+    if (configuration.candidateActivationEnabled) {
+      // trial 只允许由真正打开页面的路径消费；进程重启时未完成 trial 必须清理，
+      // 但 pending candidate 可以保留，等待页面首次访问后再进入 trial。
+      runCatching { releaseTransaction.recoverInterruptedCandidate(latestScope) }
+    }
     val current = getCurrentRelease(latest.lynxAppId)
     if (latest.status != OtaModels.ReleaseStatus.ACTIVE) {
       val reasonCode = when (latest.status) {
@@ -387,6 +427,24 @@ class OtaSdk {
       return OtaModels.LatestBundleListUpdateResult.skipped(current, skipMessage)
     }
 
+    if (configuration.candidateActivationEnabled) {
+      val existingCandidate = runCatching { releaseTransaction.candidate(latestScope) }.getOrNull()
+      if (existingCandidate != null && existingCandidate.release.context.releaseId != latest.releaseId) {
+        runCatching { releaseTransaction.discardCandidate(latestScope) }
+      } else if (existingCandidate != null && existingCandidate.release.context.releaseId == latest.releaseId) {
+        return OtaModels.LatestBundleListUpdateResult.candidate(
+          previous = current,
+          candidate = existingCandidate,
+          summary = OtaModels.BundleSyncSummary(
+            latest.releaseId,
+            latest.changedBundles.size,
+            0,
+            latest.changedBundles.size,
+          ),
+        )
+      }
+    }
+
     val manifest = latest.asManifest()
     val scope = ReleaseTransaction.ReleaseScope.fromManifest(manifest)
     val transaction = try {
@@ -397,6 +455,7 @@ class OtaSdk {
           scope = scope,
           targetManifest = manifest,
           embeddedDescriptor = store.embeddedRelease(latest.lynxAppId),
+          stageAsCandidate = configuration.candidateActivationEnabled,
         ),
       )
     } catch (error: Exception) {
@@ -425,6 +484,20 @@ class OtaSdk {
     }
     val activated = transaction.installed
       ?: return OtaModels.LatestBundleListUpdateResult.noRelease(transaction.current)
+    if (configuration.candidateActivationEnabled) {
+      val candidate = releaseTransaction.candidate(scope)
+        ?: throw OtaSdkException("candidate 发布后不可读取")
+      return OtaModels.LatestBundleListUpdateResult.candidate(
+        previous = current,
+        candidate = candidate,
+        summary = OtaModels.BundleSyncSummary(
+          manifest.releaseId,
+          manifest.bundles.size,
+          transaction.downloadedBundleCount,
+          transaction.copiedBundleCount,
+        ),
+      )
+    }
     // 兼容旧 pageId facade；Router 的实际读取优先使用 states/<appId>.json。
     store.writeCurrentRelease(activated)
     val outcome = OtaModels.BundleSyncSummary(
