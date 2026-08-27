@@ -50,6 +50,16 @@ public actor ReleaseTransaction {
         self.canonicalStore = CanonicalOtaStore(baseDirectory: store.baseDirectoryURL)
     }
 
+    /// 测试专用初始化：把持久化提交前后的故障点注入 canonical store。
+    /// 生产调用方继续使用 `init(store:)`，因此不会暴露或依赖故障控制能力。
+    init(store: FileOtaReleaseStore, faultInjector: any OtaTransactionFaultInjecting) {
+        self.store = store
+        self.canonicalStore = CanonicalOtaStore(
+            baseDirectory: store.baseDirectoryURL,
+            faultInjector: faultInjector
+        )
+    }
+
     /// 返回作用域内 current；没有 OTA current 时由 embedded 作为首次运行回退。
     public func current(scope: OtaReleaseScope) async -> OtaInstalledRelease? {
         do {
@@ -101,6 +111,41 @@ public actor ReleaseTransaction {
         let scope = OtaReleaseScope(app: release.context.app, lynxAppId: release.context.lynxAppId)
         try await prepareLegacyStateIfNeeded(scope: scope)
         try await canonicalStore.stage(release)
+    }
+
+    public func stageCandidate(_ release: OtaInstalledRelease) async throws {
+        let scope = OtaReleaseScope(app: release.context.app, lynxAppId: release.context.lynxAppId)
+        try await prepareLegacyStateIfNeeded(scope: scope)
+        try await canonicalStore.stageCandidate(release)
+    }
+
+    public func candidate(scope: OtaReleaseScope) async -> OtaCandidateSnapshot? {
+        try? await canonicalStore.candidate(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func beginCandidateTrial(scope: OtaReleaseScope) async throws -> OtaCandidateSnapshot {
+        try await canonicalStore.beginCandidateTrial(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func confirmCandidate(scope: OtaReleaseScope) async throws -> OtaInstalledRelease {
+        try await canonicalStore.confirmCandidate(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func candidateBundle(scope: OtaReleaseScope, bundleName: String) async throws -> URL? {
+        try validateBundleName(bundleName)
+        return try await canonicalStore.candidateBundle(
+            app: scope.app,
+            lynxAppId: scope.lynxAppId,
+            bundleName: bundleName
+        )
+    }
+
+    public func discardCandidate(scope: OtaReleaseScope) async throws {
+        try await canonicalStore.discardCandidate(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func recoverInterruptedCandidate(scope: OtaReleaseScope) async throws {
+        try await canonicalStore.recoverInterruptedCandidate(app: scope.app, lynxAppId: scope.lynxAppId)
     }
 
     public func activate(scope: OtaReleaseScope) async throws -> OtaInstalledRelease {

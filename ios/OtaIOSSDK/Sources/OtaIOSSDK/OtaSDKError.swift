@@ -3,7 +3,10 @@ import Foundation
 public enum OtaSDKError: Error, LocalizedError, Equatable {
     case notInitialized
     case missingReleaseIdentifier
+    case missingCurrentRelease
     case missingStagedRelease
+    case missingCandidateRelease
+    case candidateNotInTrial
     case sizeMismatch(expected: Int, actual: Int64)
     case checksumMismatch(expected: String, actual: String)
     case invalidResponse(statusCode: Int, body: String)
@@ -23,8 +26,14 @@ public enum OtaSDKError: Error, LocalizedError, Equatable {
             return "OTA SDK 尚未初始化"
         case .missingReleaseIdentifier:
             return "更新命中结果缺少 releaseId"
+        case .missingCurrentRelease:
+            return "当前没有可用于测试准备的已校验版本"
         case .missingStagedRelease:
             return "当前没有可激活的已下载版本"
+        case .missingCandidateRelease:
+            return "当前没有可用的候选版本"
+        case .candidateNotInTrial:
+            return "候选版本尚未进入试运行状态"
         case let .sizeMismatch(expected, actual):
             return "Bundle 大小校验失败，期望 \(expected) 字节，实际 \(actual) 字节"
         case let .checksumMismatch(expected, actual):

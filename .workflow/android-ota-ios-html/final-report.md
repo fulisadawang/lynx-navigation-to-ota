@@ -42,3 +42,12 @@ Android OTA + Router 已完成与 iOS 行为契约的核心对齐，并在 IN201
 - 使用 `bash scripts/ota-fault/run.sh --platform android --tier sdk --case all` 做本地 SDK 回归。
 - 使用 `docs/android-ota-test-report.html` 的筛选器按 `JVM / SDK`、`真机 / adb`、`真实 OTA` 查看证据。
 - 新 release 发布后复用 `A-02/A-05/A-06/A-07/A-10/A-16` 验证真实版本变化。
+
+## 2026-08-27 Final Test Follow-up
+
+- Android 使用已连接的 IN2010 真机 `a7e90f03` 完成聚焦复验：OTA JVM 19/19、motion JVM 7/7、candidate 同步、正常 promote、首屏故障 discard 和 `candidate 发布后不可读取` 竞态回归均通过；异常计数为 0。
+- Android 最小修复位于 `android/lynx-shell/src/main/kotlin/com/ota/android/sdk/OtaSdk.kt`：candidate 在后台同步与页面消费之间合法消失时，重新读取 current 并返回稳定结果，不再把 promote/discard 竞态报告成激活失败。
+- Android 仍未验证“已有 stable downloaded current + 新 candidate 首屏失败后保留 stable current”，原因是本轮真实服务每个 App ID 只有一个 latest release，不能在不伪造私有 state 的情况下构造双版本前置条件。
+- iOS 使用 Build iOS Apps / XcodeBuildMCP 在 iPhone 16 Pro / iOS 18.1 Simulator 上完成真实 live smoke：`testLiveOtaServerRefreshSmoke` 通过，`1 passed / 0 failed`，约 15.3 秒；凭据只存在 test runner 环境，不进入报告。
+- iOS 本轮没有修改源代码；此前无凭据 runner 的 skip 和一次环境注入超时均保留为历史证据，已由本轮有效 XcodeBuildMCP `testRunnerEnv` 结果补齐 live smoke。
+- 证据索引：`/tmp/lynx-android-final-test-result-v2.txt`、`/tmp/lynx-ios-final-test-result.txt`、Android v2 logcat/state 文件、XcodeBuildMCP result bundle（路径已写入 HTML 报告关联结果）。

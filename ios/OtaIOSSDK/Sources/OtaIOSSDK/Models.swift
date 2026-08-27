@@ -749,10 +749,39 @@ public struct OtaReportResponse: Codable, Equatable, Sendable {
     }
 }
 
+public enum OtaCandidateStatus: String, Codable, Equatable, Sendable {
+    case pending
+    case trial
+}
+
+/// 已完成下载和文件校验、但还没有替换 current 的候选 Release。
+public struct OtaCandidateSnapshot: Equatable, Sendable {
+    public let release: OtaInstalledRelease
+    public let status: OtaCandidateStatus
+    public let failureCount: Int
+    public let createdAt: Date
+    public let trialStartedAt: Date?
+
+    public init(
+        release: OtaInstalledRelease,
+        status: OtaCandidateStatus,
+        failureCount: Int = 0,
+        createdAt: Date,
+        trialStartedAt: Date? = nil
+    ) {
+        self.release = release
+        self.status = status
+        self.failureCount = failureCount
+        self.createdAt = createdAt
+        self.trialStartedAt = trialStartedAt
+    }
+}
+
 public enum OtaUpdateResult: Equatable, Sendable {
     case noUpdate(current: OtaInstalledRelease?)
     case alreadyActive(OtaInstalledRelease)
     case updated(from: OtaInstalledRelease?, to: OtaInstalledRelease)
+    case candidate(from: OtaInstalledRelease?, candidate: OtaCandidateSnapshot)
 }
 
 public struct OtaBundleSyncSummary: Equatable, Sendable {
@@ -774,6 +803,7 @@ public enum OtaLatestBundleListUpdateResult: Equatable, Sendable {
     case alreadyActive(OtaInstalledRelease)
     case skipped(current: OtaInstalledRelease?, message: String)
     case updated(from: OtaInstalledRelease?, to: OtaInstalledRelease, summary: OtaBundleSyncSummary)
+    case candidate(from: OtaInstalledRelease?, candidate: OtaCandidateSnapshot, summary: OtaBundleSyncSummary)
 }
 
 public struct OtaHostLatestBundleLists: Codable, Equatable, Sendable {
@@ -978,6 +1008,8 @@ public enum OtaLifecycleState: Equatable, Sendable {
     case downloading(releaseId: String)
     case validating(releaseId: String)
     case ready(releaseId: String)
+    case candidate(releaseId: String)
+    case trial(releaseId: String)
     case activating(releaseId: String)
     case active(OtaCurrentReleaseContext)
     case rollingBack(fromReleaseId: String?, toReleaseId: String?)
@@ -1002,6 +1034,8 @@ public struct OtaSDKConfiguration: Sendable {
     public let lynxSdkVersion: String?
     public let otaClientToken: String
     public let storageDirectory: URL
+    /// 开启后下载校验只写 candidate/trial，健康确认后才 promote 到 current。
+    public let candidateActivationEnabled: Bool
 
     public init(
         apiBaseURL: URL,
@@ -1020,7 +1054,8 @@ public struct OtaSDKConfiguration: Sendable {
         nativeProtocolVersion: String? = nil,
         lynxSdkVersion: String? = nil,
         otaClientToken: String = OtaDefaults.otaClientToken,
-        storageDirectory: URL? = nil
+        storageDirectory: URL? = nil,
+        candidateActivationEnabled: Bool = false
     ) {
         self.apiBaseURL = apiBaseURL
         self.app = app
@@ -1040,5 +1075,6 @@ public struct OtaSDKConfiguration: Sendable {
         self.otaClientToken = otaClientToken
         self.storageDirectory = storageDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ota-ios-sdk", isDirectory: true)
+        self.candidateActivationEnabled = candidateActivationEnabled
     }
 }

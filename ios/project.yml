@@ -38,3 +38,17 @@ targets:
           INFOPLIST_FILE: LynxShellSample/Supporting/Info-Debug.plist
         Release:
           INFOPLIST_FILE: LynxShellSample/Supporting/Info.plist
+  LynxShellUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: '13.0'
+    sources:
+      - path: Tests/UITests
+    dependencies:
+      - target: LynxShell
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.lynxshell.uitests
+        TARGETED_DEVICE_FAMILY: '1,2'
+        TEST_TARGET_NAME: LynxShell
+        GENERATE_INFOPLIST_FILE: YES

@@ -30,26 +30,127 @@ public enum LynxRouter {
         install(to: navigationController)
         let runtime = try LynxOtaRuntime(configuration: otaConfiguration)
         LynxShell.installOtaRuntime(runtime)
+#if DEBUG
+        if ProcessInfo.processInfo.environment["LYNX_TEST_SKIP_STARTUP_SYNC"] == "1" {
+            return runtime
+        }
+#endif
         Task { await runtime.synchronizeAllBundles() }
         return runtime
     }
 
+#if DEBUG
+private enum OtaDebugF12Status {
+    private static let key = "lynx.shell.debug.f12.status"
+
+    static func set(_ value: String) {
+        UserDefaults.standard.set(value, forKey: key)
+    }
+
+    static func get() -> String {
+        UserDefaults.standard.string(forKey: key) ?? "idle"
+    }
+}
+
+    /**
+     * XCUITest 专用故障入口；只在 Debug 编译和显式环境变量下替换 runtime。
+     * 不进入 Release，且仍使用 App Bundle 的真实 Lynx 字节验证容器回滚。
+     */
+    @discardableResult
+    public static func installDebugFaultRuntimeIfRequested() -> Bool {
+        guard let rawScenario = ProcessInfo.processInfo.environment[
+            "LYNX_TEST_FAULT_SCENARIO"
+        ],
+              let scenario = LynxDebugFaultRuntime.Scenario(rawValue: rawScenario) else {
+            return false
+        }
+        LynxShell.installOtaRuntime(LynxDebugFaultRuntime(scenario: scenario))
+        return true
+    }
+
+    /** 外网不可用时启用进程内 OTA 语义模拟器；只在 Debug + 显式环境变量下生效。 */
+    @discardableResult
+    public static func installDebugMockOtaRuntimeIfRequested() -> Bool {
+        guard ProcessInfo.processInfo.environment["LYNX_TEST_MOCK_OTA"] == "1" else {
+            return false
+        }
+        LynxShell.installOtaRuntime(LynxDebugMockOtaRuntime())
+        return true
+    }
+#endif
+
     /** App 每次回前台调用；按业务约定不做时间门控，触发 host 全量同步。 */
     public static func onApplicationForeground() {
+#if DEBUG
+        if ProcessInfo.processInfo.environment["LYNX_TEST_SKIP_STARTUP_SYNC"] == "1" {
+            return
+        }
+#endif
         guard let runtime = LynxShell.otaRuntime() as? LynxOtaRuntime else { return }
         Task { await runtime.synchronizeAllBundles() }
     }
 
     /** Demo/宿主主动刷新全量 OTA；返回是否完成了一次可用的全量同步。 */
     public static func refreshAllOtaBundles() async -> Bool {
-        guard let runtime = LynxShell.otaRuntime() as? LynxOtaRuntime else { return false }
-        return await runtime.synchronizeAllBundles()
+        if let runtime = LynxShell.otaRuntime() as? LynxOtaRuntime {
+            return await runtime.synchronizeAllBundles()
+        }
+#if DEBUG
+        if let runtime = LynxShell.otaRuntime() as? LynxDebugMockOtaRuntime {
+            return await runtime.synchronizeAllBundles()
+        }
+#endif
+        return false
     }
+
+#if DEBUG
+    /** XCUITest F12 准备真实 current/previous downloaded pair；Release 不暴露。 */
+    public static func debugPrepareRollbackProcessTest() async -> String {
+        OtaDebugF12Status.set("starting")
+        guard let runtime = LynxShell.otaRuntime() as? LynxOtaRuntime,
+              let identity = embeddedIdentity(bundleName: "home.lynx.bundle") else {
+            OtaDebugF12Status.set("runtime_or_manifest_missing")
+            return "runtime_or_manifest_missing"
+        }
+        OtaDebugF12Status.set("seeding")
+        do {
+            try await runtime.debugSeedRollbackPair(
+                lynxAppId: identity.lynxAppId,
+                bundleName: identity.bundleName
+            )
+            OtaDebugF12Status.set("seeded")
+            return "ok"
+        } catch {
+            let result = "seed_failed:\(error.localizedDescription)"
+            OtaDebugF12Status.set(result)
+            return result
+        }
+    }
+
+    public static var debugF12Status: String {
+        OtaDebugF12Status.get()
+    }
+#endif
 
     /** 只暴露是否已配置，不暴露 clientToken、服务地址或磁盘目录。 */
     public static var isOtaInstalled: Bool {
-        LynxShell.otaRuntime() is LynxOtaRuntime
+        if LynxShell.otaRuntime() is LynxOtaRuntime { return true }
+#if DEBUG
+        if LynxShell.otaRuntime() is LynxDebugMockOtaRuntime { return true }
+#endif
+        return false
     }
+
+#if DEBUG
+    /** Debug/XCUITest 读取真实 ServerOtaAPIClient 的请求数；Release 不暴露。 */
+    public static var debugHTTPRequestCount: Int {
+        OtaDebugHTTPMetrics.snapshot()
+    }
+
+    public static func resetDebugHTTPRequestCount() {
+        OtaDebugHTTPMetrics.reset()
+    }
+#endif
 
     /**
      * 仅供宿主 Demo/Coordinator 使用：让宿主 UINavigationController 统一管理返回手势。

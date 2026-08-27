@@ -486,7 +486,23 @@ class OtaSdk {
       ?: return OtaModels.LatestBundleListUpdateResult.noRelease(transaction.current)
     if (configuration.candidateActivationEnabled) {
       val candidate = releaseTransaction.candidate(scope)
-        ?: throw OtaSdkException("candidate 发布后不可读取")
+      if (candidate == null) {
+        /*
+         * 页面可以在 install 返回后立即消费 candidate：首屏健康会 promote，
+         * 首屏失败会 discard。后台同步此时再次读取 candidate 看到 null 是一个
+         * 合法的并发结果，不能把它误报成激活失败，也不能覆盖页面已经保留的 current。
+         */
+        val currentAfterCandidateConsumption = getCurrentRelease(latest.lynxAppId)
+        return if (
+          currentAfterCandidateConsumption != null &&
+          currentAfterCandidateConsumption.context.releaseId == manifest.releaseId &&
+          hasAllLocalBundles(currentAfterCandidateConsumption)
+        ) {
+          OtaModels.LatestBundleListUpdateResult.alreadyActive(currentAfterCandidateConsumption)
+        } else {
+          OtaModels.LatestBundleListUpdateResult.noRelease(currentAfterCandidateConsumption ?: current)
+        }
+      }
       return OtaModels.LatestBundleListUpdateResult.candidate(
         previous = current,
         candidate = candidate,

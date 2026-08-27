@@ -55,6 +55,7 @@ public actor OtaSDK {
         let expectedSha256: String
         let fileSize: Int64
         let modificationTime: TimeInterval
+        let fileIdentifier: UInt64
     }
 
     private struct DownloadOutcome: Sendable {
@@ -80,6 +81,45 @@ public actor OtaSDK {
         downloader: OtaBundleDownloading? = nil,
         checksumValidator: OtaChecksumValidating = SHA256ChecksumValidator()
     ) {
+        self.init(
+            configuration: configuration,
+            apiClient: apiClient,
+            store: store,
+            downloader: downloader,
+            checksumValidator: checksumValidator,
+            transactionFaultInjectorOptional: nil
+        )
+    }
+
+#if DEBUG
+    /** 仅供同一 Debug Target 的 XCUITest 进程中断恢复 harness 使用。 */
+    init(
+        configuration: OtaSDKConfiguration,
+        apiClient: OtaAPIClientProtocol? = nil,
+        store: FileOtaReleaseStore? = nil,
+        downloader: OtaBundleDownloading? = nil,
+        checksumValidator: OtaChecksumValidating = SHA256ChecksumValidator(),
+        transactionFaultInjector: any OtaTransactionFaultInjecting
+    ) {
+        self.init(
+            configuration: configuration,
+            apiClient: apiClient,
+            store: store,
+            downloader: downloader,
+            checksumValidator: checksumValidator,
+            transactionFaultInjectorOptional: transactionFaultInjector
+        )
+    }
+#endif
+
+    private init(
+        configuration: OtaSDKConfiguration,
+        apiClient: OtaAPIClientProtocol?,
+        store: FileOtaReleaseStore?,
+        downloader: OtaBundleDownloading?,
+        checksumValidator: OtaChecksumValidating,
+        transactionFaultInjectorOptional: (any OtaTransactionFaultInjecting)?
+    ) {
         self.configuration = configuration
         self.apiClient = apiClient ?? ServerOtaAPIClient(
             baseURL: configuration.apiBaseURL,
@@ -87,7 +127,14 @@ public actor OtaSDK {
         )
         let resolvedStore = store ?? FileOtaReleaseStore(baseDirectory: configuration.storageDirectory)
         self.store = resolvedStore
-        self.releaseTransaction = ReleaseTransaction(store: resolvedStore)
+        if let transactionFaultInjectorOptional {
+            self.releaseTransaction = ReleaseTransaction(
+                store: resolvedStore,
+                faultInjector: transactionFaultInjectorOptional
+            )
+        } else {
+            self.releaseTransaction = ReleaseTransaction(store: resolvedStore)
+        }
         self.bundleRuntime = BundleRuntime(transaction: releaseTransaction)
         self.downloader = downloader ?? URLSessionBundleDownloader(
             allowLocalFileURLs: configuration.environment == .test &&
@@ -128,6 +175,70 @@ public actor OtaSDK {
         await releaseTransaction.current(app: configuration.app, lynxAppId: lynxAppId)
     }
 
+    /// 返回持久化的 candidate；current 读取入口不会消费 candidate。
+    public func candidate(lynxAppId: String? = nil) async -> OtaCandidateSnapshot? {
+        await releaseTransaction.candidate(
+            scope: OtaReleaseScope(
+                app: configuration.app,
+                lynxAppId: lynxAppId ?? configuration.lynxAppId
+            )
+        )
+    }
+
+    public func candidateBundleURL(lynxAppId: String, bundleName: String) async throws -> URL? {
+        try await releaseTransaction.candidateBundle(
+            scope: OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId),
+            bundleName: bundleName
+        )
+    }
+
+    /// 健康确认成功后，原子地把 candidate promote 为 current，旧 current 进入 previous。
+    public func confirmCandidateHealthy(lynxAppId: String? = nil) async throws -> OtaInstalledRelease {
+        let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
+        let scope = OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)
+        guard let candidate = await releaseTransaction.candidate(scope: scope) else {
+            throw OtaSDKError.missingCandidateRelease
+        }
+        lifecycleState = .activating(releaseId: candidate.release.context.releaseId)
+        let confirmed = try await releaseTransaction.confirmCandidate(scope: scope)
+        lifecycleState = .active(confirmed.context)
+        try? await report(
+            event: .activate,
+            releaseId: confirmed.context.releaseId,
+            lynxAppId: resolvedLynxAppId,
+            pageId: nil,
+            eventStage: .activate,
+            eventResult: .success,
+            message: "candidate_confirmed_healthy"
+        )
+        return confirmed
+    }
+
+    /// 页面真正打开 candidate 时才进入 trial，避免 host 全量同步让未访问 AppId 悬挂 trial。
+    public func beginCandidateTrial(lynxAppId: String? = nil) async throws -> OtaCandidateSnapshot {
+        let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
+        let candidate = try await releaseTransaction.beginCandidateTrial(
+            scope: OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)
+        )
+        lifecycleState = .trial(releaseId: candidate.release.context.releaseId)
+        return candidate
+    }
+
+    public func discardCandidate(lynxAppId: String? = nil) async throws {
+        let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
+        try await releaseTransaction.discardCandidate(
+            scope: OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)
+        )
+    }
+
+    /// 进程在 trial 阶段退出后的冷启动恢复：丢弃未确认 candidate，current 保持不变。
+    public func recoverInterruptedCandidate(lynxAppId: String? = nil) async throws {
+        let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
+        try await releaseTransaction.recoverInterruptedCandidate(
+            scope: OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)
+        )
+    }
+
     /// `current` 是 Bundle Runtime 的只读入口；调用方不需要了解 pointer 文件名。
     public func current(lynxAppId: String? = nil) async -> OtaInstalledRelease? {
         await getCurrentRelease(lynxAppId: lynxAppId ?? configuration.lynxAppId)
@@ -138,6 +249,64 @@ public actor OtaSDK {
     public func current(lynxAppId: String, bundleName: String) async -> URL? {
         await currentTemplateURL(lynxAppId: lynxAppId, bundleName: bundleName)
     }
+
+#if DEBUG
+    /**
+     * XCUITest F12 准备入口：复用已经校验过的当前 Bundle，在真实 canonical store 中构造
+     * debug-previous -> debug-current 两个 downloaded Release。只在 Debug 测试 Target
+     * 使用，生产没有该 API，也不会复制 baseline 到正式 OTA 目录。
+     */
+    func debugSeedRollbackPair(
+        lynxAppId: String,
+        bundleName: String,
+        sourceURL: URL? = nil
+    ) async throws {
+        let currentURL: URL?
+        if let sourceURL {
+            currentURL = sourceURL
+        } else {
+            currentURL = await currentTemplateURL(
+                lynxAppId: lynxAppId,
+                bundleName: bundleName
+            )
+        }
+        guard let currentURL else { throw OtaSDKError.missingCurrentRelease }
+        let sourceURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lynx-debug-rollback-\(UUID().uuidString).lynx.bundle")
+        try FileManager.default.copyItem(at: currentURL, to: sourceURL)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let checksum = try SHA256ChecksumValidator().sha256(for: sourceURL)
+        let scope = OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
+        func release(_ releaseId: String) -> OtaInstalledRelease {
+            OtaInstalledRelease(
+                context: OtaCurrentReleaseContext(
+                    env: configuration.environment,
+                    app: configuration.app,
+                    lynxAppId: lynxAppId,
+                    releaseId: releaseId,
+                    platform: configuration.platform,
+                    status: .active
+                ),
+                installedAt: Date(),
+                bundles: [
+                    OtaInstalledBundle(
+                        pageId: 0,
+                        bundlePath: bundleName,
+                        bundleSha256: checksum,
+                        remoteURL: sourceURL,
+                        localFilePath: sourceURL.path
+                    ),
+                ]
+            )
+        }
+
+        try await releaseTransaction.stage(release("debug-previous"))
+        _ = try await releaseTransaction.activate(scope: scope)
+        try await releaseTransaction.stage(release("debug-current"))
+        _ = try await releaseTransaction.activate(scope: scope)
+    }
+#endif
 
     /// 按 `lynxAppId + bundleName` 精确查找 current 本地文件。
     ///
@@ -173,6 +342,9 @@ public actor OtaSDK {
         let attributes = try FileManager.default.attributesOfItem(atPath: localURL.path)
         let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? -1
         let modificationTime = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        // 同尺寸替换文件可能落在相同的 mtime 精度窗口内；文件身份变化时必须
+        // 让进程内校验缓存 miss，不能把旧文件的“已验证”结论带给新 inode。
+        let fileIdentifier = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
         let key = BundleValidationKey(
             app: configuration.app.rawValue,
             lynxAppId: lynxAppId,
@@ -180,7 +352,8 @@ public actor OtaSDK {
             bundleName: bundleName,
             expectedSha256: expectedSha256.lowercased(),
             fileSize: fileSize,
-            modificationTime: modificationTime
+            modificationTime: modificationTime,
+            fileIdentifier: fileIdentifier
         )
         if validatedBundleCache.contains(key) {
             return true
@@ -296,7 +469,11 @@ public actor OtaSDK {
         let current = await getCurrentRelease(lynxAppId: manifest.lynxAppId)
         let reusableRelease = await reusableReleaseSnapshot(current: current, lynxAppId: manifest.lynxAppId)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: reusableRelease)
-        try await releaseTransaction.stage(outcome.installed)
+        if configuration.candidateActivationEnabled {
+            try await releaseTransaction.stageCandidate(outcome.installed)
+        } else {
+            try await releaseTransaction.stage(outcome.installed)
+        }
         lifecycleState = .ready(releaseId: releaseId)
         return outcome.installed
     }
@@ -367,6 +544,13 @@ public actor OtaSDK {
             )
         }
         _ = try await downloadUpdate(match)
+        if configuration.candidateActivationEnabled {
+            guard let candidate = await candidate(lynxAppId: configuration.lynxAppId) else {
+                throw OtaSDKError.missingCandidateRelease
+            }
+            lifecycleState = .candidate(releaseId: candidate.release.context.releaseId)
+            return .candidate(from: current, candidate: candidate)
+        }
         let activated = try await activateStagedRelease()
         return .updated(from: current, to: activated)
     }
@@ -436,6 +620,9 @@ public actor OtaSDK {
         _ latest: OtaLatestBundleList,
         current: OtaInstalledRelease?
     ) async throws -> OtaLatestBundleListUpdateResult {
+        if configuration.candidateActivationEnabled {
+            try? await recoverInterruptedCandidate(lynxAppId: latest.lynxAppId)
+        }
         if latest.status != .active {
             let reasonCode: OtaReasonCode = latest.status == .disabled ? .releaseDisabled : .releaseRolledBack
             try? await report(
@@ -520,6 +707,14 @@ public actor OtaSDK {
         lifecycleState = .downloading(releaseId: manifest.releaseId)
         let reusableRelease = await reusableReleaseSnapshot(current: current, lynxAppId: latest.lynxAppId)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: reusableRelease)
+        if configuration.candidateActivationEnabled {
+            try await releaseTransaction.stageCandidate(outcome.installed)
+            lifecycleState = .candidate(releaseId: manifest.releaseId)
+            guard let candidate = await candidate(lynxAppId: latest.lynxAppId) else {
+                throw OtaSDKError.missingCandidateRelease
+            }
+            return .candidate(from: current, candidate: candidate, summary: outcome.summary)
+        }
         try await releaseTransaction.stage(outcome.installed)
         lifecycleState = .ready(releaseId: manifest.releaseId)
         let activated: OtaInstalledRelease

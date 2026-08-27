@@ -11,6 +11,10 @@ import UIKit
 final class LauncherViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
+#if DEBUG
+    private var debugF12StatusLabel: UILabel?
+    private var debugF12StatusTimer: Timer?
+#endif
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -83,6 +87,19 @@ final class LauncherViewController: UIViewController {
         )
         contentStack.setCustomSpacing(28, after: introLabel)
         contentStack.addArrangedSubview(otaHomeButton)
+
+#if DEBUG
+        if ProcessInfo.processInfo.environment["LYNX_TEST_PAUSE_AFTER_ROLLBACK_COMMIT"] == "1" {
+            let prepareRollbackButton = makeButton(
+                title: "准备 F12 回滚进程测试",
+                filled: false,
+                action: #selector(prepareRollbackProcessTest)
+            )
+            contentStack.setCustomSpacing(8, after: otaHomeButton)
+            contentStack.addArrangedSubview(prepareRollbackButton)
+            installDebugF12StatusLabel()
+        }
+#endif
 
         let playgroundButton = makeButton(
             title: "打开 Playground 首页",
@@ -283,6 +300,39 @@ final class LauncherViewController: UIViewController {
         )
     }
 
+#if DEBUG
+    @objc private func prepareRollbackProcessTest() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await LynxRouter.debugPrepareRollbackProcessTest()
+            let success = result == "ok"
+            self.presentShellAlert(
+                title: success ? "F12 准备完成" : "F12 准备失败",
+                message: success
+                    ? "已准备 canonical downloaded current/previous，可开始首屏回滚进程中断测试"
+                    : "准备失败：\(result)"
+            )
+        }
+    }
+
+    private func installDebugF12StatusLabel() {
+        let label = makeLabel(text: "F12 status: idle", style: .caption1)
+        label.accessibilityIdentifier = "lynx-debug-f12-status"
+        label.textColor = .systemOrange
+        contentStack.addArrangedSubview(label)
+        debugF12StatusLabel = label
+        updateDebugF12Status()
+        debugF12StatusTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.updateDebugF12Status()
+        }
+    }
+
+    private func updateDebugF12Status() {
+        debugF12StatusLabel?.text = "F12 status: \(LynxRouter.debugF12Status)"
+        debugF12StatusLabel?.accessibilityValue = LynxRouter.debugF12Status
+    }
+#endif
+
     @objc private func deleteAllOtaBundles() {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -294,4 +344,10 @@ final class LauncherViewController: UIViewController {
             }
         }
     }
+
+#if DEBUG
+    deinit {
+        debugF12StatusTimer?.invalidate()
+    }
+#endif
 }

@@ -25,6 +25,7 @@ public struct LynxOtaConfiguration {
     public let clientToken: String
     public let storageDirectory: URL?
     public let pageRefreshInterval: TimeInterval
+    public let candidateActivationEnabled: Bool
 
     public init(
         apiBaseURL: URL,
@@ -43,7 +44,8 @@ public struct LynxOtaConfiguration {
         lynxSDKVersion: String? = "4.0.0",
         clientToken: String,
         storageDirectory: URL? = nil,
-        pageRefreshInterval: TimeInterval = Self.defaultPageRefreshInterval
+        pageRefreshInterval: TimeInterval = Self.defaultPageRefreshInterval,
+        candidateActivationEnabled: Bool = false
     ) {
         self.apiBaseURL = apiBaseURL
         self.hostApp = hostApp
@@ -62,6 +64,7 @@ public struct LynxOtaConfiguration {
         self.clientToken = clientToken
         self.storageDirectory = storageDirectory
         self.pageRefreshInterval = pageRefreshInterval
+        self.candidateActivationEnabled = candidateActivationEnabled
     }
 
     private func makeSDKConfiguration() throws -> OtaSDKConfiguration {
@@ -111,7 +114,8 @@ public struct LynxOtaConfiguration {
             nativeProtocolVersion: nativeProtocolVersion,
             lynxSdkVersion: lynxSDKVersion,
             otaClientToken: clientToken,
-            storageDirectory: directory
+            storageDirectory: directory,
+            candidateActivationEnabled: candidateActivationEnabled
         )
     }
 
@@ -165,9 +169,12 @@ struct PreparedOtaBundle {
 protocol LynxBundleRuntime {
     func prepare(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle
     func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle?
+    /** 普通页面可在 candidate trial 期间读取候选；Native Tab 继续只读 current。 */
+    func resolvePage(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle?
     /** 普通页面命中 remote current 后的非阻塞 App ID 级 30 分钟后台检查；Tab 不调用。 */
     func refreshAppBundleIfNeeded(lynxAppId: String) async
     func rollback(lynxAppId: String, reason: String) async throws -> Bool
+    func confirmCandidateHealthy(lynxAppId: String) async throws -> Bool
     func reportPageOpen(lynxAppId: String, bundleName: String) async
     func deleteBundles(lynxAppId: String) async throws
     func deleteAllBundles() async throws
@@ -205,6 +212,37 @@ private actor OtaSDKGate {
     }
 }
 
+#if DEBUG
+/** Debug/XCUITest 进程中断标记；写入 UserDefaults 只用于测试时序观测。 */
+enum OtaDebugProcessFaultMarker {
+    private static let key = "lynx.shell.debug.rollback.process.marker"
+
+    static func reset() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    static func markAfterRollbackCommit() {
+        UserDefaults.standard.set("after_rollback_commit", forKey: key)
+    }
+
+    static func state() -> String? {
+        UserDefaults.standard.string(forKey: key)
+    }
+}
+
+/**
+ * 只在显式 Debug 环境中暂停真实 CanonicalOtaStore 的 afterRollbackCommit 点。
+ * state 已经原子写入后才设置 marker，XCUITest 可以 terminate 进程并验证冷启动读取。
+ */
+final class OtaDebugPauseAfterRollbackCommitFaultInjector: OtaTransactionFaultInjecting, @unchecked Sendable {
+    func check(_ point: OtaTransactionFaultPoint) throws {
+        guard point == .afterRollbackCommit else { return }
+        OtaDebugProcessFaultMarker.markAfterRollbackCommit()
+        Thread.sleep(forTimeInterval: 30)
+    }
+}
+#endif
+
 /**
  * Router 与内置 OTA 引擎之间的真实异步接缝。
  *
@@ -216,6 +254,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
     private let embeddedBundleRegistry: EmbeddedBundleRegistry
     private let sdkGate = OtaSDKGate()
     private let pageRefreshInterval: TimeInterval
+    private let candidateActivationEnabled: Bool
     private var lastPageRefreshAt: [String: Date] = [:]
     private var pageRefreshTasks: [String: Task<Void, Never>] = [:]
     private var fullSyncTask: Task<OtaHostBundleListSyncResult?, Never>?
@@ -223,9 +262,25 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
     private var fullSyncPending = false
 
     public init(configuration: LynxOtaConfiguration) throws {
-        sdk = OtaSDK(configuration: try configuration.makeSDKConfigurationForRuntime())
+        let sdkConfiguration = try configuration.makeSDKConfigurationForRuntime()
+#if DEBUG
+        if ProcessInfo.processInfo.environment["LYNX_TEST_PAUSE_AFTER_ROLLBACK_COMMIT"] == "1" {
+            if ProcessInfo.processInfo.environment["LYNX_TEST_RESET_PROCESS_FAULT_MARKER"] == "1" {
+                OtaDebugProcessFaultMarker.reset()
+            }
+            sdk = OtaSDK(
+                configuration: sdkConfiguration,
+                transactionFaultInjector: OtaDebugPauseAfterRollbackCommitFaultInjector()
+            )
+        } else {
+            sdk = OtaSDK(configuration: sdkConfiguration)
+        }
+#else
+        sdk = OtaSDK(configuration: sdkConfiguration)
+#endif
         embeddedBundleRegistry = EmbeddedBundleRegistry()
         pageRefreshInterval = configuration.pageRefreshInterval
+        candidateActivationEnabled = configuration.candidateActivationEnabled
     }
 
     /** App 启动和每次回前台都执行；并发触发时合并为当前任务之后再补一次。 */
@@ -259,6 +314,33 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
         } while fullSyncPending
         return succeeded
     }
+
+#if DEBUG
+    /** XCUITest F12 准备真实 canonical current/previous downloaded pair。 */
+    func debugSeedRollbackPair(lynxAppId: String, bundleName: String) async throws {
+        fullSyncPending = false
+        let startupTask = fullSyncTask
+        startupTask?.cancel()
+        if let startupTask {
+            _ = await startupTask.value
+        }
+        fullSyncTask = nil
+        fullSyncTaskID = nil
+        guard let embedded = try embeddedBundleRegistry.resolve(
+            lynxAppId: lynxAppId,
+            bundleName: bundleName
+        ) else {
+            throw LynxOtaError.unreadableBundle("embedded/\(lynxAppId)/\(bundleName)")
+        }
+        try await withSDK { sdk in
+            try await sdk.debugSeedRollbackPair(
+                lynxAppId: lynxAppId,
+                bundleName: bundleName,
+                sourceURL: embedded.fileURL
+            )
+        }
+    }
+#endif
 
     /** 页面打开：有 current 立即交付；缺失/损坏才等待网络修复。 */
     func prepare(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle {
@@ -321,14 +403,54 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
         return try await prepared(lynxAppId: lynxAppId, bundleName: bundleName, url: localURL)
     }
 
+    func resolvePage(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
+        if candidateActivationEnabled,
+           let candidate = try await withSDK({ sdk -> OtaCandidateSnapshot? in
+               guard let candidate = await sdk.candidate(lynxAppId: lynxAppId) else {
+                   return nil
+               }
+               if candidate.status == .pending {
+                   return try await sdk.beginCandidateTrial(lynxAppId: lynxAppId)
+               }
+               return candidate
+           }),
+           let candidateURL = try await withSDK({ sdk in
+               try await sdk.candidateBundleURL(lynxAppId: lynxAppId, bundleName: bundleName)
+           }) {
+            return try await prepared(
+                lynxAppId: lynxAppId,
+                bundleName: bundleName,
+                url: candidateURL,
+                releaseId: candidate.release.context.releaseId,
+                source: "candidate_trial"
+            )
+        }
+        return try await resolveCurrent(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
+
     /** cache-first 普通页面使用的后台刷新入口；schedulePageRefreshIfNeeded 自带 AppId 门控。 */
     func refreshAppBundleIfNeeded(lynxAppId: String) async {
+#if DEBUG
+        // F12 只验证 rollback commit 的进程边界；禁止旁路的 30 分钟刷新抢占同一 SDK gate。
+        if ProcessInfo.processInfo.environment["LYNX_TEST_PAUSE_AFTER_ROLLBACK_COMMIT"] == "1" {
+            return
+        }
+#endif
         schedulePageRefreshIfNeeded(lynxAppId: lynxAppId)
     }
 
     /** 首屏失败最多由容器调用一次；恢复 previous/embedded 后重新走 prepare。 */
     func rollback(lynxAppId: String, reason: String) async throws -> Bool {
         try validateAppId(lynxAppId)
+        if candidateActivationEnabled,
+           try await withSDK({ sdk in await sdk.candidate(lynxAppId: lynxAppId) }) != nil {
+            try await withSDK { sdk in
+                try await sdk.discardCandidate(lynxAppId: lynxAppId)
+            }
+            lastPageRefreshAt.removeValue(forKey: lynxAppId)
+            return true
+        }
         let restoredRemote = try await withSDK { sdk in
             try await sdk.rollback(lynxAppId: lynxAppId, reason: reason)
         }
@@ -346,6 +468,16 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
         } catch {
             return false
         }
+    }
+
+    func confirmCandidateHealthy(lynxAppId: String) async throws -> Bool {
+        try validateAppId(lynxAppId)
+        guard candidateActivationEnabled else { return false }
+        _ = try await withSDK { sdk in
+            try await sdk.confirmCandidateHealthy(lynxAppId: lynxAppId)
+        }
+        lastPageRefreshAt[lynxAppId] = Date()
+        return true
     }
 
     func reportPageOpen(lynxAppId: String, bundleName: String) async {
@@ -412,21 +544,29 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
     private func prepared(
         lynxAppId: String,
         bundleName: String,
-        url: URL
+        url: URL,
+        releaseId: String? = nil,
+        source: String = "ota_current"
     ) async throws -> PreparedOtaBundle {
         guard url.isFileURL,
               FileManager.default.fileExists(atPath: url.path),
               FileManager.default.isReadableFile(atPath: url.path) else {
             throw LynxOtaError.unreadableBundle(url.path)
         }
-        let releaseId = try await withSDK { sdk in
-            await sdk.current(lynxAppId: lynxAppId)?.context.releaseId
+        let resolvedReleaseId: String?
+        if let releaseId {
+            resolvedReleaseId = releaseId
+        } else {
+            resolvedReleaseId = try await withSDK { sdk in
+                await sdk.current(lynxAppId: lynxAppId)?.context.releaseId
+            }
         }
         return PreparedOtaBundle(
             lynxAppId: lynxAppId,
             bundleName: bundleName,
             fileURL: url,
-            releaseId: releaseId
+            releaseId: resolvedReleaseId,
+            source: source
         )
     }
 
@@ -506,9 +646,15 @@ actor LynxEmbeddedOnlyRuntime: LynxBundleRuntime {
         )
     }
 
+    func resolvePage(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        try await resolveCurrent(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
+
     func refreshAppBundleIfNeeded(lynxAppId: String) async {}
 
     func rollback(lynxAppId: String, reason: String) async throws -> Bool { false }
+
+    func confirmCandidateHealthy(lynxAppId: String) async throws -> Bool { false }
 
     func reportPageOpen(lynxAppId: String, bundleName: String) async {}
 
@@ -516,3 +662,181 @@ actor LynxEmbeddedOnlyRuntime: LynxBundleRuntime {
 
     func deleteAllBundles() async throws {}
 }
+
+#if DEBUG
+/**
+ * 只供 LynxShellUITests 使用的真实容器故障 runtime。
+ *
+ * 它仍然读取 App Bundle 内的真实 Manifest/Bundle 字节，只替换 OTA current/previous
+ * 的可控指针和 rollback 结果；Release 构建不会编译这段代码，也不会改变生产 runtime。
+ */
+actor LynxDebugFaultRuntime: LynxBundleRuntime {
+    enum Scenario: String {
+        case firstScreenPrevious = "first_screen_previous"
+        case firstScreenEmbedded = "first_screen_embedded"
+    }
+
+    private let registry: EmbeddedBundleRegistry
+    private let scenario: Scenario
+    private var currentRelease: String? = "fault-v2"
+
+    init(
+        scenario: Scenario,
+        registry: EmbeddedBundleRegistry = EmbeddedBundleRegistry()
+    ) {
+        self.scenario = scenario
+        self.registry = registry
+    }
+
+    func prepare(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle {
+        try await resolvePage(lynxAppId: lynxAppId, bundleName: bundleName)
+            ?? embedded(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
+
+    func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        if let currentRelease {
+            return try bundle(
+                lynxAppId: lynxAppId,
+                bundleName: bundleName,
+                releaseId: currentRelease,
+                source: "ota_current"
+            )
+        }
+        return try? embedded(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
+
+    func resolvePage(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        try await resolveCurrent(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
+
+    func refreshAppBundleIfNeeded(lynxAppId: String) async {}
+
+    func rollback(lynxAppId: String, reason: String) async throws -> Bool {
+        switch scenario {
+        case .firstScreenPrevious:
+            currentRelease = "fault-v1"
+        case .firstScreenEmbedded:
+            currentRelease = nil
+        }
+        return true
+    }
+
+    func confirmCandidateHealthy(lynxAppId: String) async throws -> Bool { false }
+
+    func reportPageOpen(lynxAppId: String, bundleName: String) async {}
+
+    func deleteBundles(lynxAppId: String) async throws {
+        currentRelease = nil
+    }
+
+    func deleteAllBundles() async throws {
+        currentRelease = nil
+    }
+
+    private func bundle(
+        lynxAppId: String,
+        bundleName: String,
+        releaseId: String,
+        source: String
+    ) throws -> PreparedOtaBundle {
+        guard let descriptor = try registry.resolve(
+            lynxAppId: lynxAppId,
+            bundleName: bundleName
+        ) else {
+            throw LynxOtaError.unreadableBundle("embedded/\(lynxAppId)/\(bundleName)")
+        }
+        return PreparedOtaBundle(
+            lynxAppId: descriptor.lynxAppId,
+            bundleName: descriptor.bundleName,
+            fileURL: descriptor.fileURL,
+            releaseId: releaseId,
+            source: source
+        )
+    }
+
+    private func embedded(lynxAppId: String, bundleName: String) throws -> PreparedOtaBundle {
+        guard let descriptor = try registry.resolve(
+            lynxAppId: lynxAppId,
+            bundleName: bundleName
+        ) else {
+            throw LynxOtaError.unreadableBundle("embedded/\(lynxAppId)/\(bundleName)")
+        }
+        return PreparedOtaBundle(
+            lynxAppId: descriptor.lynxAppId,
+            bundleName: descriptor.bundleName,
+            fileURL: descriptor.fileURL,
+            releaseId: descriptor.releaseId,
+            source: "embedded_baseline"
+        )
+    }
+}
+
+/**
+ * 外网不可用时的 Debug OTA 语义模拟器：使用真实 embedded Bundle 字节，但模拟
+ * latest-list/下载成功后的 current，并让主动刷新继续走同一 Router/Tab 协议。
+ */
+actor LynxDebugMockOtaRuntime: LynxBundleRuntime {
+    private let registry: EmbeddedBundleRegistry
+    private var releaseId = "mock-ota-r20260825"
+
+    init(registry: EmbeddedBundleRegistry = EmbeddedBundleRegistry()) {
+        self.registry = registry
+    }
+
+    func synchronizeAllBundles() async -> Bool {
+        OtaDebugHTTPMetrics.recordRequest()
+        return true
+    }
+
+    func prepare(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle {
+        try await resolvePage(lynxAppId: lynxAppId, bundleName: bundleName)
+            ?? embedded(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
+
+    func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        try bundle(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
+
+    func resolvePage(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        try await resolveCurrent(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
+
+    func refreshAppBundleIfNeeded(lynxAppId: String) async {}
+
+    func rollback(lynxAppId: String, reason: String) async throws -> Bool {
+        releaseId = "mock-embedded-baseline"
+        return true
+    }
+
+    func confirmCandidateHealthy(lynxAppId: String) async throws -> Bool { false }
+    func reportPageOpen(lynxAppId: String, bundleName: String) async {}
+    func deleteBundles(lynxAppId: String) async throws {}
+    func deleteAllBundles() async throws {}
+
+    private func bundle(lynxAppId: String, bundleName: String) throws -> PreparedOtaBundle {
+        guard let descriptor = try registry.resolve(lynxAppId: lynxAppId, bundleName: bundleName) else {
+            throw LynxOtaError.unreadableBundle("embedded/\(lynxAppId)/\(bundleName)")
+        }
+        return PreparedOtaBundle(
+            lynxAppId: descriptor.lynxAppId,
+            bundleName: descriptor.bundleName,
+            fileURL: descriptor.fileURL,
+            releaseId: releaseId,
+            source: "ota_current"
+        )
+    }
+
+    private func embedded(lynxAppId: String, bundleName: String) throws -> PreparedOtaBundle {
+        guard let descriptor = try registry.resolve(lynxAppId: lynxAppId, bundleName: bundleName) else {
+            throw LynxOtaError.unreadableBundle("embedded/\(lynxAppId)/\(bundleName)")
+        }
+        return PreparedOtaBundle(
+            lynxAppId: descriptor.lynxAppId,
+            bundleName: descriptor.bundleName,
+            fileURL: descriptor.fileURL,
+            releaseId: descriptor.releaseId,
+            source: "embedded_baseline"
+        )
+    }
+}
+#endif

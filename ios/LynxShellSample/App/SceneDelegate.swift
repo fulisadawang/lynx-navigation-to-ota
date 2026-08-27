@@ -4,26 +4,10 @@ import UIKit
 /**
  * iOS Demo 专用的全局导航承载。
  *
- * 业务 App 可以选择自己的 UINavigationController；Sample 为了方便验收，始终让宿主
- * 全局管理 interactive-pop，不依赖每个 Lynx 页面是否声明 transition。
+ * 业务 App 可以选择自己的 UINavigationController；Sample 只提供原生导航栏，返回手势
+ * 由 LynxShell 的统一转场协调器管理，保证普通页、Bottom Sheet 和 Hero Sheet 不互相抢手势。
  */
-final class DemoNavigationController: UINavigationController {
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        enableGlobalBackGesture()
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        enableGlobalBackGesture()
-    }
-
-    private func enableGlobalBackGesture() {
-        guard isViewLoaded else { return }
-        interactivePopGestureRecognizer?.delegate = nil
-        interactivePopGestureRecognizer?.isEnabled = viewControllers.count > 1
-    }
-}
+final class DemoNavigationController: UINavigationController {}
 
 /** Scene 只负责建立系统导航栈，并把深链交给统一 Router。 */
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -40,8 +24,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let navigationController = DemoNavigationController(rootViewController: rootController)
         navigationController.navigationBar.prefersLargeTitles = true
 #if DEBUG
-        // Sample 只为验收开启宿主全局返回；生产宿主不应默认覆盖业务自己的手势策略。
-        LynxRouter.setHostManagedBackGesture(true)
+        // Demo 只负责原生导航栏；返回手势所有权交给 LynxShell 的统一转场协调器，
+        // 避免宿主 delegate 与壳的 edge-pan/system-pop 互相覆盖。
+        LynxRouter.setHostManagedBackGesture(false)
 #endif
         // 三端统一入口：iOS 端 Native Page Stack 由 UINavigationController 承载。
         // Demo 不硬编码令牌。业务可从 Info.plist 或进程环境注入配置；配置完整时安装
@@ -59,6 +44,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         } else {
             LynxRouter.install(to: navigationController)
         }
+#if DEBUG
+        // XCUITest 故障车道显式请求时才替换为 Debug fault runtime；生产运行不会进入。
+        if !LynxRouter.installDebugFaultRuntimeIfRequested() {
+            _ = LynxRouter.installDebugMockOtaRuntimeIfRequested()
+        }
+#endif
         LynxShell.installAppHomeHandler { navigationController, _ in
             // 壳工程没有真实 UITabBarController，示例回到原生首页。
             // 业务 App 在 Scene/Coordinator 中覆盖为“选择主 Tab + popToRoot”。
@@ -338,7 +329,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             environment: environment["LYNX_OTA_ENV"]
                 ?? info["LynxOtaEnvironment"] as? String
                 ?? "TEST",
-            clientToken: token
+            clientToken: token,
+            candidateActivationEnabled: Self.booleanValue(
+                environment["LYNX_OTA_CANDIDATE_MODE"]
+                    ?? info["LynxOtaCandidateActivationEnabled"] as? String
+            )
         )
     }
 
@@ -347,6 +342,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.contains("$(") else { return nil }
         return trimmed
+    }
+
+    private static func booleanValue(_ value: String?) -> Bool {
+        guard let value else { return false }
+        return ["1", "true", "yes", "on"].contains(value.lowercased())
     }
 
 }

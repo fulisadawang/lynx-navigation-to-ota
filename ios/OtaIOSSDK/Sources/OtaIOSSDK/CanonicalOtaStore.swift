@@ -1,11 +1,31 @@
 import Foundation
 
+/// 仅供 iOS 事务测试注入的持久化故障点。
+///
+/// 生产初始化使用 no-op 注入器，不改变正常运行路径；测试可以在 state 写入前后
+/// 模拟进程退出或磁盘写入异常，验证重启后的 current/previous 恢复边界。
+enum OtaTransactionFaultPoint: Sendable, Equatable {
+    case beforeStateCommit
+    case afterStateCommit
+    case beforeRollbackCommit
+    case afterRollbackCommit
+}
+
+protocol OtaTransactionFaultInjecting: Sendable {
+    func check(_ point: OtaTransactionFaultPoint) throws
+}
+
+struct NoopOtaTransactionFaultInjector: OtaTransactionFaultInjecting {
+    func check(_ point: OtaTransactionFaultPoint) throws {}
+}
+
 /// iOS OTA 的 canonical durable store。
 ///
 /// 旧版 `FileOtaReleaseStore` 仍负责 legacy pointer 兼容读取；新事务只把
 /// downloaded Release 的引用写入 state，把 Bundle 本体放入自包含的 release 目录。
 actor CanonicalOtaStore {
     private let baseDirectory: URL
+    private let faultInjector: any OtaTransactionFaultInjecting
     private let fileManager = FileManager.default
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -22,7 +42,7 @@ actor CanonicalOtaStore {
         case downloaded
     }
 
-    private struct ReleaseRef: Codable {
+    private struct ReleaseRef: Codable, Equatable {
         let kind: RefKind
         let releaseId: String
     }
@@ -39,6 +59,16 @@ actor CanonicalOtaStore {
         let schemaVersion: Int
         let scope: Scope
         let release: ReleaseRef
+    }
+
+    private struct CandidateState: Codable {
+        let schemaVersion: Int
+        let scope: Scope
+        let release: ReleaseRef
+        let status: OtaCandidateStatus
+        let failureCount: Int
+        let createdAt: Date
+        let trialStartedAt: Date?
     }
 
     private struct LocalBundle: Codable {
@@ -66,8 +96,12 @@ actor CanonicalOtaStore {
         let release: OtaInstalledRelease
     }
 
-    init(baseDirectory: URL) {
+    init(
+        baseDirectory: URL,
+        faultInjector: any OtaTransactionFaultInjecting = NoopOtaTransactionFaultInjector()
+    ) {
         self.baseDirectory = baseDirectory
+        self.faultInjector = faultInjector
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -202,6 +236,125 @@ actor CanonicalOtaStore {
         }
     }
 
+    /// 写入一个已经完成文件校验的候选版本，但不修改 current/previous。
+    func stageCandidate(_ release: OtaInstalledRelease) throws {
+        try stage(release)
+        guard let staged = readStaged(app: release.context.app, lynxAppId: release.context.lynxAppId) else {
+            throw storageError("candidate stage 指针不存在")
+        }
+        let candidate = CandidateState(
+            schemaVersion: 1,
+            scope: staged.scope,
+            release: staged.release,
+            status: .pending,
+            failureCount: 0,
+            createdAt: Date(),
+            trialStartedAt: nil
+        )
+        try writeAtomic(
+            try encoder.encode(candidate),
+            to: candidateURL(app: release.context.app, lynxAppId: release.context.lynxAppId)
+        )
+        try removeItemIfPresent(stagedURL(app: release.context.app, lynxAppId: release.context.lynxAppId))
+    }
+
+    func candidate(app: OtaAppID, lynxAppId: String) throws -> OtaCandidateSnapshot? {
+        guard let state = readCandidate(app: app, lynxAppId: lynxAppId) else { return nil }
+        guard let release = try resolve(state.release, app: app, lynxAppId: lynxAppId) else {
+            return nil
+        }
+        return OtaCandidateSnapshot(
+            release: release,
+            status: state.status,
+            failureCount: state.failureCount,
+            createdAt: state.createdAt,
+            trialStartedAt: state.trialStartedAt
+        )
+    }
+
+    func beginCandidateTrial(app: OtaAppID, lynxAppId: String) throws -> OtaCandidateSnapshot {
+        guard let state = readCandidate(app: app, lynxAppId: lynxAppId) else {
+            throw OtaSDKError.missingCandidateRelease
+        }
+        if state.status == .trial {
+            guard let snapshot = try candidate(app: app, lynxAppId: lynxAppId) else {
+                throw OtaSDKError.missingCandidateRelease
+            }
+            return snapshot
+        }
+        let trial = CandidateState(
+            schemaVersion: state.schemaVersion,
+            scope: state.scope,
+            release: state.release,
+            status: .trial,
+            failureCount: state.failureCount,
+            createdAt: state.createdAt,
+            trialStartedAt: Date()
+        )
+        try writeAtomic(
+            try encoder.encode(trial),
+            to: candidateURL(app: app, lynxAppId: lynxAppId)
+        )
+        guard let snapshot = try candidate(app: app, lynxAppId: lynxAppId) else {
+            throw OtaSDKError.missingCandidateRelease
+        }
+        return snapshot
+    }
+
+    func confirmCandidate(app: OtaAppID, lynxAppId: String) throws -> OtaInstalledRelease {
+        guard let candidate = readCandidate(app: app, lynxAppId: lynxAppId) else {
+            throw OtaSDKError.missingCandidateRelease
+        }
+        guard candidate.status == .trial else {
+            throw OtaSDKError.candidateNotInTrial
+        }
+        guard let installed = try resolve(candidate.release, app: app, lynxAppId: lynxAppId) else {
+            throw OtaSDKError.missingCandidateRelease
+        }
+        let oldState = readState(app: app, lynxAppId: lynxAppId)
+        let previous = oldState?.current ?? embeddedReference(app: app, lynxAppId: lynxAppId)
+        let next = State(
+            schemaVersion: 1,
+            generation: (oldState?.generation ?? 0) + 1,
+            scope: candidate.scope,
+            current: candidate.release,
+            previous: previous
+        )
+        try faultInjector.check(.beforeStateCommit)
+        try writeState(next, app: app, lynxAppId: lynxAppId)
+        try faultInjector.check(.afterStateCommit)
+        try removeItemIfPresent(candidateURL(app: app, lynxAppId: lynxAppId))
+        return installed
+    }
+
+    func candidateBundle(app: OtaAppID, lynxAppId: String, bundleName: String) throws -> URL? {
+        guard let candidate = try candidate(app: app, lynxAppId: lynxAppId),
+              let bundle = candidate.release.bundles.first(where: {
+                  $0.bundleName == bundleName || $0.bundlePath == bundleName
+              }),
+              fileManager.fileExists(atPath: bundle.localFilePath) else {
+            return nil
+        }
+        return URL(fileURLWithPath: bundle.localFilePath)
+    }
+
+    func discardCandidate(app: OtaAppID, lynxAppId: String) throws {
+        guard let candidate = readCandidate(app: app, lynxAppId: lynxAppId) else { return }
+        try removeItemIfPresent(candidateURL(app: app, lynxAppId: lynxAppId))
+        let state = readState(app: app, lynxAppId: lynxAppId)
+        guard state?.current != candidate.release,
+              state?.previous != candidate.release else { return }
+        if candidate.release.kind == .downloaded {
+            try removeItemIfPresent(try releaseDirectory(candidate.release.releaseId))
+        }
+    }
+
+    func recoverInterruptedCandidate(app: OtaAppID, lynxAppId: String) throws {
+        guard let candidate = readCandidate(app: app, lynxAppId: lynxAppId),
+              candidate.status == .trial else { return }
+        try discardCandidate(app: app, lynxAppId: lynxAppId)
+    }
+
     func activate(app: OtaAppID, lynxAppId: String) throws -> OtaInstalledRelease {
         guard let staged = readStaged(app: app, lynxAppId: lynxAppId) else {
             throw OtaSDKError.missingStagedRelease
@@ -218,7 +371,15 @@ actor CanonicalOtaStore {
             current: staged.release,
             previous: previous
         )
+        // 如果上一次进程已经提交 current，只是还没来得及清理 staged，重启时必须
+        // 把它视为同一笔事务的幂等重放，不能把 current 自己再次写成 previous。
+        if oldState?.current == staged.release {
+            try removeItemIfPresent(stagedURL(app: app, lynxAppId: lynxAppId))
+            return installed
+        }
+        try faultInjector.check(.beforeStateCommit)
         try writeState(next, app: app, lynxAppId: lynxAppId)
+        try faultInjector.check(.afterStateCommit)
         try removeItemIfPresent(stagedURL(app: app, lynxAppId: lynxAppId))
         return installed
     }
@@ -242,7 +403,9 @@ actor CanonicalOtaStore {
             current: previous,
             previous: nil
         )
+        try faultInjector.check(.beforeRollbackCommit)
         try writeState(next, app: app, lynxAppId: lynxAppId)
+        try faultInjector.check(.afterRollbackCommit)
         return restored
     }
 
@@ -289,6 +452,10 @@ actor CanonicalOtaStore {
         statesDirectory.appendingPathComponent(".\(safeFileName(app.rawValue))_\(safeFileName(lynxAppId)).staged.json", isDirectory: false)
     }
 
+    private func candidateURL(app: OtaAppID, lynxAppId: String) -> URL {
+        statesDirectory.appendingPathComponent(".\(safeFileName(app.rawValue))_\(safeFileName(lynxAppId)).candidate.json", isDirectory: false)
+    }
+
     private func embeddedURL(app: OtaAppID, lynxAppId: String) -> URL {
         embeddedDirectory
             .appendingPathComponent(safeFileName(app.rawValue), isDirectory: true)
@@ -322,6 +489,11 @@ actor CanonicalOtaStore {
     private func readStaged(app: OtaAppID, lynxAppId: String) -> StagedState? {
         guard let data = try? Data(contentsOf: stagedURL(app: app, lynxAppId: lynxAppId)) else { return nil }
         return try? decoder.decode(StagedState.self, from: data)
+    }
+
+    private func readCandidate(app: OtaAppID, lynxAppId: String) -> CandidateState? {
+        guard let data = try? Data(contentsOf: candidateURL(app: app, lynxAppId: lynxAppId)) else { return nil }
+        return try? decoder.decode(CandidateState.self, from: data)
     }
 
     private func embeddedReference(app: OtaAppID, lynxAppId: String) -> ReleaseRef? {

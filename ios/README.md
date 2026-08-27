@@ -112,6 +112,79 @@ Native Tab Demo 的两个 Tab 都从 embedded Manifest 解析 `main.lynx.bundle`
 `main.lynx.bundle` 的 Bundle、releaseId 和内容来源一致。Demo 顶部“刷新 OTA”会先做一次全量
 同步，再让两个 Tab 重新读取已经提交的 current。
 
+### iOS OTA 故障测试入口
+
+当前分支已把 SDK/事务层的 iOS 故障矩阵接入脚本：
+
+```bash
+bash scripts/ota-fault/run.sh --platform ios --tier sdk --case all
+bash scripts/ota-fault/run.sh --platform ios --tier sdk --case F07
+```
+
+`swift test` 当前覆盖 32 个测试、5 个测试套件，包含清单/下载/SHA/文件篡改、版本门禁、
+`current/previous/embedded`、提交前后故障和回滚重启恢复。Native Tab 的异步结果代际门禁
+另有无 Lynx 依赖的快速契约测试：
+
+```bash
+ios/scripts/test_lynx_tab_generation.sh
+```
+
+`scripts/ota-fault/run.sh --tier device` 仍对未接入统一 device harness 的 case fail-closed；
+真实容器/Tab 运行态由已接入的 `LynxShellUITests` Target 执行。当前 iPhone 16 Pro / iOS 18.1
+模拟器结果为：无 token 10 tests / 7 passed / 3 expected skip；Debug mock OTA 配置后 9/9 passed，
+覆盖 F10/F11/F12/F13/F14/F15/F16。F12 已在真实 canonical store 的 afterRollbackCommit 后
+terminate 进程，再冷启动读取 current 的 UI 用例中通过。
+
+### iOS 候选版本安全启用（可选）
+
+`OtaSDKConfiguration.candidateActivationEnabled` 默认是 `false`，保持现有直接激活兼容行为。
+开启后，下载校验流程变为：
+
+```text
+stageCandidate -> current 保持 V1 -> beginCandidateTrial -> 首屏/健康确认
+  -> confirmCandidateHealthy -> current=V2, previous=V1
+```
+
+进程在 trial 阶段重启时调用 `recoverInterruptedCandidate` 会清理候选，current 仍保持 V1；
+首屏失败路径调用 `discardCandidate`，不会回滚掉原来的稳定 current。`OtaCandidateActivationTests`
+已覆盖健康确认和未完成 trial 重启恢复。Android/Harmony 还没有这套状态机。
+
+Sample Debug 可用环境变量打开这条链路：`LYNX_OTA_CANDIDATE_MODE=1`。本轮在 iPhone 16 Pro
+模拟器清空 OTA 数据后重新启动，打开 `10000001` 首页并完成首屏确认；state 最终为
+`current=downloaded/r20260823_qc8ffc`，对应 candidate 文件已清理。
+
+本轮 iOS 模拟器运行态已在 `iPhone 16 Pro / iOS 18.1` 上完成：
+
+- Launcher、OTA 验收首页、Playground 首页和 Manifest 第一个内置 Bundle 可打开，并显示
+  `10000001`、BundleName、Release/构建版本和来源。
+- 原生 Tab Home/Settings 可切换 20 次；刷新失败提示出现后，Home 仍保留原 Release。
+- Hero Sheet 上滑到全屏、下拉关闭；Bottom Sheet 打开、下拉关闭；原生 Back 可返回。
+- 无 token 的 embedded-only 刷新失败保留 current，以及注入 TEST 配置后的远程 OTA 成功、
+  冷启动读取和 Tab 刷新均已在模拟器分别验证；token 只作为进程环境变量使用，不写入仓库。
+- 完整左边缘拖动已由 XCUITest 坐标手势通过并返回原生 Launcher；`agent-device` 的高层 swipe
+  仍受驱动能力限制只能产生约 7px 位移，这不等同于壳侧滑功能失败。
+
+### XCUITest Target
+
+工程已新增 `LynxShellUITests`：
+
+```bash
+cd ios
+xcodebuild -workspace LynxShell.xcworkspace \
+  -scheme LynxShell \
+  -destination 'platform=iOS Simulator,id=<simulator-udid>' \
+  -only-testing:LynxShellUITests test
+```
+
+无 token 全套结果为 10 tests / 7 passed / 3 expected skip / 0 failures；左边缘返回、Tab 往返和
+刷新失败保留已由 XCTest 通过。注入 Debug mock OTA 运行变量后，完整 UI 回归为 9 passed / 1
+live-only skip / 0 failed；成功刷新使用真实 embedded Bundle + Router/Tab 链路模拟，Tab 切换的
+请求计数、实例和 generation 均有断言，F12 rollback terminate/relaunch 也已通过。真实 OTA
+Server 模式为 9 passed / 1 mock-only skip / 0 failed，live smoke 单项 1/1 通过。
+
+独立 HTML 测试报告：[ios-ota-test-report.html](../docs/ios-ota-test-report.html)，包含 live、mock、
+无 token 三组结果、用例筛选、证据展开和可追溯源码链接。
+
 ## 默认沉浸式容器
 
 iOS 打开任意 Bundle 时默认：
