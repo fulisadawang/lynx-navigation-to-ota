@@ -117,12 +117,21 @@ final class LauncherViewController: UIViewController {
         contentStack.setCustomSpacing(12, after: playgroundButton)
         contentStack.addArrangedSubview(nativeTabButton)
 
+        let storageInspectorButton = makeButton(
+            title: "查看 OTA 磁盘目录",
+            filled: false,
+            action: #selector(openOtaStorageInspector)
+        )
+        storageInspectorButton.accessibilityIdentifier = "open-ota-storage-inspector"
+        contentStack.setCustomSpacing(12, after: nativeTabButton)
+        contentStack.addArrangedSubview(storageInspectorButton)
+
         let embeddedButton = makeButton(
             title: "打开 Manifest 中的第一个内置 Bundle",
             filled: false,
             action: #selector(openEmbeddedDemo)
         )
-        contentStack.setCustomSpacing(12, after: nativeTabButton)
+        contentStack.setCustomSpacing(12, after: storageInspectorButton)
         contentStack.addArrangedSubview(embeddedButton)
 
         let card = makeOtaCard()
@@ -300,6 +309,13 @@ final class LauncherViewController: UIViewController {
         )
     }
 
+    @objc private func openOtaStorageInspector() {
+        navigationController?.pushViewController(
+            OtaStorageInspectorViewController(),
+            animated: true
+        )
+    }
+
 #if DEBUG
     @objc private func prepareRollbackProcessTest() {
         Task { @MainActor [weak self] in
@@ -350,4 +366,145 @@ final class LauncherViewController: UIViewController {
         debugF12StatusTimer?.invalidate()
     }
 #endif
+}
+
+/** Demo-only 原生只读 OTA Store 浏览器。 */
+final class OtaStorageInspectorViewController: UIViewController {
+    private let textView = UITextView()
+    private var loadTask: Task<Void, Never>?
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "OTA 磁盘浏览器"
+        view.backgroundColor = .systemGroupedBackground
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.alwaysBounceVertical = true
+        textView.backgroundColor = .systemGroupedBackground
+        textView.textColor = .label
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.textContainerInset = UIEdgeInsets(top: 20, left: 16, bottom: 28, right: 16)
+        textView.accessibilityIdentifier = "ota-storage-inspector-content"
+        view.addSubview(textView)
+        NSLayoutConstraint.activate([
+            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            textView.topAnchor.constraint(equalTo: view.topAnchor),
+            textView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "刷新",
+            style: .plain,
+            target: self,
+            action: #selector(refreshSnapshot)
+        )
+        loadSnapshot()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: false)
+    }
+
+    deinit {
+        loadTask?.cancel()
+    }
+
+    @objc private func refreshSnapshot() {
+        loadSnapshot()
+    }
+
+    private func loadSnapshot() {
+        loadTask?.cancel()
+        navigationItem.rightBarButtonItem?.isEnabled = false
+        textView.text = "正在读取一致性快照…\n\n只读操作，不会触发 OTA 请求或修改文件。"
+        loadTask = Task { [weak self] in
+            let result: Result<OtaStorageSnapshot?, Error>
+            do {
+                result = .success(try await LynxRouter.otaStorageSnapshot())
+            } catch {
+                result = .failure(error)
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.navigationItem.rightBarButtonItem?.isEnabled = true
+                switch result {
+                case let .success(snapshot):
+                    self.textView.text = snapshot.map(Self.render) ?? "当前没有远程 OTA Store。"
+                case let .failure(error):
+                    self.textView.text = "OTA 磁盘快照读取失败\n\n\(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private static func render(_ snapshot: OtaStorageSnapshot) -> String {
+        var lines: [String] = [
+            "OTA 磁盘浏览器",
+            "",
+            "root: \(snapshot.rootPath)",
+            "apps: \(snapshot.apps.count)",
+            "files: \(snapshot.fileCount)",
+            "disk: \(formatBytes(snapshot.totalBytes))",
+            "mode: 只读",
+        ]
+        if snapshot.apps.isEmpty {
+            lines += ["", "当前没有远程 OTA Bundle；页面将使用 App Bundle baseline。"]
+            return lines.joined(separator: "\n")
+        }
+        for app in snapshot.apps {
+            lines += [
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━",
+                "App ID  \(app.appId)",
+                "current: \(app.state?.currentReleaseId ?? "—") (\(app.state?.currentKind ?? "none"))",
+                "previous: \(app.state?.previousReleaseId ?? "—")",
+                "candidate: \(app.candidate?.releaseId ?? "—")" + (app.candidate.map { " (\($0.status))" } ?? ""),
+                "disk: \(formatBytes(app.totalBytes)) / \(app.fileCount) files",
+            ]
+            for release in app.releases {
+                let roles = release.roles.map(roleLabel).sorted().joined(separator: " · ")
+                lines += [
+                    "",
+                    "\(release.releaseId) [\(roles)]",
+                    "manifest: \(release.manifestValid ? "valid" : "invalid")",
+                    "size: \(formatBytes(release.totalBytes)) / \(release.fileCount) files",
+                ]
+                lines += release.files.map { "├─ \($0.relativePath)  \(formatBytes($0.byteCount))" }
+                if release.truncated { lines.append("└─ …文件列表已截断") }
+            }
+            if !app.staging.isEmpty {
+                lines += ["", "未完成的 staging"]
+                for staging in app.staging {
+                    lines.append("\(staging.transactionName)  \(formatBytes(staging.totalBytes))")
+                    lines += staging.files.map { "├─ \($0.relativePath)  \(formatBytes($0.byteCount))" }
+                }
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func roleLabel(_ role: OtaStorageReleaseRole) -> String {
+        switch role {
+        case .current: return "当前"
+        case .previous: return "上一个"
+        case .candidate: return "候选"
+        case .leased: return "页面使用中"
+        case .orphan: return "孤儿"
+        }
+    }
+
+    private static func formatBytes(_ bytes: Int64) -> String {
+        guard bytes >= 1024 else { return "\(bytes) B" }
+        let units = ["KB", "MB", "GB"]
+        var value = Double(bytes)
+        var index = -1
+        while value >= 1024, index < units.count - 1 {
+            value /= 1024
+            index += 1
+        }
+        return String(format: "%.1f %@", value, units[index])
+    }
 }

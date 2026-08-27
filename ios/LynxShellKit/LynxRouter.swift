@@ -263,6 +263,14 @@ private enum OtaDebugF12Status {
         try await runtime.deleteAllBundles()
     }
 
+    /** 只读 OTA Store 快照；不联网、不激活、不删除文件。 */
+    public static func otaStorageSnapshot() async throws -> OtaStorageSnapshot? {
+        guard let runtime = LynxShell.otaRuntime() else {
+            throw LynxOtaError.runtimeNotInstalled
+        }
+        return try await runtime.storageSnapshot()
+    }
+
     /** 打开 `hybrid://lynxview_page?...` 或其它兼容 Scheme。 */
     @discardableResult
     public static func openScheme(

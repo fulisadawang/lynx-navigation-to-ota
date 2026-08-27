@@ -149,19 +149,23 @@ struct PreparedOtaBundle {
     let releaseId: String?
     /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
     let source: String
+    /** downloaded Release 的进程内租约；容器放弃结果或销毁时必须 close。 */
+    let releaseLease: OtaBundleLease?
 
     init(
         lynxAppId: String,
         bundleName: String,
         fileURL: URL,
         releaseId: String?,
-        source: String = "ota_current"
+        source: String = "ota_current",
+        releaseLease: OtaBundleLease? = nil
     ) {
         self.lynxAppId = lynxAppId
         self.bundleName = bundleName
         self.fileURL = fileURL
         self.releaseId = releaseId
         self.source = source
+        self.releaseLease = releaseLease
     }
 }
 
@@ -178,6 +182,11 @@ protocol LynxBundleRuntime {
     func reportPageOpen(lynxAppId: String, bundleName: String) async
     func deleteBundles(lynxAppId: String) async throws
     func deleteAllBundles() async throws
+    func storageSnapshot() async throws -> OtaStorageSnapshot?
+}
+
+extension LynxBundleRuntime {
+    func storageSnapshot() async throws -> OtaStorageSnapshot? { nil }
 }
 
 /**
@@ -295,7 +304,8 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
             let task = Task<OtaHostBundleListSyncResult?, Never> { [weak self] in
                 guard let self else { return nil }
                 return try? await self.withSDK { sdk in
-                    try await sdk.updateToLatestBundleLists()
+                    try await sdk.pruneUnreferencedBundles()
+                    return try await sdk.updateToLatestBundleLists()
                 }
             }
             let taskID = UUID()
@@ -345,11 +355,11 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
     /** 页面打开：有 current 立即交付；缺失/损坏才等待网络修复。 */
     func prepare(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle {
         try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
-        if let localURL = try await withSDK({ sdk in
-            await sdk.current(lynxAppId: lynxAppId, bundleName: bundleName)
+        if let lease = try await withSDK({ sdk in
+            try await sdk.acquireCurrentBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
         }) {
             schedulePageRefreshIfNeeded(lynxAppId: lynxAppId)
-            return try await prepared(lynxAppId: lynxAppId, bundleName: bundleName, url: localURL)
+            return try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: lease)
         }
 
         // App Bundle 内置版本是无网络 baseline；启动全量同步尚未完成时可先直接交付。
@@ -374,7 +384,13 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
             )
         }
         lastPageRefreshAt[lynxAppId] = Date()
-        return try await prepared(lynxAppId: lynxAppId, bundleName: bundleName, url: repairedURL)
+        let repairedLease = try await withSDK { sdk in
+            try await sdk.acquireCurrentBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
+        }
+        guard let repairedLease else {
+            throw LynxOtaError.unreadableBundle(repairedURL.path)
+        }
+        return try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: repairedLease)
     }
 
     /**
@@ -383,8 +399,8 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
      */
     func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
         try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
-        guard let localURL = try await withSDK({ sdk in
-            await sdk.current(lynxAppId: lynxAppId, bundleName: bundleName)
+        guard let lease = try await withSDK({ sdk in
+            try await sdk.acquireCurrentBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
         }) else {
             guard let embedded = try embeddedBundleRegistry.resolve(
                 lynxAppId: lynxAppId,
@@ -400,7 +416,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
                 source: "embedded_baseline"
             )
         }
-        return try await prepared(lynxAppId: lynxAppId, bundleName: bundleName, url: localURL)
+        return try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: lease)
     }
 
     func resolvePage(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
@@ -415,13 +431,13 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
                }
                return candidate
            }),
-           let candidateURL = try await withSDK({ sdk in
-               try await sdk.candidateBundleURL(lynxAppId: lynxAppId, bundleName: bundleName)
+           let candidateLease = try await withSDK({ sdk in
+               try await sdk.acquireCandidateBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
            }) {
-            return try await prepared(
+            return try prepared(
                 lynxAppId: lynxAppId,
                 bundleName: bundleName,
-                url: candidateURL,
+                lease: candidateLease,
                 releaseId: candidate.release.context.releaseId,
                 source: "candidate_trial"
             )
@@ -518,6 +534,12 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
         lastPageRefreshAt.removeAll()
     }
 
+    public func storageSnapshot() async throws -> OtaStorageSnapshot? {
+        try await withSDK { sdk in
+            try await sdk.storageSnapshot()
+        }
+    }
+
     private func schedulePageRefreshIfNeeded(lynxAppId: String) {
         guard fullSyncTask == nil, pageRefreshTasks[lynxAppId] == nil else { return }
         if let last = lastPageRefreshAt[lynxAppId],
@@ -544,29 +566,24 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
     private func prepared(
         lynxAppId: String,
         bundleName: String,
-        url: URL,
+        lease: OtaBundleLease,
         releaseId: String? = nil,
         source: String = "ota_current"
-    ) async throws -> PreparedOtaBundle {
+    ) throws -> PreparedOtaBundle {
+        let url = lease.fileURL
         guard url.isFileURL,
               FileManager.default.fileExists(atPath: url.path),
               FileManager.default.isReadableFile(atPath: url.path) else {
+            Task { await lease.close() }
             throw LynxOtaError.unreadableBundle(url.path)
-        }
-        let resolvedReleaseId: String?
-        if let releaseId {
-            resolvedReleaseId = releaseId
-        } else {
-            resolvedReleaseId = try await withSDK { sdk in
-                await sdk.current(lynxAppId: lynxAppId)?.context.releaseId
-            }
         }
         return PreparedOtaBundle(
             lynxAppId: lynxAppId,
             bundleName: bundleName,
             fileURL: url,
-            releaseId: resolvedReleaseId,
-            source: source
+            releaseId: releaseId ?? lease.release.context.releaseId,
+            source: source,
+            releaseLease: lease
         )
     }
 
@@ -600,8 +617,8 @@ public actor LynxOtaRuntime: LynxBundleRuntime {
 
     private func validateAppId(_ value: String) throws {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= 256 else {
-            throw LynxOtaError.invalidIdentity("lynxAppId 不能为空且不能超过 256 个字符")
+        guard trimmed.range(of: "^[0-9]{8}$", options: .regularExpression) != nil else {
+            throw LynxOtaError.invalidIdentity("lynxAppId 必须是 8 位数字")
         }
     }
 }
@@ -661,6 +678,8 @@ actor LynxEmbeddedOnlyRuntime: LynxBundleRuntime {
     func deleteBundles(lynxAppId: String) async throws {}
 
     func deleteAllBundles() async throws {}
+
+    func storageSnapshot() async throws -> OtaStorageSnapshot? { nil }
 }
 
 #if DEBUG

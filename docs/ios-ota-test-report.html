@@ -179,7 +179,7 @@
       <div>
         <p class="eyebrow">iOS OTA + Router · Final verification</p>
         <h1 id="report-title">测试<br>报告</h1>
-        <p class="hero-copy"><strong>iOS 范围已完成。</strong>本报告把真实 OTA Server、外网不可达时的 Debug mock、无 token 降级和 Simulator UI/SDK 证据分开呈现，不把方案页或静态检查冒充运行结果。</p>
+        <p class="hero-copy"><strong>iOS 已对齐 Android Store v2。</strong>除既有真实 OTA、mock、无 token 与故障恢复证据外，本轮补齐 App ID 物理隔离、有界保留、页面 lease、冷启动清理、容量门禁和只读磁盘浏览器；每种结论继续按 SDK、构建、真实 Server 与 Simulator UI 分层。</p>
       </div>
       <div class="status-stamp" aria-label="iOS 范围已通过">
         <span class="stamp-kicker">FINAL STATUS / IOS SCOPE</span>
@@ -198,8 +198,9 @@
         <article class="score-card"><span class="score-label">本轮 Live smoke</span><strong class="score-number">1/1</strong><span class="score-note">2026-08-27 · XcodeBuildMCP runner env</span></article>
         <article class="score-card"><span class="score-label">Mock OTA UI</span><strong class="score-number">9/9</strong><span class="score-note">通过 · 外网故障可重复</span></article>
         <article class="score-card"><span class="score-label">No token UI</span><strong class="score-number">7/7</strong><span class="score-note">通过 · 3 个能力用例按条件跳过</span></article>
-        <article class="score-card"><span class="score-label">Swift SDK</span><strong class="score-number">32</strong><span class="score-note">5 个测试套件全部通过</span></article>
-        <article class="score-card"><span class="score-label">Static gate</span><strong class="score-number">111</strong><span class="score-note">PASS · 0 WARN · 0 FAIL</span></article>
+        <article class="score-card"><span class="score-label">Swift SDK</span><strong class="score-number">47</strong><span class="score-note">8 个测试套件全部通过</span></article>
+        <article class="score-card"><span class="score-label">Store v2</span><strong class="score-number">PASS</strong><span class="score-note">隔离 · 保留 · lease · 清理 · 容量</span></article>
+        <article class="score-card"><span class="score-label">Static gate</span><strong class="score-number">191</strong><span class="score-note">三端总门禁 · 111 条 Android/iOS · 0 FAIL</span></article>
         <article class="score-card"><span class="score-label">Xcode build</span><strong class="score-number">OK</strong><span class="score-note">Debug iOS Simulator 构建成功</span></article>
       </div>
     </section>
@@ -226,8 +227,9 @@
       <dl class="facts">
         <div class="fact"><dt>设备</dt><dd>iPhone 16 Pro / iOS 18.1</dd></div>
         <div class="fact"><dt>Bundle ID</dt><dd>com.example.lynxshell</dd></div>
-        <div class="fact"><dt>OTA identity</dt><dd>10000001 / home.lynx.bundle</dd></div>
+        <div class="fact"><dt>OTA identity</dt><dd>10000001 / main.lynx.bundle</dd></div>
         <div class="fact"><dt>observed release</dt><dd>r20260823_qc8ffc</dd></div>
+        <div class="fact"><dt>Store v2</dt><dd>3 apps / 53 files / 5.1 MB</dd></div>
       </dl>
     </section>
 
@@ -238,9 +240,10 @@
       </div>
       <div class="timeline">
         <div class="timeline-step"><span class="timeline-dot"></span><strong>1 / Build</strong><span>Xcode workspace 成功构建</span></div>
-        <div class="timeline-step"><span class="timeline-dot"></span><strong>2 / SDK</strong><span>32 个 Swift OTA 测试通过</span></div>
-        <div class="timeline-step"><span class="timeline-dot"></span><strong>3 / UI</strong><span>live / mock / no-token 三组矩阵</span></div>
-        <div class="timeline-step"><span class="timeline-dot"></span><strong>4 / Evidence</strong><span>workflow、README、Obsidian 已同步</span></div>
+        <div class="timeline-step"><span class="timeline-dot"></span><strong>2 / SDK</strong><span>47 个 Swift OTA 测试通过</span></div>
+        <div class="timeline-step"><span class="timeline-dot"></span><strong>3 / Store v2</strong><span>隔离、保留、lease、清理与容量门禁</span></div>
+        <div class="timeline-step"><span class="timeline-dot"></span><strong>4 / UI</strong><span>真实 OTA、Native Tab 与只读 Inspector</span></div>
+        <div class="timeline-step"><span class="timeline-dot"></span><strong>5 / Evidence</strong><span>workflow、README、HTML 与 Obsidian 同步</span></div>
       </div>
     </section>
 
@@ -269,10 +272,34 @@
       </div>
 
       <div class="matrix-grid" id="case-grid">
+        <article class="case-card" data-status="pass" data-mode="all" data-search="Store v2 app id isolation same release path schema legacy">
+          <div class="case-head"><div><span class="case-id">STORE V2 / SDK + SIMULATOR</span><h3>App ID 物理隔离</h3></div><span class="tag pass">PASS</span></div>
+          <p class="case-summary">Release 目录改为 <code>apps/&lt;appId&gt;/releases/&lt;releaseId&gt;</code>；两个 App ID 使用相同 releaseId 时互不覆盖、互不误删。</p>
+          <details><summary>展开证据</summary><dl class="detail-grid"><dt>测试</dt><dd><code>OtaStoreV2RetentionTests</code> 覆盖同 Release 隔离和按 App 删除。</dd><dt>真机目录</dt><dd>Simulator 同时存在 10000000、10000001、10000002；顶层旧 <code>releases/states/.staging</code> 均不存在。</dd><dt>迁移</dt><dd>Demo 不兼容读取旧 Store；卸载重装后直接使用 schema v2。</dd></dl></details>
+        </article>
+
+        <article class="case-card" data-status="pass" data-mode="all" data-search="retention V1 V10 current previous candidate capacity insufficient storage prune">
+          <div class="case-head"><div><span class="case-id">RETENTION / SDK</span><h3>版本不会无限增长</h3></div><span class="tag pass">PASS</span></div>
+          <p class="case-summary">连续 V1…V10 后只保留 V9/V10；candidate 模式最多再保留一份候选，下载前先 prune 并检查可用空间。</p>
+          <details><summary>展开证据</summary><dl class="detail-grid"><dt>测试</dt><dd><code>ten activations retain only current and previous</code>、candidate retention、insufficient storage、prune-before-capacity。</dd><dt>失败语义</dt><dd>容量不足抛出结构化错误，旧 current 不变，不留下半发布目录。</dd><dt>embedded</dt><dd>baseline bytes 继续直接读取 App Bundle，不复制到 Application Support。</dd></dl></details>
+        </article>
+
+        <article class="case-card" data-status="pass" data-mode="all" data-search="lease UIViewController Native Tab active page delayed delete release">
+          <div class="case-head"><div><span class="case-id">LEASE / SDK + SIMULATOR</span><h3>活体页面不会被清理打断</h3></div><span class="tag pass">PASS</span></div>
+          <p class="case-summary">普通页面与 Native Tab 持有远程 Release lease；删除、回滚或新版本激活只延迟目录回收，不破坏正在显示的 LynxView。</p>
+          <details><summary>展开证据</summary><dl class="detail-grid"><dt>测试</dt><dd><code>OtaReleaseLeaseTests</code> 覆盖 current、显式删除和 candidate discard。</dd><dt>容器</dt><dd>销毁 Provider/LynxView 后再关闭 lease；过期异步结果也会主动释放。</dd><dt>UI</dt><dd>Native Tab 打开 Inspector 时显示“当前 · 页面使用中”；退出 Tab 后重新查看，该标记消失。</dd></dl></details>
+        </article>
+
+        <article class="case-card" data-status="pass" data-mode="live" data-search="inspector diagnostics read only cold maintenance orphan staging no network">
+          <div class="case-head"><div><span class="case-id">INSPECTOR / LIVE SIMULATOR</span><h3>磁盘状态可见且只读</h3></div><span class="tag pass">PASS</span></div>
+          <p class="case-summary">Launcher 与 Native Tab 都能进入原生 Inspector，查看 root、角色、文件树、Manifest 状态与字节数；刷新不发 OTA 请求。</p>
+          <details><summary>展开证据</summary><dl class="detail-grid"><dt>真实 OTA</dt><dd>TEST Server 同步后显示 3 apps、53 files、约 5.1 MB，10000001 current 为 <code>r20260823_qc8ffc</code>。</dd><dt>只读</dt><dd><code>OtaStorageDiagnosticsTests</code> 验证空 Store 查询不创建目录；刷新前后请求计数均为 0。</dd><dt>冷维护</dt><dd>无引用 orphan/staging 会被清理；状态损坏时保守保留。</dd></dl></details>
+        </article>
+
         <article class="case-card" data-status="pass" data-mode="all" data-search="F01 F02 F03 F04 F05 F06 Bundle latest list download size sha checksum integrity">
           <div class="case-head"><div><span class="case-id">F01—F06 / SDK</span><h3>清单、下载与 Bundle 完整性</h3></div><span class="tag pass">PASS</span></div>
           <p class="case-summary">网络失败、下载失败、size/SHA 错误、current 文件篡改和版本门禁都保留稳定 current。</p>
-          <details><summary>展开证据</summary><dl class="detail-grid"><dt>测试</dt><dd><code>OtaSDKFaultPathTests</code>、<code>Bundle validation cache</code></dd><dt>结果</dt><dd>32 个 Swift 测试总套件通过；坏包不会交给 Lynx Runtime。</dd><dt>断言</dt><dd>current、staging、下载次数和 reason code 均保持预期。</dd></dl></details>
+          <details><summary>展开证据</summary><dl class="detail-grid"><dt>测试</dt><dd><code>OtaSDKFaultPathTests</code>、<code>Bundle validation cache</code></dd><dt>结果</dt><dd>47 个 Swift 测试总套件通过；坏包不会交给 Lynx Runtime。</dd><dt>断言</dt><dd>current、staging、下载次数和 reason code 均保持预期。</dd></dl></details>
         </article>
 
         <article class="case-card" data-status="pass" data-mode="all" data-search="F07 F08 F12 transaction commit rollback restart canonical state">
@@ -367,8 +394,9 @@
         <div class="run"><div class="run-title">Mock OTA UI suite</div><div class="run-command">xcodebuild test · LYNX_TEST_MOCK_OTA=1 · embedded bytes</div><div class="run-result pass">9 PASS · 1 SKIP</div></div>
         <div class="run"><div class="run-title">No-token UI suite</div><div class="run-command">xcodebuild test · no OTA token</div><div class="run-result pass">7 PASS · 3 SKIP</div></div>
         <div class="run"><div class="run-title">Live smoke 单项</div><div class="run-command">testLiveOtaServerRefreshSmoke · real Server</div><div class="run-result pass">1 PASS</div></div>
-        <div class="run"><div class="run-title">Swift OTA SDK</div><div class="run-command">bash scripts/ota-fault/run.sh --platform ios --tier sdk --case all</div><div class="run-result pass">32 PASS</div></div>
-        <div class="run"><div class="run-title">Static / Build</div><div class="run-command">static_check_android_ios.py · xcodebuild Simulator build</div><div class="run-result pass">111 PASS · BUILD OK</div></div>
+        <div class="run"><div class="run-title">Swift OTA SDK / Store v2</div><div class="run-command">cd ios/OtaIOSSDK &amp;&amp; swift test</div><div class="run-result pass">47 PASS · 8 SUITES</div></div>
+        <div class="run"><div class="run-title">Static / Build</div><div class="run-command">static_check_android_ios.py · static_check.py · XcodeBuildMCP build_sim</div><div class="run-result pass">111 + 191 PASS · BUILD OK</div></div>
+        <div class="run"><div class="run-title">Store v2 / Simulator</div><div class="run-command">真实 TEST OTA · Inspector · Native Tab lease</div><div class="run-result pass">3 APPS · 53 FILES · PASS</div></div>
       </div>
     </section>
 
@@ -381,14 +409,18 @@
         <a class="link-card" href="../ios/Tests/UITests/LynxShellUITests.swift">→ XCUITest source</a>
         <a class="link-card" href="../ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaTransactionFaultTests.swift">→ Transaction tests</a>
         <a class="link-card" href="../ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaCandidateActivationTests.swift">→ Candidate tests</a>
+        <a class="link-card" href="../ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaStoreV2RetentionTests.swift">→ Store v2 retention tests</a>
+        <a class="link-card" href="../ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaReleaseLeaseTests.swift">→ Release lease tests</a>
+        <a class="link-card" href="../ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaStorageDiagnosticsTests.swift">→ Diagnostics tests</a>
         <a class="link-card" href="../ios/README.md">→ iOS README</a>
+        <a class="link-card" href="../.workflow/ios-ota-store-v2-implementation/final-report.md">→ Store v2 workflow report</a>
         <a class="link-card" href="../.workflow/ios-ota-fault-testing-and-candidate-activation-hardening/final-report.md">→ Workflow final report</a>
         <a class="link-card" href="lynx-ota-candidate-version-guide.html">→ Interactive design / matrix</a>
       </div>
     </section>
 
     <footer>
-      <span>iOS scope: COMPLETE · 2026-08-27 live smoke 1/1 · live/mock/offline evidence separated</span>
+      <span>iOS Store v2: COMPLETE · 47/47 SDK · BUILD OK · LIVE OTA / INSPECTOR / LEASE VERIFIED</span>
       <span>Generated locally · no external assets · no credential content</span>
     </footer>
   </div>

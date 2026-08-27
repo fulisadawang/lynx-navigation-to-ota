@@ -38,6 +38,12 @@ LynxOtaPlatform/ios/sdk
 - 回滚到上一个版本或 embedded
 - 获取当前版本
 - 获取当前 bundle 本地文件地址
+- 按 `lynxAppId` 物理隔离 Release
+- 有界保留 current / previous / candidate
+- 页面级 Release lease 与延迟回收
+- 冷启动 orphan / staging 清理
+- 下载前容量预检
+- 只读磁盘诊断快照
 
 ### Canonical 本地 Release 布局
 
@@ -46,15 +52,39 @@ LynxOtaPlatform/ios/sdk
 
 ```text
 <storageDirectory>/
-├── releases/<releaseId>/
-│   ├── release-manifest.json
-│   └── <bundlePath>
-├── .staging/<releaseId>.<transactionId>/
-└── states/<app>_<lynxAppId>.json
+└── apps/<lynxAppId>/
+    ├── state.json
+    ├── staged.json
+    ├── candidate.json
+    ├── embedded.json
+    ├── releases/<releaseId>/
+    │   ├── release-manifest.json
+    │   └── <bundlePath>
+    └── .staging/<releaseId>.<transactionId>/
 ```
 
-升级期间旧 `current-release*.json` 只用于兼容读取；首次成功事务会把旧 Bundle 物化到新的
-Release 目录，之后 current/previous 只通过 `kind + releaseId` 引用。
+`state.json`、`staged.json` 与 `candidate.json` 使用 Store schema v2。Store 不再读取或迁移旧
+`current-release*.json` / 顶层 `releases` / `states` 布局；Demo 通过卸载重装获得空沙盒。
+两个 App ID 即使收到相同 `releaseId`，也会写入不同物理目录，互不覆盖。
+
+embedded baseline 的 Bundle bytes 始终留在 App Bundle。`embedded.json` 只保存逻辑描述，
+不会在 Application Support 再复制一份 baseline。
+
+### 保留、lease 与清理
+
+- 正常激活后保留当前 Release 与直接前驱 previous；连续 V1...V10 后只剩 V9/V10。
+- candidate 模式最多额外保留一个 candidate；新的 candidate 会替换旧候选。
+- `OtaBundleLease` 把远程 Release 的生命周期绑定到正在展示它的 UIViewController/Native Tab。
+  删除或激活新版本只会先移除指针，被 lease 引用的目录等最后一个 lease 关闭后再删除。
+- 冷启动维护只删除 schema v2 中可确认无引用的 Release 和 staging；状态损坏时保守保留。
+- staging 前先 prune，再按目标 Bundle 大小、元数据余量和安全保留空间做容量预检；不足时抛出
+  `OtaSDKError.insufficientStorage`，旧 current 保持不变。
+
+### 只读诊断
+
+`OtaSDK.storageSnapshot()` 返回真实 root、各 App 的 current/previous/candidate、Release 角色、
+lease、文件树与字节数。该 API 不创建目录、不清理文件、不计算 SHA，也不触发网络，可直接用于
+Debug Inspector 或问题上报。
 
 ## 推荐接法
 
@@ -130,13 +160,13 @@ let templateURL = await LynxHotUpdate.shared.currentTemplateURL(pageId: 10000000
 2. 如果 SHA 一致且本地文件存在，复制到新 Release 的 staging 目录，并重新校验 SHA；不会把旧
    Release 的绝对 `localFilePath` 持久化到新 current。
 3. 如果 SHA 不一致或本地文件不存在，才下载 manifest 中的 `bundleUrl`。
-4. 只对新下载的 bundle 做文件 SHA256 校验；复用 bundle 只做文件存在性检查。
+4. 新下载和从旧 Release 复用的 Bundle 都在发布前校验，只有完整 Release 才能提交 current。
 
 因此发布侧可以保持“全量 manifest”，客户端实际网络下载仍然是“按 SHA 增量下载”。这样既能保证 release 是完整快照，也能避免 bundle 很多时重复下载未变化文件。
 
 ## 和主工程集成时的边界
 
-当前 SDK 已经能直接集成到主工程里跑 OTA 状态机，但要真正“页面打开即可用”，主工程还需要自己提供：
+当前 SDK 已经能直接集成到主工程里跑 OTA 状态机；通用 SDK 仍要求接入方提供：
 
 1. Lynx / Sparkling 容器层
 2. embedded bundle 的打包与随包分发
@@ -149,5 +179,6 @@ let templateURL = await LynxHotUpdate.shared.currentTemplateURL(pageId: 10000000
 
 ## 当前状态
 
-这个 SDK 已经可以作为主工程的 OTA 核心能力接入。
-如果要做到“接进主工程后页面直接打开”，还差 Lynx / Sparkling 宿主接入那最后一层。
+这个 SDK 已经可以作为主工程的 OTA 核心能力接入。本仓库的 `LynxShellKit` 已完成
+UIViewController、Native Tab、首屏健康确认、lease 与只读 Inspector 的宿主接线，可作为业务
+工程集成参考。

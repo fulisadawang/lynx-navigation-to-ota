@@ -177,6 +177,7 @@ public final class LynxTabViewController: UIViewController {
     private let contentView = UIView()
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
+    private var releaseLease: OtaBundleLease?
     private var loadTask: Task<Void, Never>?
     private let pageID: String
     private var didStartLoad = false
@@ -210,6 +211,7 @@ public final class LynxTabViewController: UIViewController {
         ShellMessageHub.unregister(pageId: pageID)
         templateProvider?.cancel()
         lynxView = nil
+        releaseCurrentLease()
     }
 
     public override func viewDidLoad() {
@@ -259,6 +261,7 @@ public final class LynxTabViewController: UIViewController {
         ShellMessageHub.unregister(pageId: pageID)
         lynxView?.removeFromSuperview()
         lynxView = nil
+        releaseCurrentLease()
         contentView.viewWithTag(0x4C5958)?.removeFromSuperview()
         didStartLoad = false
         if isViewLoaded,
@@ -293,6 +296,12 @@ public final class LynxTabViewController: UIViewController {
         let resolveOrdinal = debugResolveCurrentCount
 #endif
         loadTask = Task { [weak self] in
+            var pendingLease: OtaBundleLease?
+            defer {
+                if let pendingLease {
+                    Task { await pendingLease.close() }
+                }
+            }
             do {
 #if DEBUG
                 if resolveOrdinal == 1,
@@ -316,6 +325,7 @@ public final class LynxTabViewController: UIViewController {
                         userInfo: [NSLocalizedDescriptionKey: "Tab \(self?.spec.tabId ?? bundleName) 没有 active Bundle"]
                     )
                 }
+                pendingLease = prepared.releaseLease
                 let data = try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
                 let metadata: [String: Any] = [
                     "lynxAppId": prepared.lynxAppId,
@@ -326,10 +336,17 @@ public final class LynxTabViewController: UIViewController {
                     "loadPolicy": "cache_only",
                     "bundleName": prepared.bundleName
                 ]
-                await MainActor.run { [weak self] in
-                    guard let self, self.loadGeneration.accepts(generation) else { return }
-                    self.render(prefetchedData: data, bundleMetadata: metadata, generation: generation)
+                let accepted: Bool = await MainActor.run { [weak self] in
+                    guard let self, self.loadGeneration.accepts(generation) else { return false }
+                    self.render(
+                        prefetchedData: data,
+                        bundleMetadata: metadata,
+                        releaseLease: prepared.releaseLease,
+                        generation: generation
+                    )
+                    return true
                 }
+                if accepted { pendingLease = nil }
             } catch is CancellationError {
                 return
             } catch {
@@ -347,9 +364,15 @@ public final class LynxTabViewController: UIViewController {
     private func render(
         prefetchedData: Data?,
         bundleMetadata: [String: Any]? = nil,
+        releaseLease: OtaBundleLease? = nil,
         generation: UUID
     ) {
-        guard lynxView == nil else { return }
+        guard lynxView == nil else {
+            if let releaseLease { Task { await releaseLease.close() } }
+            return
+        }
+        releaseCurrentLease()
+        self.releaseLease = releaseLease
         do {
             let request = try LynxPageRequest(
                 bundleURL: spec.bundleURL,
@@ -429,6 +452,11 @@ public final class LynxTabViewController: UIViewController {
 
     private func showError(_ message: String) {
         guard isViewLoaded else { return }
+        templateProvider?.cancel()
+        templateProvider = nil
+        lynxView?.removeFromSuperview()
+        lynxView = nil
+        releaseCurrentLease()
 #if DEBUG
         debugLastError = message
 #endif
@@ -447,5 +475,11 @@ public final class LynxTabViewController: UIViewController {
                 label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             ])
         }
+    }
+
+    private func releaseCurrentLease() {
+        guard let lease = releaseLease else { return }
+        releaseLease = nil
+        Task { await lease.close() }
     }
 }

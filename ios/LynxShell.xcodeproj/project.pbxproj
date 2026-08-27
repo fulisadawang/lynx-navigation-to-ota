@@ -35,7 +35,7 @@
 		B2B8A488E6FB22D0D77C70C2 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		BDC72B6468F3396CF46F2562 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C322FA3193AE7E7D598EA1EB /* Pods-LynxShell.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShell.debug.xcconfig"; path = "Target Support Files/Pods-LynxShell/Pods-LynxShell.debug.xcconfig"; sourceTree = "<group>"; };
-		CB1F313B2F4077991B8523DA /* LynxShell.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LynxShell.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB1F313B2F4077991B8523DA /* LynxShell.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LynxShell.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0222834D0966DCC86119189 /* Pods_LynxShell.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_LynxShell.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		D45F73F90995A6FFCC6C446B /* UIViewController+ShellAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIViewController+ShellAlert.swift"; sourceTree = "<group>"; };
 		D535EAB0479812D11B4B6BF9 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -71,7 +71,6 @@
 				C322FA3193AE7E7D598EA1EB /* Pods-LynxShell.debug.xcconfig */,
 				8EBE180D630B12D18C532D91 /* Pods-LynxShell.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -256,9 +255,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-LynxShell/Pods-LynxShell-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-LynxShell/Pods-LynxShell-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -369,6 +372,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = J6SYSM2AHQ;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = LynxShellSample/Supporting/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
@@ -485,6 +489,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = J6SYSM2AHQ;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				INFOPLIST_FILE = "LynxShellSample/Supporting/Info-Debug.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;

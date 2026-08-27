@@ -19,6 +19,7 @@ public enum OtaSDKError: Error, LocalizedError, Equatable {
     case invalidBundleURL(String)
     case missingBundleSize(String)
     case bundleTooLarge(String)
+    case insufficientStorage(required: Int64, available: Int64)
 
     public var errorDescription: String? {
         switch self {
@@ -58,6 +59,8 @@ public enum OtaSDKError: Error, LocalizedError, Equatable {
             return "Bundle 缺少 size：\(bundlePath)"
         case let .bundleTooLarge(bundlePath):
             return "Bundle 超过 20 MB：\(bundlePath)"
+        case let .insufficientStorage(required, available):
+            return "OTA 存储空间不足：需要 \(required) 字节，可用 \(available) 字节"
         }
     }
 }

@@ -26,6 +26,7 @@ final class LynxContainerViewController: UIViewController {
     private let loadingView = ShellLoadingView()
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
+    private var releaseLease: OtaBundleLease?
     private var preparedBundleData: Data?
     private var bundleRuntimeMetadata: [String: Any]?
     private var loadGeneration = UUID()
@@ -70,6 +71,7 @@ final class LynxContainerViewController: UIViewController {
         ShellMessageHub.unregister(pageId: navigationEntryID)
         otaPrepareTask?.cancel()
         templateProvider?.cancel()
+        releaseCurrentLease()
 #if DEBUG
         debugRollbackMarkerTimer?.invalidate()
 #endif
@@ -482,6 +484,7 @@ final class LynxContainerViewController: UIViewController {
         ShellMessageHub.unregister(pageId: navigationEntryID)
         lynxView?.removeFromSuperview()
         lynxView = nil
+        releaseCurrentLease()
 
         let generation = loadGeneration
         if request.isOtaRequest {
@@ -506,6 +509,12 @@ final class LynxContainerViewController: UIViewController {
             return
         }
         otaPrepareTask = Task { [weak self] in
+            var pendingLease: OtaBundleLease?
+            defer {
+                if let pendingLease {
+                    Task { await pendingLease.close() }
+                }
+            }
             do {
                 let cached = try await runtime.resolvePage(
                     lynxAppId: appId,
@@ -525,13 +534,14 @@ final class LynxContainerViewController: UIViewController {
                     }
                     prepared = try await runtime.prepare(lynxAppId: appId, bundleName: bundleName)
                 }
-                try Task.checkCancellation()
+                pendingLease = prepared.releaseLease
+                if Task.isCancelled { return }
                 let data = try await Task.detached(priority: .userInitiated) {
                     try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
                 }.value
-                try Task.checkCancellation()
-                await MainActor.run { [weak self] in
-                    guard let self, generation == self.loadGeneration else { return }
+                if Task.isCancelled { return }
+                let accepted: Bool = await MainActor.run { [weak self] in
+                    guard let self, generation == self.loadGeneration else { return false }
                     self.otaPrepareTask = nil
                     guard prepared.lynxAppId == appId,
                           prepared.bundleName == bundleName,
@@ -540,8 +550,10 @@ final class LynxContainerViewController: UIViewController {
                             generation: generation,
                             message: "OTA Bundle 身份或内容校验失败"
                         )
-                        return
+                        return false
                     }
+                    self.releaseCurrentLease()
+                    self.releaseLease = prepared.releaseLease
                     self.preparedBundleData = data
                     self.bundleRuntimeMetadata = [
                         "lynxAppId": prepared.lynxAppId,
@@ -563,7 +575,9 @@ final class LynxContainerViewController: UIViewController {
 #endif
                     self.loadingView.hide()
                     self.renderLynxView(generation: generation)
+                    return true
                 }
+                if accepted { pendingLease = nil }
             } catch is CancellationError {
                 return
             } catch {
@@ -659,6 +673,7 @@ final class LynxContainerViewController: UIViewController {
     /** Provider/首屏错误时，OTA 页面只允许一次 previous/embedded 回滚。 */
     private func handleTemplateLoadFailure(generation: UUID, message: String) {
         guard generation == loadGeneration else { return }
+        destroyRuntimeContentAndReleaseLease()
 #if DEBUG
         updateDebugRuntimeState("failure:\(message)")
 #endif
@@ -819,6 +834,23 @@ final class LynxContainerViewController: UIViewController {
         ShellMessageHub.unregister(pageId: navigationEntryID)
         lynxView?.removeFromSuperview()
         lynxView = nil
+        releaseCurrentLease()
+    }
+
+    private func destroyRuntimeContentAndReleaseLease() {
+        templateProvider?.cancel()
+        templateProvider = nil
+        firstScreenObserver = nil
+        ShellMessageHub.unregister(pageId: navigationEntryID)
+        lynxView?.removeFromSuperview()
+        lynxView = nil
+        releaseCurrentLease()
+    }
+
+    private func releaseCurrentLease() {
+        guard let lease = releaseLease else { return }
+        releaseLease = nil
+        Task { await lease.close() }
     }
 
     /**

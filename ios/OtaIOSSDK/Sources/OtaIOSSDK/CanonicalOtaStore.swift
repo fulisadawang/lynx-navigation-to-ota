@@ -15,20 +15,42 @@ protocol OtaTransactionFaultInjecting: Sendable {
     func check(_ point: OtaTransactionFaultPoint) throws
 }
 
+protocol OtaStorageCapacityProbing: Sendable {
+    func availableCapacity(at storageRoot: URL) -> Int64
+}
+
+struct SystemOtaStorageCapacityProbe: OtaStorageCapacityProbing {
+    func availableCapacity(at storageRoot: URL) -> Int64 {
+        if let values = try? storageRoot.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+           let capacity = values.volumeAvailableCapacityForImportantUsage {
+            return capacity
+        }
+        let attributes = try? FileManager.default.attributesOfFileSystem(forPath: storageRoot.path)
+        return (attributes?[.systemFreeSize] as? NSNumber)?.int64Value ?? -1
+    }
+}
+
 struct NoopOtaTransactionFaultInjector: OtaTransactionFaultInjecting {
     func check(_ point: OtaTransactionFaultPoint) throws {}
 }
 
 /// iOS OTA 的 canonical durable store。
 ///
-/// 旧版 `FileOtaReleaseStore` 仍负责 legacy pointer 兼容读取；新事务只把
-/// downloaded Release 的引用写入 state，把 Bundle 本体放入自包含的 release 目录。
+/// Store v2 以 `apps/<lynxAppId>` 为唯一物理隔离边界；downloaded Release 的引用
+/// 只写入 state/candidate，Bundle 本体位于该 App ID 的自包含 release 目录。
 actor CanonicalOtaStore {
     private let baseDirectory: URL
     private let faultInjector: any OtaTransactionFaultInjecting
+    private let capacityProbe: any OtaStorageCapacityProbing
     private let fileManager = FileManager.default
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private var leaseCounts: [LeaseKey: Int] = [:]
+
+    private struct LeaseKey: Hashable {
+        let lynxAppId: String
+        let releaseId: String
+    }
 
     private struct Scope: Codable, Equatable {
         let env: String
@@ -96,12 +118,21 @@ actor CanonicalOtaStore {
         let release: OtaInstalledRelease
     }
 
+    private struct TreeScan {
+        let totalBytes: Int64
+        let fileCount: Int
+        let files: [OtaStorageFileSnapshot]
+        let truncated: Bool
+    }
+
     init(
         baseDirectory: URL,
-        faultInjector: any OtaTransactionFaultInjecting = NoopOtaTransactionFaultInjector()
+        faultInjector: any OtaTransactionFaultInjecting = NoopOtaTransactionFaultInjector(),
+        capacityProbe: any OtaStorageCapacityProbing = SystemOtaStorageCapacityProbe()
     ) {
         self.baseDirectory = baseDirectory
         self.faultInjector = faultInjector
+        self.capacityProbe = capacityProbe
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -112,20 +143,20 @@ actor CanonicalOtaStore {
     }
 
     func registerEmbedded(_ release: OtaInstalledRelease) throws {
-        try ensureDirectories()
+        try ensureAppDirectories(lynxAppId: release.context.lynxAppId)
         let descriptor = EmbeddedDescriptor(release: release)
         try writeAtomic(try encoder.encode(descriptor), to: embeddedURL(app: release.context.app, lynxAppId: release.context.lynxAppId))
-        guard readState(app: release.context.app, lynxAppId: release.context.lynxAppId) == nil else {
-            return
+        if readState(app: release.context.app, lynxAppId: release.context.lynxAppId) == nil {
+            let state = State(
+                schemaVersion: storeSchemaVersion,
+                generation: 0,
+                scope: scope(for: release.context),
+                current: ReleaseRef(kind: .embedded, releaseId: release.context.releaseId),
+                previous: nil
+            )
+            try writeState(state, app: release.context.app, lynxAppId: release.context.lynxAppId)
         }
-        let state = State(
-            schemaVersion: 1,
-            generation: 0,
-            scope: scope(for: release.context),
-            current: ReleaseRef(kind: .embedded, releaseId: release.context.releaseId),
-            previous: nil
-        )
-        try writeState(state, app: release.context.app, lynxAppId: release.context.lynxAppId)
+        try pruneUnreferencedReleases(app: release.context.app, lynxAppId: release.context.lynxAppId)
     }
 
     func current(app: OtaAppID, lynxAppId: String) throws -> OtaInstalledRelease? {
@@ -147,31 +178,32 @@ actor CanonicalOtaStore {
         return try resolve(staged.release, app: app, lynxAppId: lynxAppId)
     }
 
-    func adoptLegacy(_ release: OtaInstalledRelease) throws {
-        try ensureDirectories()
-        guard release.context.releaseId != "embedded" else {
-            try registerEmbedded(release)
-            return
-        }
-        if readState(app: release.context.app, lynxAppId: release.context.lynxAppId) != nil {
-            return
-        }
-        try publishRelease(release)
-        let state = State(
-            schemaVersion: 1,
-            generation: 0,
-            scope: scope(for: release.context),
-            current: ReleaseRef(kind: .downloaded, releaseId: release.context.releaseId),
-            previous: nil
-        )
-        try writeState(state, app: release.context.app, lynxAppId: release.context.lynxAppId)
-    }
-
     func stage(_ release: OtaInstalledRelease) throws {
-        try ensureDirectories()
+        try ensureAppDirectories(lynxAppId: release.context.lynxAppId)
+        try recoverStaging(lynxAppId: release.context.lynxAppId)
         try validateRelease(release)
+        try pruneUnreferencedReleases(app: release.context.app, lynxAppId: release.context.lynxAppId)
+        let targetBytes = try release.bundles.reduce(into: Int64(0)) { total, bundle in
+            let values = try fileManager.attributesOfItem(atPath: bundle.localFilePath)
+            total += (values[.size] as? NSNumber)?.int64Value ?? 0
+        }
+        let requiredBytes = targetBytes + metadataAllowanceBytes + max(
+            safetyReserveBytes,
+            (targetBytes + 9) / 10
+        )
+        let availableBytes = capacityProbe.availableCapacity(at: baseDirectory)
+        if availableBytes >= 0, availableBytes < requiredBytes {
+            throw OtaSDKError.insufficientStorage(
+                required: requiredBytes,
+                available: availableBytes
+            )
+        }
         let transactionId = UUID().uuidString
-        let staging = stagingDirectory(releaseId: release.context.releaseId, transactionId: transactionId)
+        let staging = stagingDirectory(
+            lynxAppId: release.context.lynxAppId,
+            releaseId: release.context.releaseId,
+            transactionId: transactionId
+        )
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
         do {
             var localBundles: [LocalBundle] = []
@@ -219,17 +251,22 @@ actor CanonicalOtaStore {
                 to: staging.appendingPathComponent("release-manifest.json", isDirectory: false)
             )
             try verifyReleaseDirectory(staging, expected: manifest)
-            try publishStaging(staging, releaseId: release.context.releaseId)
+            try publishStaging(
+                staging,
+                lynxAppId: release.context.lynxAppId,
+                releaseId: release.context.releaseId
+            )
             try writeAtomic(
                 try encoder.encode(
                     StagedState(
-                        schemaVersion: 1,
+                        schemaVersion: storeSchemaVersion,
                         scope: scope(for: release.context),
                         release: ReleaseRef(kind: .downloaded, releaseId: release.context.releaseId)
                     )
                 ),
                 to: stagedURL(app: release.context.app, lynxAppId: release.context.lynxAppId)
             )
+            try pruneUnreferencedReleases(app: release.context.app, lynxAppId: release.context.lynxAppId)
         } catch {
             try? fileManager.removeItem(at: staging)
             throw error
@@ -243,7 +280,7 @@ actor CanonicalOtaStore {
             throw storageError("candidate stage 指针不存在")
         }
         let candidate = CandidateState(
-            schemaVersion: 1,
+            schemaVersion: storeSchemaVersion,
             scope: staged.scope,
             release: staged.release,
             status: .pending,
@@ -256,6 +293,7 @@ actor CanonicalOtaStore {
             to: candidateURL(app: release.context.app, lynxAppId: release.context.lynxAppId)
         )
         try removeItemIfPresent(stagedURL(app: release.context.app, lynxAppId: release.context.lynxAppId))
+        try pruneUnreferencedReleases(app: release.context.app, lynxAppId: release.context.lynxAppId)
     }
 
     func candidate(app: OtaAppID, lynxAppId: String) throws -> OtaCandidateSnapshot? {
@@ -314,7 +352,7 @@ actor CanonicalOtaStore {
         let oldState = readState(app: app, lynxAppId: lynxAppId)
         let previous = oldState?.current ?? embeddedReference(app: app, lynxAppId: lynxAppId)
         let next = State(
-            schemaVersion: 1,
+            schemaVersion: storeSchemaVersion,
             generation: (oldState?.generation ?? 0) + 1,
             scope: candidate.scope,
             current: candidate.release,
@@ -324,6 +362,7 @@ actor CanonicalOtaStore {
         try writeState(next, app: app, lynxAppId: lynxAppId)
         try faultInjector.check(.afterStateCommit)
         try removeItemIfPresent(candidateURL(app: app, lynxAppId: lynxAppId))
+        try pruneUnreferencedReleases(app: app, lynxAppId: lynxAppId)
         return installed
     }
 
@@ -338,15 +377,38 @@ actor CanonicalOtaStore {
         return URL(fileURLWithPath: bundle.localFilePath)
     }
 
+    func acquireCurrentBundleLease(
+        app: OtaAppID,
+        lynxAppId: String,
+        bundleName: String
+    ) throws -> OtaBundleLease? {
+        guard let state = readState(app: app, lynxAppId: lynxAppId) else { return nil }
+        return try acquireBundleLease(
+            reference: state.current,
+            app: app,
+            lynxAppId: lynxAppId,
+            bundleName: bundleName
+        )
+    }
+
+    func acquireCandidateBundleLease(
+        app: OtaAppID,
+        lynxAppId: String,
+        bundleName: String
+    ) throws -> OtaBundleLease? {
+        guard let candidate = readCandidate(app: app, lynxAppId: lynxAppId) else { return nil }
+        return try acquireBundleLease(
+            reference: candidate.release,
+            app: app,
+            lynxAppId: lynxAppId,
+            bundleName: bundleName
+        )
+    }
+
     func discardCandidate(app: OtaAppID, lynxAppId: String) throws {
-        guard let candidate = readCandidate(app: app, lynxAppId: lynxAppId) else { return }
+        guard readCandidate(app: app, lynxAppId: lynxAppId) != nil else { return }
         try removeItemIfPresent(candidateURL(app: app, lynxAppId: lynxAppId))
-        let state = readState(app: app, lynxAppId: lynxAppId)
-        guard state?.current != candidate.release,
-              state?.previous != candidate.release else { return }
-        if candidate.release.kind == .downloaded {
-            try removeItemIfPresent(try releaseDirectory(candidate.release.releaseId))
-        }
+        try pruneUnreferencedReleases(app: app, lynxAppId: lynxAppId)
     }
 
     func recoverInterruptedCandidate(app: OtaAppID, lynxAppId: String) throws {
@@ -365,7 +427,7 @@ actor CanonicalOtaStore {
         let oldState = readState(app: app, lynxAppId: lynxAppId)
         let previous = oldState?.current ?? embeddedReference(app: app, lynxAppId: lynxAppId)
         let next = State(
-            schemaVersion: 1,
+            schemaVersion: storeSchemaVersion,
             generation: (oldState?.generation ?? 0) + 1,
             scope: staged.scope,
             current: staged.release,
@@ -375,12 +437,14 @@ actor CanonicalOtaStore {
         // 把它视为同一笔事务的幂等重放，不能把 current 自己再次写成 previous。
         if oldState?.current == staged.release {
             try removeItemIfPresent(stagedURL(app: app, lynxAppId: lynxAppId))
+            try pruneUnreferencedReleases(app: app, lynxAppId: lynxAppId)
             return installed
         }
         try faultInjector.check(.beforeStateCommit)
         try writeState(next, app: app, lynxAppId: lynxAppId)
         try faultInjector.check(.afterStateCommit)
         try removeItemIfPresent(stagedURL(app: app, lynxAppId: lynxAppId))
+        try pruneUnreferencedReleases(app: app, lynxAppId: lynxAppId)
         return installed
     }
 
@@ -397,7 +461,7 @@ actor CanonicalOtaStore {
             return nil
         }
         let next = State(
-            schemaVersion: 1,
+            schemaVersion: storeSchemaVersion,
             generation: state.generation + 1,
             scope: state.scope,
             current: previous,
@@ -406,70 +470,251 @@ actor CanonicalOtaStore {
         try faultInjector.check(.beforeRollbackCommit)
         try writeState(next, app: app, lynxAppId: lynxAppId)
         try faultInjector.check(.afterRollbackCommit)
+        try pruneUnreferencedReleases(app: app, lynxAppId: lynxAppId)
         return restored
     }
 
     func deleteDownloadedBundles(app: OtaAppID, lynxAppId: String) throws {
         try removeItemIfPresent(stateURL(app: app, lynxAppId: lynxAppId))
         try removeItemIfPresent(stagedURL(app: app, lynxAppId: lynxAppId))
-        guard fileManager.fileExists(atPath: releasesDirectory.path) else { return }
-        for item in try fileManager.contentsOfDirectory(at: releasesDirectory, includingPropertiesForKeys: nil) {
-            guard let manifest = try? readManifest(at: item),
-                  manifest.hostApp == app.rawValue,
-                  manifest.lynxAppId == lynxAppId else { continue }
-            try removeItemIfPresent(item)
-        }
-        if let embedded = try resolveEmbedded(app: app, lynxAppId: lynxAppId) {
-            try registerEmbedded(embedded)
-        }
+        try removeItemIfPresent(candidateURL(app: app, lynxAppId: lynxAppId))
+        try removeItemIfPresent(stagingRoot(lynxAppId: lynxAppId))
+        try pruneUnreferencedReleases(app: app, lynxAppId: lynxAppId)
     }
 
     func deleteAllDownloadedBundles() throws {
-        try removeItemIfPresent(releasesDirectory)
-        try removeItemIfPresent(stagingDirectoryRoot)
-        try removeItemIfPresent(statesDirectory)
-        try ensureDirectories()
-        if let enumerator = fileManager.enumerator(at: embeddedDirectory, includingPropertiesForKeys: nil) {
-            for case let descriptor as URL in enumerator where descriptor.lastPathComponent == "release.json" {
-                if let data = try? Data(contentsOf: descriptor),
-                   let value = try? decoder.decode(EmbeddedDescriptor.self, from: data) {
-                    try registerEmbedded(value.release)
-                }
-            }
+        guard fileManager.fileExists(atPath: appsDirectory.path) else { return }
+        for appDirectory in try fileManager.contentsOfDirectory(
+            at: appsDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) {
+            let appId = appDirectory.lastPathComponent
+            guard isValidAppId(appId) else { continue }
+            try removeItemIfPresent(stateURL(app: .capp, lynxAppId: appId))
+            try removeItemIfPresent(stagedURL(app: .capp, lynxAppId: appId))
+            try removeItemIfPresent(candidateURL(app: .capp, lynxAppId: appId))
+            try removeItemIfPresent(stagingRoot(lynxAppId: appId))
+            try pruneDownloadedDirectories(lynxAppId: appId, retained: [])
         }
     }
 
-    private var releasesDirectory: URL { baseDirectory.appendingPathComponent("releases", isDirectory: true) }
-    private var stagingDirectoryRoot: URL { baseDirectory.appendingPathComponent(".staging", isDirectory: true) }
-    private var statesDirectory: URL { baseDirectory.appendingPathComponent("states", isDirectory: true) }
-    private var embeddedDirectory: URL { baseDirectory.appendingPathComponent("embedded", isDirectory: true) }
+    /** 冷启动维护；状态损坏时跳过该 App，宁可保留文件也不猜测删除。 */
+    func pruneAllUnreferencedReleases() throws {
+        guard fileManager.fileExists(atPath: appsDirectory.path) else { return }
+        for appDirectory in try fileManager.contentsOfDirectory(
+            at: appsDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) {
+            let appId = appDirectory.lastPathComponent
+            guard isValidAppId(appId) else { continue }
+            if fileManager.fileExists(atPath: stateURL(app: .capp, lynxAppId: appId).path),
+               readState(app: .capp, lynxAppId: appId) == nil {
+                continue
+            }
+            if fileManager.fileExists(atPath: stagedURL(app: .capp, lynxAppId: appId).path),
+               readStaged(app: .capp, lynxAppId: appId) == nil {
+                continue
+            }
+            if fileManager.fileExists(atPath: candidateURL(app: .capp, lynxAppId: appId).path),
+               readCandidate(app: .capp, lynxAppId: appId) == nil {
+                continue
+            }
+            try recoverStaging(lynxAppId: appId)
+            try pruneUnreferencedReleases(app: .capp, lynxAppId: appId)
+        }
+    }
+
+    /** 与写事务共用 actor 的只读快照；不创建目录、不 prune、不重新计算 Bundle SHA。 */
+    func storageSnapshot(maxFilesPerTree: Int = 2_000) throws -> OtaStorageSnapshot {
+        precondition(maxFilesPerTree > 0)
+        let rootScan = try scanTree(baseDirectory, maxFiles: maxFilesPerTree)
+        let appURLs = fileManager.fileExists(atPath: appsDirectory.path)
+            ? try fileManager.contentsOfDirectory(
+                at: appsDirectory,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ).filter { isValidAppId($0.lastPathComponent) }
+            : []
+        let apps = try appURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }.map {
+            try snapshotApp(lynxAppId: $0.lastPathComponent, maxFilesPerTree: maxFilesPerTree)
+        }
+        return OtaStorageSnapshot(
+            rootPath: baseDirectory.standardizedFileURL.path,
+            totalBytes: rootScan.totalBytes,
+            fileCount: rootScan.fileCount,
+            generatedAt: Date(),
+            apps: apps
+        )
+    }
+
+    private func snapshotApp(lynxAppId: String, maxFilesPerTree: Int) throws -> OtaStorageAppSnapshot {
+        let state = readState(app: .capp, lynxAppId: lynxAppId)
+        let candidate = readCandidate(app: .capp, lynxAppId: lynxAppId)
+        let leasedReleaseIds = Set(
+            leaseCounts.compactMap { key, count in
+                key.lynxAppId == lynxAppId && count > 0 ? key.releaseId : nil
+            }
+        )
+        let releaseURLs = fileManager.fileExists(atPath: releasesDirectory(lynxAppId: lynxAppId).path)
+            ? try fileManager.contentsOfDirectory(
+                at: releasesDirectory(lynxAppId: lynxAppId),
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+            : []
+        let releases = try releaseURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }.map { url in
+            let releaseId = url.lastPathComponent
+            var roles = Set<OtaStorageReleaseRole>()
+            if state?.current.kind == .downloaded, state?.current.releaseId == releaseId { roles.insert(.current) }
+            if state?.previous?.kind == .downloaded, state?.previous?.releaseId == releaseId { roles.insert(.previous) }
+            if candidate?.release.kind == .downloaded, candidate?.release.releaseId == releaseId { roles.insert(.candidate) }
+            if leasedReleaseIds.contains(releaseId) { roles.insert(.leased) }
+            if roles.isEmpty { roles.insert(.orphan) }
+            let scan = try scanTree(url, maxFiles: maxFilesPerTree)
+            let manifestValid: Bool
+            if let manifest = try? readManifest(at: url) {
+                manifestValid = manifest.lynxAppId == lynxAppId && manifest.releaseId == releaseId
+            } else {
+                manifestValid = false
+            }
+            return OtaStorageReleaseSnapshot(
+                releaseId: releaseId,
+                roles: roles,
+                totalBytes: scan.totalBytes,
+                fileCount: scan.fileCount,
+                manifestValid: manifestValid,
+                files: scan.files,
+                truncated: scan.truncated
+            )
+        }
+        let stagingURLs = fileManager.fileExists(atPath: stagingRoot(lynxAppId: lynxAppId).path)
+            ? try fileManager.contentsOfDirectory(
+                at: stagingRoot(lynxAppId: lynxAppId),
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+            : []
+        let staging = try stagingURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }.map { url in
+            let scan = try scanTree(url, maxFiles: maxFilesPerTree)
+            return OtaStorageStagingSnapshot(
+                transactionName: url.lastPathComponent,
+                totalBytes: scan.totalBytes,
+                fileCount: scan.fileCount,
+                files: scan.files,
+                truncated: scan.truncated
+            )
+        }
+        let appScan = try scanTree(appDirectory(lynxAppId: lynxAppId), maxFiles: maxFilesPerTree)
+        return OtaStorageAppSnapshot(
+            appId: lynxAppId,
+            state: state.map {
+                OtaStorageStateSnapshot(
+                    generation: $0.generation,
+                    currentReleaseId: $0.current.releaseId,
+                    currentKind: $0.current.kind.rawValue,
+                    previousReleaseId: $0.previous?.releaseId,
+                    previousKind: $0.previous?.kind.rawValue
+                )
+            },
+            candidate: candidate.map {
+                OtaStorageCandidateStateSnapshot(
+                    releaseId: $0.release.releaseId,
+                    status: $0.status.rawValue,
+                    failureCount: $0.failureCount
+                )
+            },
+            releases: releases,
+            staging: staging,
+            totalBytes: appScan.totalBytes,
+            fileCount: appScan.fileCount
+        )
+    }
+
+    private func scanTree(_ root: URL, maxFiles: Int) throws -> TreeScan {
+        guard fileManager.fileExists(atPath: root.path) else {
+            return TreeScan(totalBytes: 0, fileCount: 0, files: [], truncated: false)
+        }
+        var totalBytes: Int64 = 0
+        var fileCount = 0
+        var files: [OtaStorageFileSnapshot] = []
+        var truncated = false
+
+        func visit(_ directory: URL, depth: Int) throws {
+            guard depth <= 32 else {
+                truncated = true
+                return
+            }
+            let children = try fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey],
+                options: []
+            ).sorted { $0.lastPathComponent < $1.lastPathComponent }
+            for child in children {
+                let values = try child.resourceValues(forKeys: [
+                    .isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey,
+                ])
+                if values.isDirectory == true, values.isSymbolicLink != true {
+                    try visit(child, depth: depth + 1)
+                } else if values.isRegularFile == true {
+                    let bytes = Int64(values.fileSize ?? 0)
+                    totalBytes += bytes
+                    fileCount += 1
+                    if files.count < maxFiles {
+                        files.append(
+                            OtaStorageFileSnapshot(
+                                relativePath: String(child.path.dropFirst(root.path.count + 1)),
+                                byteCount: bytes,
+                                modifiedAt: values.contentModificationDate ?? .distantPast
+                            )
+                        )
+                    } else {
+                        truncated = true
+                    }
+                }
+            }
+        }
+        try visit(root, depth: 0)
+        return TreeScan(totalBytes: totalBytes, fileCount: fileCount, files: files, truncated: truncated)
+    }
+
+    private var appsDirectory: URL { baseDirectory.appendingPathComponent("apps", isDirectory: true) }
+
+    private func appDirectory(lynxAppId: String) -> URL {
+        appsDirectory.appendingPathComponent(lynxAppId, isDirectory: true)
+    }
+
+    private func releasesDirectory(lynxAppId: String) -> URL {
+        appDirectory(lynxAppId: lynxAppId).appendingPathComponent("releases", isDirectory: true)
+    }
+
+    private func stagingRoot(lynxAppId: String) -> URL {
+        appDirectory(lynxAppId: lynxAppId).appendingPathComponent(".staging", isDirectory: true)
+    }
 
     private func stateURL(app: OtaAppID, lynxAppId: String) -> URL {
-        statesDirectory.appendingPathComponent("\(safeFileName(app.rawValue))_\(safeFileName(lynxAppId)).json", isDirectory: false)
+        appDirectory(lynxAppId: lynxAppId).appendingPathComponent("state.json", isDirectory: false)
     }
 
     private func stagedURL(app: OtaAppID, lynxAppId: String) -> URL {
-        statesDirectory.appendingPathComponent(".\(safeFileName(app.rawValue))_\(safeFileName(lynxAppId)).staged.json", isDirectory: false)
+        appDirectory(lynxAppId: lynxAppId).appendingPathComponent("staged.json", isDirectory: false)
     }
 
     private func candidateURL(app: OtaAppID, lynxAppId: String) -> URL {
-        statesDirectory.appendingPathComponent(".\(safeFileName(app.rawValue))_\(safeFileName(lynxAppId)).candidate.json", isDirectory: false)
+        appDirectory(lynxAppId: lynxAppId).appendingPathComponent("candidate.json", isDirectory: false)
     }
 
     private func embeddedURL(app: OtaAppID, lynxAppId: String) -> URL {
-        embeddedDirectory
-            .appendingPathComponent(safeFileName(app.rawValue), isDirectory: true)
-            .appendingPathComponent(safeFileName(lynxAppId), isDirectory: true)
-            .appendingPathComponent("release.json", isDirectory: false)
+        appDirectory(lynxAppId: lynxAppId).appendingPathComponent("embedded.json", isDirectory: false)
     }
 
-    private func releaseDirectory(_ releaseId: String) throws -> URL {
+    private func releaseDirectory(lynxAppId: String, releaseId: String) throws -> URL {
         try safeReleaseId(releaseId)
-        return releasesDirectory.appendingPathComponent(releaseId, isDirectory: true)
+        return releasesDirectory(lynxAppId: lynxAppId).appendingPathComponent(releaseId, isDirectory: true)
     }
 
-    private func stagingDirectory(releaseId: String, transactionId: String) -> URL {
-        stagingDirectoryRoot.appendingPathComponent("\(releaseId).\(transactionId)", isDirectory: true)
+    private func stagingDirectory(lynxAppId: String, releaseId: String, transactionId: String) -> URL {
+        stagingRoot(lynxAppId: lynxAppId)
+            .appendingPathComponent("\(releaseId).\(transactionId)", isDirectory: true)
     }
 
     private func scope(for context: OtaCurrentReleaseContext) -> Scope {
@@ -483,17 +728,23 @@ actor CanonicalOtaStore {
 
     private func readState(app: OtaAppID, lynxAppId: String) -> State? {
         guard let data = try? Data(contentsOf: stateURL(app: app, lynxAppId: lynxAppId)) else { return nil }
-        return try? decoder.decode(State.self, from: data)
+        guard let value = try? decoder.decode(State.self, from: data),
+              value.schemaVersion == storeSchemaVersion else { return nil }
+        return value
     }
 
     private func readStaged(app: OtaAppID, lynxAppId: String) -> StagedState? {
         guard let data = try? Data(contentsOf: stagedURL(app: app, lynxAppId: lynxAppId)) else { return nil }
-        return try? decoder.decode(StagedState.self, from: data)
+        guard let value = try? decoder.decode(StagedState.self, from: data),
+              value.schemaVersion == storeSchemaVersion else { return nil }
+        return value
     }
 
     private func readCandidate(app: OtaAppID, lynxAppId: String) -> CandidateState? {
         guard let data = try? Data(contentsOf: candidateURL(app: app, lynxAppId: lynxAppId)) else { return nil }
-        return try? decoder.decode(CandidateState.self, from: data)
+        guard let value = try? decoder.decode(CandidateState.self, from: data),
+              value.schemaVersion == storeSchemaVersion else { return nil }
+        return value
     }
 
     private func embeddedReference(app: OtaAppID, lynxAppId: String) -> ReleaseRef? {
@@ -507,7 +758,7 @@ actor CanonicalOtaStore {
         case .embedded:
             return try resolveEmbedded(app: app, lynxAppId: lynxAppId)
         case .downloaded:
-            let directory = try releaseDirectory(reference.releaseId)
+            let directory = try releaseDirectory(lynxAppId: lynxAppId, releaseId: reference.releaseId)
             guard let manifest = try? readManifest(at: directory) else { return nil }
             guard manifest.hostApp == app.rawValue, manifest.lynxAppId == lynxAppId else {
                 throw storageError("canonical Release scope 不匹配")
@@ -561,39 +812,12 @@ actor CanonicalOtaStore {
         )
     }
 
-    private func publishRelease(_ release: OtaInstalledRelease) throws {
-        let staging = stagingDirectory(releaseId: release.context.releaseId, transactionId: "adopt-\(UUID().uuidString)")
-        try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
-        do {
-            var bundles: [LocalBundle] = []
-            for bundle in release.bundles {
-                let path = try safeBundlePath(bundle.bundlePath)
-                let source = URL(fileURLWithPath: bundle.localFilePath)
-                let destination = staging.appendingPathComponent(path, isDirectory: false)
-                try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try fileManager.copyItem(at: source, to: destination)
-                let size = try fileManager.attributesOfItem(atPath: destination.path)[.size] as? NSNumber
-                let byteCount = size?.intValue ?? -1
-                guard byteCount > 0, byteCount <= 20 * 1024 * 1024 else { throw storageError("legacy Bundle 大小非法") }
-                let actual = try SHA256ChecksumValidator().sha256(for: destination)
-                guard actual.caseInsensitiveCompare(bundle.bundleSha256) == .orderedSame else {
-                    throw OtaSDKError.checksumMismatch(expected: bundle.bundleSha256, actual: actual)
-                }
-                bundles.append(LocalBundle(pageId: bundle.pageId, bundleName: bundle.bundleName, bundlePath: path, bundleSha256: bundle.bundleSha256, remoteURL: bundle.remoteURL.absoluteString, size: byteCount))
-            }
-            let manifest = LocalManifest(schemaVersion: 1, env: release.context.env.rawValue, hostApp: release.context.app.rawValue, lynxAppId: release.context.lynxAppId, releaseId: release.context.releaseId, platform: release.context.platform.rawValue, status: OtaReleaseStatus.active.rawValue, installedAt: release.installedAt, bundles: bundles)
-            try writeAtomic(try encoder.encode(manifest), to: staging.appendingPathComponent("release-manifest.json", isDirectory: false))
-            try verifyReleaseDirectory(staging, expected: manifest)
-            try publishStaging(staging, releaseId: release.context.releaseId)
-        } catch {
-            try? fileManager.removeItem(at: staging)
-            throw error
-        }
-    }
-
-    private func publishStaging(_ staging: URL, releaseId: String) throws {
-        let target = try releaseDirectory(releaseId)
-        try fileManager.createDirectory(at: releasesDirectory, withIntermediateDirectories: true)
+    private func publishStaging(_ staging: URL, lynxAppId: String, releaseId: String) throws {
+        let target = try releaseDirectory(lynxAppId: lynxAppId, releaseId: releaseId)
+        try fileManager.createDirectory(
+            at: releasesDirectory(lynxAppId: lynxAppId),
+            withIntermediateDirectories: true
+        )
         if fileManager.fileExists(atPath: target.path) {
             _ = try fileManager.replaceItemAt(
                 target,
@@ -630,10 +854,15 @@ actor CanonicalOtaStore {
 
     private func ensureDirectories() throws {
         try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
-        try fileManager.createDirectory(at: releasesDirectory, withIntermediateDirectories: true)
-        try fileManager.createDirectory(at: stagingDirectoryRoot, withIntermediateDirectories: true)
-        try fileManager.createDirectory(at: statesDirectory, withIntermediateDirectories: true)
-        try fileManager.createDirectory(at: embeddedDirectory, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: appsDirectory, withIntermediateDirectories: true)
+    }
+
+    private func ensureAppDirectories(lynxAppId: String) throws {
+        guard isValidAppId(lynxAppId) else { throw storageError("lynxAppId 必须是 8 位数字") }
+        try ensureDirectories()
+        try fileManager.createDirectory(at: appDirectory(lynxAppId: lynxAppId), withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: releasesDirectory(lynxAppId: lynxAppId), withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: stagingRoot(lynxAppId: lynxAppId), withIntermediateDirectories: true)
     }
 
     private func writeState(_ state: State, app: OtaAppID, lynxAppId: String) throws {
@@ -650,8 +879,92 @@ actor CanonicalOtaStore {
         try fileManager.removeItem(at: url)
     }
 
-    private func safeFileName(_ raw: String) -> String {
-        raw.lowercased().map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }.map(String.init).joined()
+    private func recoverStaging(lynxAppId: String) throws {
+        let root = stagingRoot(lynxAppId: lynxAppId)
+        guard fileManager.fileExists(atPath: root.path) else { return }
+        for item in try fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            try removeItemIfPresent(item)
+        }
+    }
+
+    private func pruneUnreferencedReleases(app: OtaAppID, lynxAppId: String) throws {
+        var retained = Set<String>()
+        if let state = readState(app: app, lynxAppId: lynxAppId) {
+            if state.current.kind == .downloaded { retained.insert(state.current.releaseId) }
+            if let previous = state.previous, previous.kind == .downloaded {
+                retained.insert(previous.releaseId)
+            }
+        }
+        if let staged = readStaged(app: app, lynxAppId: lynxAppId), staged.release.kind == .downloaded {
+            retained.insert(staged.release.releaseId)
+        }
+        if let candidate = readCandidate(app: app, lynxAppId: lynxAppId), candidate.release.kind == .downloaded {
+            retained.insert(candidate.release.releaseId)
+        }
+        try pruneDownloadedDirectories(lynxAppId: lynxAppId, retained: retained)
+    }
+
+    private func pruneDownloadedDirectories(lynxAppId: String, retained: Set<String>) throws {
+        let leased = Set(
+            leaseCounts.compactMap { key, count in
+                key.lynxAppId == lynxAppId && count > 0 ? key.releaseId : nil
+            }
+        )
+        let retained = retained.union(leased)
+        let releases = releasesDirectory(lynxAppId: lynxAppId)
+        guard fileManager.fileExists(atPath: releases.path) else { return }
+        for item in try fileManager.contentsOfDirectory(at: releases, includingPropertiesForKeys: nil)
+        where !retained.contains(item.lastPathComponent) {
+            try removeItemIfPresent(item)
+        }
+    }
+
+    private func acquireBundleLease(
+        reference: ReleaseRef,
+        app: OtaAppID,
+        lynxAppId: String,
+        bundleName: String
+    ) throws -> OtaBundleLease? {
+        guard let release = try resolve(reference, app: app, lynxAppId: lynxAppId),
+              let bundle = resolveBundle(named: bundleName, in: release),
+              fileManager.fileExists(atPath: bundle.localFilePath) else {
+            return nil
+        }
+        if reference.kind == .downloaded {
+            let key = LeaseKey(lynxAppId: lynxAppId, releaseId: reference.releaseId)
+            leaseCounts[key, default: 0] += 1
+        }
+        return OtaBundleLease(
+            release: release,
+            bundle: bundle,
+            fileURL: URL(fileURLWithPath: bundle.localFilePath)
+        ) { [self] in
+            guard reference.kind == .downloaded else { return }
+            await releaseLease(app: app, lynxAppId: lynxAppId, releaseId: reference.releaseId)
+        }
+    }
+
+    private func releaseLease(app: OtaAppID, lynxAppId: String, releaseId: String) {
+        let key = LeaseKey(lynxAppId: lynxAppId, releaseId: releaseId)
+        let remaining = (leaseCounts[key] ?? 0) - 1
+        if remaining > 0 {
+            leaseCounts[key] = remaining
+        } else {
+            leaseCounts.removeValue(forKey: key)
+        }
+        try? pruneUnreferencedReleases(app: app, lynxAppId: lynxAppId)
+    }
+
+    private func resolveBundle(named bundleName: String, in release: OtaInstalledRelease) -> OtaInstalledBundle? {
+        let pathMatches = release.bundles.filter { $0.bundlePath == bundleName }
+        if pathMatches.count == 1 { return pathMatches[0] }
+        if pathMatches.count > 1 { return nil }
+        let nameMatches = release.bundles.filter { $0.bundleName == bundleName }
+        return nameMatches.count == 1 ? nameMatches[0] : nil
+    }
+
+    private func isValidAppId(_ value: String) -> Bool {
+        value.range(of: "^[0-9]{8}$", options: .regularExpression) != nil
     }
 
     private func safeReleaseId(_ raw: String) throws {
@@ -675,4 +988,8 @@ actor CanonicalOtaStore {
     private func storageError(_ message: String) -> NSError {
         NSError(domain: "OtaIOSSDK.CanonicalStore", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
+
+    private let storeSchemaVersion = 2
+    private let metadataAllowanceBytes: Int64 = 1024 * 1024
+    private let safetyReserveBytes: Int64 = 32 * 1024 * 1024
 }

@@ -32,7 +32,14 @@ final class NativeTabBarDemoViewController: UITabBarController {
             target: self,
             action: #selector(refreshOta)
         )
-        navigationItem.rightBarButtonItem = refreshItem
+        let storageItem = UIBarButtonItem(
+            title: "磁盘",
+            style: .plain,
+            target: self,
+            action: #selector(openStorageInspector)
+        )
+        storageItem.accessibilityIdentifier = "native-tab-storage-inspector"
+        navigationItem.rightBarButtonItems = [refreshItem, storageItem]
         self.refreshItem = refreshItem
 #if DEBUG
         if ProcessInfo.processInfo.environment["LYNX_UI_TEST_EXPOSE_RUNTIME_STATE"] == "1" {
@@ -42,7 +49,7 @@ final class NativeTabBarDemoViewController: UITabBarController {
                 target: self,
                 action: #selector(debugRebuildSelectedTab)
             )
-            navigationItem.rightBarButtonItems = [refreshItem, rebuildItem]
+            navigationItem.rightBarButtonItems = [refreshItem, storageItem, rebuildItem]
         }
 #endif
 
@@ -181,6 +188,13 @@ final class NativeTabBarDemoViewController: UITabBarController {
                     : "保留当前 Tab 版本，请检查 OTA 配置和网络"
             )
         }
+    }
+
+    @objc private func openStorageInspector() {
+        navigationController?.pushViewController(
+            OtaStorageInspectorViewController(),
+            animated: true
+        )
     }
 
 #if DEBUG

@@ -61,11 +61,11 @@ public actor OtaSDK {
     private struct DownloadOutcome: Sendable {
         let installed: OtaInstalledRelease
         let summary: OtaBundleSyncSummary
+        let temporaryDirectory: URL?
     }
 
     private let configuration: OtaSDKConfiguration
     private let apiClient: OtaAPIClientProtocol
-    private let store: FileOtaReleaseStore
     private let releaseTransaction: ReleaseTransaction
     private let bundleRuntime: BundleRuntime
     private let downloader: OtaBundleDownloading
@@ -126,7 +126,6 @@ public actor OtaSDK {
             otaClientToken: configuration.otaClientToken
         )
         let resolvedStore = store ?? FileOtaReleaseStore(baseDirectory: configuration.storageDirectory)
-        self.store = resolvedStore
         if let transactionFaultInjectorOptional {
             self.releaseTransaction = ReleaseTransaction(
                 store: resolvedStore,
@@ -144,7 +143,6 @@ public actor OtaSDK {
     }
 
     public func initializeEmbeddedRelease(_ release: OtaInstalledRelease) async throws {
-        try await store.saveEmbeddedRelease(release)
         try await releaseTransaction.registerEmbedded(release)
         lifecycleState = .active(release.context)
     }
@@ -161,6 +159,16 @@ public actor OtaSDK {
         try await releaseTransaction.deleteAllDownloadedBundles()
         validatedBundleCache.removeAll()
         lifecycleState = .idle(current: nil)
+    }
+
+    /** 冷启动维护，不联网；清理 Store v2 orphan 与残留 staging。 */
+    public func pruneUnreferencedBundles() async throws {
+        try await releaseTransaction.pruneAllUnreferencedReleases()
+        validatedBundleCache.removeAll()
+    }
+
+    public func storageSnapshot(maxFilesPerTree: Int = 2_000) async throws -> OtaStorageSnapshot {
+        try await releaseTransaction.storageSnapshot(maxFilesPerTree: maxFilesPerTree)
     }
 
     public func state() -> OtaLifecycleState {
@@ -332,6 +340,55 @@ public actor OtaSDK {
         return localURL
     }
 
+    /** 原子登记 current lease 后再执行当前 Bundle 的 SHA/fingerprint 门禁。 */
+    public func acquireCurrentBundleLease(
+        lynxAppId: String,
+        bundleName: String
+    ) async throws -> OtaBundleLease? {
+        let scope = OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
+        guard let lease = try await releaseTransaction.acquireCurrentBundleLease(
+            scope: scope,
+            bundleName: bundleName
+        ) else {
+            return nil
+        }
+        guard try verifyCurrentBundle(
+            localURL: lease.fileURL,
+            releaseId: lease.release.context.releaseId,
+            lynxAppId: lynxAppId,
+            bundleName: lease.bundle.bundleName,
+            expectedSha256: lease.bundle.bundleSha256
+        ) else {
+            await lease.close()
+            return nil
+        }
+        return lease
+    }
+
+    public func acquireCandidateBundleLease(
+        lynxAppId: String,
+        bundleName: String
+    ) async throws -> OtaBundleLease? {
+        let scope = OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
+        guard let lease = try await releaseTransaction.acquireCandidateBundleLease(
+            scope: scope,
+            bundleName: bundleName
+        ) else {
+            return nil
+        }
+        guard try verifyCurrentBundle(
+            localURL: lease.fileURL,
+            releaseId: lease.release.context.releaseId,
+            lynxAppId: lynxAppId,
+            bundleName: lease.bundle.bundleName,
+            expectedSha256: lease.bundle.bundleSha256
+        ) else {
+            await lease.close()
+            return nil
+        }
+        return lease
+    }
+
     private func verifyCurrentBundle(
         localURL: URL,
         releaseId: String,
@@ -469,6 +526,11 @@ public actor OtaSDK {
         let current = await getCurrentRelease(lynxAppId: manifest.lynxAppId)
         let reusableRelease = await reusableReleaseSnapshot(current: current, lynxAppId: manifest.lynxAppId)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: reusableRelease)
+        defer {
+            if let temporaryDirectory = outcome.temporaryDirectory {
+                try? FileManager.default.removeItem(at: temporaryDirectory)
+            }
+        }
         if configuration.candidateActivationEnabled {
             try await releaseTransaction.stageCandidate(outcome.installed)
         } else {
@@ -707,6 +769,11 @@ public actor OtaSDK {
         lifecycleState = .downloading(releaseId: manifest.releaseId)
         let reusableRelease = await reusableReleaseSnapshot(current: current, lynxAppId: latest.lynxAppId)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: reusableRelease)
+        defer {
+            if let temporaryDirectory = outcome.temporaryDirectory {
+                try? FileManager.default.removeItem(at: temporaryDirectory)
+            }
+        }
         if configuration.candidateActivationEnabled {
             try await releaseTransaction.stageCandidate(outcome.installed)
             lifecycleState = .candidate(releaseId: manifest.releaseId)
@@ -863,6 +930,15 @@ public actor OtaSDK {
         manifest: OtaReleaseManifest,
         reusableRelease: OtaInstalledRelease?
     ) async throws -> DownloadOutcome {
+        let downloadDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lynx-ota-download-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloadDirectory, withIntermediateDirectories: true)
+        var completed = false
+        defer {
+            if !completed {
+                try? FileManager.default.removeItem(at: downloadDirectory)
+            }
+        }
         var bundles: [OtaInstalledBundle] = []
         var downloadedBundleCount = 0
         var reusedBundleCount = 0
@@ -882,12 +958,11 @@ public actor OtaSDK {
                 continue
             }
 
-            let localURL = try await store.localBundleURL(
-                app: manifest.app,
-                lynxAppId: manifest.lynxAppId,
-                releaseId: manifest.releaseId,
-                bundleName: bundle.bundleName,
-                bundlePath: bundle.bundlePath
+            let safePath = try normalizedBundleName(bundle.bundlePath)
+            let localURL = downloadDirectory.appendingPathComponent(safePath, isDirectory: false)
+            try FileManager.default.createDirectory(
+                at: localURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
             )
             let downloadStartedAt = Date()
             do {
@@ -993,6 +1068,7 @@ public actor OtaSDK {
             installedAt: Date(),
             bundles: bundles
         )
+        completed = true
         return DownloadOutcome(
             installed: installed,
             summary: OtaBundleSyncSummary(
@@ -1000,7 +1076,8 @@ public actor OtaSDK {
                 totalBundleCount: manifest.bundles.count,
                 downloadedBundleCount: downloadedBundleCount,
                 reusedBundleCount: reusedBundleCount
-            )
+            ),
+            temporaryDirectory: downloadDirectory
         )
     }
 
@@ -1238,9 +1315,8 @@ public actor OtaSDK {
     }
 
     private func reusableReleaseSnapshot(current: OtaInstalledRelease?, lynxAppId: String) async -> OtaInstalledRelease? {
-        let embedded = await store.embeddedRelease(app: configuration.app, lynxAppId: lynxAppId)
-        let candidates = [current, embedded].compactMap { $0 }
-        guard let context = current?.context ?? embedded?.context else {
+        let candidates = [current].compactMap { $0 }
+        guard let context = current?.context else {
             return nil
         }
 
