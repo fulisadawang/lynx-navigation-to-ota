@@ -19,6 +19,13 @@ data class EmbeddedBundle(
     val bytes: ByteArray,
 )
 
+/** 构建期 Manifest 暴露给 Demo/宿主的逻辑 identity；不包含物理文件路径。 */
+data class EmbeddedBundleIdentity(
+    val lynxAppId: String,
+    val releaseId: String,
+    val bundleName: String,
+)
+
 /**
  * 多个 Lynx App 共存时的 APK assets 索引。
  *
@@ -60,6 +67,24 @@ class EmbeddedBundleRegistry(
     /** 判断 App 是否有内置 baseline；只查 Manifest，不读取或复制 Bundle。 */
     fun containsApp(lynxAppId: String): Boolean {
         return entries.any { it.lynxAppId == lynxAppId }
+    }
+
+    /** 返回指定 bundleName 的全部身份；同名 Bundle 跨 appId 时不会擅自挑选。 */
+    fun identities(bundleName: String): List<EmbeddedBundleIdentity> {
+        return entries.asSequence()
+            .filter { it.bundleName == bundleName }
+            .map { EmbeddedBundleIdentity(it.lynxAppId, it.releaseId, it.bundleName) }
+            .distinct()
+            .toList()
+    }
+
+    /** 仅当一组 Bundle 唯一属于一个 appId 时才返回它，避免按文件名猜身份。 */
+    fun uniqueAppIdForBundles(bundleNames: Set<String>): String? {
+        if (bundleNames.isEmpty()) return null
+        return entries.groupBy { it.lynxAppId }
+            .filterValues { descriptors -> bundleNames.all { name -> descriptors.any { it.bundleName == name } } }
+            .keys
+            .singleOrNull()
     }
 
     private fun loadManifest(): List<Descriptor> {

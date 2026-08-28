@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Android OTA 一致性测试报告</title>
+  <style>
+    :root { --bg:#081016; --panel:#101c25; --panel2:#142631; --ink:#edf8f6; --muted:#9db3b5; --cyan:#25f4ee; --pink:#ff3158; --amber:#ffc857; --green:#37d79a; --line:#25404a; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:radial-gradient(circle at 12% 0%, #123642 0, transparent 34rem), var(--bg); font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }
+    main { width:min(1160px, calc(100% - 32px)); margin:0 auto; padding:44px 0 72px; }
+    .hero { padding:34px 36px; border:1px solid #176c70; border-radius:28px; background:linear-gradient(135deg,#0d3539,#20121b 78%); box-shadow:0 20px 70px #0007; }
+    .eyebrow { color:var(--cyan); letter-spacing:.12em; text-transform:uppercase; font-weight:700; }
+    h1 { margin:8px 0 12px; font-size:clamp(30px,5vw,56px); line-height:1.1; letter-spacing:-.04em; }
+    h2 { margin:0 0 12px; font-size:22px; }
+    h3 { margin:4px 0 0; font-size:17px; }
+    p { margin:8px 0; }
+    .hero p { max-width:790px; color:#c8d9d7; font-size:17px; }
+    .verdict { display:inline-flex; align-items:center; gap:8px; margin-top:20px; padding:7px 13px; border-radius:999px; background:#37d79a1c; border:1px solid #37d79a66; color:#9ff3ca; font-weight:700; }
+    .verdict::before { content:""; width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 16px var(--green); }
+    .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0 30px; }
+    .metric { padding:18px; border:1px solid var(--line); border-radius:18px; background:#0e1a22dd; }
+    .metric strong { display:block; color:var(--cyan); font-size:29px; line-height:1.1; }
+    .metric span { color:var(--muted); }
+    section { margin-top:28px; padding:25px; border:1px solid var(--line); border-radius:22px; background:#0d1921cc; }
+    .facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 28px; }
+    .fact { padding:10px 0; border-bottom:1px solid #20343d; }
+    .fact label { display:block; color:var(--muted); font-size:13px; }
+    code { padding:2px 6px; color:#d5fffa; border:1px solid #2d5059; border-radius:6px; background:#071117; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; overflow-wrap:anywhere; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:18px 0; }
+    input, select { min-height:40px; padding:0 12px; color:var(--ink); border:1px solid #33535d; border-radius:10px; background:#08141b; }
+    input { flex:1 1 260px; }
+    .filter { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid #33535d; border-radius:999px; color:var(--muted); cursor:pointer; user-select:none; }
+    .filter input { flex:0 0 auto; min-height:auto; accent-color:var(--cyan); }
+    .cases { display:grid; gap:11px; }
+    .case { padding:17px 18px; border:1px solid var(--line); border-radius:16px; background:linear-gradient(135deg,#12232c,#0c171e); }
+    .case[hidden] { display:none; }
+    .case-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; }
+    .case-id { display:block; color:var(--cyan); font:12px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.03em; }
+    .tag { flex:0 0 auto; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:700; }
+    .tag.pass { color:#aaffd8; background:#37d79a20; border:1px solid #37d79a66; }
+    .tag.skip { color:#ffe0a2; background:#ffc85718; border:1px solid #ffc85766; }
+    .summary { color:#bfd1d1; }
+    details { margin-top:10px; color:var(--muted); }
+    summary { color:#d7fffa; cursor:pointer; }
+    .detail-grid { display:grid; grid-template-columns:145px 1fr; gap:5px 14px; margin:10px 0 0; }
+    .detail-grid dt { color:#77969b; }
+    .detail-grid dd { margin:0; color:#bfd1d1; }
+    .notice { padding:14px 16px; border-left:3px solid var(--amber); color:#dfd2b2; background:#3e32161c; }
+    .links { display:flex; flex-wrap:wrap; gap:10px; }
+    .links a { color:var(--cyan); text-decoration:none; padding:9px 12px; border:1px solid #29636a; border-radius:10px; background:#0e2830; }
+    footer { margin-top:28px; color:#789196; font-size:13px; }
+    @media (max-width:760px) { main { width:min(100% - 20px, 680px); padding-top:16px; } .hero,section { padding:20px; border-radius:18px; } .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .facts { grid-template-columns:1fr; } .detail-grid { grid-template-columns:1fr; gap:0; } }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="eyebrow">Lynx 4.0 · Android · OTA / Router</div>
+    <h1>Android OTA 一致性测试报告</h1>
+    <p>本报告记录 Android OTA / Router 的当前证据：Store v2 按 App ID 物理隔离、版本有界保留、活体页面 lease、只读磁盘浏览器，以及既有 embedded → OTA current、Tab cache-only、candidate 和回滚链路。</p>
+    <div class="verdict">Store v2、真实服务落盘、页面 lease、删除延迟回收与只读 Inspector 均通过；服务端双远程版本回滚仍是边界</div>
+  </header>
+
+  <div class="grid">
+    <div class="metric"><strong>36 + 7</strong><span>OTA + motion JVM tests</span></div>
+    <div class="metric"><strong>111</strong><span>跨端静态检查 PASS</span></div>
+    <div class="metric"><strong>2</strong><span>真实服务返回 App ID</span></div>
+    <div class="metric"><strong>2</strong><span>真机历史证据 + API 35 模拟器</span></div>
+  </div>
+
+  <section>
+    <h2>测试环境与事实</h2>
+    <div class="facts">
+      <div class="fact"><label>测试时间</label>2026-08-27（Asia/Shanghai）</div>
+      <div class="fact"><label>设备</label>OnePlus IN2010 · Android 13 历史证据；LynxScreens_API35 · Android 15 · arm64 本轮 Store v2 验收</div>
+      <div class="fact"><label>包名</label><code>com.example.lynxshell.debug</code></div>
+      <div class="fact"><label>OTA 服务</label><code>https://lynx-ota-server.test.huangbaoche.com</code> · TEST / capp / android</div>
+      <div class="fact"><label>真实清单</label><code>10000001 → r20260823_qc8ffc</code>（28 bundles）；<code>10000002 → r20260806_dhax5q</code>（12 bundles）</div>
+      <div class="fact"><label>AndroMeld</label>Phone Screen session 已连接；设备 serial 仅作为本次验收上下文，不写入运行时业务数据</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>结论先看</h2>
+    <div class="notice">
+      Android 的“内置 → 启动同步 → 下一次冷启动使用 OTA current”已在真机上观察到。首次截图显示 <code>10000001 / r20260823_qc8ffc / 内置 baseline / main.lynx.bundle</code>；等待启动同步完成后重新冷启动，截图显示 <code>10000001 / r20260823_qc8ffc / OTA current / main.lynx.bundle</code>。<code>run-as</code> 核对确认没有生成 <code>files/lynx-ota-store/embedded</code> 副本。
+    </div>
+    <div class="notice" style="margin-top:12px;border-left-color:var(--cyan)">
+      Native Tab Home 与单独打开的 Playground 使用同一个 <code>10000001 + main.lynx.bundle</code>，手机屏幕均显示相同 release/source；切换 Home/Settings 后前台 Activity 仍为 <code>NativeTabDemoActivity</code>，Bundle render 计数没有因切换增加。显式刷新时全量同步计数为 2，两个 Tab 的 main Bundle render 总计为 4，符合“启动一次 + 主动刷新一次”的预期。
+    </div>
+    <div class="notice" style="margin-top:12px;border-left-color:var(--green)">
+      2026-08-27 聚焦真机复验确认 candidate 被页面消费后，后台同步不再误报 <code>candidate 发布后不可读取</code>；正常 promote 和首屏故障 discard 均完成，失败场景页面仍可用且稳定 current 未被覆盖。
+    </div>
+    <div class="notice" style="margin-top:12px;border-left-color:var(--cyan)">
+      Store v2 全新安装后，真实服务返回的两个 App ID 分别落在 <code>apps/10000001/...</code> 与 <code>apps/10000002/...</code>；顶层不存在旧 <code>releases/</code>、<code>states/</code>、<code>.staging/</code>。Inspector 显示 44 个真实文件、约 4.5 MB，刷新期间没有 OTA 请求日志。
+    </div>
+  </section>
+
+  <section>
+    <h2>用例结果</h2>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="搜索用例、关键词或证据…" aria-label="搜索测试用例">
+      <select id="evidence" aria-label="按证据层级筛选"><option value="all">全部证据层级</option><option value="jvm">JVM / SDK</option><option value="build">构建 / 静态</option><option value="device">真机 / adb</option><option value="live">真实 OTA</option></select>
+      <label class="filter"><input id="showPass" type="checkbox" checked> PASS</label>
+      <label class="filter"><input id="showSkip" type="checkbox" checked> SKIP / 边界</label>
+    </div>
+    <div id="empty" class="notice" hidden>没有匹配的用例。</div>
+    <div class="cases" id="cases">
+      <article class="case" data-status="pass" data-evidence="build" data-search="A-01 AndroMeld MCP device quickstart device connection"><div class="case-head"><div><span class="case-id">A-01 · build / connection</span><h3>AndroMeld 连接与设备发现</h3></div><span class="tag pass">PASS</span></div><p class="summary">已调用 quickstart，发现并确认 1 台可控 Android 设备。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>设备</dt><dd>IN2010 · Android 13 · SDK 33 · USB · mirror supported · MCP control enabled</dd><dt>应用目录</dt><dd>发现 <code>com.example.lynxshell.debug</code>（Lynx 4.0 Shell）</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="live" data-search="A-02 latest-bundle-list real server two app ids 10000001 10000002"><div class="case-head"><div><span class="case-id">A-02 · live</span><h3>真实 OTA 服务清单回读</h3></div><span class="tag pass">PASS</span></div><p class="summary">真实 HTTPS latest-bundle-list 返回合法 JSON，包含两个服务端 App ID；没有在客户端自行生成 appId。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>返回</dt><dd><code>10000001 / r20260823_qc8ffc / ACTIVE / 28</code>；<code>10000002 / r20260806_dhax5q / ACTIVE / 12</code></dd><dt>凭证</dt><dd>仅运行时读取，本报告、仓库和工作流均不保存 token。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-03 embedded baseline cold start version visible 内置 baseline"><div class="case-head"><div><span class="case-id">A-03 · device</span><h3>清缓存后首次打开使用内置 baseline</h3></div><span class="tag pass">PASS</span></div><p class="summary">首次屏幕证据明确显示 App ID、Release、来源和 Bundle 名称；没有等待网络才能创建页面。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>屏幕</dt><dd><code>10000001 / r20260823_qc8ffc / 内置 baseline / main.lynx.bundle</code></dd><dt>动作</dt><dd>adb 精确清理指定 debug 包的 OTA store 后启动 Playground，1 秒截图完成。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-04 no copy embedded assets AssetManager files store"><div class="case-head"><div><span class="case-id">A-04 · device</span><h3>内置 Bundle 不复制到手机存储</h3></div><span class="tag pass">PASS</span></div><p class="summary">APK embedded 直接由 AssetManager 读取；私有 Store 只出现远程 Release 与状态，未出现 embedded Bundle bytes 副本。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>run-as</dt><dd><code>embedded_copy=absent</code>；<code>canonical_state=present</code></dd><dt>目录</dt><dd><code>files/lynx-ota-store/apps/&lt;appId&gt;/releases/</code> 与 <code>state.json</code>；可选 <code>embedded.json</code> 仅是逻辑描述。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-05 next cold start OTA current restart version release"><div class="case-head"><div><span class="case-id">A-05 · device</span><h3>启动同步后下一次冷启动使用 OTA current</h3></div><span class="tag pass">PASS</span></div><p class="summary">第一次页面继续保持内置版本；同步在后台完成；进程终止后重新打开读取已提交 OTA current。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>屏幕</dt><dd><code>10000001 / r20260823_qc8ffc / OTA current / main.lynx.bundle</code></dd><dt>持久化</dt><dd><code>apps/10000001/state.json</code> 的 current 为 downloaded release；第二个 App ID 也有独立 state。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-06 standalone version visibility single open Playground release source bundleName"><div class="case-head"><div><span class="case-id">A-06 · device</span><h3>单独打开页面版本可辨识</h3></div><span class="tag pass">PASS</span></div><p class="summary">Playground 首页的版本卡同时展示 <code>lynxAppId</code>、<code>releaseId</code>、来源、Bundle 名称和 SHA 前缀。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>实际值</dt><dd><code>10000001</code>、<code>r20260823_qc8ffc</code>、<code>OTA current</code>、<code>main.lynx.bundle</code></dd><dt>App 版本</dt><dd>页面系统信息独立展示 Android App/Lynx SDK 版本，不把 OTA release 冒充原生 App 版本。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-07 tab home same current standalone parity Fragment"><div class="case-head"><div><span class="case-id">A-07 · device</span><h3>Native Tab Home 与单独页面读取同一 current</h3></div><span class="tag pass">PASS</span></div><p class="summary">原生 Fragment 承载的 Home Tab 屏幕与单独 Playground 页面显示相同身份和来源，没有退回 cache-only 旧包。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>承载</dt><dd><code>NativeTabDemoActivity → LynxTabFragment → resolveCurrent</code></dd><dt>屏幕</dt><dd><code>10000001 / r20260823_qc8ffc / OTA current / main.lynx.bundle</code></dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-08 tab settings Fragment bottom navigation same app"><div class="case-head"><div><span class="case-id">A-08 · device</span><h3>原生 Tab Settings 页面可承载</h3></div><span class="tag pass">PASS</span></div><p class="summary">Android 原生 BottomNavigation 只负责选中态，Settings 内容由第二个 LynxTabFragment 承载，页面可正常显示。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>屏幕</dt><dd>Settings 页面显示系统信息、Android 平台、SDK 33、1080×2400px。</dd><dt>边界</dt><dd>BottomNavigation 仍是 Demo 的原生验收控件，复用容器本身不依赖 TabBar。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-09 tab round trip no duplicate request no reload NativeTabDemoActivity render count"><div class="case-head"><div><span class="case-id">A-09 · device</span><h3>Tab 切换不重复请求且不重建 Activity</h3></div><span class="tag pass">PASS</span></div><p class="summary">Home → Settings → Home 后前台仍是 NativeTabDemoActivity；两个 main Bundle 只在两个 Fragment 首次创建时各渲染一次。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>日志</dt><dd>启动/切换场景的全量同步日志计数为 1；main Bundle render 计数为 2。</dd><dt>实现</dt><dd>切 Tab 只 hide/show Fragment；Fragment 只调用 <code>resolveCurrent</code>，不调用 repair。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-10 explicit refresh full sync reload tabs count"><div class="case-head"><div><span class="case-id">A-10 · device</span><h3>主动刷新先全量同步，再重载 Tab</h3></div><span class="tag pass">PASS</span></div><p class="summary">点击 Demo 的“刷新 OTA 后重载 Tab”后只增加一次全量同步，两个 Tab 重新读取 current。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>日志计数</dt><dd><code>全量 OTA 同步完成=2</code>（启动一次 + 主动刷新一次）；<code>main render=4</code>（两个 Tab 各两代）。</dd><dt>前台</dt><dd>操作后 top Activity 仍是 <code>NativeTabDemoActivity</code>。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-11 multi app id state response returned stored current 10000002"><div class="case-head"><div><span class="case-id">A-11 · device</span><h3>多 App ID 按服务响应独立持久化</h3></div><span class="tag pass">PASS</span></div><p class="summary">启动全量同步没有预先枚举业务 appId；两个响应 identity 各自生成 state/release 目录。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>state 1</dt><dd><code>10000001 → downloaded/r20260823_qc8ffc</code></dd><dt>state 2</dt><dd><code>10000002 → downloaded/r20260806_dhax5q</code></dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="jvm" data-search="A-12 JVM tests 36 OTA 7 motion candidate rollback checksum recovery store v2"><div class="case-head"><div><span class="case-id">A-12 · JVM / SDK</span><h3>Android OTA 故障与事务单测</h3></div><span class="tag pass">PASS</span></div><p class="summary">Android lynx-shell 的 OTA 与 motion JVM 测试分开统计，新增 Store v2 隔离、十版本保留、lease、Inspector、容量与进程故障边界。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>命令</dt><dd><code>gradle -p android :lynx-shell:testDebugUnitTest --no-daemon</code></dd><dt>结果</dt><dd>36 个 OTA + 7 个 motion，共 43 tests；0 skipped，0 failure，0 error。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="jvm" data-search="A-13 candidate pending trial healthy confirmation promote current previous restart"><div class="case-head"><div><span class="case-id">A-13 · JVM / SDK + device</span><h3>候选版本 candidate / trial / healthy promote</h3></div><span class="tag pass">PASS</span></div><p class="summary">Android 已提供与 iOS 对等的可选 candidate 状态机：current 在健康确认前不改变，trial 重启会被清理，确认后 candidate promote 为 current。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>实现</dt><dd><code>ReleaseTransaction</code> 的 candidate 文件、<code>OtaSdk</code> API、<code>LynxOtaRuntime.resolvePage</code>。</dd><dt>测试</dt><dd><code>OtaCandidateActivationTest</code> 3 个用例通过；Debug 可用 <code>LYNX_OTA_CANDIDATE_MODE=1</code> 构建开启。</dd><dt>真机复验</dt><dd>candidate 同步、正常 promote、首屏故障 discard 均完成；candidate 被消费后的后台同步异常为 0。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="build" data-search="A-14 static check 111 android ios parity"><div class="case-head"><div><span class="case-id">A-14 · build / static</span><h3>跨端静态契约检查</h3></div><span class="tag pass">PASS</span></div><p class="summary">Android/iOS 工程、路由、Bridge、XElement、转场和 OTA 相关静态规则全部通过。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>命令</dt><dd><code>python3 scripts/static_check_android_ios.py --quiet</code></dd><dt>结果</dt><dd>111 PASS / 0 WARN / 0 FAIL。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="build" data-search="A-15 assemble install debug APK build device"><div class="case-head"><div><span class="case-id">A-15 · build / device</span><h3>Debug APK 构建与真机安装</h3></div><span class="tag pass">PASS</span></div><p class="summary">Debug APK 成功构建并安装到 IN2010，真实运行中的包名与预期一致。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>命令</dt><dd><code>gradle -p android :app:installDebug --no-daemon</code></dd><dt>结果</dt><dd>BUILD SUCCESSFUL；Installed on 1 device。</dd></dl></details></article>
+      <article class="case" data-status="skip" data-evidence="live" data-search="A-16 release delta new version live server no update same release"><div class="case-head"><div><span class="case-id">A-16 · live boundary</span><h3>真实 OTA 新 release delta</h3></div><span class="tag skip">边界</span></div><p class="summary">真实服务当前返回的 latest release 与 APK embedded release 都是 <code>r20260823_qc8ffc</code>；因此本轮无法凭真实服务证明“V1 → 新 V2 releaseId”变化。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>已证明</dt><dd>真实请求、清单解析、下载、校验、current 写入、下一次冷启动使用 OTA current 均已证明。</dd><dt>未臆造</dt><dd>没有把同 release 的 source 切换写成新版本发布通过；需要服务端发布一个高于当前的 Android release 后再补一条 smoke。</dd></dl></details></article>
+      <article class="case" data-status="skip" data-evidence="device" data-search="A-17 instrumentation Espresso UIAutomator unavailable automated screen assertion"><div class="case-head"><div><span class="case-id">A-17 · automation boundary</span><h3>Android instrumentation UI 自动化</h3></div><span class="tag skip">未配置</span></div><p class="summary">当前工程没有 Espresso/UIAutomator instrumentation target；手机屏幕断言由 adb 截图 + 人工视觉核对完成，不能冒充自动化 UI 通过。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>替代证据</dt><dd>ADB top Activity、logcat 计数、run-as state、1080×2400 真机截图。</dd><dt>后续</dt><dd>若要 CI 自动化，需要独立配置 <code>androidTest</code> runner 和稳定 accessibility/debug state。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-18 first screen injected failure embedded rollback rollback fallback real device"><div class="case-head"><div><span class="case-id">A-18 · device</span><h3>真机首屏失败回退到 embedded</h3></div><span class="tag pass">PASS</span></div><p class="summary">Debug 一次性故障注入触发 OTA current 首屏失败；Android 容器执行一次 recovery，删除坏的 downloaded current，重新读取 APK embedded，页面最终可用。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>屏幕</dt><dd><code>10000001 / r20260823_qc8ffc / 回滚 fallback / main.lynx.bundle</code></dd><dt>磁盘</dt><dd>回退后仅保留其它 appId 的 release；10000001 downloaded current 被移除，未生成 embedded 副本。</dd><dt>入口</dt><dd>Debug <code>lynx_shell.fail_first_screen=true</code>；Release 不消费该入口。</dd></dl></details></article>
+      <article class="case" data-status="skip" data-evidence="device" data-search="A-19 previous remote rollback force stop after rollback commit durable process"><div class="case-head"><div><span class="case-id">A-19 · device boundary</span><h3>previous remote 回滚后的跨进程 force-stop</h3></div><span class="tag skip">待补设备故障注入</span></div><p class="summary">Android 事务层已验证 direct predecessor 和 rollback commit 持久化；真机已尝试故障入口，但服务端当前每个 App ID 只有一个 latest，无法在不伪造前置 state 的情况下构造 remote previous。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>已通过</dt><dd>JVM <code>OtaReleaseRecoveryTest</code>、<code>OtaCandidateActivationTest</code> 覆盖 durable state；真机 embedded fallback 已通过。</dd><dt>仍未验证</dt><dd>两个不同远程 release、rollback commit 后暂停/force-stop、下一进程读取 remote previous。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-20 candidate race consumed discard background sync candidate published unreadable regression real device"><div class="case-head"><div><span class="case-id">A-20 · device regression</span><h3>candidate 被页面消费后的后台同步竞态</h3></div><span class="tag pass">PASS</span></div><p class="summary">真机复验 candidate 正常 promote 与首屏失败 discard；后台同步不再把 candidate 已被合法消费误报成激活失败。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>设备</dt><dd>OnePlus IN2010 / Android 13 / <code>a7e90f03</code>。</dd><dt>结果</dt><dd>OTA 19 + motion 7 JVM 全通过；正常 promote 通过；fail_first_screen 后页面完成两次渲染、candidate 文件消失、异常计数为 0。</dd><dt>原始记录</dt><dd><code>/tmp/lynx-android-final-test-result-v2.txt</code>、<code>/tmp/lynx-android-v2-final-state-check.txt</code>、v2 candidate logcat。</dd><dt>边界</dt><dd>本轮 store 为清空状态，未证明“已有独立 stable downloaded current + 新 candidate 失败”双版本语义。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="jvm" data-search="A-21 store v2 app id same release V5 isolation retention V1 V10"><div class="case-head"><div><span class="case-id">A-21 · JVM / SDK</span><h3>Store v2 App ID 隔离与有界保留</h3></div><span class="tag pass">PASS</span></div><p class="summary"><code>10000009/V5</code> 与 <code>10000010/V5</code> 同时安装、读取和按 App 删除互不影响；连续 V1…V10 后只剩 V10/V9。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>测试</dt><dd><code>OtaStoreV2RetentionTest</code> 11 个用例。</dd><dt>candidate</dt><dd>pending 时最多 current/previous/candidate 三份；confirm 后只剩新 current/previous。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="jvm" data-search="A-22 release lease delete deferred activity fragment"><div class="case-head"><div><span class="case-id">A-22 · JVM / SDK + device</span><h3>活体 Release lease 与删除延迟回收</h3></div><span class="tag pass">PASS</span></div><p class="summary">Activity/Fragment 持有 downloaded Release 时，后台激活与显式删除都不会移除其文件；容器销毁后最后一个 lease 关闭并 prune。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>JVM</dt><dd><code>OtaReleaseLeaseTest</code> 3/3 通过。</dd><dt>模拟器</dt><dd>删除全部后 state 清空、10000002 立即删除，10000001 仅显示 <code>[页面使用中]</code>；返回销毁页面后目录立即消失。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="device" data-search="A-23 native inspector snapshot read only app id files bytes staging"><div class="case-head"><div><span class="case-id">A-23 · emulator / UI</span><h3>原生 OTA 磁盘浏览器</h3></div><span class="tag pass">PASS</span></div><p class="summary">Launcher 可进入只读 Inspector，展示真实绝对 root、两个 App ID、角色、Manifest、Bundle 文件树与字节数；返回正常。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>空闲快照</dt><dd>2 个 App ID、44 个文件、约 4.5 MB。</dd><dt>刷新</dt><dd>刷新后 UI 数值不变，清空后的 logcat 未出现 latest-bundle-list / 全量同步日志。</dd><dt>测试</dt><dd><code>OtaStorageDiagnosticsTest</code> 3/3 通过。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="live" data-search="A-24 fresh install real ota store v2 paths schemaVersion 2"><div class="case-head"><div><span class="case-id">A-24 · live / emulator</span><h3>全新安装后真实服务写入 Store v2</h3></div><span class="tag pass">PASS</span></div><p class="summary">卸载重装 Debug APK 后，启动全量同步把真实清单直接写入最新 schema，没有迁移或清理旧 Store 的代码路径。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>路径</dt><dd><code>apps/10000001/releases/r20260823_qc8ffc</code> 与 <code>apps/10000002/releases/r20260806_dhax5q</code>。</dd><dt>状态</dt><dd>两份 <code>state.json</code> 均为 <code>schemaVersion=2</code>、generation=1、current=downloaded。</dd><dt>旧顶层</dt><dd><code>releases/</code>、<code>states/</code>、根 <code>.staging/</code> 全部不存在。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-evidence="jvm" data-search="A-25 preflight staging fault malformed state cold maintenance"><div class="case-head"><div><span class="case-id">A-25 · JVM / fault</span><h3>容量、staging 与冷启动恢复边界</h3></div><span class="tag pass">PASS</span></div><p class="summary">先 prune 后容量预检；空间不足保持 embedded/current；state 提交前后故障均可恢复；A 的 staging 不误删 B；冷启动清 orphan，状态损坏时保守不删。</p><details><summary>展开证据</summary><dl class="detail-grid"><dt>失败安全</dt><dd>不足空间时没有 state/candidate/半成品发布。</dd><dt>保守策略</dt><dd>state/candidate 解析失败时跳过该 App 的自动 prune。</dd></dl></details></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>对 iOS 行为契约的对照</h2>
+    <div class="facts">
+      <div class="fact"><label>一致</label>内置 baseline 不复制；服务端响应提供 App ID；current 优先；Tab cache-only；启动/前台全量同步；主动刷新后 Tab 重读；版本卡显示身份。</div>
+      <div class="fact"><label>已补齐</label>Android candidate/trial/healthy promote；首屏错误进入一次性 recovery；previous remote 保持 <code>ota_current</code> 来源，embedded 才标 <code>rollback_fallback</code>。</div>
+      <div class="fact"><label>仍有自动化差异</label>iOS 有 XCUITest；Android 当前是 JVM + adb/真机人工证据，没有 instrumentation runner。</div>
+      <div class="fact"><label>服务端差异</label>本轮真实服务没有新 release delta，不能验证 releaseId 变化；下一次服务端发布 Android 新版本后，只需重跑 A-02、A-05、A-06、A-07、A-10、A-16。</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>实现与工作流</h2>
+    <div class="links">
+      <a href="../android/README.md">Android README</a>
+      <a href="../android/lynx-shell/OTA_RUNTIME.md">OTA Runtime 说明</a>
+      <a href="../android/lynx-shell/src/main/kotlin/com/ota/android/sdk/ReleaseTransaction.kt">ReleaseTransaction</a>
+      <a href="../android/lynx-shell/src/main/kotlin/com/example/lynxshell/ota/LynxOtaRuntime.kt">LynxOtaRuntime</a>
+      <a href="../android/lynx-shell/src/main/java/com/example/lynxshell/tab/LynxTabFragment.kt">LynxTabFragment</a>
+      <a href="../android/app/scripts/sync_ota_bundles_to_assets.mjs">Assets 同步脚本</a>
+      <a href="../.workflow/android-ota-ios-html/plan.md">Android 工作流计划</a>
+      <a href="../.workflow/android-ota-ios-html/final-report.md">工作流最终报告</a>
+      <a href="ios-ota-test-report.html">iOS 对照报告</a>
+    </div>
+  </section>
+
+  <footer>报告是 standalone HTML，不依赖外部资源；未写入 OTA token。最后更新：2026-08-27。</footer>
+</main>
+<script>
+  (() => {
+    const search = document.querySelector('#search');
+    const evidence = document.querySelector('#evidence');
+    const showPass = document.querySelector('#showPass');
+    const showSkip = document.querySelector('#showSkip');
+    const empty = document.querySelector('#empty');
+    const cards = [...document.querySelectorAll('.case')];
+    function refresh() {
+      const needle = search.value.trim().toLowerCase();
+      const level = evidence.value;
+      let visible = 0;
+      cards.forEach(card => {
+        const statusOK = card.dataset.status === 'pass' ? showPass.checked : showSkip.checked;
+        const evidenceOK = level === 'all' || card.dataset.evidence === level;
+        const textOK = !needle || card.dataset.search.toLowerCase().includes(needle) || card.textContent.toLowerCase().includes(needle);
+        const show = statusOK && evidenceOK && textOK;
+        card.hidden = !show;
+        if (show) visible += 1;
+      });
+      empty.hidden = visible !== 0;
+    }
+    [search, evidence, showPass, showSkip].forEach(el => el.addEventListener('input', refresh));
+    refresh();
+  })();
+</script>
+</body>
+</html>

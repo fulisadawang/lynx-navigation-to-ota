@@ -1,5 +1,6 @@
 package com.example.lynxshell.ota
 
+import com.ota.android.sdk.OtaStorageSnapshot
 import java.io.File
 
 /**
@@ -35,6 +36,9 @@ interface ActivityBundleRuntime {
      */
     fun refreshAppBundleIfNeeded(lynxAppId: String) = Unit
 
+    /** 只读 Store 快照；不触发网络、下载、激活或清理。 */
+    fun otaStorageSnapshot(): OtaStorageSnapshot? = null
+
     /**
      * 为一次页面打开准备指定 appId 下的 Bundle。
      *
@@ -50,6 +54,13 @@ interface ActivityBundleRuntime {
      * Native Tab Container 只能使用这个 cache-only 入口，避免每次切 Tab 都访问网络。
      */
     fun resolveCurrent(lynxAppId: String, bundleName: String): PreparedActivityBundle? = null
+
+    /** 普通 Activity 页面可选择消费 candidate；Native Tab 固定使用 resolveCurrent。 */
+    fun resolvePage(lynxAppId: String, bundleName: String): PreparedActivityBundle? =
+        resolveCurrent(lynxAppId, bundleName)
+
+    /** candidate 页面首屏健康后由容器调用；默认 runtime 没有 candidate。 */
+    fun confirmCandidateHealthy(lynxAppId: String): Boolean = false
 
     /**
      * 页面首屏失败时按 appId 回滚一次。没有可回滚版本时返回 false，避免误报成功。
@@ -73,6 +84,8 @@ data class PreparedActivityBundle(
     val sha256: String? = null,
     /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
     val source: String = "ota_current",
+    /** downloaded Release 的进程内租约；容器销毁或放弃本次结果时必须 close。 */
+    val releaseLease: AutoCloseable? = null,
 ) {
     init {
         require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }

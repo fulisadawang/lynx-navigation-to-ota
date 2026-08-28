@@ -20,6 +20,17 @@ import org.json.JSONObject
  * Activity 的 Intent extra、Registry 或 Provider 细节，也不需要预注册 routeId。
  */
 object LynxRouter {
+    /** Debug Sample 的一次性首屏故障注入；Release 构建不会消费该标记。 */
+    @JvmStatic
+    fun debugFailNextFirstScreen() {
+        if (BuildConfig.DEBUG) LynxDebugFaults.failNextFirstScreen = true
+    }
+
+    internal fun consumeDebugFirstScreenFailure(): Boolean {
+        if (!BuildConfig.DEBUG) return false
+        return LynxDebugFaults.consumeFirstScreenFailure()
+    }
+
     /** Application.onCreate 中调用一次；Runtime 初始化本身幂等。 */
     fun install(
         application: Application,
@@ -91,6 +102,11 @@ object LynxRouter {
     /** 兼容旧诊断入口；语义仍然是直接删除全部下载内容。 */
     fun clearOtaCache(onComplete: (success: Boolean, message: String?) -> Unit = { _, _ -> }) {
         deleteAllOtaBundles(onComplete)
+    }
+
+    /** 返回只读 OTA Store 快照；调用方应在后台线程执行。 */
+    fun otaStorageSnapshot(): com.ota.android.sdk.OtaStorageSnapshot? {
+        return LynxShell.activityBundleRuntime()?.otaStorageSnapshot()
     }
 
     /** 运行时替换 OTA 适配器；适合宿主完成环境配置后再安装。 */
@@ -228,5 +244,16 @@ object LynxRouter {
         } else {
             "assets://bundles/$normalized"
         }
+    }
+}
+
+internal object LynxDebugFaults {
+    @Volatile
+    var failNextFirstScreen: Boolean = false
+
+    fun consumeFirstScreenFailure(): Boolean {
+        if (!failNextFirstScreen) return false
+        failNextFirstScreen = false
+        return true
     }
 }

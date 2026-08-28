@@ -31,6 +31,39 @@ public protocol OtaBundleDownloading: Sendable {
     func download(from remoteURL: URL, to localURL: URL) async throws
 }
 
+#if DEBUG
+/**
+ * Debug/XCUITest 只读 HTTP 计数器；由真实 ServerOtaAPIClient 请求递增，不参与 OTA 业务状态。
+ * Release 不编译该 API，避免把测试观测能力带入生产包。
+ */
+public enum OtaDebugHTTPMetrics {
+    private final class Storage: @unchecked Sendable {
+        let lock = NSLock()
+        var requestCount = 0
+    }
+
+    private static let storage = Storage()
+
+    public static func reset() {
+        storage.lock.lock()
+        storage.requestCount = 0
+        storage.lock.unlock()
+    }
+
+    public static func snapshot() -> Int {
+        storage.lock.lock()
+        defer { storage.lock.unlock() }
+        return storage.requestCount
+    }
+
+    static func recordRequest() {
+        storage.lock.lock()
+        storage.requestCount += 1
+        storage.lock.unlock()
+    }
+}
+#endif
+
 public protocol OtaChecksumValidating: Sendable {
     func sha256(for fileURL: URL) throws -> String
 }
@@ -288,6 +321,9 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
     }
 
     private func send<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
+#if DEBUG
+        OtaDebugHTTPMetrics.recordRequest()
+#endif
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw OtaSDKError.invalidResponse(statusCode: -1, body: "Missing HTTPURLResponse")

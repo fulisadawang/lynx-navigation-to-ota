@@ -57,6 +57,17 @@
             android:textSize="16sp"
             app:cornerRadius="12dp" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/open_ota_storage_inspector_button"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="52dp"
+            android:text="查看 OTA 磁盘目录"
+            android:textSize="16sp"
+            app:cornerRadius="12dp" />
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

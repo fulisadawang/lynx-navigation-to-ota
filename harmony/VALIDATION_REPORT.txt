@@ -1,54 +1,37 @@
-Lynx 4.0 HarmonyOS Shell 静态验收
-工程目录: harmony
-说明: 未下载 OHPM 依赖，未执行 DevEco/Hvigor/HAP 编译。
+Lynx 4.0 HarmonyOS OTA Store v2 验收报告
+日期: 2026-08-27
+范围: HarmonyOS ArkTS/ArkUI；不包含 candidate/trial 状态机
 
-[PASS] HarmonyOS 关键工程文件完整
-[PASS] HarmonyOS JSON/JSON5 可解析（12 个）
-[PASS] HarmonyOS SVG 可解析（7 个）
-[PASS] HarmonyOS PrimJS 固定为 4.0.0
-[FAIL] HarmonyOS release/4.0 OHPM 映射固定为 1.4.0
-[PASS] HarmonyOS Lynx/Service/XElement OHPM 依赖清单完整
-[PASS] HarmonyOS @lynx/* 统一引用 1.4.0 参数
-[PASS] HarmonyOS ImageKnifePro 固定为官方 Explorer 使用的 1.0.9
-[PASS] 业务壳已移除 Lynx monorepo 本地 override 与 GN 插件
-[PASS] 业务壳不依赖 Explorer 源码 CMake 构建
-[PASS] HarmonyOS XElement 9/9 能力清单完整
-[PASS] HarmonyOS Markdown 通过进程级 initialize 注册
-[PASS] HarmonyOS SVG/WebView Behavior 全量注入
-[PASS] 每个 HarmonyOS LynxView 使用统一 XElement BehaviorMap
-[PASS] HarmonyOS 三个独立 XElement OHPM 包显式声明
-[PASS] HarmonyOS XElement 严格限定 release/4.0，未混入 Video
-[PASS] HarmonyOS Service 在 LynxEnv.initialize 之前注册
-[PASS] HarmonyOS Log/DevTool/HTTP/Image Service 完整
-[PASS] HarmonyOS LynxView 容器输入与生命周期完整
-[PASS] HarmonyOS 容器采用 ArkUI Entry Component
-[PASS] HarmonyOS 路由兼容 Explorer、Sparkling 与统一别名
-[PASS] HarmonyOS 路由进入容器前执行安全校验
-[PASS] HarmonyOS 远程资源不限制 Host
-[PASS] HarmonyOS 远程资源保留 HTTPS 与 Bundle 后缀校验
-[PASS] HarmonyOS HTTP 调试默认关闭
-[PASS] HarmonyOS Template Provider 校验状态码和 20 MB 上限
-[PASS] HarmonyOS Template Provider 成功回调不携带 BusinessError
-[PASS] HarmonyOS Generic Provider 支持单请求与批量取消
-[PASS] HarmonyOS Generic Provider 成功回调不携带 BusinessError
-[PASS] HarmonyOS Template Provider 支持容器级批量取消
-[PASS] HarmonyOS 页面退出与重试释放 Provider 请求
-[PASS] HarmonyOS Media Provider 转换 rawfile 逻辑地址
-[PASS] HarmonyOS Bridge 方法完整：clearStorage, close, getAppInfo, getStorageItem, open, removeStorageItem, setStorageItem
-[PASS] HarmonyOS Native Module 遵循 LynxModule 构造协议
-[PASS] HarmonyOS Storage 使用独立 Preferences 持久化
-[PASS] HarmonyOS AppInfo platform 字段稳定
-[PASS] HarmonyOS Storage Name 与三端契约对齐
-[PASS] HarmonyOS 使用 Stage 模型 entry 模块
-[PASS] HarmonyOS 壳支持 phone/tablet/2in1
-[PASS] HarmonyOS 壳仅申请必要 INTERNET 权限
-[PASS] HarmonyOS Module Manifest 注册三类深链
-[PASS] HarmonyOS Sparkling 只保留可追溯协议兼容，不伪造 Runtime
-[PASS] HarmonyOS Sparkling 边界说明不进入默认 ArkTS 编译链
-[PASS] HarmonyOS ArkTS 业务源码均包含说明性注释
-[PASS] HarmonyOS ArkTS 分层源码数量合理（20 个）
-[PASS] HarmonyOS 启动页使用原生 ArkUI 组件
-[PASS] HarmonyOS ArkTS/TypeScript 基础分隔符检查通过
-[PASS] HarmonyOS Bundle 同步脚本 Bash 语法通过
+实现结果
+[PASS] 远程 Release 使用 apps/<8位appId>/releases/<releaseId>
+[PASS] state 使用 apps/<appId>/state.json，schemaVersion=2
+[PASS] 普通模式只保留 current/previous
+[PASS] staging 使用 App ID 作用域
+[PASS] embedded rawfile 直接返回 ArrayBuffer，不复制到 filesDir
+[PASS] current/previous 读取与首屏 previous/embedded 回退链路
+[PASS] statfs 可用空间预检，下载前先 prune
+[PASS] Page/Tab PreparedPageBundle 持有 OtaBundleLease
+[PASS] lease 释放通过 Runtime 操作队列执行 prune
+[PASS] Launcher/Native Tab 可推入只读 OTA Storage Inspector
+[PASS] Inspector 展示 root、App ID、current/previous、角色、文件、字节和 staging
+[PASS] Harmony 代码不包含候选版本状态字段、文件或 API
 
-结果: 47 PASS, 0 WARN, 1 FAIL
+验证结果
+- `python3 harmony/scripts/check_harmony_shell.py --quiet`: 85 PASS / 0 WARN / 0 FAIL
+- `python3 scripts/static_check.py`: 196 PASS / 0 WARN / 0 FAIL（包含 Android/iOS/Harmony 静态项）
+- `assembleHar --mode module -p module=lynx_shell_kit@default --no-daemon`: BUILD SUCCESSFUL
+- `assembleApp --no-daemon`: BUILD SUCCESSFUL
+- `git diff --check`: 通过
+
+运行态边界
+- 已连接 HarmonyOS Pura 90 模拟器：`127.0.0.1:5555 TCP Connected localhost`。
+- 由于本次运行环境访问 TEST OTA 服务时 TLS 失败，运行态使用仅 TEST 可开启的显式 `lynx_ota_mock=1`。
+- 模拟器中两个 App ID 各自保留 mock-ota-v1(previous) 与 mock-ota-v2(current)，共 12 个文件；
+  观察到 Native Tab 的 current lease 存活、退出后的 lease 释放、Inspector 只读刷新、删除远程文件后
+  rawfile 继续渲染，以及强制停止后的冷启动 current 加载。
+- 以上是 Store v2 结构与生命周期的模拟器通过证据，不是真实 OTA Server 版本内容差异证据。
+- 本次 Mac 请求真实 TEST OTA 服务返回 TLS `SSL_ERROR_SYSCALL`（HTTP code 000）；当前没有物理
+  Harmony 真机目标。
+- 旧全局 `releases/states` 布局的历史运行记录不能证明本轮新布局。
+- 待真实服务恢复并连接物理设备后执行：真实 TEST OTA、服务端版本切换、签名包、物理真机冷启动、
+  Tab cache-only、主动刷新重载、Inspector 只读刷新、lease 存活/释放、删除和 previous/embedded 回退。

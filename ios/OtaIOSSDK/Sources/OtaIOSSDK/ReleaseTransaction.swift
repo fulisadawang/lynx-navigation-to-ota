@@ -37,29 +37,39 @@ public enum OtaReleaseRollbackOutcome: Equatable, Sendable {
 
 /// iOS 端的最小 release 事务模块。
 ///
-/// 当前 SDK 已有 `FileOtaReleaseStore` actor。这里不复制它的 JSON 格式，而是
-/// 作为稳定的 deep façade：未来可以把锁、恢复和容量预检放进本模块，外部仍只
-/// 需要理解 install/current/rollback 三个动作。旧 pageId pointer 读取仍由 store
-/// 完成，因此升级后可以无损读取历史安装状态。
+/// 所有 current/previous/candidate 与下载文件都由 canonical Store v2 管理。
+/// `FileOtaReleaseStore` 只保留 storage root 构造兼容，不再读写旧 pointer。
 public actor ReleaseTransaction {
-    private let store: FileOtaReleaseStore
     private let canonicalStore: CanonicalOtaStore
 
     public init(store: FileOtaReleaseStore) {
-        self.store = store
         self.canonicalStore = CanonicalOtaStore(baseDirectory: store.baseDirectoryURL)
+    }
+
+    /// 测试专用初始化：把持久化提交前后的故障点注入 canonical store。
+    /// 生产调用方继续使用 `init(store:)`，因此不会暴露或依赖故障控制能力。
+    init(store: FileOtaReleaseStore, faultInjector: any OtaTransactionFaultInjecting) {
+        self.canonicalStore = CanonicalOtaStore(
+            baseDirectory: store.baseDirectoryURL,
+            faultInjector: faultInjector
+        )
+    }
+
+    init(store: FileOtaReleaseStore, capacityProbe: any OtaStorageCapacityProbing) {
+        self.canonicalStore = CanonicalOtaStore(
+            baseDirectory: store.baseDirectoryURL,
+            capacityProbe: capacityProbe
+        )
     }
 
     /// 返回作用域内 current；没有 OTA current 时由 embedded 作为首次运行回退。
     public func current(scope: OtaReleaseScope) async -> OtaInstalledRelease? {
+        guard isValidAppId(scope.lynxAppId) else { return nil }
         do {
-            if let current = try await canonicalStore.current(app: scope.app, lynxAppId: scope.lynxAppId) {
-                return current
-            }
+            return try await canonicalStore.current(app: scope.app, lynxAppId: scope.lynxAppId)
         } catch {
-            // 损坏的 canonical state 不应吞掉 legacy fallback；下一次事务会重新物化。
+            return nil
         }
-        return await store.currentRelease(app: scope.app, lynxAppId: scope.lynxAppId)
     }
 
     public func current(app: OtaAppID, lynxAppId: String) async -> OtaInstalledRelease? {
@@ -68,6 +78,7 @@ public actor ReleaseTransaction {
 
     /// 只解析 current 中精确的 bundleName；不会读取 staged 或历史目录。
     public func currentBundle(scope: OtaReleaseScope, bundleName: String) async throws -> URL? {
+        try validateAppId(scope.lynxAppId)
         try validateBundleName(bundleName)
         guard let release = await current(scope: scope),
               let bundle = resolveBundle(named: bundleName, in: release),
@@ -92,52 +103,104 @@ public actor ReleaseTransaction {
         if currentRelease?.context.releaseId == request.release.context.releaseId {
             return .alreadyActive(currentRelease ?? request.release)
         }
-        try await prepareLegacyStateIfNeeded(scope: request.scope)
         let activated = try await canonicalStore.install(request.release)
         return .updated(from: currentRelease, to: activated)
     }
 
     public func stage(_ release: OtaInstalledRelease) async throws {
-        let scope = OtaReleaseScope(app: release.context.app, lynxAppId: release.context.lynxAppId)
-        try await prepareLegacyStateIfNeeded(scope: scope)
         try await canonicalStore.stage(release)
     }
 
+    public func stageCandidate(_ release: OtaInstalledRelease) async throws {
+        try await canonicalStore.stageCandidate(release)
+    }
+
+    public func candidate(scope: OtaReleaseScope) async -> OtaCandidateSnapshot? {
+        guard isValidAppId(scope.lynxAppId) else { return nil }
+        return try? await canonicalStore.candidate(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func beginCandidateTrial(scope: OtaReleaseScope) async throws -> OtaCandidateSnapshot {
+        try validateAppId(scope.lynxAppId)
+        return try await canonicalStore.beginCandidateTrial(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func confirmCandidate(scope: OtaReleaseScope) async throws -> OtaInstalledRelease {
+        try validateAppId(scope.lynxAppId)
+        return try await canonicalStore.confirmCandidate(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func candidateBundle(scope: OtaReleaseScope, bundleName: String) async throws -> URL? {
+        try validateAppId(scope.lynxAppId)
+        try validateBundleName(bundleName)
+        return try await canonicalStore.candidateBundle(
+            app: scope.app,
+            lynxAppId: scope.lynxAppId,
+            bundleName: bundleName
+        )
+    }
+
+    public func acquireCurrentBundleLease(
+        scope: OtaReleaseScope,
+        bundleName: String
+    ) async throws -> OtaBundleLease? {
+        try validateAppId(scope.lynxAppId)
+        try validateBundleName(bundleName)
+        return try await canonicalStore.acquireCurrentBundleLease(
+            app: scope.app,
+            lynxAppId: scope.lynxAppId,
+            bundleName: bundleName
+        )
+    }
+
+    public func acquireCandidateBundleLease(
+        scope: OtaReleaseScope,
+        bundleName: String
+    ) async throws -> OtaBundleLease? {
+        try validateAppId(scope.lynxAppId)
+        try validateBundleName(bundleName)
+        return try await canonicalStore.acquireCandidateBundleLease(
+            app: scope.app,
+            lynxAppId: scope.lynxAppId,
+            bundleName: bundleName
+        )
+    }
+
+    public func discardCandidate(scope: OtaReleaseScope) async throws {
+        try await canonicalStore.discardCandidate(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
+    public func recoverInterruptedCandidate(scope: OtaReleaseScope) async throws {
+        try await canonicalStore.recoverInterruptedCandidate(app: scope.app, lynxAppId: scope.lynxAppId)
+    }
+
     public func activate(scope: OtaReleaseScope) async throws -> OtaInstalledRelease {
-        if (try await canonicalStore.staged(app: scope.app, lynxAppId: scope.lynxAppId)) != nil {
-            return try await canonicalStore.activate(app: scope.app, lynxAppId: scope.lynxAppId)
-        }
-        return try await store.activateStagedRelease(app: scope.app, lynxAppId: scope.lynxAppId)
+        try await canonicalStore.activate(app: scope.app, lynxAppId: scope.lynxAppId)
     }
 
     public func staged(scope: OtaReleaseScope) async -> OtaInstalledRelease? {
-        do {
-            if let staged = try await canonicalStore.staged(app: scope.app, lynxAppId: scope.lynxAppId) {
-                return staged
-            }
-        } catch {
-            // fall through to the legacy staged pointer during migration
-            print("[OtaIOSSDK] canonical staged read failed: \(error)")
-        }
-        return await store.stagedRelease(app: scope.app, lynxAppId: scope.lynxAppId)
+        try? await canonicalStore.staged(app: scope.app, lynxAppId: scope.lynxAppId)
     }
 
     public func registerEmbedded(_ release: OtaInstalledRelease) async throws {
-        if let legacy = await store.currentRelease(app: release.context.app, lynxAppId: release.context.lynxAppId),
-           legacy.context.releaseId != "embedded" {
-            try? await canonicalStore.adoptLegacy(legacy)
-        }
         try await canonicalStore.registerEmbedded(release)
     }
 
     public func deleteDownloadedBundles(app: OtaAppID, lynxAppId: String) async throws {
+        try validateAppId(lynxAppId)
         try await canonicalStore.deleteDownloadedBundles(app: app, lynxAppId: lynxAppId)
-        try await store.deleteDownloadedBundles(app: app, lynxAppId: lynxAppId)
     }
 
     public func deleteAllDownloadedBundles() async throws {
         try await canonicalStore.deleteAllDownloadedBundles()
-        try await store.deleteAllDownloadedBundles()
+    }
+
+    public func storageSnapshot(maxFilesPerTree: Int = 2_000) async throws -> OtaStorageSnapshot {
+        try await canonicalStore.storageSnapshot(maxFilesPerTree: maxFilesPerTree)
+    }
+
+    public func pruneAllUnreferencedReleases() async throws {
+        try await canonicalStore.pruneAllUnreferencedReleases()
     }
 
     /// 恢复 previous；没有 previous 时回退 embedded。不会扫描或猜测其它历史目录。
@@ -145,10 +208,7 @@ public actor ReleaseTransaction {
         if let restored = try await canonicalStore.rollback(app: scope.app, lynxAppId: scope.lynxAppId) {
             return .restored(restored)
         }
-        guard let restored = try await store.rollback(app: scope.app, lynxAppId: scope.lynxAppId) else {
-            return .unavailable
-        }
-        return .restored(restored)
+        return .unavailable
     }
 
     public func rollback(app: OtaAppID, lynxAppId: String) async throws -> OtaReleaseRollbackOutcome {
@@ -171,6 +231,16 @@ public actor ReleaseTransaction {
         }
     }
 
+    private func validateAppId(_ value: String) throws {
+        guard isValidAppId(value) else {
+            throw OtaSDKError.invalidBundleName(value)
+        }
+    }
+
+    private func isValidAppId(_ value: String) -> Bool {
+        value.range(of: "^[0-9]{8}$", options: .regularExpression) != nil
+    }
+
     private func resolveBundle(named bundleName: String, in release: OtaInstalledRelease) -> OtaInstalledBundle? {
         let pathMatches = release.bundles.filter { $0.bundlePath == bundleName }
         if pathMatches.count == 1 {
@@ -183,23 +253,6 @@ public actor ReleaseTransaction {
         return nameMatches.count == 1 ? nameMatches[0] : nil
     }
 
-    private func prepareLegacyStateIfNeeded(scope: OtaReleaseScope) async throws {
-        if try await canonicalStore.current(app: scope.app, lynxAppId: scope.lynxAppId) != nil {
-            return
-        }
-        let legacy = await store.currentRelease(app: scope.app, lynxAppId: scope.lynxAppId)
-        if let legacy, legacy.context.releaseId != "embedded" {
-            do {
-                try await canonicalStore.adoptLegacy(legacy)
-                return
-            } catch {
-                // 旧 current 可能指向已失效的绝对路径；保留 legacy 供诊断，继续回退 embedded。
-            }
-        }
-        if let embedded = await store.embeddedRelease(app: scope.app, lynxAppId: scope.lynxAppId) {
-            try await canonicalStore.registerEmbedded(embedded)
-        }
-    }
 }
 
 /// 便于旧宿主按 Ota 前缀引用；正式实现名保持与 Android 对齐的 ReleaseTransaction。

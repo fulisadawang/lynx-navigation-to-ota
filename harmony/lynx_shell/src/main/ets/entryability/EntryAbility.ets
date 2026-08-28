@@ -25,6 +25,8 @@ export default class EntryAbility extends UIAbility {
     if (launchToken.trim().length > 0) {
       otaConfig.clientToken = launchToken.trim();
     }
+    const launchMock = (want.parameters?.lynx_ota_mock as string) ?? '';
+    otaConfig.debugMockEnabled = otaConfig.environment === 'TEST' && launchMock === '1';
     LynxRouter.install(this.context, otaConfig);
     AppStorage.setOrCreate(ShellConstants.STORAGE_COLOR_MODE, this.context.config.colorMode);
     console.info(`[${ShellConstants.TAG}] EntryAbility created, launchReason=${launchParam.launchReason}`);

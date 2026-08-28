@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.FragmentContainerView
 import com.example.lynxshell.LynxRouter
+import com.example.lynxshell.ota.EmbeddedBundleRegistry
 import com.example.lynxshell.tab.LynxTabFragment
 import com.example.lynxshell.tab.LynxTabSpec
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -22,34 +23,37 @@ class NativeTabDemoActivity : AppCompatActivity() {
     private lateinit var container: FragmentContainerView
     private lateinit var bottomNavigation: BottomNavigationView
     private lateinit var refreshButton: MaterialButton
+    private lateinit var tabSpecs: List<LynxTabSpec>
     private var refreshing = false
-
-    private val tabSpecs = listOf(
-        LynxTabSpec(
-            tabId = "home",
-            bundleUrl = "assets://bundles/main.lynx.bundle",
-            title = "首页",
-            routeKey = "native-tab-home",
-            initDataJson = "{\"source\":\"android-native-tab-demo\"}",
-            globalPropsJson = "{\"queryItems\":{\"native_tab_id\":\"home\"}}",
-            lynxAppId = PLAYGROUND_OTA_APP_ID,
-            bundleName = PLAYGROUND_OTA_BUNDLE_NAME,
-        ),
-        LynxTabSpec(
-            tabId = "settings",
-            bundleUrl = "assets://bundles/main.lynx.bundle",
-            title = "设置",
-            routeKey = "native-tab-settings",
-            initDataJson = "{\"source\":\"android-native-tab-demo\"}",
-            globalPropsJson = "{\"queryItems\":{\"native_tab_id\":\"settings\"}}",
-            lynxAppId = PLAYGROUND_OTA_APP_ID,
-            bundleName = PLAYGROUND_OTA_BUNDLE_NAME,
-        ),
-    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "原生 Tab 承载 Demo"
+        val appId = EmbeddedBundleRegistry(this).uniqueAppIdForBundles(
+            setOf(PLAYGROUND_OTA_BUNDLE_NAME),
+        ) ?: error("内置 Manifest 中没有唯一的 Tab Demo appId")
+        tabSpecs = listOf(
+            LynxTabSpec(
+                tabId = "home",
+                bundleUrl = "assets://bundles/main.lynx.bundle",
+                title = "首页",
+                routeKey = "native-tab-home",
+                initDataJson = "{\"source\":\"android-native-tab-demo\"}",
+                globalPropsJson = "{\"queryItems\":{\"native_tab_id\":\"home\"}}",
+                lynxAppId = appId,
+                bundleName = PLAYGROUND_OTA_BUNDLE_NAME,
+            ),
+            LynxTabSpec(
+                tabId = "settings",
+                bundleUrl = "assets://bundles/main.lynx.bundle",
+                title = "设置",
+                routeKey = "native-tab-settings",
+                initDataJson = "{\"source\":\"android-native-tab-demo\"}",
+                globalPropsJson = "{\"queryItems\":{\"native_tab_id\":\"settings\"}}",
+                lynxAppId = appId,
+                bundleName = PLAYGROUND_OTA_BUNDLE_NAME,
+            ),
+        )
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -162,7 +166,6 @@ class NativeTabDemoActivity : AppCompatActivity() {
 
     companion object {
         private const val MENU_ID_BASE = 0x4C5958
-        private const val PLAYGROUND_OTA_APP_ID = "10000001"
         private const val PLAYGROUND_OTA_BUNDLE_NAME = "main.lynx.bundle"
     }
 }

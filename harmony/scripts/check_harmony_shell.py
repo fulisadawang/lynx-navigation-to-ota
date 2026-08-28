@@ -105,7 +105,9 @@ def expected_files() -> None:
         "lynx_shell_kit/src/main/ets/ota/OtaJson.ets",
         "lynx_shell_kit/src/main/ets/ota/OtaApiClient.ets",
         "lynx_shell_kit/src/main/ets/ota/ReleaseTransaction.ets",
+        "lynx_shell_kit/src/main/ets/ota/OtaStorageDiagnostics.ets",
         "lynx_shell_kit/src/main/ets/ota/LynxOtaRuntime.ets",
+        "lynx_shell/src/main/ets/pages/OtaStorageInspector.ets",
         "lynx_shell/src/main/resources/base/profile/main_pages.json",
         "lynx_shell_kit/src/main/module.json5",
         "lynx_shell/src/main/resources/rawfile/bundles/README.md",
@@ -570,6 +572,61 @@ def native_tab_ota_parity() -> None:
     )
 
 
+def ota_store_v2_no_candidate() -> None:
+    """Store v2 的 Harmony 契约：按 App ID 隔离、current/previous、lease、无候选版本。"""
+    transaction = shell_read("src/main/ets/ota/ReleaseTransaction.ets")
+    models = shell_read("src/main/ets/ota/OtaModels.ets")
+    runtime = shell_read("src/main/ets/ota/LynxOtaRuntime.ets")
+    tab = shell_read("src/main/ets/pages/LynxTabContainer.ets")
+    container = shell_read("src/main/ets/pages/LynxContainer.ets")
+    router = shell_read("src/main/ets/routing/LynxRouter.ets")
+    inspector = read("lynx_shell/src/main/ets/pages/OtaStorageInspector.ets")
+    index = read("lynx_shell/src/main/ets/pages/Index.ets")
+    main_pages = read("lynx_shell/src/main/resources/base/profile/main_pages.json")
+
+    require(
+        all(marker in transaction for marker in [
+            "appsRoot()", "statePath(lynxAppId)", "releasesRoot(lynxAppId)",
+            "stagingRoot(lynxAppId)", "STORE_SCHEMA_VERSION: number = 2",
+            "pruneUnreferencedReleases", "pruneAllUnreferencedReleases",
+            "statfs.getFreeSizeSync", "METADATA_ALLOWANCE_BYTES", "SAFETY_RESERVE_BYTES",
+        ]) and
+        "this.root}/releases" not in transaction and
+        "this.root}/states" not in transaction and
+        "statesRoot" not in transaction,
+        "HarmonyOS Store v2 使用 apps/<appId>/ 隔离、schema v2、prune 与容量预检",
+    )
+    require(
+        "OtaBundleLease" in models and "lease?: OtaBundleLease" in models and
+        "acquireCurrentBundleLease" in transaction and
+        "releaseLease" in transaction and
+        "private releaseLease: OtaBundleLease | null" in tab and
+        "private releaseLease: OtaBundleLease | null" in container,
+        "HarmonyOS Page/Tab 使用 Release lease 并在销毁或过期结果时释放",
+    )
+    ota_sources = "\n".join([transaction, models, runtime, tab, container, router])
+    require(
+        not re.search(r"candidate|trial", ota_sources, re.IGNORECASE) and
+        "candidate" not in inspector.lower(),
+        "HarmonyOS OTA 不包含 candidate/trial 状态机",
+    )
+    require(
+        all(marker in runtime for marker in [
+            "acquireCurrentBundleLease", "storageSnapshot(): Promise<OtaStorageSnapshot>",
+        ]) and
+        all(marker in router for marker in ["otaStorageSnapshot()", "storageSnapshot()"]),
+        "HarmonyOS Runtime/Router 暴露有 lease 的 current 与只读 snapshot",
+    )
+    require(
+        all(marker in inspector for marker in [
+            "OTA 磁盘浏览器（只读）", "LynxRouter.otaStorageSnapshot()",
+            "root:", "current:", "previous:", "staging/", "mode: read-only",
+        ]) and "pages/OtaStorageInspector" in main_pages and
+        "OtaStorageInspector" in index,
+        "HarmonyOS Demo Launcher/Native Tab 可进入只读 OTA 磁盘浏览器",
+    )
+
+
 def structural_text(text: str) -> str:
     output: list[str] = []
     index = 0
@@ -654,6 +711,7 @@ def main() -> int:
         sparkling_boundary,
         comments_and_structure,
         native_tab_ota_parity,
+        ota_store_v2_no_candidate,
         delimiter_and_script_syntax,
     ]
     for check in checks:

@@ -1,6 +1,7 @@
 {
   "src": [
     "pages/Index",
-    "pages/LynxContainer"
+    "pages/LynxContainer",
+    "pages/OtaStorageInspector"
   ]
 }

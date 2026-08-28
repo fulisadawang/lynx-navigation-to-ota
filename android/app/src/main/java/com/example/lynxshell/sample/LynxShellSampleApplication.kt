@@ -32,6 +32,7 @@ class LynxShellSampleApplication : Application() {
                 environment = "TEST",
                 platform = "android",
                 clientToken = BuildConfig.LYNX_OTA_CLIENT_TOKEN,
+                candidateActivationEnabled = BuildConfig.LYNX_OTA_CANDIDATE_MODE,
             ),
         )
 

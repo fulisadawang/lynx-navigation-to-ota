@@ -103,8 +103,8 @@ node android/app/scripts/sync_ota_bundles_to_assets.mjs ... --dry-run
 - [ ] `Application.onCreate` 触发 `LynxRouter.install`。
 - [ ] 启动/回前台触发 `LynxRouter.onApplicationForeground()`。
 - [ ] 原生调用 `OtaSdk.syncLatestBundleLists()`，一次处理全量 App ID。
-- [ ] 远程 Bundle 写入 `files/lynx-ota-store/releases/<releaseId>/`。
-- [ ] `states/<appId>.json` 最后原子提交 current/previous。
+- [ ] Android 远程 Bundle 写入 `files/lynx-ota-store/apps/<appId>/releases/<releaseId>/`。
+- [ ] Android `apps/<appId>/state.json` 最后原子提交 current/previous。
 - [ ] 下次打开优先读取远程 current。
 
 ### 回滚
@@ -156,25 +156,39 @@ node android/app/scripts/sync_ota_bundles_to_assets.mjs ... --dry-run
 adb shell run-as <package> find files/lynx-ota-store -maxdepth 3 -type f | sort
 ```
 
-正常情况下可以看到 `releases/`、`states/`、`.staging/`，不应该新增 `embedded/`。
+Android Store v2 正常情况下可以看到 `apps/<appId>/releases/`、`state.json`、`.staging/`，
+不应该出现 embedded Bundle bytes 副本；可选 `embedded.json` 只保存逻辑描述。
 
 ## 3. iOS 验收
 
-- [ ] `Bundles/lynx/embedded-bundles.json` 包含服务端返回的 App ID。
-- [ ] 内置 Bundle 从 App Bundle file URL 读取，不复制到 Application Support。
-- [ ] `Application Support/lynx-ota-store/releases/` 只保存远程 OTA。
-- [ ] iOS Simulator 可以打开 Manifest 中第一条内置 Bundle。
-- [ ] OTA 配置完整时，启动/前台触发全量同步。
-- [ ] current 命中时优先读 current，首屏失败时回滚到 previous 或内置 baseline。
+- [x] `Bundles/lynx/embedded-bundles.json` 包含服务端返回的 App ID。
+- [x] 内置 Bundle 从 App Bundle file URL 读取，不复制到 Application Support。
+- [x] 远程 OTA 写入 `Application Support/lynx-ota-store/apps/<appId>/releases/<releaseId>/`，
+  `state.json`、`candidate.json` 与 `.staging/` 都位于同一 App ID 目录。
+- [x] 同一个 `releaseId` 可同时存在于两个 App ID 下，删除其中一个不影响另一个。
+- [x] 连续 V1...V10 后普通模式只保留 current/previous；candidate 模式最多再保留 candidate。
+- [x] UIViewController 与 Native Tab 持有 Release lease；页面存活时删除/激活不破坏文件，最后一个
+  lease 关闭后清理无引用目录。
+- [x] 冷启动清理 orphan/staging；状态损坏时保守跳过；容量不足不发布半成品 current。
+- [x] iOS Simulator 可以打开 Manifest 内置 Bundle、真实 OTA current、Native Tab 和只读 Inspector。
+- [x] OTA 配置完整时，启动/前台触发全量同步；切换 Tab 不新增请求，主动刷新后才重建 Tab。
+- [x] current 命中时优先读 current，首屏失败时回滚到 previous 或内置 baseline。
+- [x] Inspector 展示真实 root、App ID、角色、文件树、字节数与 lease；刷新 Inspector 不触发网络。
 
-当前构建验证：`LynxShell` iOS Simulator build 通过。
+当前验证：`swift test` 47/47（8 suites）；iOS/Android 静态门禁 111 PASS，三端总门禁
+191 PASS；`LynxShell` iOS Simulator Debug build 通过。iPhone 16 Pro / iOS 18.1 模拟器真实
+TEST OTA 展示 3 个 App、53 个文件、约 5.1 MB；Native Tab 存活时显示“页面使用中”，退出后消失。
 
 ## 4. HarmonyOS 验收
 
 - [x] rawfile Manifest 包含 `10000001/home.lynx.bundle` 与 `10000001/main.lynx.bundle`；静态门禁
   全量校验 Manifest 身份、文件 size 和 SHA。
 - [x] rawfile 直接读取为 `ArrayBuffer`，不写 `filesDir/lynx-embedded`。
-- [x] 远程 OTA 只写入 `<context.filesDir>/lynx-ota-store/releases/`。
+- [x] 远程 OTA 的目标路径为 `<context.filesDir>/lynx-ota-store/apps/<appId>/releases/<releaseId>/`。
+- [x] Harmony Store v2 的 `apps/<appId>/state.json` 只保存 current/previous，不创建候选版本文件。
+- [x] 源码实现连续版本只保留 current/previous；Page/Tab lease 存活期间延迟回收旧 Release。
+- [x] 源码实现冷启动清理无引用 orphan/staging，下载前执行容量预检。
+- [x] Harmony Launcher/Tab 增加只读 OTA 磁盘 Inspector，刷新不请求网络、不改文件。
 - [x] Harmony 使用 `serverPlatform=android` 查询当前测试服务端，宿主 GlobalProps 仍报告 harmony。
 - [x] 冷启动默认按 Manifest 身份打开 `10000001/home.lynx.bundle`；Playground 和两个 ArkUI Tab
   都按 Manifest 身份打开 `10000001/main.lynx.bundle`，不依赖 Manifest 条目顺序。
@@ -184,16 +198,15 @@ adb shell run-as <package> find files/lynx-ota-store -maxdepth 3 -type f | sort
   失败继续保留当前版本。普通 Tab 切换不修改 generation。
 - [x] previous 不可用但存在 rawfile baseline 时，删除坏 downloaded current 并回到 baseline。
 - [x] `assembleHar` 与 `assembleApp` 在当前 checkout 构建成功。
-- [x] Pura 90 / HarmonyOS 6.1.1(24) 模拟器冷启动显示
-  `10000001 / home.lynx.bundle`，Home Tab 显示
-  `10000001 / r20260823_qc8ffc / embedded baseline / main.lynx.bundle`，Settings 页面正常。
-- [x] Home/Settings 普通往返前后 OTA 全量同步日志计数保持 `3 → 3`，没有因切换 Tab 新增同步。
-- [x] 主动刷新失败后提示“保留当前 Tab 版本”，Home/Settings 和 baseline Release 继续可用。
-- [ ] 网络恢复后验证主动刷新成功、Tab 重建读取 remote current、previous/embedded rollback。
+- [x] 在新 Store v2 包上使用 Pura 90 HarmonyOS 模拟器完成冷启动、Tab 往返和主动刷新（TEST 显式 Mock）。
+- [x] 模拟器运行态核对 App ID 目录、Inspector 只读刷新、lease 存活/释放、删除和 previous/embedded rollback。
+- [ ] 真实 TEST OTA 服务恢复后，核对服务端版本内容差异与真实下载链路。
+- [ ] 在物理 Harmony 真机和签名包上复验冷启动、Tab、Inspector、lease、删除和回退。
 
-当前验证边界：Harmony 静态检查 `80 PASS / 0 WARN / 0 FAIL`，HAR 与完整 App 构建成功；
-模拟器 baseline、Home/Settings 与刷新失败保留旧实例已通过。测试 OTA 域名当前在本机 `curl`
-和模拟器 HTTP Client 均连接失败，因此 remote current、刷新成功和回滚运行态仍标 `[待确认]`。
+当前验证边界：Harmony 静态检查 `85 PASS / 0 WARN / 0 FAIL`，HAR 与完整 App 构建成功；Pura 90
+模拟器已通过 Store v2 Mock 运行态，两个 App ID 共 12 个文件并完成 current/previous、Tab lease、
+Inspector、删除和冷启动验证。真实 Server 请求本次因 TLS `SSL_ERROR_SYSCALL`（HTTP code 000）未通过，
+物理 Harmony 真机和签名包仍标 `[待确认]`；不能把 Mock 证据写成真实服务端验收。
 
 ## 路径速查
 
@@ -206,9 +219,9 @@ LynxView
 远程：
 latest-bundle-list
     ↓ 下载
-<private files>/lynx-ota-store/releases/<releaseId>/
+<private files>/lynx-ota-store/apps/<appId>/releases/<releaseId>/
     ↓ 原子提交
-states/<appId>.json -> current / previous
+Android apps/<appId>/state.json -> current / previous
 ```
 
 详细交互说明见：[lynx-bundle-paths.html](./lynx-bundle-paths.html)。

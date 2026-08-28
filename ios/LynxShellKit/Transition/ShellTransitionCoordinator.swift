@@ -366,13 +366,11 @@ final class ShellTransitionCoordinator: NSObject, UIGestureRecognizerDelegate {
             controller.request.transitionSpec.popGesture.enabled
         let spec = controller.request.transitionSpec
         let style = spec.baseEffectiveStyle
-        let isStandardHorizontalPop = spec.routeType == nil &&
-            spec.popGesture.direction == .horizontal &&
-            !spec.popGesture.fullScreen
-        // 普通页面也使用壳的 edge-pan 交互返回。这样不依赖 UIKit 私有
-        // interactive-pop delegate 与 ShellNavigationDelegateMux 的组合行为。
+        // 普通横向页面交给 UIKit 的 interactive-pop；只有调用方明确要求自定义转场时，
+        // 壳才接管 edge/full-screen 手势。这样默认 Bundle 页面可以使用系统原生侧滑返回，
+        // BottomSheet/HeroSheet 等自定义方向仍由壳自己的手势仲裁。
         let usesCustom = gestureAllowed &&
-            (spec.usesCustomAnimator || isStandardHorizontalPop) &&
+            spec.usesCustomAnimator &&
             style != .none
         let usesFullPan = usesCustom && (
             spec.popGesture.fullScreen ||

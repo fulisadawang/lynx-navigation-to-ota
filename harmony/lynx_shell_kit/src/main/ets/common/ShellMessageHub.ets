@@ -41,8 +41,8 @@ export default class ShellMessageHub {
 
   static pageId(context: LynxContext): string | null {
     let result: string | null = null;
-    ShellMessageHub.contexts.forEach((candidate: LynxContext, pageId: string) => {
-      if (candidate === context) {
+    ShellMessageHub.contexts.forEach((otherContext: LynxContext, pageId: string) => {
+      if (otherContext === context) {
         result = pageId;
       }
     });

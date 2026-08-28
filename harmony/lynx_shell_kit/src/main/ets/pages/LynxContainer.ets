@@ -25,6 +25,7 @@ import ShellGenericResourceFetcher from '../provider/ShellGenericResourceFetcher
 import ShellMediaResourceFetcher from '../provider/ShellMediaResourceFetcher';
 import ShellTemplateResourceFetcher from '../provider/ShellTemplateResourceFetcher';
 import PageBundleRuntimeRegistry, {
+  OtaBundleLease,
   OtaPrepareSignal,
   PageBundleRuntime,
   PreparedPageBundle
@@ -58,6 +59,7 @@ export struct LynxContainer {
   private prepareSignal: OtaPrepareSignal = new OtaPrepareSignal();
   private prepareGeneration: number = 0;
   private preparing: boolean = false;
+  private releaseLease: OtaBundleLease | null = null;
   private rollbackAttempted: boolean = false;
   private rollbackInProgress: boolean = false;
   private viewWidth: number | string = '100%';
@@ -162,6 +164,7 @@ export struct LynxContainer {
       this.attemptRollback(message.length > 0 ? message : 'Lynx 首屏加载失败');
       return;
     }
+    this.cancelViewResources();
     this.isLoading = false;
     this.errorMessage = message.length > 0 ? message : 'Lynx 页面加载失败';
   }
@@ -201,6 +204,7 @@ export struct LynxContainer {
     this.prepareSignal = new OtaPrepareSignal();
     const signal = this.prepareSignal;
     const generation = ++this.prepareGeneration;
+    let pendingLease: OtaBundleLease | null = null;
     runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName)
       .then((cached: PreparedPageBundle | null) => {
         if (cached !== null) {
@@ -213,8 +217,11 @@ export struct LynxContainer {
         return runtime.prepare(this.request.lynxAppId, this.request.bundleName, signal);
       })
       .then((prepared: PreparedPageBundle) => {
+        pendingLease = prepared.lease ?? null;
         if (signal.cancelled || generation !== this.prepareGeneration ||
           !LynxNavigator.hasEntry(this.request.entryID)) {
+          pendingLease?.close();
+          pendingLease = null;
           return;
         }
         this.templateFetcher.cancelAll();
@@ -242,9 +249,14 @@ export struct LynxContainer {
         );
         this.extraTiming.prepareTemplateEnd = new Date().getTime();
         this.preparing = false;
+        this.releaseCurrentLease();
+        this.releaseLease = prepared.lease ?? null;
+        pendingLease = null;
         this.showLynxView = true;
       })
       .catch((error: Error) => {
+        pendingLease?.close();
+        pendingLease = null;
         if (signal.cancelled || generation !== this.prepareGeneration) {
           return;
         }
@@ -292,6 +304,7 @@ export struct LynxContainer {
     this.preparing = false;
     this.templateFetcher.cancelAll();
     this.genericFetcher.cancelAll();
+    this.releaseCurrentLease();
   }
 
   private cancelViewResources(): void {
@@ -301,6 +314,14 @@ export struct LynxContainer {
       ShellMessageHub.unregister(this.request.entryID);
       this.lynxContext = null;
     }
+    this.releaseCurrentLease();
+  }
+
+  private releaseCurrentLease(): void {
+    if (this.releaseLease === null) return;
+    const lease = this.releaseLease;
+    this.releaseLease = null;
+    lease.close();
   }
 
   build() {

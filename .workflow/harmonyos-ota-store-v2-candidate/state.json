@@ -1,0 +1,31 @@
+{
+  "title": "HarmonyOS OTA Store v2 \u65e0 Candidate \u5bf9\u9f50",
+  "slug": "harmonyos-ota-store-v2-candidate",
+  "created_at": "2026-08-27T10:30:52+00:00",
+  "status": "in_progress",
+  "approval": {
+    "required": null,
+    "granted": null,
+    "notes": ""
+  },
+  "packets": [
+    {"id": "H1", "status": "completed"},
+    {"id": "H2", "status": "completed"},
+    {"id": "H3", "status": "completed"},
+    {"id": "H4", "status": "completed_with_live_server_and_physical_device_pending"}
+  ],
+  "verification": {
+    "status": "simulator_pass_live_server_and_physical_device_pending",
+    "checks": [
+      "Harmony static 85 PASS / 0 WARN / 0 FAIL",
+      "Three-platform static 196 PASS / 0 WARN / 0 FAIL",
+      "HAR build successful",
+      "App build successful",
+      "HTML script and DOM structure valid",
+      "Harmony implementation has no candidate/trial references",
+      "Pura 90 simulator Store v2 mock runtime passed",
+      "real TEST OTA server TLS unavailable in this run",
+      "physical Harmony device not connected"
+    ]
+  }
+}

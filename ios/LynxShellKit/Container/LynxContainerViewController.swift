@@ -26,6 +26,7 @@ final class LynxContainerViewController: UIViewController {
     private let loadingView = ShellLoadingView()
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
+    private var releaseLease: OtaBundleLease?
     private var preparedBundleData: Data?
     private var bundleRuntimeMetadata: [String: Any]?
     private var loadGeneration = UUID()
@@ -36,6 +37,12 @@ final class LynxContainerViewController: UIViewController {
     private var otaPrepareTask: Task<Void, Never>?
     private var otaRecoveryUsed = false
     private var otaRecoveryInFlight = false
+#if DEBUG
+    private var debugForcedFirstScreenFailure = false
+    private var debugRuntimeStateLabel: UILabel?
+    private var debugRollbackMarkerLabel: UILabel?
+    private var debugRollbackMarkerTimer: Timer?
+#endif
 
     init(
         request: LynxPageRequest,
@@ -64,6 +71,10 @@ final class LynxContainerViewController: UIViewController {
         ShellMessageHub.unregister(pageId: navigationEntryID)
         otaPrepareTask?.cancel()
         templateProvider?.cancel()
+        releaseCurrentLease()
+#if DEBUG
+        debugRollbackMarkerTimer?.invalidate()
+#endif
         finishReadiness(success: false, reason: "page_destroyed")
     }
 
@@ -111,6 +122,9 @@ final class LynxContainerViewController: UIViewController {
         sheetGrabberView.isHidden = true
         contentHostView.addSubview(sheetGrabberView)
         layoutPresetContainer()
+#if DEBUG
+        installDebugRuntimeStateLabelIfNeeded()
+#endif
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -470,6 +484,7 @@ final class LynxContainerViewController: UIViewController {
         ShellMessageHub.unregister(pageId: navigationEntryID)
         lynxView?.removeFromSuperview()
         lynxView = nil
+        releaseCurrentLease()
 
         let generation = loadGeneration
         if request.isOtaRequest {
@@ -494,15 +509,21 @@ final class LynxContainerViewController: UIViewController {
             return
         }
         otaPrepareTask = Task { [weak self] in
+            var pendingLease: OtaBundleLease?
+            defer {
+                if let pendingLease {
+                    Task { await pendingLease.close() }
+                }
+            }
             do {
-                let cached = try await runtime.resolveCurrent(
+                let cached = try await runtime.resolvePage(
                     lynxAppId: appId,
                     bundleName: bundleName
                 )
                 let prepared: PreparedOtaBundle
                 if let cached {
                     prepared = cached
-                    if cached.source != "embedded_baseline" {
+                    if cached.source != "embedded_baseline" && cached.source != "candidate_trial" {
                         await runtime.refreshAppBundleIfNeeded(lynxAppId: appId)
                     }
                 } else {
@@ -513,13 +534,14 @@ final class LynxContainerViewController: UIViewController {
                     }
                     prepared = try await runtime.prepare(lynxAppId: appId, bundleName: bundleName)
                 }
-                try Task.checkCancellation()
+                pendingLease = prepared.releaseLease
+                if Task.isCancelled { return }
                 let data = try await Task.detached(priority: .userInitiated) {
                     try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
                 }.value
-                try Task.checkCancellation()
-                await MainActor.run { [weak self] in
-                    guard let self, generation == self.loadGeneration else { return }
+                if Task.isCancelled { return }
+                let accepted: Bool = await MainActor.run { [weak self] in
+                    guard let self, generation == self.loadGeneration else { return false }
                     self.otaPrepareTask = nil
                     guard prepared.lynxAppId == appId,
                           prepared.bundleName == bundleName,
@@ -528,18 +550,34 @@ final class LynxContainerViewController: UIViewController {
                             generation: generation,
                             message: "OTA Bundle 身份或内容校验失败"
                         )
-                        return
+                        return false
                     }
+                    self.releaseCurrentLease()
+                    self.releaseLease = prepared.releaseLease
                     self.preparedBundleData = data
                     self.bundleRuntimeMetadata = [
                         "lynxAppId": prepared.lynxAppId,
                         "releaseId": prepared.releaseId ?? "unknown",
-                        "source": self.otaRecoveryUsed ? "rollback_fallback" : prepared.source,
+                        // 只有没有 previous、重新回到 App Bundle baseline 时才标记 fallback；
+                        // 回滚到 previous downloaded release 仍必须保留 ota_current 来源。
+                        "source": self.otaRecoveryUsed && prepared.source == "embedded_baseline"
+                            ? "rollback_fallback"
+                            : prepared.source,
                         "bundleName": prepared.bundleName
                     ]
+#if DEBUG
+                    self.updateDebugRuntimeState(
+                        "prepared:\(prepared.releaseId ?? "unknown"):" +
+                            (self.otaRecoveryUsed && prepared.source == "embedded_baseline"
+                                ? "rollback_fallback"
+                                : prepared.source)
+                    )
+#endif
                     self.loadingView.hide()
                     self.renderLynxView(generation: generation)
+                    return true
                 }
+                if accepted { pendingLease = nil }
             } catch is CancellationError {
                 return
             } catch {
@@ -615,6 +653,16 @@ final class LynxContainerViewController: UIViewController {
             view: createdView
         )
 
+#if DEBUG
+        if forceDebugFirstScreenFailureIfRequested(
+            generation: generation,
+            view: createdView
+        ) {
+            // 测试故障必须先进入真实容器 rollback，再让下一代 LynxView 正常加载；
+            // 不让首屏事件竞速决定故障是否生效。
+            return
+        }
+#endif
         LynxNativeRuntime.load(
             url: request.bundleURL,
             initData: request.initialData,
@@ -625,6 +673,10 @@ final class LynxContainerViewController: UIViewController {
     /** Provider/首屏错误时，OTA 页面只允许一次 previous/embedded 回滚。 */
     private func handleTemplateLoadFailure(generation: UUID, message: String) {
         guard generation == loadGeneration else { return }
+        destroyRuntimeContentAndReleaseLease()
+#if DEBUG
+        updateDebugRuntimeState("failure:\(message)")
+#endif
         if request.isOtaRequest, !firstScreenReady, attemptOtaRecovery(generation: generation, reason: message) {
             return
         }
@@ -642,6 +694,9 @@ final class LynxContainerViewController: UIViewController {
         }
         otaRecoveryUsed = true
         otaRecoveryInFlight = true
+#if DEBUG
+        updateDebugRuntimeState("rollback_started")
+#endif
         loadingView.show(message: "页面加载失败，正在回滚…", canCancel: false)
         otaPrepareTask?.cancel()
         otaPrepareTask = Task { [weak self] in
@@ -652,6 +707,9 @@ final class LynxContainerViewController: UIViewController {
                     self.otaPrepareTask = nil
                     self.otaRecoveryInFlight = false
                     if rolledBack {
+#if DEBUG
+                        self.updateDebugRuntimeState("rollback_committed")
+#endif
                         self.rebuildLynxView(resetOtaRecovery: false)
                     } else {
                         self.loadingView.hide()
@@ -712,11 +770,21 @@ final class LynxContainerViewController: UIViewController {
             self.firstScreenReady = true
             self.firstScreenFailed = false
             self.loadingView.hide()
+#if DEBUG
+            let releaseId = self.bundleRuntimeMetadata?["releaseId"] as? String ?? "unknown"
+            let source = self.bundleRuntimeMetadata?["source"] as? String ?? "unknown"
+            self.updateDebugRuntimeState("ready:\(releaseId):\(source)")
+#endif
             self.finishReadiness(success: true, reason: nil)
             if let appId = self.request.lynxAppId,
                let bundleName = self.request.bundleName,
                let runtime = LynxShell.otaRuntime() {
                 Task { await runtime.reportPageOpen(lynxAppId: appId, bundleName: bundleName) }
+                if self.bundleRuntimeMetadata?["source"] as? String == "candidate_trial" {
+                    Task {
+                        _ = try? await runtime.confirmCandidateHealthy(lynxAppId: appId)
+                    }
+                }
             }
         }
     }
@@ -766,6 +834,23 @@ final class LynxContainerViewController: UIViewController {
         ShellMessageHub.unregister(pageId: navigationEntryID)
         lynxView?.removeFromSuperview()
         lynxView = nil
+        releaseCurrentLease()
+    }
+
+    private func destroyRuntimeContentAndReleaseLease() {
+        templateProvider?.cancel()
+        templateProvider = nil
+        firstScreenObserver = nil
+        ShellMessageHub.unregister(pageId: navigationEntryID)
+        lynxView?.removeFromSuperview()
+        lynxView = nil
+        releaseCurrentLease()
+    }
+
+    private func releaseCurrentLease() {
+        guard let lease = releaseLease else { return }
+        releaseLease = nil
+        Task { await lease.close() }
     }
 
     /**
@@ -879,5 +964,95 @@ final class LynxContainerViewController: UIViewController {
         }
         _ = ShellNavigator.shared.close()
     }
+
+#if DEBUG
+    private var debugRuntimeStateEnabled: Bool {
+        ProcessInfo.processInfo.environment["LYNX_UI_TEST_EXPOSE_RUNTIME_STATE"] == "1"
+    }
+
+    private func installDebugRuntimeStateLabelIfNeeded() {
+        guard debugRuntimeStateEnabled else { return }
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.accessibilityIdentifier = "lynx-debug-ota-state"
+        label.accessibilityTraits = .staticText
+        label.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        label.textColor = .secondaryLabel
+        label.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+        label.numberOfLines = 2
+        label.textAlignment = .center
+        contentHostView.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: contentHostView.leadingAnchor, constant: 8),
+            label.trailingAnchor.constraint(equalTo: contentHostView.trailingAnchor, constant: -8),
+            label.topAnchor.constraint(equalTo: contentHostView.topAnchor, constant: 8),
+            label.heightAnchor.constraint(greaterThanOrEqualToConstant: 20),
+        ])
+        debugRuntimeStateLabel = label
+        updateDebugRuntimeState("created")
+
+        if ProcessInfo.processInfo.environment["LYNX_TEST_PAUSE_AFTER_ROLLBACK_COMMIT"] == "1" {
+            let marker = UILabel()
+            marker.translatesAutoresizingMaskIntoConstraints = false
+            marker.accessibilityIdentifier = "lynx-debug-rollback-marker"
+            marker.accessibilityTraits = .staticText
+            marker.font = UIFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+            marker.textColor = .systemOrange
+            marker.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+            marker.textAlignment = .center
+            contentHostView.addSubview(marker)
+            NSLayoutConstraint.activate([
+                marker.leadingAnchor.constraint(equalTo: contentHostView.leadingAnchor, constant: 8),
+                marker.trailingAnchor.constraint(equalTo: contentHostView.trailingAnchor, constant: -8),
+                marker.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 2),
+                marker.heightAnchor.constraint(equalToConstant: 18),
+            ])
+            debugRollbackMarkerLabel = marker
+            updateDebugRollbackMarker()
+            debugRollbackMarkerTimer = Timer.scheduledTimer(
+                withTimeInterval: 0.1,
+                repeats: true
+            ) { [weak self] _ in
+                self?.updateDebugRollbackMarker()
+            }
+        }
+    }
+
+    private func updateDebugRuntimeState(_ value: String) {
+        guard debugRuntimeStateEnabled else { return }
+        debugRuntimeStateLabel?.text = value
+        debugRuntimeStateLabel?.accessibilityValue = value
+    }
+
+    private func updateDebugRollbackMarker() {
+        guard let debugRollbackMarkerLabel else { return }
+        let state = OtaDebugProcessFaultMarker.state() ?? "pending"
+        let value = "rollback_marker:\(state)"
+        debugRollbackMarkerLabel.text = value
+        debugRollbackMarkerLabel.accessibilityValue = value
+    }
+
+    private func forceDebugFirstScreenFailureIfRequested(
+        generation: UUID,
+        view: LynxView
+    ) -> Bool {
+        guard ProcessInfo.processInfo.environment["LYNX_TEST_FORCE_FIRST_SCREEN_FAILURE"] == "1",
+              !debugForcedFirstScreenFailure else {
+            return false
+        }
+        debugForcedFirstScreenFailure = true
+        let error = NSError(
+            domain: "LynxShellTestFault",
+            code: 1001,
+            userInfo: [NSLocalizedDescriptionKey: "测试注入：首屏 Bundle 故障"]
+        )
+        didFailBeforeFirstScreen(
+            generation: generation,
+            view: view,
+            error: error
+        )
+        return true
+    }
+#endif
 
 }

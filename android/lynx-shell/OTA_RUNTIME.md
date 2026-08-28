@@ -53,6 +53,9 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 - 并发任务只写各自的 staging `.part` 文件；全部任务完成后才按 Manifest 顺序发布文件并
   提交 current/previous。任一任务失败都会取消其余任务并清理 staging，不会激活半成品。
 - 首屏渲染失败：按 appId 回滚一次并重试，禁止坏版本无限循环。
+- 可选 candidate 模式：`stage candidate -> trial -> 首屏健康确认 -> promote current`；
+  Native Tab 不消费 candidate，进程重启会清理未完成 trial。
+- 无 clientToken 时为 embedded-only，启动/前台/页面缺包均不发 OTA 请求。
 
 ## 存储边界
 
@@ -60,22 +63,33 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 
 ```text
 <application filesDir>/lynx-ota-store/
-├── states/<safeAppId>.json
-├── releases/<releaseId>/<bundlePath>
-└── .staging/                   # 事务完成后不应被路由读取
+└── apps/<lynxAppId>/
+    ├── state.json
+    ├── candidate.json                  # candidate 模式才存在
+    ├── embedded.json                   # 可选逻辑描述，不包含 Bundle bytes
+    ├── releases/<releaseId>/<bundlePath>
+    └── .staging/<releaseId>.<tx>/<bundlePath>.part
 ```
 
-`states/<appId>.json` 保存 `current/previous={kind,releaseId}` 指针；Bundle 本体位于已发布的
+`apps/<appId>/state.json` 保存 `current/previous={kind,releaseId}` 指针；Bundle 本体位于已发布的
 Release 目录，不把下载 Bundle 的绝对路径写入 state。
 路由只读取已提交 current，不读取 `.part` 或 `.staging`。
+
+服务端 App ID 契约是 8 位数字，可直接作为无碰撞目录段。同名 `releaseId` 允许分别存在于不同
+App ID 下。普通激活后只保留 current/previous；candidate 模式额外保留 candidate；活体页面
+lease 会阻止旧 Release 被提前删除，容器销毁后立即重新 prune。
+
+candidate 文件只保存逻辑 scope、releaseId、状态和 trial 时间；它不会改变 current。普通
+Activity 首屏成功后由 runtime promote，首屏失败由容器 discard；Tab 永远只调用
+`resolveCurrent`。
 
 验收页或 Lynx 页面可以调用以下入口直接删除磁盘内容：
 
 ```kotlin
-// 只删除一个 appId 的 releases、staging 和下载指针
+// 只删除一个 appId 的 state、candidate、staging 和远程 releases
 LynxRouter.deleteOtaBundles(returnedBundle.lynxAppId) { success, message -> }
 
-// 删除 releases 下全部 appId 的 Bundle
+// 删除 apps 下全部 appId 的远程 Bundle
 LynxRouter.deleteAllOtaBundles { success, message -> }
 ```
 
@@ -90,13 +104,20 @@ NativeModules.LynxShellModule.deleteAllOtaBundles?.((result) => {
 });
 ```
 
-这两个 API 是永久删除，不会改名生成 `.delete-*`、`.legacy-*` 或其它备份目录；APK
-内置 `embedded-release` 描述和 assets 不会被删除。删除失败会返回失败并保留失败原路径，
-不伪造成功，便于页面提示用户关闭正在使用的容器后重试。旧的
+这两个 API 是永久删除，不会改名生成 `.delete-*` 或其它备份目录；APK assets 和
+`embedded.json` 逻辑描述不会被删除。正被活体页面 lease 的 Release 会延迟到最后一个 lease
+关闭后删除，不会让已显示页面丢失文件。删除失败不会伪造成功。旧的
 `LynxRouter.clearOtaCache()` 仍保留为“删除全部下载内容”的兼容别名。
+
+Demo 原生 Launcher 的“查看 OTA 磁盘目录”通过 `LynxRouter.otaStorageSnapshot()` 展示只读快照；
+该调用不联网、不清理 orphan、不重新计算全部 SHA，也不接受任意外部扫描路径。
+
+Store v2 不读取或迁移旧路径。Demo 验收时卸载旧 App、重新安装，以全新沙盒直接使用最新 schema。
 
 ## 源码边界
 
 OTA 核心源码位于 `src/main/kotlin/com/ota/android/sdk`，由 Router AAR 一起编译和发布；
 `ActivityBundleRuntime` 仍然保留为可选扩展口，允许已有宿主替换网络层，但不再是三方接入
 内置 OTA 的必需步骤。
+
+Android 端对等测试和真机证据见仓库根目录 `docs/android-ota-test-report.html`。

@@ -35,6 +35,8 @@ data class LynxOtaConfig(
     val storageDirectory: File? = null,
     /** 本地 Bundle 有效时，页面打开触发当前 appId 后台检查的最小间隔。默认 30 分钟。 */
     val pageRefreshIntervalMillis: Long = DEFAULT_PAGE_REFRESH_INTERVAL_MILLIS,
+    /** 可选的候选版本模式；开启后页面首屏健康确认后才 promote 到 current。 */
+    val candidateActivationEnabled: Boolean = false,
 ) {
     companion object {
         /** 页面后台刷新默认 30 分钟；传 0 可用于测试时每次页面打开都检查。 */
@@ -92,6 +94,7 @@ data class LynxOtaConfig(
             lynxSdkVersion,
             clientToken,
             storageDirectory ?: File(appContext.filesDir, "lynx-ota-store"),
+            candidateActivationEnabled,
         )
     }
 }

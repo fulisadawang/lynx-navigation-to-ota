@@ -1,10 +1,13 @@
 import { common } from '@kit.AbilityKit';
 import systemDateTime from '@ohos.systemDateTime';
-import OtaApiClient from './OtaApiClient';
+import OtaApiClient, { OtaMockSource } from './OtaApiClient';
 import {
+  OtaBundleArtifact,
   LynxOtaConfig,
+  OtaLatestBundleLists,
   OtaPrepareSignal,
   OtaReleaseSnapshot,
+  OtaStorageSnapshot,
   PageBundleRuntime,
   PreparedPageBundle
 } from './OtaModels';
@@ -19,6 +22,84 @@ class OtaOperationQueue {
     const result = this.tail.then(operation, operation);
     this.tail = result.then(() => undefined, () => undefined);
     return result;
+  }
+}
+
+/**
+ * TEST 环境的确定性 OTA 源。
+ *
+ * 只在 Ability Want 显式开启 debugMockEnabled 时由 Runtime 注入；它复用 HAP rawfile 中已校验
+ * 的 home/main 字节，模拟两次不同 Release，仍完整经过 Store 的 size/SHA/发布/current/previous。
+ */
+class EmbeddedMockOtaSource implements OtaMockSource {
+  private readonly config: LynxOtaConfig;
+  private readonly registry: EmbeddedBundleRegistry;
+  private readonly bundles: Map<string, ArrayBuffer> = new Map();
+  private generation: number = 0;
+
+  constructor(config: LynxOtaConfig, registry: EmbeddedBundleRegistry) {
+    this.config = config;
+    this.registry = registry;
+  }
+
+  async fetchLatestBundleLists(): Promise<OtaLatestBundleLists> {
+    this.generation += 1;
+    return {
+      env: this.config.environment,
+      hostApp: this.config.hostApp,
+      platform: this.config.requestPlatform(),
+      bundleLists: [
+        await this.makeSnapshot('10000001', ['home.lynx.bundle', 'main.lynx.bundle']),
+        await this.makeSnapshot('10000002', ['home.lynx.bundle'])
+      ]
+    };
+  }
+
+  async fetchLatestBundleList(lynxAppId: string): Promise<OtaReleaseSnapshot> {
+    if (this.generation === 0) this.generation = 1;
+    const snapshot = await this.makeSnapshot(
+      lynxAppId,
+      lynxAppId === '10000002' ? ['home.lynx.bundle'] : ['home.lynx.bundle', 'main.lynx.bundle']
+    );
+    if (snapshot.lynxAppId !== lynxAppId) {
+      throw new Error(`Mock latest 中不存在 lynxAppId：${lynxAppId}`);
+    }
+    return snapshot;
+  }
+
+  async downloadBundle(bundleUrl: string): Promise<ArrayBuffer> {
+    const bytes = this.bundles.get(bundleUrl);
+    if (bytes === undefined) throw new Error(`Mock Bundle 不存在：${bundleUrl}`);
+    return bytes.slice(0);
+  }
+
+  private async makeSnapshot(lynxAppId: string, bundleNames: string[]): Promise<OtaReleaseSnapshot> {
+    const releaseId = this.generation <= 1 ? 'mock-ota-v1' : 'mock-ota-v2';
+    const artifacts: OtaBundleArtifact[] = [];
+    for (let index = 0; index < bundleNames.length; index += 1) {
+      const bundleName = bundleNames[index];
+      const embedded = await this.registry.resolve(lynxAppId, bundleName);
+      if (embedded === null || embedded.bytes === undefined) continue;
+      const bundleUrl = `https://mock.lynx-ota.invalid/${lynxAppId}/${releaseId}/${bundleName}`;
+      this.bundles.set(bundleUrl, embedded.bytes);
+      artifacts.push({
+        pageId: index + 1,
+        bundlePath: bundleName,
+        bundleSha256: embedded.sha256,
+        bundleUrl: bundleUrl,
+        size: embedded.bytes.byteLength
+      });
+    }
+    if (artifacts.length === 0) throw new Error('Mock rawfile 没有可用 Bundle');
+    return {
+      env: this.config.environment,
+      hostApp: this.config.hostApp,
+      lynxAppId: lynxAppId,
+      releaseId: releaseId,
+      platform: this.config.requestPlatform(),
+      status: 'ACTIVE',
+      changedBundles: artifacts
+    };
   }
 }
 
@@ -43,9 +124,18 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
   constructor(context: common.UIAbilityContext, config: LynxOtaConfig) {
     config.validate(context);
     this.config = config;
-    this.api = new OtaApiClient(config);
-    this.transaction = new ReleaseTransaction(config, this.api);
     this.embeddedBundleRegistry = new EmbeddedBundleRegistry(context);
+    const mockSource: OtaMockSource | null = config.debugMockEnabled ?
+      new EmbeddedMockOtaSource(config, this.embeddedBundleRegistry) : null;
+    this.api = new OtaApiClient(config, mockSource);
+    this.transaction = new ReleaseTransaction(config, this.api);
+    this.transaction.setLeaseReleaseScheduler(() => {
+      this.queue.run(async () => {
+        this.transaction.pruneAllUnreferencedReleases();
+      }).catch((error: Error) => {
+        console.warn(`LynxShellOTA lease 释放后清理失败：${error.message}`);
+      });
+    });
   }
 
   onApplicationStarted(): void {
@@ -63,7 +153,7 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
   ): Promise<PreparedPageBundle> {
     this.validateLogicalAddress(lynxAppId, bundleName);
     signal.throwIfCancelled();
-    const local = this.transaction.currentBundle(lynxAppId, bundleName);
+    const local = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName);
     if (local !== null) {
       this.syncAppBundleAsync(lynxAppId);
       return local;
@@ -73,7 +163,13 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       return embedded;
     }
     // 缺包/损坏不走 30 分钟门控，必须在创建 LynxView 前完成定向 repair。
-    return this.queue.run(() => this.transaction.ensureBundleReady(lynxAppId, bundleName, signal));
+    await this.queue.run(() => this.transaction.ensureBundleReady(lynxAppId, bundleName, signal));
+    signal.throwIfCancelled();
+    const repaired = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName);
+    if (repaired === null) {
+      throw new Error(`Release 已激活但 Bundle 无法建立 lease：${lynxAppId}/${bundleName}`);
+    }
+    return repaired;
   }
 
   /**
@@ -86,7 +182,7 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     bundleName: string
   ): Promise<PreparedPageBundle | null> {
     this.validateLogicalAddress(lynxAppId, bundleName);
-    const current = this.transaction.currentBundle(lynxAppId, bundleName);
+    const current = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName);
     if (current !== null) {
       return current;
     }
@@ -150,6 +246,10 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
 
   storageRoot(): string {
     return this.transaction.storageRoot();
+  }
+
+  storageSnapshot(): Promise<OtaStorageSnapshot> {
+    return Promise.resolve(this.transaction.storageSnapshot());
   }
 
   /** 生命周期全量请求不限次数；重叠事件合并为当前请求结束后的补发。 */

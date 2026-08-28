@@ -11,6 +11,10 @@ import UIKit
 final class LauncherViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
+#if DEBUG
+    private var debugF12StatusLabel: UILabel?
+    private var debugF12StatusTimer: Timer?
+#endif
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -84,6 +88,19 @@ final class LauncherViewController: UIViewController {
         contentStack.setCustomSpacing(28, after: introLabel)
         contentStack.addArrangedSubview(otaHomeButton)
 
+#if DEBUG
+        if ProcessInfo.processInfo.environment["LYNX_TEST_PAUSE_AFTER_ROLLBACK_COMMIT"] == "1" {
+            let prepareRollbackButton = makeButton(
+                title: "准备 F12 回滚进程测试",
+                filled: false,
+                action: #selector(prepareRollbackProcessTest)
+            )
+            contentStack.setCustomSpacing(8, after: otaHomeButton)
+            contentStack.addArrangedSubview(prepareRollbackButton)
+            installDebugF12StatusLabel()
+        }
+#endif
+
         let playgroundButton = makeButton(
             title: "打开 Playground 首页",
             filled: false,
@@ -100,12 +117,21 @@ final class LauncherViewController: UIViewController {
         contentStack.setCustomSpacing(12, after: playgroundButton)
         contentStack.addArrangedSubview(nativeTabButton)
 
+        let storageInspectorButton = makeButton(
+            title: "查看 OTA 磁盘目录",
+            filled: false,
+            action: #selector(openOtaStorageInspector)
+        )
+        storageInspectorButton.accessibilityIdentifier = "open-ota-storage-inspector"
+        contentStack.setCustomSpacing(12, after: nativeTabButton)
+        contentStack.addArrangedSubview(storageInspectorButton)
+
         let embeddedButton = makeButton(
             title: "打开 Manifest 中的第一个内置 Bundle",
             filled: false,
             action: #selector(openEmbeddedDemo)
         )
-        contentStack.setCustomSpacing(12, after: nativeTabButton)
+        contentStack.setCustomSpacing(12, after: storageInspectorButton)
         contentStack.addArrangedSubview(embeddedButton)
 
         let card = makeOtaCard()
@@ -283,6 +309,46 @@ final class LauncherViewController: UIViewController {
         )
     }
 
+    @objc private func openOtaStorageInspector() {
+        navigationController?.pushViewController(
+            OtaStorageInspectorViewController(),
+            animated: true
+        )
+    }
+
+#if DEBUG
+    @objc private func prepareRollbackProcessTest() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await LynxRouter.debugPrepareRollbackProcessTest()
+            let success = result == "ok"
+            self.presentShellAlert(
+                title: success ? "F12 准备完成" : "F12 准备失败",
+                message: success
+                    ? "已准备 canonical downloaded current/previous，可开始首屏回滚进程中断测试"
+                    : "准备失败：\(result)"
+            )
+        }
+    }
+
+    private func installDebugF12StatusLabel() {
+        let label = makeLabel(text: "F12 status: idle", style: .caption1)
+        label.accessibilityIdentifier = "lynx-debug-f12-status"
+        label.textColor = .systemOrange
+        contentStack.addArrangedSubview(label)
+        debugF12StatusLabel = label
+        updateDebugF12Status()
+        debugF12StatusTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.updateDebugF12Status()
+        }
+    }
+
+    private func updateDebugF12Status() {
+        debugF12StatusLabel?.text = "F12 status: \(LynxRouter.debugF12Status)"
+        debugF12StatusLabel?.accessibilityValue = LynxRouter.debugF12Status
+    }
+#endif
+
     @objc private func deleteAllOtaBundles() {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -293,5 +359,152 @@ final class LauncherViewController: UIViewController {
                 self.presentShellAlert(title: "删除失败", message: error.localizedDescription)
             }
         }
+    }
+
+#if DEBUG
+    deinit {
+        debugF12StatusTimer?.invalidate()
+    }
+#endif
+}
+
+/** Demo-only 原生只读 OTA Store 浏览器。 */
+final class OtaStorageInspectorViewController: UIViewController {
+    private let textView = UITextView()
+    private var loadTask: Task<Void, Never>?
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "OTA 磁盘浏览器"
+        view.backgroundColor = .systemGroupedBackground
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.alwaysBounceVertical = true
+        textView.backgroundColor = .systemGroupedBackground
+        textView.textColor = .label
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.textContainerInset = UIEdgeInsets(top: 20, left: 16, bottom: 28, right: 16)
+        textView.accessibilityIdentifier = "ota-storage-inspector-content"
+        view.addSubview(textView)
+        NSLayoutConstraint.activate([
+            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            textView.topAnchor.constraint(equalTo: view.topAnchor),
+            textView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "刷新",
+            style: .plain,
+            target: self,
+            action: #selector(refreshSnapshot)
+        )
+        loadSnapshot()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: false)
+    }
+
+    deinit {
+        loadTask?.cancel()
+    }
+
+    @objc private func refreshSnapshot() {
+        loadSnapshot()
+    }
+
+    private func loadSnapshot() {
+        loadTask?.cancel()
+        navigationItem.rightBarButtonItem?.isEnabled = false
+        textView.text = "正在读取一致性快照…\n\n只读操作，不会触发 OTA 请求或修改文件。"
+        loadTask = Task { [weak self] in
+            let result: Result<OtaStorageSnapshot?, Error>
+            do {
+                result = .success(try await LynxRouter.otaStorageSnapshot())
+            } catch {
+                result = .failure(error)
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.navigationItem.rightBarButtonItem?.isEnabled = true
+                switch result {
+                case let .success(snapshot):
+                    self.textView.text = snapshot.map(Self.render) ?? "当前没有远程 OTA Store。"
+                case let .failure(error):
+                    self.textView.text = "OTA 磁盘快照读取失败\n\n\(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private static func render(_ snapshot: OtaStorageSnapshot) -> String {
+        var lines: [String] = [
+            "OTA 磁盘浏览器",
+            "",
+            "root: \(snapshot.rootPath)",
+            "apps: \(snapshot.apps.count)",
+            "files: \(snapshot.fileCount)",
+            "disk: \(formatBytes(snapshot.totalBytes))",
+            "mode: 只读",
+        ]
+        if snapshot.apps.isEmpty {
+            lines += ["", "当前没有远程 OTA Bundle；页面将使用 App Bundle baseline。"]
+            return lines.joined(separator: "\n")
+        }
+        for app in snapshot.apps {
+            lines += [
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━",
+                "App ID  \(app.appId)",
+                "current: \(app.state?.currentReleaseId ?? "—") (\(app.state?.currentKind ?? "none"))",
+                "previous: \(app.state?.previousReleaseId ?? "—")",
+                "candidate: \(app.candidate?.releaseId ?? "—")" + (app.candidate.map { " (\($0.status))" } ?? ""),
+                "disk: \(formatBytes(app.totalBytes)) / \(app.fileCount) files",
+            ]
+            for release in app.releases {
+                let roles = release.roles.map(roleLabel).sorted().joined(separator: " · ")
+                lines += [
+                    "",
+                    "\(release.releaseId) [\(roles)]",
+                    "manifest: \(release.manifestValid ? "valid" : "invalid")",
+                    "size: \(formatBytes(release.totalBytes)) / \(release.fileCount) files",
+                ]
+                lines += release.files.map { "├─ \($0.relativePath)  \(formatBytes($0.byteCount))" }
+                if release.truncated { lines.append("└─ …文件列表已截断") }
+            }
+            if !app.staging.isEmpty {
+                lines += ["", "未完成的 staging"]
+                for staging in app.staging {
+                    lines.append("\(staging.transactionName)  \(formatBytes(staging.totalBytes))")
+                    lines += staging.files.map { "├─ \($0.relativePath)  \(formatBytes($0.byteCount))" }
+                }
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func roleLabel(_ role: OtaStorageReleaseRole) -> String {
+        switch role {
+        case .current: return "当前"
+        case .previous: return "上一个"
+        case .candidate: return "候选"
+        case .leased: return "页面使用中"
+        case .orphan: return "孤儿"
+        }
+    }
+
+    private static func formatBytes(_ bytes: Int64) -> String {
+        guard bytes >= 1024 else { return "\(bytes) B" }
+        let units = ["KB", "MB", "GB"]
+        var value = Double(bytes)
+        var index = -1
+        while value >= 1024, index < units.count - 1 {
+            value /= 1024
+            index += 1
+        }
+        return String(format: "%.1f %@", value, units[index])
     }
 }

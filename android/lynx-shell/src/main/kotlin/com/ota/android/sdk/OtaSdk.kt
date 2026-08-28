@@ -2,12 +2,11 @@ package com.ota.android.sdk
 
 import java.io.File
 import java.io.IOException
-import java.time.Instant
 
 class OtaSdk {
   private val configuration: OtaModels.Configuration
   private val apiClient: OtaApiClient
-  private val store: OtaReleaseStore
+  private val embeddedStore: EmbeddedReleaseStore
   private val releaseTransaction: ReleaseTransaction
   private val bundleRuntime: BundleRuntime
 
@@ -19,15 +18,13 @@ class OtaSdk {
   constructor(configuration: OtaModels.Configuration, apiClient: OtaApiClient) {
     this.configuration = configuration
     this.apiClient = apiClient
-    this.store = OtaReleaseStore(configuration.storageDirectory)
+    this.embeddedStore = EmbeddedReleaseStore(configuration.storageDirectory)
     this.releaseTransaction = ReleaseTransaction(configuration.storageDirectory)
     this.bundleRuntime = BundleRuntime(releaseTransaction)
   }
 
   @Throws(IOException::class)
   fun initializeEmbeddedRelease(release: OtaModels.InstalledRelease) {
-    store.saveEmbeddedRelease(release)
-    // 新 state 与旧 pointer 同时写入，保证升级后的 runtime 可直接使用 embedded fallback。
     releaseTransaction.registerEmbeddedRelease(release)
   }
 
@@ -47,13 +44,15 @@ class OtaSdk {
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun clearDownloadedBundles() = deleteAllDownloadedBundles()
 
+  /** 冷启动维护，不联网；清理不再被 state/candidate/lease 引用的目录。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun pruneUnreferencedBundles() {
+    releaseTransaction.pruneAllUnreferencedReleases()
+  }
+
   @Throws(IOException::class)
   fun getCurrentRelease(lynxAppId: String): OtaModels.InstalledRelease? {
-    val current = store.currentRelease(lynxAppId)
-    if (current != null) {
-      return current
-    }
-    return store.embeddedRelease(lynxAppId)
+    return releaseTransaction.current(scopeFor(lynxAppId)) ?: embeddedStore.embeddedRelease(lynxAppId)
   }
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
@@ -223,10 +222,6 @@ class OtaSdk {
     )
     val restored = releaseTransaction.rollback(scope)
     if (restored != null) {
-      // 保留旧 pageId facade 的可读性；真正提交顺序由 ReleaseTransaction 保证。
-      store.writeCurrentRelease(restored)
-    }
-    if (restored != null) {
       report(
         OtaModels.ReportEvent.ROLLBACK,
         current?.context?.releaseId ?: restored.context.releaseId,
@@ -256,10 +251,62 @@ class OtaSdk {
     return bundleRuntime.current(scopeFor(lynxAppId), bundleName)
   }
 
-  /** 读取指定 appId 的新 runtime current；无新 state 时回退旧 pointer。 */
+  /** 为活体容器原子解析 current Bundle，并持有到容器销毁。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun acquireCurrentBundleLease(
+    lynxAppId: String,
+    bundleName: String,
+  ): ReleaseTransaction.BundleLease? {
+    return releaseTransaction.acquireCurrentBundleLease(scopeFor(lynxAppId), bundleName)
+  }
+
+  /** 读取指定 appId 的 Store v2 current；无 state 时回退 embedded 描述。 */
   @Throws(IOException::class, OtaSdkException::class)
   fun current(lynxAppId: String): OtaModels.InstalledRelease? {
     return releaseTransaction.current(scopeFor(lynxAppId)) ?: getCurrentRelease(lynxAppId)
+  }
+
+  /** 返回持久化 candidate；current 读取入口不会消费候选版本。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun candidate(lynxAppId: String): OtaModels.CandidateSnapshot? {
+    return releaseTransaction.candidate(scopeFor(lynxAppId))
+  }
+
+  /** 页面真正使用 candidate 时进入 trial；重复调用保持幂等。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun beginCandidateTrial(lynxAppId: String): OtaModels.CandidateSnapshot {
+    return releaseTransaction.beginCandidateTrial(scopeFor(lynxAppId))
+  }
+
+  /** 健康确认后原子 promote candidate，并把旧 current 写入 previous。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun confirmCandidateHealthy(lynxAppId: String): OtaModels.InstalledRelease {
+    return releaseTransaction.confirmCandidate(scopeFor(lynxAppId))
+  }
+
+  @Throws(IOException::class, OtaSdkException::class)
+  fun discardCandidate(lynxAppId: String) {
+    releaseTransaction.discardCandidate(scopeFor(lynxAppId))
+  }
+
+  @Throws(IOException::class, OtaSdkException::class)
+  fun recoverInterruptedCandidate(lynxAppId: String) {
+    releaseTransaction.recoverInterruptedCandidate(scopeFor(lynxAppId))
+  }
+
+  /** 按 candidate 的 Release 精确读取 Bundle，不改变 current。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun candidateBundle(lynxAppId: String, bundleName: String): File? {
+    return releaseTransaction.candidateBundle(scopeFor(lynxAppId), bundleName)
+  }
+
+  /** 为 candidate trial 页面原子解析 Bundle，并持有到容器销毁。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun acquireCandidateBundleLease(
+    lynxAppId: String,
+    bundleName: String,
+  ): ReleaseTransaction.BundleLease? {
+    return releaseTransaction.acquireCandidateBundleLease(scopeFor(lynxAppId), bundleName)
   }
 
   /** 路由进入 Lynx 容器前的 Bundle 门禁，失败不会读取 staging/part 文件。 */
@@ -288,9 +335,6 @@ class OtaSdk {
       return rollback(reason)
     }
     val restored = releaseTransaction.rollback(scopeFor(lynxAppId))
-    if (restored != null) {
-      OtaReleaseStore(configuration.storageDirectory).writeCurrentRelease(restored)
-    }
     return restored
   }
 
@@ -305,6 +349,12 @@ class OtaSdk {
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   private fun updateToLatestBundleList(latest: OtaModels.LatestBundleList): OtaModels.LatestBundleListUpdateResult {
+    val latestScope = ReleaseTransaction.ReleaseScope.fromManifest(latest.asManifest())
+    if (configuration.candidateActivationEnabled) {
+      // trial 只允许由真正打开页面的路径消费；进程重启时未完成 trial 必须清理，
+      // 但 pending candidate 可以保留，等待页面首次访问后再进入 trial。
+      runCatching { releaseTransaction.recoverInterruptedCandidate(latestScope) }
+    }
     val current = getCurrentRelease(latest.lynxAppId)
     if (latest.status != OtaModels.ReleaseStatus.ACTIVE) {
       val reasonCode = when (latest.status) {
@@ -387,16 +437,35 @@ class OtaSdk {
       return OtaModels.LatestBundleListUpdateResult.skipped(current, skipMessage)
     }
 
+    if (configuration.candidateActivationEnabled) {
+      val existingCandidate = runCatching { releaseTransaction.candidate(latestScope) }.getOrNull()
+      if (existingCandidate != null && existingCandidate.release.context.releaseId != latest.releaseId) {
+        runCatching { releaseTransaction.discardCandidate(latestScope) }
+      } else if (existingCandidate != null && existingCandidate.release.context.releaseId == latest.releaseId) {
+        return OtaModels.LatestBundleListUpdateResult.candidate(
+          previous = current,
+          candidate = existingCandidate,
+          summary = OtaModels.BundleSyncSummary(
+            latest.releaseId,
+            latest.changedBundles.size,
+            0,
+            latest.changedBundles.size,
+          ),
+        )
+      }
+    }
+
     val manifest = latest.asManifest()
     val scope = ReleaseTransaction.ReleaseScope.fromManifest(manifest)
     val transaction = try {
-      // 所有新下载都经过同一个 Release 事务：Bundle 写入 staging，完整校验后再
-      // 原子发布并提交 current/previous state。旧 pointer 只作为兼容读取和写回 facade。
+      // 所有新下载都经过同一个 Release 事务：Bundle 写入 appId staging，完整校验后再
+      // 原子发布并提交 current/previous state。
       releaseTransaction.install(
         ReleaseTransaction.InstallRequest(
           scope = scope,
           targetManifest = manifest,
-          embeddedDescriptor = store.embeddedRelease(latest.lynxAppId),
+          embeddedDescriptor = embeddedStore.embeddedRelease(latest.lynxAppId),
+          stageAsCandidate = configuration.candidateActivationEnabled,
         ),
       )
     } catch (error: Exception) {
@@ -425,8 +494,36 @@ class OtaSdk {
     }
     val activated = transaction.installed
       ?: return OtaModels.LatestBundleListUpdateResult.noRelease(transaction.current)
-    // 兼容旧 pageId facade；Router 的实际读取优先使用 states/<appId>.json。
-    store.writeCurrentRelease(activated)
+    if (configuration.candidateActivationEnabled) {
+      val candidate = releaseTransaction.candidate(scope)
+      if (candidate == null) {
+        /*
+         * 页面可以在 install 返回后立即消费 candidate：首屏健康会 promote，
+         * 首屏失败会 discard。后台同步此时再次读取 candidate 看到 null 是一个
+         * 合法的并发结果，不能把它误报成激活失败，也不能覆盖页面已经保留的 current。
+         */
+        val currentAfterCandidateConsumption = getCurrentRelease(latest.lynxAppId)
+        return if (
+          currentAfterCandidateConsumption != null &&
+          currentAfterCandidateConsumption.context.releaseId == manifest.releaseId &&
+          hasAllLocalBundles(currentAfterCandidateConsumption)
+        ) {
+          OtaModels.LatestBundleListUpdateResult.alreadyActive(currentAfterCandidateConsumption)
+        } else {
+          OtaModels.LatestBundleListUpdateResult.noRelease(currentAfterCandidateConsumption ?: current)
+        }
+      }
+      return OtaModels.LatestBundleListUpdateResult.candidate(
+        previous = current,
+        candidate = candidate,
+        summary = OtaModels.BundleSyncSummary(
+          manifest.releaseId,
+          manifest.bundles.size,
+          transaction.downloadedBundleCount,
+          transaction.copiedBundleCount,
+        ),
+      )
+    }
     val outcome = OtaModels.BundleSyncSummary(
       manifest.releaseId,
       manifest.bundles.size,
@@ -472,190 +569,6 @@ class OtaSdk {
       ),
     )
     return OtaModels.LatestBundleListUpdateResult.updated(current, activated, outcome)
-  }
-
-  @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
-  private fun downloadAndValidate(
-    manifest: OtaModels.ReleaseManifest,
-    reusableRelease: OtaModels.InstalledRelease?,
-  ): DownloadOutcome {
-    val installedBundles = ArrayList<OtaModels.InstalledBundle>()
-    var downloadedBundleCount = 0
-    var reusedBundleCount = 0
-
-    for (artifact in manifest.bundles) {
-      val reusable = reusableInstalledBundle(artifact, reusableRelease)
-      if (reusable != null) {
-        reusedBundleCount += 1
-        installedBundles.add(
-          OtaModels.InstalledBundle(
-            artifact.pageId,
-            artifact.bundlePath,
-            artifact.bundleSha256,
-            artifact.bundleUrl,
-            reusable.localFilePath,
-          ),
-        )
-        continue
-      }
-
-      val localPath = store.localBundlePath(manifest.releaseId, artifact.bundlePath)
-      val downloadStartedAt = System.currentTimeMillis()
-      try {
-        OtaIO.download(artifact.bundleUrl, localPath)
-      } catch (error: IOException) {
-        report(
-          OtaModels.ReportEvent.DOWNLOAD_SUCCESS,
-          manifest.releaseId,
-          manifest.lynxAppId,
-          artifact.pageId,
-          artifact.bundlePath,
-          artifact.bundleSha256,
-          artifact.size,
-          ReportDetails(
-            OtaModels.ReportEventStage.DOWNLOAD,
-            OtaModels.ReportEventResult.FAILED,
-            OtaModels.ReasonCodes.BUNDLE_DOWNLOAD_FAILED,
-            error.message,
-            null,
-            null,
-            elapsedMillis(downloadStartedAt),
-            OtaModels.ReasonCodes.BUNDLE_DOWNLOAD_FAILED,
-          ),
-        )
-        throw error
-      }
-
-      val actualSha256 = OtaIO.sha256(localPath)
-      if (!actualSha256.equals(artifact.bundleSha256, ignoreCase = true)) {
-        report(
-          OtaModels.ReportEvent.DOWNLOAD_SUCCESS,
-          manifest.releaseId,
-          manifest.lynxAppId,
-          artifact.pageId,
-          artifact.bundlePath,
-          artifact.bundleSha256,
-          artifact.size,
-          ReportDetails(
-            OtaModels.ReportEventStage.DOWNLOAD,
-            OtaModels.ReportEventResult.FAILED,
-            OtaModels.ReasonCodes.BUNDLE_CHECKSUM_FAILED,
-            "expected=${artifact.bundleSha256}, actual=$actualSha256",
-            null,
-            null,
-            elapsedMillis(downloadStartedAt),
-            OtaModels.ReasonCodes.BUNDLE_CHECKSUM_FAILED,
-          ),
-        )
-        throw OtaSdkException.checksumMismatch(artifact.bundleSha256, actualSha256)
-      }
-      downloadedBundleCount += 1
-      installedBundles.add(
-        OtaModels.InstalledBundle(
-          artifact.pageId,
-          artifact.bundlePath,
-          artifact.bundleSha256,
-          artifact.bundleUrl,
-          localPath.toString(),
-        ),
-      )
-      report(
-        OtaModels.ReportEvent.DOWNLOAD_SUCCESS,
-        manifest.releaseId,
-        manifest.lynxAppId,
-        artifact.pageId,
-        artifact.bundlePath,
-        artifact.bundleSha256,
-        artifact.size,
-        ReportDetails(
-          OtaModels.ReportEventStage.DOWNLOAD,
-          OtaModels.ReportEventResult.SUCCESS,
-          null,
-          null,
-          null,
-          null,
-          elapsedMillis(downloadStartedAt),
-          "bundle_downloaded",
-        ),
-      )
-    }
-
-    val installed = OtaModels.InstalledRelease(
-      OtaModels.CurrentReleaseContext(
-        manifest.env,
-        manifest.hostApp,
-        manifest.lynxAppId,
-        manifest.releaseId,
-        manifest.platform,
-        OtaModels.ReleaseStatus.ACTIVE,
-      ),
-      Instant.now(),
-      installedBundles,
-    )
-    return DownloadOutcome(
-      installed,
-      OtaModels.BundleSyncSummary(
-        manifest.releaseId,
-        manifest.bundles.size,
-        downloadedBundleCount,
-        reusedBundleCount,
-      ),
-    )
-  }
-
-  @Throws(IOException::class)
-  private fun reusableReleaseSnapshot(
-    current: OtaModels.InstalledRelease?,
-    lynxAppId: String,
-  ): OtaModels.InstalledRelease? {
-    val embedded = store.embeddedRelease(lynxAppId)
-    val candidates = ArrayList<OtaModels.InstalledRelease>()
-    if (current != null) {
-      candidates.add(current)
-    }
-    if (embedded != null) {
-      candidates.add(embedded)
-    }
-    if (candidates.isEmpty()) {
-      return null
-    }
-
-    val reusableBundles = LinkedHashMap<String, OtaModels.InstalledBundle>()
-    for (release in candidates) {
-      for (bundle in release.bundles) {
-        if (!File(bundle.localFilePath).isFile) {
-          continue
-        }
-        reusableBundles.putIfAbsent("${bundle.bundlePath}#${bundle.bundleSha256.lowercase()}", bundle)
-      }
-    }
-    if (reusableBundles.isEmpty()) {
-      return null
-    }
-    val basis = current ?: embedded!!
-    return OtaModels.InstalledRelease(basis.context, Instant.now(), ArrayList(reusableBundles.values))
-  }
-
-  private fun reusableInstalledBundle(
-    artifact: OtaModels.BundleArtifact,
-    release: OtaModels.InstalledRelease?,
-  ): OtaModels.InstalledBundle? {
-    if (release == null) {
-      return null
-    }
-    for (bundle in release.bundles) {
-      if (bundle.bundlePath != artifact.bundlePath) {
-        continue
-      }
-      if (!bundle.bundleSha256.equals(artifact.bundleSha256, ignoreCase = true)) {
-        continue
-      }
-      if (!File(bundle.localFilePath).isFile) {
-        continue
-      }
-      return bundle
-    }
-    return null
   }
 
   private fun versionMismatchMessage(latest: OtaModels.LatestBundleList): String? {
@@ -840,11 +753,6 @@ class OtaSdk {
     }
     return elapsed.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
   }
-
-  private data class DownloadOutcome(
-    val installed: OtaModels.InstalledRelease,
-    val summary: OtaModels.BundleSyncSummary,
-  )
 
   private data class ReportDetails(
     val eventStage: OtaModels.ReportEventStage?,

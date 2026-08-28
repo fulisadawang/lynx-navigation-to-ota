@@ -10,6 +10,10 @@ import UIKit
 final class NativeTabBarDemoViewController: UITabBarController {
     private var tabControllers: [LynxTabViewController] = []
     private var refreshItem: UIBarButtonItem?
+#if DEBUG
+    private var debugStateLabel: UILabel?
+    private var debugStateTimer: Timer?
+#endif
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -28,8 +32,26 @@ final class NativeTabBarDemoViewController: UITabBarController {
             target: self,
             action: #selector(refreshOta)
         )
-        navigationItem.rightBarButtonItem = refreshItem
+        let storageItem = UIBarButtonItem(
+            title: "磁盘",
+            style: .plain,
+            target: self,
+            action: #selector(openStorageInspector)
+        )
+        storageItem.accessibilityIdentifier = "native-tab-storage-inspector"
+        navigationItem.rightBarButtonItems = [refreshItem, storageItem]
         self.refreshItem = refreshItem
+#if DEBUG
+        if ProcessInfo.processInfo.environment["LYNX_UI_TEST_EXPOSE_RUNTIME_STATE"] == "1" {
+            let rebuildItem = UIBarButtonItem(
+                title: "重建 Tab",
+                style: .plain,
+                target: self,
+                action: #selector(debugRebuildSelectedTab)
+            )
+            navigationItem.rightBarButtonItems = [refreshItem, storageItem, rebuildItem]
+        }
+#endif
 
         guard let identity = LynxRouter.embeddedIdentity(bundleName: "main.lynx.bundle") else {
             presentShellAlert(
@@ -81,7 +103,74 @@ final class NativeTabBarDemoViewController: UITabBarController {
 
         tabControllers = [home, settings]
         setViewControllers(tabControllers, animated: false)
+#if DEBUG
+        installDebugStateIfNeeded()
+#endif
     }
+
+#if DEBUG
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard ProcessInfo.processInfo.environment["LYNX_UI_TEST_EXPOSE_RUNTIME_STATE"] == "1" else {
+            return
+        }
+        updateDebugState()
+        debugStateTimer?.invalidate()
+        debugStateTimer = Timer.scheduledTimer(
+            withTimeInterval: 0.1,
+            repeats: true
+        ) { [weak self] _ in
+            self?.updateDebugState()
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        debugStateTimer?.invalidate()
+        debugStateTimer = nil
+    }
+
+    deinit {
+        debugStateTimer?.invalidate()
+    }
+
+    private func installDebugStateIfNeeded() {
+        guard ProcessInfo.processInfo.environment["LYNX_UI_TEST_EXPOSE_RUNTIME_STATE"] == "1" else {
+            return
+        }
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.accessibilityIdentifier = "lynx-debug-tab-state"
+        label.accessibilityTraits = .staticText
+        label.font = UIFont.monospacedSystemFont(ofSize: 9, weight: .medium)
+        label.textColor = .secondaryLabel
+        label.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.9)
+        label.numberOfLines = 2
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.55
+        label.textAlignment = .center
+        view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+            label.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            label.heightAnchor.constraint(equalToConstant: 30),
+        ])
+        debugStateLabel = label
+        updateDebugState()
+    }
+
+    private func updateDebugState() {
+        guard let label = debugStateLabel else { return }
+        let values = tabControllers.map { tab in
+            "\(tab.spec.tabId)=\(tab.debugState)"
+        }
+        let value = values.joined(separator: " | ") +
+            " | http=\(LynxRouter.debugHTTPRequestCount)"
+        label.text = value
+        label.accessibilityValue = value
+    }
+#endif
 
     @objc private func refreshOta() {
         refreshItem?.isEnabled = false
@@ -100,4 +189,19 @@ final class NativeTabBarDemoViewController: UITabBarController {
             )
         }
     }
+
+    @objc private func openStorageInspector() {
+        navigationController?.pushViewController(
+            OtaStorageInspectorViewController(),
+            animated: true
+        )
+    }
+
+#if DEBUG
+    @objc private func debugRebuildSelectedTab() {
+        guard let selected = selectedViewController as? LynxTabViewController else { return }
+        selected.refreshFromCurrent()
+        updateDebugState()
+    }
+#endif
 }

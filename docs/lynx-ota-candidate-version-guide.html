@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="用全中文交互方式解释 Lynx OTA 候选版本安全启用机制，并逐项审计 18 个故障测试的脚本、命令、断言与可执行性">
+  <title>Lynx OTA 候选版本安全启用与故障测试可执行性 · 全中文交互说明</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #eee8d8;
+      --paper-2: #f8f4e8;
+      --ink: #171715;
+      --muted: #665f55;
+      --orange: #ff5a24;
+      --orange-soft: #ffd2bf;
+      --teal: #008d88;
+      --teal-soft: #bfe8df;
+      --lime: #c9f25e;
+      --red: #c9323f;
+      --red-soft: #ffd5d7;
+      --navy: #14242d;
+      --white: #fffdf7;
+      --line: #1d1d1a;
+      --shadow: 8px 8px 0 var(--ink);
+      --display: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+      --body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(23,23,21,.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(23,23,21,.055) 1px, transparent 1px),
+        var(--paper);
+      background-size: 28px 28px;
+      font: 16px/1.7 var(--body);
+    }
+
+    button, textarea { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, textarea:focus-visible, summary:focus-visible {
+      outline: 4px solid var(--lime);
+      outline-offset: 3px;
+    }
+
+    .page-shell { width: min(1260px, calc(100% - 36px)); margin: 0 auto; padding: 28px 0 96px; }
+    .top-rule { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0 16px; border-bottom: 3px solid var(--ink); font: 700 12px var(--mono); letter-spacing: .08em; }
+    .top-rule span:last-child { color: var(--teal); }
+
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1.45fr .55fr;
+      gap: 24px;
+      min-height: 520px;
+      padding: 54px 0 40px;
+      overflow: hidden;
+    }
+    .hero-copy { position: relative; z-index: 2; align-self: center; }
+    .kicker { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 20px; font: 800 13px var(--mono); letter-spacing: .08em; }
+    .kicker::before { content: ""; width: 28px; height: 10px; background: var(--orange); border: 2px solid var(--ink); }
+    h1, h2, h3 { font-family: var(--display); line-height: 1.12; letter-spacing: -.035em; }
+    h1 { max-width: 920px; margin: 0; font-size: clamp(48px, 8vw, 104px); font-weight: 900; }
+    h1 em { display: block; color: var(--orange); font-style: normal; }
+    .hero-lead { max-width: 780px; margin: 30px 0 0; font-size: clamp(18px, 2.2vw, 25px); color: #38342e; }
+    .hero-lead strong { color: var(--ink); }
+    .hero-mark {
+      align-self: center;
+      justify-self: end;
+      width: min(330px, 100%);
+      aspect-ratio: 1;
+      position: relative;
+      border: 3px solid var(--ink);
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 14px 14px 0 var(--ink);
+      transform: rotate(7deg);
+    }
+    .hero-mark::before, .hero-mark::after { content: ""; position: absolute; left: 50%; top: 50%; background: var(--ink); transform: translate(-50%, -50%); }
+    .hero-mark::before { width: 68%; height: 3px; }
+    .hero-mark::after { width: 3px; height: 68%; }
+    .hero-mark span { position: absolute; inset: 25%; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 50%; background: var(--orange); color: var(--white); font: 900 42px var(--display); transform: rotate(-7deg); }
+
+    .one-line {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 72px;
+      padding: 24px 26px;
+      border: 3px solid var(--ink);
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+    .one-line .stamp { padding: 8px 12px; background: var(--ink); color: var(--lime); font: 800 13px var(--mono); white-space: nowrap; }
+    .one-line p { margin: 0; font-size: clamp(18px, 2vw, 24px); }
+
+    section { margin-top: 84px; }
+    .section-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: end; margin-bottom: 28px; border-bottom: 3px solid var(--ink); }
+    .section-number { color: var(--orange); font: 900 15px var(--mono); }
+    h2 { margin: 5px 0 18px; font-size: clamp(34px, 5vw, 62px); }
+    .section-note { max-width: 430px; margin-bottom: 20px; color: var(--muted); text-align: right; }
+
+    .term-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .term-card { min-height: 205px; padding: 22px; border: 2px solid var(--ink); background: var(--paper-2); transition: transform .18s ease, box-shadow .18s ease; }
+    .term-card:hover { transform: translate(-3px, -3px); box-shadow: 6px 6px 0 var(--ink); }
+    .term-card .code { display: inline-block; margin-bottom: 25px; color: var(--teal); font: 800 12px var(--mono); }
+    .term-card h3 { margin: 0 0 10px; font-size: 25px; }
+    .term-card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .term-card.current { background: var(--teal-soft); }
+    .term-card.candidate { background: var(--orange-soft); }
+
+    .lab {
+      padding: 26px;
+      border: 3px solid var(--ink);
+      background: var(--navy);
+      color: var(--white);
+      box-shadow: 12px 12px 0 var(--orange);
+    }
+    .lab p { color: #c4d2d7; }
+    .lab-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; padding-bottom: 22px; border-bottom: 1px solid #49606a; }
+    .tool-block { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+    .tool-label { margin-right: 4px; color: #93aab2; font: 700 12px var(--mono); }
+    .segmented { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid #4c626c; background: #0c171d; }
+    .segmented button, .scenario-button, .lab-action {
+      border: 1px solid transparent;
+      background: transparent;
+      color: #b8c7cc;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+    .segmented button { padding: 8px 12px; }
+    .segmented button:hover, .scenario-button:hover, .lab-action:hover { color: white; background: #283f49; }
+    .segmented button.active { border-color: var(--lime); background: var(--lime); color: var(--ink); font-weight: 800; }
+    .scenario-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin: 20px 0; }
+    .scenario-button { padding: 13px 12px; border: 1px solid #4c626c; text-align: left; }
+    .scenario-button strong { display: block; color: inherit; }
+    .scenario-button span { display: block; margin-top: 2px; color: #8fa4ac; font-size: 12px; }
+    .scenario-button.active { border-color: var(--orange); background: var(--orange); color: var(--white); }
+    .scenario-button.active span { color: #fff0e8; }
+
+    .state-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+    .state-slot { min-height: 136px; padding: 16px; border: 1px solid #4b626c; background: #0a1419; }
+    .state-slot.changed { animation: stateFlash .55s ease; }
+    .state-label { color: #8ea2aa; font: 700 11px var(--mono); }
+    .state-value { display: block; margin-top: 17px; color: var(--white); font: 900 clamp(24px, 3vw, 38px) var(--display); }
+    .state-note { display: block; margin-top: 4px; color: #88a0a9; font-size: 12px; }
+    .state-slot[data-state="current"] { border-top: 5px solid var(--teal); }
+    .state-slot[data-state="previous"] { border-top: 5px solid #8fa2aa; }
+    .state-slot[data-state="candidate"] { border-top: 5px solid var(--orange); }
+    .state-slot[data-state="trial"] { border-top: 5px solid var(--lime); }
+
+    .timeline-wrap { margin-top: 22px; }
+    .timeline-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 10px; }
+    .timeline-title { color: var(--lime); font: 800 13px var(--mono); }
+    .progress-track { flex: 1; height: 7px; max-width: 360px; border: 1px solid #4b626c; background: #0a1419; }
+    .progress-bar { width: 0; height: 100%; background: var(--orange); transition: width .35s ease; }
+    .timeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+    .timeline-step { min-height: 118px; padding: 12px; border: 1px solid #435761; background: #13242c; color: #91a8b0; cursor: pointer; text-align: left; }
+    .timeline-step .step-index { display: block; color: #6f8993; font: 700 11px var(--mono); }
+    .timeline-step strong { display: block; margin-top: 8px; color: #d8e4e8; font-size: 13px; }
+    .timeline-step.active { border-color: var(--orange); background: #44271e; }
+    .timeline-step.done { border-color: var(--teal); color: #c1ece7; }
+
+    .lab-bottom { display: grid; grid-template-columns: 1.25fr .75fr; gap: 14px; margin-top: 14px; }
+    .explain-panel, .result-panel { min-height: 180px; padding: 18px; border: 1px solid #4b626c; background: #0b171c; }
+    .panel-kicker { color: var(--orange); font: 800 11px var(--mono); }
+    .explain-panel h3, .result-panel h3 { margin: 8px 0 8px; font-size: 25px; }
+    .explain-panel p, .result-panel p { margin: 0; font-size: 14px; }
+    .result-badge { display: inline-flex; margin-top: 13px; padding: 7px 9px; border: 1px solid currentColor; color: var(--lime); font: 800 12px var(--mono); }
+    .result-badge.risk { color: #ff9b9f; }
+    .lab-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    .lab-action { padding: 10px 14px; border: 1px solid #4b626c; }
+    .lab-action.primary { border-color: var(--orange); background: var(--orange); color: white; font-weight: 800; }
+
+    .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .compare-card { position: relative; padding: 26px; border: 3px solid var(--ink); background: var(--white); }
+    .compare-card::before { content: attr(data-mark); position: absolute; right: 18px; top: -17px; padding: 5px 9px; border: 2px solid var(--ink); background: var(--paper); font: 800 11px var(--mono); }
+    .compare-card.recommended { background: var(--teal-soft); box-shadow: var(--shadow); }
+    .compare-card h3 { margin: 0 0 18px; font-size: 30px; }
+    .compare-card ol { margin: 0; padding-left: 22px; }
+    .compare-card li { margin: 10px 0; }
+    .compare-card .verdict { margin-top: 22px; padding-top: 15px; border-top: 2px solid var(--ink); font-weight: 800; }
+
+    .gate-panel { padding: 28px; border: 3px solid var(--ink); background: var(--white); box-shadow: var(--shadow); }
+    .gate-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 24px; }
+    .version-dials { display: grid; gap: 16px; }
+    .dial { padding: 16px; border: 2px solid var(--ink); background: var(--paper-2); }
+    .dial-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .dial-head strong { font-family: var(--display); font-size: 20px; }
+    .dial-value { color: var(--orange); font: 900 19px var(--mono); }
+    input[type="range"] { width: 100%; accent-color: var(--orange); }
+    .gate-result { display: grid; place-items: center; min-height: 260px; padding: 28px; border: 3px solid var(--ink); background: var(--navy); color: var(--white); text-align: center; }
+    .gate-icon { display: grid; place-items: center; width: 82px; height: 82px; border: 3px solid currentColor; border-radius: 50%; color: var(--lime); font: 900 40px var(--display); }
+    .gate-result.blocked .gate-icon { color: #ff9298; }
+    .gate-result h3 { margin: 16px 0 8px; font-size: 34px; }
+    .gate-result p { margin: 0; color: #bdd0d6; }
+    .gate-foot { margin-top: 20px; padding: 16px; border-left: 7px solid var(--orange); background: var(--orange-soft); }
+
+    .truth-banner {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 22px;
+      border: 3px solid var(--ink);
+      background: var(--red-soft);
+      box-shadow: var(--shadow);
+    }
+    .truth-icon { display: grid; place-items: center; width: 64px; height: 64px; border: 3px solid var(--ink); border-radius: 50%; background: var(--red); color: white; font: 900 34px var(--display); }
+    .truth-banner h3 { margin: 0 0 5px; font-size: 28px; }
+    .truth-banner p { margin: 0; color: #5d3033; }
+    .audit-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 22px 0; }
+    .audit-card { min-height: 160px; padding: 17px; border: 2px solid var(--ink); background: var(--white); }
+    .audit-card strong { display: block; font: 900 44px var(--display); }
+    .audit-card span { display: block; margin-top: 5px; font-size: 13px; font-weight: 800; }
+    .audit-card small { display: block; margin-top: 7px; color: var(--muted); line-height: 1.45; }
+    .audit-card.proven { background: var(--teal-soft); }
+    .audit-card.seam { background: #e7efc3; }
+    .audit-card.device { background: #ffe9c6; }
+    .audit-card.missing { background: var(--red-soft); }
+    .audit-card.external { background: #dce3e6; }
+    .evidence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+    .evidence-card { padding: 20px; border: 2px solid var(--ink); background: var(--white); }
+    .evidence-card h3 { margin: 0 0 8px; font-size: 24px; }
+    .evidence-status { display: inline-flex; margin-bottom: 12px; padding: 4px 7px; border: 1px solid var(--ink); background: var(--lime); font: 800 10px var(--mono); }
+    .evidence-status.partial { background: #ffe2a7; }
+    .evidence-card p { margin: 7px 0; color: var(--muted); font-size: 13px; }
+    .command {
+      display: block;
+      overflow-x: auto;
+      margin-top: 10px;
+      padding: 11px 12px;
+      border: 1px solid var(--ink);
+      background: var(--navy);
+      color: #d9e6e9;
+      font: 11px/1.55 var(--mono);
+      white-space: pre-wrap;
+    }
+    .script-blueprint { margin-top: 22px; padding: 22px; border: 3px solid var(--ink); background: var(--navy); color: var(--white); }
+    .script-blueprint h3 { margin: 0 0 12px; color: var(--lime); font-size: 29px; }
+    .script-blueprint > p { margin: 0 0 16px; color: #bdcdd2; }
+    .blueprint-grid { display: grid; grid-template-columns: .85fr 1.15fr; gap: 14px; }
+    .tree, .runner-contract { padding: 16px; border: 1px solid #4b626c; background: #0b171c; }
+    .tree pre { margin: 0; color: #d6e2e5; font: 11px/1.6 var(--mono); white-space: pre-wrap; }
+    .runner-contract dl { display: grid; grid-template-columns: 108px 1fr; gap: 8px 12px; margin: 0; font-size: 13px; }
+    .runner-contract dt { color: var(--orange); font-weight: 800; }
+    .runner-contract dd { margin: 0; color: #c7d5da; }
+    .no-fake-claim { margin-top: 14px; padding: 13px 15px; border-left: 5px solid var(--orange); background: #3a281f; color: #ffe7d7; font-size: 13px; }
+
+    .test-lab { padding: 26px; border: 3px solid var(--ink); background: var(--paper-2); }
+    .test-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 20px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 7px; }
+    .filter-button, .test-action { padding: 8px 11px; border: 2px solid var(--ink); background: var(--white); cursor: pointer; }
+    .filter-button.active { background: var(--ink); color: var(--white); }
+    .test-action.primary { background: var(--lime); font-weight: 800; }
+    .test-progress { font: 800 13px var(--mono); }
+    .test-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .test-card { position: relative; min-height: 240px; padding: 18px; border: 2px solid var(--ink); background: var(--white); transition: .18s ease; }
+    .test-card:hover { transform: translateY(-3px); }
+    .test-card.selected { background: var(--teal-soft); box-shadow: 5px 5px 0 var(--ink); }
+    .test-meta { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+    .test-id, .test-cat, .test-priority { padding: 3px 6px; border: 1px solid var(--ink); font: 700 10px var(--mono); }
+    .test-priority { background: var(--orange-soft); }
+    .test-status { padding: 3px 6px; border: 1px solid var(--ink); font: 800 10px var(--mono); }
+    .test-status.proven { background: var(--teal-soft); }
+    .test-status.seam { background: #e7efc3; }
+    .test-status.device { background: #ffe9c6; }
+    .test-status.missing { background: var(--red-soft); }
+    .test-status.external { background: #dce3e6; }
+    .test-card h3 { margin: 0 0 8px; font-size: 22px; }
+    .test-card p { margin: 6px 0; color: var(--muted); font-size: 13px; }
+    .expected { padding-top: 9px; border-top: 1px dashed var(--ink); }
+    .select-test { width: 100%; margin-top: 12px; padding: 9px 11px; border: 2px solid var(--ink); background: var(--white); cursor: pointer; font-weight: 800; }
+    .test-card.selected .select-test { background: var(--teal); color: white; }
+    .test-detail { margin-top: 12px; border: 1px solid var(--ink); background: rgba(255,255,255,.55); }
+    .test-detail summary { padding: 10px 38px 10px 10px; font: 800 13px var(--body); }
+    .test-detail summary::after { right: 10px; top: 3px; font-size: 23px; }
+    .detail-body { padding: 0 11px 12px; }
+    .detail-row { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 7px 0; border-top: 1px dashed #918a7f; font-size: 11px; }
+    .detail-row strong { color: var(--teal); }
+    .detail-row span, .detail-row code { color: #514c45; overflow-wrap: anywhere; }
+    .detail-row code { font-family: var(--mono); }
+    .platform-line { display: grid; gap: 5px; margin-top: 9px; }
+    .platform-line span { padding: 6px 7px; border-left: 4px solid var(--ink); background: #f2eee3; color: #514c45; font-size: 11px; }
+    .plan-box { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 20px; }
+    textarea { width: 100%; min-height: 190px; resize: vertical; padding: 15px; border: 2px solid var(--ink); background: #101c22; color: #dce7e9; font: 12px/1.65 var(--mono); }
+    .copy-column { display: grid; align-content: start; gap: 8px; }
+
+    .decision-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .decision { padding: 24px; border: 3px solid var(--ink); background: var(--white); }
+    .decision.yes { background: var(--orange-soft); }
+    .decision h3 { margin: 0 0 13px; font-size: 27px; }
+    .decision ul { margin: 0; padding-left: 20px; }
+    .decision li { margin: 7px 0; }
+
+    details { border-bottom: 2px solid var(--ink); background: var(--white); }
+    details:first-of-type { border-top: 2px solid var(--ink); }
+    summary { position: relative; padding: 18px 56px 18px 16px; cursor: pointer; font: 800 19px var(--display); list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; position: absolute; right: 18px; top: 12px; color: var(--orange); font: 900 30px var(--display); }
+    details[open] summary::after { content: "−"; }
+    details p { max-width: 900px; margin: 0; padding: 0 56px 20px 16px; color: var(--muted); }
+
+    .final-route { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 3px solid var(--ink); box-shadow: var(--shadow); }
+    .route-step { position: relative; padding: 25px; background: var(--white); }
+    .route-step + .route-step { border-left: 3px solid var(--ink); }
+    .route-step strong { display: block; margin-bottom: 10px; color: var(--orange); font: 900 13px var(--mono); }
+    .route-step h3 { margin: 0 0 8px; font-size: 25px; }
+    .route-step p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 86px; padding-top: 18px; border-top: 3px solid var(--ink); color: var(--muted); font-size: 13px; }
+
+    @keyframes stateFlash { 0% { background: var(--orange); transform: translateY(-5px); } 100% { background: #0a1419; transform: translateY(0); } }
+    @media (max-width: 980px) {
+      .hero { grid-template-columns: 1fr; min-height: auto; }
+      .hero-mark { width: 200px; justify-self: start; }
+      .section-head { grid-template-columns: 1fr; }
+      .section-note { text-align: left; }
+      .term-grid, .state-board { grid-template-columns: repeat(2, 1fr); }
+      .timeline { grid-template-columns: repeat(3, 1fr); }
+      .lab-bottom, .gate-grid, .blueprint-grid { grid-template-columns: 1fr; }
+      .test-grid { grid-template-columns: repeat(2, 1fr); }
+      .audit-grid { grid-template-columns: repeat(3, 1fr); }
+      .evidence-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .page-shell { width: min(100% - 22px, 620px); padding-top: 12px; }
+      .top-rule { display: none; }
+      .hero { padding-top: 34px; }
+      h1 { font-size: 48px; }
+      .one-line { grid-template-columns: 1fr; }
+      .term-grid, .state-board, .scenario-row, .comparison, .decision-grid, .test-grid, .final-route, .audit-grid { grid-template-columns: 1fr; }
+      .truth-banner { grid-template-columns: 1fr; }
+      .timeline { grid-template-columns: 1fr 1fr; }
+      .route-step + .route-step { border-left: 0; border-top: 3px solid var(--ink); }
+      .plan-box { grid-template-columns: 1fr; }
+      .copy-column { grid-template-columns: 1fr 1fr; }
+      footer { flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page-shell">
+    <div class="top-rule"><span>LYNX OTA / 版本调度控制台</span><span>全中文 · 单文件 · 可交互 · <a href="ios-ota-test-report.html">查看 iOS 实测报告 →</a> · <a href="android-ota-test-report.html">查看 Android 实测报告 →</a></span></div>
+
+    <header class="hero">
+      <div class="hero-copy">
+        <div class="kicker">先理解状态，再决定要不要改</div>
+        <h1>新版本不是下载完，<em>就算正式启用。</em></h1>
+        <p class="hero-lead">这份页面把英文术语统一改成中文：<strong>“候选版本安全启用机制”</strong>。你可以亲手模拟新版本成功、首屏失败、试运行时杀进程和网络失败。</p>
+      </div>
+      <div class="hero-mark" aria-hidden="true"><span>V2</span></div>
+    </header>
+
+    <div class="one-line">
+      <span class="stamp">一句话</span>
+      <p><strong>这是跨端增强设计。</strong>当前 iOS SDK 已提供可选的候选版本安全启用模式；Android/Harmony 仍未接入同等状态机。目标是让新版本先作为候选版本试运行，确认健康以后，才升级成新的当前稳定版本。</p>
+    </div>
+
+    <section aria-labelledby="terms-title">
+      <div class="section-head">
+        <div><span class="section-number">01 / 先把名词说人话</span><h2 id="terms-title">以后都用这些中文</h2></div>
+        <p class="section-note">英文只适合写代码变量，团队讨论、文档和产品验收统一使用中文概念。</p>
+      </div>
+      <div class="term-grid">
+        <article class="term-card current"><span class="code">稳定指针</span><h3>当前稳定版本</h3><p>现在正式给用户使用的版本。无论更新过程发生什么，它都不能被半成品覆盖。</p></article>
+        <article class="term-card"><span class="code">回滚指针</span><h3>上一稳定版本</h3><p>当前版本失败时可回退的上一版。它是已经正式使用过的版本。</p></article>
+        <article class="term-card candidate"><span class="code">更新状态</span><h3>待验证候选版本</h3><p>已经下载并通过文件校验，但还没有被证明能在这台设备上正常运行的新版本。</p></article>
+        <article class="term-card"><span class="code">试运行状态</span><h3>试运行版本</h3><p>候选版本正在接受首屏、接口、原生能力和稳定存活检查，尚未正式替换当前版本。</p></article>
+        <article class="term-card"><span class="code">健康事件</span><h3>健康确认</h3><p>首屏成功，关键接口和原生能力可用，页面进入稳定状态后发出的确认。</p></article>
+        <article class="term-card"><span class="code">原子切换</span><h3>正式启用</h3><p>候选版本健康以后，把它原子地升级成新的当前稳定版本。</p></article>
+        <article class="term-card"><span class="code">清理动作</span><h3>放弃候选版本</h3><p>试运行失败或进程异常退出时，删除候选状态，继续使用原来的稳定版本。</p></article>
+        <article class="term-card"><span class="code">恢复规则</span><h3>状态可恢复</h3><p>即使 App 被杀或手机重启，磁盘状态也能知道上次进行到哪一步，不会把半成品当正式版本。</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="lab-title">
+      <div class="section-head">
+        <div><span class="section-number">02 / 交互状态机</span><h2 id="lab-title">点一次，版本状态走一步</h2></div>
+        <p class="section-note">先比较你现在的方案，再切到候选版本安全启用方案。重点观察“当前稳定版本”什么时候变化。</p>
+      </div>
+
+      <div class="lab" id="state-machine-lab">
+        <div class="lab-toolbar">
+          <div class="tool-block">
+            <span class="tool-label">方案</span>
+            <div class="segmented" role="tablist" aria-label="选择版本启用方案">
+              <button type="button" class="active" data-mode="current" role="tab" aria-selected="true">当前方案</button>
+              <button type="button" data-mode="candidate" role="tab" aria-selected="false">候选版本安全启用（iOS 可选）</button>
+            </div>
+          </div>
+          <div class="tool-block"><span class="tool-label" id="step-count">步骤 1 / 6</span></div>
+        </div>
+
+        <div class="scenario-row" role="tablist" aria-label="选择故障场景">
+          <button type="button" class="scenario-button active" data-scenario="success" role="tab" aria-selected="true"><strong>正常成功</strong><span>新版本健康，正式启用</span></button>
+          <button type="button" class="scenario-button" data-scenario="first-screen-fail" role="tab" aria-selected="false"><strong>首屏失败</strong><span>文件正常，页面打不开</span></button>
+          <button type="button" class="scenario-button" data-scenario="process-killed" role="tab" aria-selected="false"><strong>试运行时杀进程</strong><span>重启后如何恢复</span></button>
+          <button type="button" class="scenario-button" data-scenario="network-fail" role="tab" aria-selected="false"><strong>网络失败</strong><span>下载没有完成</span></button>
+        </div>
+
+        <div class="state-board" aria-live="polite">
+          <div class="state-slot" data-state="current"><span class="state-label">当前稳定版本</span><strong class="state-value" id="state-current">V1</strong><span class="state-note" id="note-current">正式服务用户</span></div>
+          <div class="state-slot" data-state="previous"><span class="state-label">上一稳定版本</span><strong class="state-value" id="state-previous">—</strong><span class="state-note" id="note-previous">暂无</span></div>
+          <div class="state-slot" data-state="candidate"><span class="state-label">待验证候选版本</span><strong class="state-value" id="state-candidate">—</strong><span class="state-note" id="note-candidate">暂无</span></div>
+          <div class="state-slot" data-state="trial"><span class="state-label">试运行版本</span><strong class="state-value" id="state-trial">—</strong><span class="state-note" id="note-trial">未开始</span></div>
+        </div>
+
+        <div class="timeline-wrap">
+          <div class="timeline-head"><span class="timeline-title">执行路径</span><div class="progress-track" aria-hidden="true"><div class="progress-bar" id="progress-bar"></div></div></div>
+          <div class="timeline" id="timeline" aria-label="版本状态执行路径"></div>
+        </div>
+
+        <div class="lab-bottom">
+          <div class="explain-panel"><span class="panel-kicker">当前步骤</span><h3 id="step-title">发现新版本</h3><p id="step-detail">服务端告诉客户端有 V2，但此时没有修改任何本地稳定状态。</p></div>
+          <div class="result-panel"><span class="panel-kicker">这一刻的结论</span><h3 id="result-title">V1 继续稳定运行</h3><p id="result-detail">新版本还没有资格替换当前稳定版本。</p><span class="result-badge" id="result-badge">稳定版本安全</span></div>
+        </div>
+
+        <div class="lab-actions">
+          <button type="button" class="lab-action" id="reset-flow">重新开始</button>
+          <button type="button" class="lab-action primary" id="next-step">下一步</button>
+          <button type="button" class="lab-action" id="auto-play">自动播放</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="compare-title">
+      <div class="section-head">
+        <div><span class="section-number">03 / 两种方案的真实差别</span><h2 id="compare-title">不是有没有回滚，而是什么时候改当前版本</h2></div>
+        <p class="section-note">你现在的 current/previous 已经可用。增强方案只是在它前面多加一道候选试运行。</p>
+      </div>
+      <div class="comparison">
+        <article class="compare-card" data-mark="当前已实现"><h3>下载完成后直接成为当前版本</h3><ol><li>下载 V2，校验文件。</li><li>当前版本切到 V2，V1 变成上一版本。</li><li>现有 Tab 继续用旧实例，新页面读取 V2。</li><li>如果 V2 首屏失败，再回滚到 V1 或内置版本。</li></ol><p class="verdict">优点：简单、成熟、已经有完整回滚。<br>代价：坏 V2 会短暂拥有“当前版本”身份。</p></article>
+        <article class="compare-card recommended" data-mark="iOS 可选 · Android/Harmony 待接入"><h3>候选版本先试运行，成功后再启用</h3><ol><li>下载 V2，先记录为候选版本。</li><li>当前稳定版本始终还是 V1。</li><li>冷启动或主动刷新时试运行 V2。</li><li>健康确认后，V2 才正式成为当前版本。</li></ol><p class="verdict">优点：试运行失败时 V1 从未失去稳定身份。<br>当前实现：iOS SDK 提供 opt-in candidate/trial/confirm/discard/recover API；Android/Harmony 仍需同步。</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="gate-title">
+      <div class="section-head">
+        <div><span class="section-number">04 / 目标服务端方案演示</span><h2 id="gate-title">版本门禁管“能不能下发”</h2></div>
+        <p class="section-note">当前仓库只能证明 Android/iOS 会在客户端跳过不兼容快照；Harmony 尚无版本范围字段，服务端“直接返回最高兼容版本”需要服务端仓库或契约测试确认。</p>
+      </div>
+      <div class="gate-panel">
+        <div class="gate-grid">
+          <div class="version-dials">
+            <div class="dial"><div class="dial-head"><strong>客户端原生版本号</strong><span class="dial-value" id="client-version-label">500</span></div><input type="range" id="client-version" min="480" max="540" step="10" value="500" aria-label="客户端原生版本号"></div>
+            <div class="dial"><div class="dial-head"><strong>新 Bundle 要求的最低版本</strong><span class="dial-value" id="minimum-version-label">510</span></div><input type="range" id="minimum-version" min="480" max="540" step="10" value="510" aria-label="Bundle 要求的最低客户端版本"></div>
+            <div class="dial"><div class="dial-head"><strong>客户端原生能力协议</strong><span class="dial-value" id="client-contract-label">2</span></div><input type="range" id="client-contract" min="1" max="5" step="1" value="2" aria-label="客户端原生能力协议版本"></div>
+            <div class="dial"><div class="dial-head"><strong>Bundle 要求的能力协议</strong><span class="dial-value" id="minimum-contract-label">3</span></div><input type="range" id="minimum-contract" min="1" max="5" step="1" value="3" aria-label="Bundle 要求的能力协议版本"></div>
+          </div>
+          <div class="gate-result blocked" id="gate-result" aria-live="polite"><div><div class="gate-icon" id="gate-icon">×</div><h3 id="gate-result-title">目标方案：不下发 V2</h3><p id="gate-result-detail">目标契约应拒绝不兼容 Bundle；当前仓库只能验证 Android/iOS 客户端本地跳过，服务端选择逻辑待服务端仓库确认。</p></div></div>
+        </div>
+        <div class="gate-foot"><strong>当前事实：</strong>Android/iOS 的 latest-list 响应包含版本范围，客户端本地执行 skip；Harmony 尚未解析这些字段。上面的调节器表达的是目标服务端门禁，不代表当前仓库已经证明服务端会返回最高兼容版本。</div>
+        <div class="evidence-grid">
+          <article class="evidence-card"><span class="evidence-status">代码已确认</span><h3>Android / iOS 客户端</h3><p>响应模型包含 App、Lynx 和 Native 协议版本范围；客户端发现不兼容时跳过激活并保留 current。需要补 F17/F18 精确单测。</p></article>
+          <article class="evidence-card"><span class="evidence-status partial">三端缺口</span><h3>HarmonyOS 客户端</h3><p>当前 Snapshot 没有 minAppVersion、Lynx 范围和 Native 协议范围字段，不能声称具备同等本地门禁。</p></article>
+          <article class="evidence-card"><span class="evidence-status partial">外部待确认</span><h3>OTA Server</h3><p>当前工作区没有服务端选择代码和契约 fixture，因此“直接 no-update / 返回最高兼容旧版”必须在服务端仓库验证。</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="decision-title">
+      <div class="section-head">
+        <div><span class="section-number">05 / 你到底需不需要</span><h2 id="decision-title">这是增强项，不是说当前方案错误</h2></div>
+        <p class="section-note">当前系统已经有原子 current/previous、首屏回滚和内置兜底，是否增加候选机制取决于业务风险。</p>
+      </div>
+      <div class="decision-grid">
+        <article class="decision"><h3>可以暂时不做</h3><ul><li>OTA 主要用于非核心展示页面。</li><li>发布前已经有严格测试与灰度。</li><li>首屏失败后回滚可以接受。</li><li>希望先控制三端状态机复杂度。</li></ul></article>
+        <article class="decision yes"><h3>建议增加</h3><ul><li>首页、登录、订单或支付高度依赖 OTA。</li><li>要求坏版本永远不能成为 current。</li><li>需要覆盖试运行时杀进程和重启恢复。</li><li>愿意先补自动化故障测试再改状态机。</li></ul></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="audit-title">
+      <div class="section-head">
+        <div><span class="section-number">06 / 真实可执行性审计</span><h2 id="audit-title">能做，但不是 18 项今天全部可跑</h2></div>
+        <p class="section-note">下面是按当前仓库代码、测试任务和实际命令得到的结论，不把设计目标冒充成已完成测试。</p>
+      </div>
+
+      <div class="truth-banner">
+        <div class="truth-icon">!</div>
+        <div><h3>当前准确结论：三端矩阵仍未全部可跑，但 iOS SDK 已补齐候选状态机</h3><p>跨三端范围内 F05 仍是已有 Android/iOS 对应自动证明的共同基线；本轮 iOS 分支已补齐清单失败、下载失败、SHA/篡改、版本门禁、事务提交前后、回滚提交前后和 opt-in candidate/trial/health 测试。Android/Harmony 的 F09、设备项和 F17/F18 服务端选择仍需各自补齐。</p></div>
+      </div>
+
+      <div class="audit-grid" aria-label="18 项测试当前可行性分类">
+        <article class="audit-card proven"><strong>1</strong><span>已有部分自动证明</span><small>F05：Android/iOS 已覆盖 size 错误；Harmony 尚未覆盖。</small></article>
+        <article class="audit-card seam"><strong>5</strong><span>补小测试接缝后可测</span><small>F01、F02、F03、F04、F06。</small></article>
+        <article class="audit-card device"><strong>9</strong><span>需要故障点和设备驱动</span><small>F07、F08、F10～F16。</small></article>
+        <article class="audit-card missing"><strong>1</strong><span>跨端功能尚未实现</span><small>F09：iOS 已有 opt-in 状态机；Android/Harmony 仍没有候选/试运行/健康确认状态。</small></article>
+        <article class="audit-card external"><strong>2</strong><span>需要服务端仓库</span><small>F17、F18：本仓库不能证明服务端选择结果。</small></article>
+      </div>
+
+      <div class="evidence-grid">
+        <article class="evidence-card"><span class="evidence-status">当前真实状态</span><h3>Android</h3><p>持久化状态只有 <code>current / previous</code>。完整下载、校验和发布后直接写 current；首屏失败再 rollback。没有 candidate、trial 或健康确认 API。</p></article>
+        <article class="evidence-card"><span class="evidence-status">当前真实状态</span><h3>iOS</h3><p>默认仍保持直接激活以兼容现有宿主；开启 <code>candidateActivationEnabled</code> 后，iOS 持久化 candidate 的 pending/trial，健康确认才写 current/previous，重启可丢弃未完成 trial。</p></article>
+        <article class="evidence-card"><span class="evidence-status">当前真实状态</span><h3>HarmonyOS</h3><p>持久化状态只有 <code>current / previous</code>。事务最后写 current；首屏失败时恢复 previous 或 rawfile baseline。没有候选健康状态。</p></article>
+      </div>
+
+      <div class="evidence-grid">
+        <article class="evidence-card">
+          <span class="evidence-status">本轮已执行</span><h3>Android SDK 单测</h3>
+          <p>JUnit4 测试任务真实可运行。本轮结果：18 tests / 0 failures。</p>
+          <code class="command">JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+GRADLE_BIN="&lt;Gradle 8.14.4 可执行文件&gt;" \
+"$GRADLE_BIN" -p android :lynx-shell:testDebugUnitTest --no-daemon</code>
+          <p><strong>缺口：</strong>仓库没有提交 Gradle Wrapper；正式统一脚本必须接收 `GRADLE_BIN`，或者先补 Wrapper。</p>
+        </article>
+        <article class="evidence-card">
+          <span class="evidence-status">本轮已执行</span><h3>iOS SDK 单测</h3>
+          <p>Swift Testing 已有 Fake API、可注入 Downloader、临时 Store；本轮新增事务故障点、current 文件身份校验和 candidate/trial 恢复。本轮结果：32 tests / 5 suites passed。</p>
+          <code class="command">cd ios/OtaIOSSDK
+swift test
+# 或按故障项执行
+bash scripts/ota-fault/run.sh --platform ios --tier sdk --case all</code>
+          <p><strong>模拟器证据：</strong>iPhone 16 Pro / iOS 18.1 已实际打开 Launcher、OTA 首页、Playground、Manifest Bundle、Native Tab、Hero Sheet 和 Bottom Sheet；Tab 往返 20 次，刷新失败后 Release 保持不变。2026-08-26 真实 OTA Server 已恢复可达，live smoke 和完整 live UI suite 均通过；Debug mock 也保留用于外网故障复现。无 token UI 回归为 10 tests / 7 passed / 3 expected skip；mock OTA 配置后 9 passed / 0 failed / 1 live-only skip；live OTA 配置后 9 passed / 0 failed / 1 mock-only skip。</p>
+          <p><strong>缺口：</strong>已有 LynxShellUITests Target，左边缘完整坐标拖动、首屏 previous/embedded 恢复、Tab 实例/resolve/generation、live/mock OTA 刷新、请求计数、刷新失败保留和 rollback 过程 kill/relaunch 均由 XCTest 通过；当前只保留 Android/Harmony candidate、服务端选择契约和物理机证据边界。</p>
+        </article>
+        <article class="evidence-card">
+          <span class="evidence-status partial">只有门禁，不是故障单测</span><h3>HarmonyOS</h3>
+          <p>当前只有 80 项静态门禁、HAR/App 构建和 hdc 手工运行证据，没有 Local Test 源码与任务。</p>
+          <code class="command">python3 harmony/scripts/check_harmony_shell.py --quiet
+# 结果：80 PASS / 0 WARN / 0 FAIL</code>
+          <p><strong>可行性：</strong>Harmony 官方支持 HAR 的 DECC-ArkTSUnit Local Test；需要先在本工程创建并提交测试任务，才能给出经过验证的 CLI 命令。</p>
+        </article>
+      </div>
+
+      <div class="gate-foot"><strong>当前 iOS 分支已完成的最小批次：</strong>F01、F03、F04、F05、F06、F07、F08、F10、F11、F12、F13、F14、F15、F16、F17、F18 的 SDK/事务或 XCUITest 证据，以及 Tab 异步加载代际门禁脚本。F13/F15 已分别通过 live OTA Server 和 Debug mock OTA；Android/Harmony candidate、Harmony 行为测试、服务端选择和物理机证据仍需各自环境。</div>
+
+      <div class="script-blueprint">
+        <h3>建议建设的真实脚本和目录</h3>
+        <p>以下路径目前尚不存在，是经过代码可测性审计后建议新增的实施包。它们不是本 HTML 已经执行的脚本。</p>
+        <div class="blueprint-grid">
+          <div class="tree"><pre>test-fixtures/ota/
+├── releases/v1-baseline/
+├── releases/v2-valid/
+├── releases/v2-bad-sha/
+├── releases/v2-bad-size/
+├── releases/v2-bad-first-screen/
+└── scenarios/F01-F18.json
+
+scripts/ota-fault/
+├── run.sh                 # 总入口
+├── build-fixtures.mjs     # 生成 Manifest/size/SHA
+├── run-sdk-tests.sh       # Android/iOS/Harmony Local Test
+├── run-device-tests.sh    # adb/simctl/hdc
+└── collect-evidence.mjs   # 汇总 JSON、日志、截图
+
+android/lynx-shell/src/test/.../OtaFailureMatrixTest.kt
+android/lynx-shell/src/androidTest/.../OtaDeviceRecoveryTest.kt
+ios/OtaIOSSDK/Tests/.../OtaFailureMatrixTests.swift
+ios/LynxShellSampleUITests/.../OtaTabRecoveryUITests.swift
+harmony/lynx_shell_kit/&lt;DevEco 生成的 Local Test 目录&gt;/...</pre></div>
+          <div class="runner-contract">
+            <dl>
+              <dt>当前 iOS 入口</dt><dd><code>bash scripts/ota-fault/run.sh --platform ios --tier sdk --case all</code></dd>
+              <dt>输入</dt><dd>平台、层级、场景 ID、V1/V2 fixture、随机种子。</dd>
+              <dt>退出码</dt><dd>0=全部通过；1=断言失败；2=测试前置能力缺失；3=设备/服务不可用。</dd>
+              <dt>核心断言</dt><dd>current 指针、previous/baseline、staging、请求次数、pageId、releaseId、Loading 终态。</dd>
+              <dt>证据目录</dt><dd><code>artifacts/ota-fault/&lt;run-id&gt;/summary.json</code>，附测试 XML、日志和设备截图。</dd>
+              <dt>清理</dt><dd>每个场景使用独立临时 Store；设备场景结束后删除测试 state、恢复网络代理和测试版本。</dd>
+              <dt>禁止事项</dt><dd>默认不访问真实 TEST OTA 服务，不使用发布脚本伪造故障测试，不把静态检查当运行结果。</dd>
+            </dl>
+          </div>
+        </div>
+        <div class="no-fake-claim"><strong>总入口必须 fail-closed：</strong>Harmony Local Test、Android Gradle、设备或服务端契约环境缺失时，脚本返回“前置能力缺失”，不能把跳过写成通过。</div>
+      </div>
+    </section>
+
+    <section aria-labelledby="tests-title">
+      <div class="section-head">
+        <div><span class="section-number">07 / 自动化故障测试规划器</span><h2 id="tests-title">不是执行器：逐项查看怎么才能跑</h2></div>
+        <p class="section-note">本页不会连接设备、不会注入故障、不会执行命令。它只生成计划，并明确哪些已有证明、哪些需要接缝、设备、服务端或先实现功能。</p>
+      </div>
+
+      <div class="test-lab">
+        <div class="no-fake-claim"><strong>别误会：</strong>点击测试卡片只会加入计划，不代表该测试已经存在或已经通过。展开“脚本落地细节”查看真实状态、文件、命令、注入点、断言和阻塞项。</div>
+        <div class="test-toolbar">
+          <div class="filters" role="tablist" aria-label="筛选故障类型">
+            <button type="button" class="filter-button active" data-filter="全部">全部</button>
+            <button type="button" class="filter-button" data-filter="网络">网络</button>
+            <button type="button" class="filter-button" data-filter="文件">文件</button>
+            <button type="button" class="filter-button" data-filter="进程">进程</button>
+            <button type="button" class="filter-button" data-filter="回滚">回滚</button>
+            <button type="button" class="filter-button" data-filter="Tab">Tab</button>
+            <button type="button" class="filter-button" data-filter="版本门禁">版本门禁</button>
+          </div>
+          <span class="test-progress" id="test-progress">已选 0 / 18</span>
+        </div>
+        <div class="test-toolbar">
+          <div><button type="button" class="test-action primary" id="select-core">选择首批 12 项建设计划</button> <button type="button" class="test-action" id="clear-tests">清空</button></div>
+          <span style="color: var(--muted); font-size: 13px;">点击卡片可加入或移出测试计划</span>
+        </div>
+        <div class="test-grid" id="test-grid"></div>
+        <div class="plan-box">
+          <textarea id="test-plan" readonly aria-label="已生成的自动化故障测试计划">尚未选择测试。</textarea>
+          <div class="copy-column"><button type="button" class="test-action primary" id="copy-plan">复制清单</button><button type="button" class="test-action" id="select-all">全选</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="faq-title">
+      <div class="section-head"><div><span class="section-number">08 / 常见疑问</span><h2 id="faq-title">最容易混淆的几个问题</h2></div></div>
+      <details><summary>候选版本和上一版本是一回事吗？</summary><p>不是。上一版本是以前已经正式使用过的稳定版本；候选版本是刚下载、尚未正式启用的新版本。方向完全相反。</p></details>
+      <details><summary>服务端已经做版本控制，还需要候选试运行吗？</summary><p>服务端版本控制证明“理论上兼容”；候选试运行证明“在这台设备上实际成功”。如果你的业务允许失败后再回滚，可以暂缓候选机制。</p></details>
+      <details><summary>候选版本会不会让磁盘翻倍？</summary><p>更新窗口内会同时存在当前版本和候选版本，这是为了可恢复。正式启用后只保留 current、previous 和必要的 staging，再由垃圾回收删除孤立 Release。</p></details>
+      <details><summary>后台下载新版本以后，当前 Tab 会立刻变化吗？</summary><p>不会。当前可见 Tab 继续使用自己的旧 LynxView 实例。只有冷启动、重新打开，或者用户主动刷新并成功后，才读取新的已提交版本。</p></details>
+      <details><summary>“状态可恢复”到底是什么意思？</summary><p>App 被杀或手机重启后，客户端仍能从磁盘 state 判断 V2 是候选、正在试运行、已经正式启用，还是应该丢弃。iOS 在开启 candidate 模式后已具备这组字段；默认模式和 Android/Harmony 仍是 current/previous 直接激活。</p></details>
+    </section>
+
+    <section aria-labelledby="route-title">
+      <div class="section-head"><div><span class="section-number">09 / 推荐落地顺序</span><h2 id="route-title">先建设测试能力，再升级状态机</h2></div></div>
+      <div class="final-route">
+        <article class="route-step"><strong>STEP 01</strong><h3>建立共享故障夹具</h3><p>让 Android、iOS、Harmony 使用同一批 V1、V2、坏 SHA、坏首屏和中断场景。</p></article>
+        <article class="route-step"><strong>STEP 02</strong><h3>分阶段建设首批 12 项</h3><p>先落 Android/iOS 可直接开写的 7 项，再补故障点、Harmony Local Test 和三端设备驱动。</p></article>
+        <article class="route-step"><strong>STEP 03</strong><h3>先在 iOS 启用候选模式，再同步三端</h3><p>iOS SDK 已有 opt-in candidate/trial/health 状态机；下一阶段把同一契约迁移到 Android/Harmony，并补设备故障驱动。</p></article>
+      </div>
+    </section>
+
+    <footer><span>项目：lynx-navigation-to-ota</span><span>中文术语：候选版本安全启用机制 · 2026-08-26</span></footer>
+  </main>
+
+  <script>
+    const stateNotes = {
+      current: '正式服务用户',
+      previous: '可回退的稳定版本',
+      candidate: '已下载，等待验证',
+      trial: '正在接受健康检查'
+    };
+
+    const flowData = {
+      current: {
+        success: [
+          step('发现 V2', '服务端返回新版本信息，本地仍然使用 V1。', values('V1', '—', '—', '—'), 'V1 继续稳定运行', '此时没有修改 current。', false),
+          step('下载 V2', '把 V2 写入 staging，当前页面和磁盘指针仍然指向 V1。', values('V1', '—', '—', '—'), '下载不影响稳定版本', '网络和文件写入失败都可以直接放弃。', false),
+          step('校验 V2', '检查 Manifest、size 和 SHA，确认文件完整。', values('V1', '—', '—', '—'), '文件校验通过', '这里只证明文件没坏，不证明业务运行正常。', false),
+          step('提交 current', 'V2 成为 current，V1 成为 previous。', values('V2', 'V1', '—', '—'), 'V2 已拥有当前身份', '新的页面会开始读取 V2。', true),
+          step('打开 V2', '新页面创建 LynxView，开始渲染 V2。', values('V2', 'V1', '—', 'V2'), '等待首屏结果', '现有 Tab 旧实例仍然可以继续显示 V1。', true),
+          step('运行成功', 'V2 首屏和业务运行正常，继续保持 current。', values('V2', 'V1', '—', '—'), 'V2 正式稳定', '更新完成，V1 继续作为回滚版本。', false)
+        ],
+        'first-screen-fail': [
+          step('发现 V2', '服务端返回新版本信息。', values('V1', '—', '—', '—'), 'V1 继续稳定运行', '尚未修改本地状态。', false),
+          step('下载 V2', 'V2 下载到 staging。', values('V1', '—', '—', '—'), '旧版本不受影响', '下载阶段失败可直接退出。', false),
+          step('文件校验通过', 'V2 的 size/SHA 都正确，但业务是否能运行仍未知。', values('V1', '—', '—', '—'), '文件正确不等于页面正确', 'JS、Bridge 或资源仍可能出错。', false),
+          step('提交 current', 'V2 成为 current，V1 保存为 previous。', values('V2', 'V1', '—', '—'), 'V2 暂时成为当前版本', '这是当前方案的风险窗口。', true),
+          step('首屏失败', 'V2 创建 LynxView 后发生不可恢复加载错误。', values('V2', 'V1', '—', 'V2'), '触发自动回滚', '同一页面生命周期只允许自动回滚一次。', true),
+          step('恢复 V1', 'current 重新指向 V1；没有 previous 时回到内置 baseline。', values('V1', '—', '—', '—'), '用户恢复可用页面', '恢复成功，但 V2 曾短暂成为 current。', false)
+        ],
+        'process-killed': [
+          step('发现 V2', '服务端返回新版本。', values('V1', '—', '—', '—'), 'V1 稳定', '没有状态变化。', false),
+          step('下载并校验', 'V2 文件完整。', values('V1', '—', '—', '—'), '准备提交', '还没有运行验证。', false),
+          step('提交 current', 'V2 成为 current，V1 成为 previous。', values('V2', 'V1', '—', '—'), 'V2 已成为当前版本', '磁盘 state 已经保存。', true),
+          step('准备打开 V2', '客户端准备创建新页面。', values('V2', 'V1', '—', 'V2'), '尚未看到首屏', '此时还不能证明 V2 健康。', true),
+          step('进程被杀', 'App 在首屏回调之前退出。', values('V2', 'V1', '—', '—'), '没有健康确认记录', '当前方案只能在下次启动再次尝试 V2。', true),
+          step('重启再尝试', '重启后 state.current 仍然是 V2；失败后才能回滚。', values('V2', 'V1', '—', 'V2'), 'V2 仍会先被加载', '这就是候选机制能够进一步收紧的窗口。', true)
+        ],
+        'network-fail': [
+          step('发现 V2', '服务端返回新版本。', values('V1', '—', '—', '—'), 'V1 稳定', '没有状态变化。', false),
+          step('开始下载', '网络请求建立。', values('V1', '—', '—', '—'), 'V1 继续服务', '当前页面不等待网络。', false),
+          step('网络中断', 'Bundle 只下载了一部分。', values('V1', '—', '—', '—'), '拒绝半成品', '不允许 state 指向未完成文件。', false),
+          step('清理 staging', '删除或恢复未完成事务。', values('V1', '—', '—', '—'), '旧版本完全不变', '下次网络恢复后可以重新下载。', false),
+          step('页面继续运行', '当前 Tab 和新开页面仍然读取 V1/baseline。', values('V1', '—', '—', '—'), '用户不受影响', '刷新失败只提示，不替换实例。', false),
+          step('等待下次同步', '前台事件或用户主动刷新再次尝试。', values('V1', '—', '—', '—'), '系统保持可恢复', '网络失败不等于页面失败。', false)
+        ]
+      },
+      candidate: {
+        success: [
+          step('发现 V2', '服务端返回兼容的 V2。', values('V1', '—', '—', '—'), 'V1 继续稳定运行', '尚未修改正式状态。', false),
+          step('下载并校验', 'V2 写入 staging 并通过 size/SHA。', values('V1', '—', 'V2', '—'), 'V2 成为候选版本', '它还没有资格替换 V1。', false),
+          step('保存候选状态', 'candidate=V2 被原子写入磁盘，杀进程后仍然能识别。', values('V1', '—', 'V2', '—'), '状态可恢复', 'V1 始终是 current。', false),
+          step('开始试运行', '冷启动或主动刷新选择 V2 作为试运行页面。', values('V1', '—', 'V2', 'V2'), 'V1 仍是稳定版本', 'V2 只拥有试运行身份。', false),
+          step('健康确认', 'V2 首屏成功，关键接口和原生能力可用。', values('V1', '—', 'V2', 'V2'), '允许正式启用', '确认可以来自页面，也可以是首屏后稳定存活窗口。', false),
+          step('正式启用 V2', 'previous=V1，current=V2，candidate/trial 清空。', values('V2', 'V1', '—', '—'), 'V2 成为新的稳定版本', '只有这一刻 current 才发生变化。', false)
+        ],
+        'first-screen-fail': [
+          step('发现 V2', '服务端返回兼容的新版本。', values('V1', '—', '—', '—'), 'V1 稳定', '没有状态变化。', false),
+          step('下载并校验', 'V2 文件完整，记录为候选。', values('V1', '—', 'V2', '—'), 'V2 等待验证', '文件正确不等于页面正确。', false),
+          step('保存候选状态', 'candidate=V2 被持久化。', values('V1', '—', 'V2', '—'), 'V1 仍是 current', '进程重启也不会误认 V2。', false),
+          step('开始试运行', 'V2 以试运行身份创建页面。', values('V1', '—', 'V2', 'V2'), '稳定版本没有变化', '失败只影响候选版本。', false),
+          step('首屏失败', 'V2 无法完成首屏。', values('V1', '—', 'V2', 'V2'), '拒绝正式启用', '不需要先切 current 再回滚。', false),
+          step('放弃 V2', '清空 candidate/trial，继续使用 V1。', values('V1', '—', '—', '—'), 'V1 从未失去稳定身份', '这是候选机制最核心的价值。', false)
+        ],
+        'process-killed': [
+          step('发现 V2', '服务端返回兼容的新版本。', values('V1', '—', '—', '—'), 'V1 稳定', '没有状态变化。', false),
+          step('下载并校验', 'V2 成为候选版本。', values('V1', '—', 'V2', '—'), '候选状态已保存', 'current 仍然是 V1。', false),
+          step('开始试运行', 'trial=V2 写入磁盘后创建页面。', values('V1', '—', 'V2', 'V2'), '等待健康确认', '试运行状态不是内存临时变量。', false),
+          step('进程被杀', '首屏确认之前 App 退出。', values('V1', '—', 'V2', 'V2'), '磁盘保留未完成试运行', '重启能够识别异常中断。', false),
+          step('重启恢复', '发现 trial 没有健康确认，增加失败次数。', values('V1', '—', 'V2', '—'), 'V1 继续启动', '可以按策略再试一次或直接放弃 V2。', false),
+          step('放弃候选', '超过尝试次数后清空 V2。', values('V1', '—', '—', '—'), '坏版本没有成为 current', '稳定版本不需要回滚，因为从未被替换。', false)
+        ],
+        'network-fail': [
+          step('发现 V2', '服务端返回兼容的新版本。', values('V1', '—', '—', '—'), 'V1 稳定', '没有状态变化。', false),
+          step('开始下载', '准备构造候选版本。', values('V1', '—', '—', '—'), 'V1 继续服务', 'candidate 尚未写入。', false),
+          step('网络中断', 'V2 下载不完整。', values('V1', '—', '—', '—'), '不会生成候选版本', '只有完整校验通过才能写 candidate。', false),
+          step('清理 staging', '恢复未完成事务。', values('V1', '—', '—', '—'), '状态完全不变', '无半成品指针。', false),
+          step('继续使用 V1', '当前 Tab、新页面和冷启动都读 V1。', values('V1', '—', '—', '—'), '用户不受影响', '候选机制不改变网络失败策略。', false),
+          step('等待重试', '网络恢复后再重新生成候选版本。', values('V1', '—', '—', '—'), '保持可恢复', '失败只消耗一次下载机会。', false)
+        ]
+      }
+    };
+
+    function values(current, previous, candidate, trial) {
+      return { current, previous, candidate, trial };
+    }
+    function step(title, detail, state, resultTitle, resultDetail, risk) {
+      return { title, detail, state, resultTitle, resultDetail, risk };
+    }
+
+    const labState = { mode: 'current', scenario: 'success', index: 0, timer: null };
+    const stateIds = ['current', 'previous', 'candidate', 'trial'];
+    const timeline = document.getElementById('timeline');
+
+    function currentSteps() { return flowData[labState.mode][labState.scenario]; }
+    function setActive(selector, attribute, value) {
+      document.querySelectorAll(selector).forEach(button => {
+        const active = button.dataset[attribute] === value;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', String(active));
+      });
+    }
+    function renderTimeline() {
+      const steps = currentSteps();
+      timeline.innerHTML = steps.map((item, index) => `
+        <button type="button" class="timeline-step ${index === labState.index ? 'active' : ''} ${index < labState.index ? 'done' : ''}" data-step="${index}">
+          <span class="step-index">0${index + 1}</span><strong>${item.title}</strong>
+        </button>`).join('');
+      timeline.querySelectorAll('[data-step]').forEach(button => {
+        button.addEventListener('click', () => { stopAuto(); labState.index = Number(button.dataset.step); renderLab(); });
+      });
+    }
+    function renderLab() {
+      const steps = currentSteps();
+      const item = steps[labState.index];
+      setActive('[data-mode]', 'mode', labState.mode);
+      setActive('[data-scenario]', 'scenario', labState.scenario);
+      stateIds.forEach(key => {
+        const value = item.state[key];
+        const element = document.getElementById(`state-${key}`);
+        if (element.textContent !== value) {
+          const slot = document.querySelector(`[data-state="${key}"]`);
+          slot.classList.remove('changed');
+          void slot.offsetWidth;
+          slot.classList.add('changed');
+        }
+        element.textContent = value;
+        document.getElementById(`note-${key}`).textContent = value === '—' ? (key === 'trial' ? '未开始' : '暂无') : stateNotes[key];
+      });
+      document.getElementById('step-title').textContent = item.title;
+      document.getElementById('step-detail').textContent = item.detail;
+      document.getElementById('result-title').textContent = item.resultTitle;
+      document.getElementById('result-detail').textContent = item.resultDetail;
+      const badge = document.getElementById('result-badge');
+      badge.textContent = item.risk ? '存在坏 current 窗口' : '稳定版本安全';
+      badge.classList.toggle('risk', item.risk);
+      document.getElementById('step-count').textContent = `步骤 ${labState.index + 1} / ${steps.length}`;
+      document.getElementById('progress-bar').style.width = `${((labState.index + 1) / steps.length) * 100}%`;
+      document.getElementById('next-step').textContent = labState.index === steps.length - 1 ? '回到第一步' : '下一步';
+      renderTimeline();
+    }
+    function stopAuto() {
+      if (labState.timer) window.clearInterval(labState.timer);
+      labState.timer = null;
+      document.getElementById('auto-play').textContent = '自动播放';
+    }
+    document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => {
+      stopAuto(); labState.mode = button.dataset.mode; labState.index = 0; renderLab();
+    }));
+    document.querySelectorAll('[data-scenario]').forEach(button => button.addEventListener('click', () => {
+      stopAuto(); labState.scenario = button.dataset.scenario; labState.index = 0; renderLab();
+    }));
+    document.getElementById('next-step').addEventListener('click', () => {
+      stopAuto(); const length = currentSteps().length; labState.index = (labState.index + 1) % length; renderLab();
+    });
+    document.getElementById('reset-flow').addEventListener('click', () => { stopAuto(); labState.index = 0; renderLab(); });
+    document.getElementById('auto-play').addEventListener('click', () => {
+      if (labState.timer) { stopAuto(); return; }
+      document.getElementById('auto-play').textContent = '暂停播放';
+      labState.timer = window.setInterval(() => {
+        if (labState.index === currentSteps().length - 1) { stopAuto(); return; }
+        labState.index += 1; renderLab();
+      }, 950);
+    });
+
+    const versionInputs = ['client-version', 'minimum-version', 'client-contract', 'minimum-contract'];
+    function renderGate() {
+      const clientVersion = Number(document.getElementById('client-version').value);
+      const minVersion = Number(document.getElementById('minimum-version').value);
+      const clientContract = Number(document.getElementById('client-contract').value);
+      const minContract = Number(document.getElementById('minimum-contract').value);
+      versionInputs.forEach(id => document.getElementById(`${id}-label`).textContent = document.getElementById(id).value);
+      const versionOK = clientVersion >= minVersion;
+      const contractOK = clientContract >= minContract;
+      const allowed = versionOK && contractOK;
+      const panel = document.getElementById('gate-result');
+      panel.classList.toggle('blocked', !allowed);
+      document.getElementById('gate-icon').textContent = allowed ? '✓' : '×';
+      document.getElementById('gate-result-title').textContent = allowed ? '目标方案：可以下发 V2' : '目标方案：不下发 V2';
+      document.getElementById('gate-result-detail').textContent = allowed
+        ? '如果服务端实现该契约：客户端版本和能力协议满足要求，服务端才返回兼容 Release。当前仓库不包含服务端选择逻辑。'
+        : `目标契约应拒绝：${versionOK ? '' : '客户端版本过低；'}${contractOK ? '' : '原生能力协议过低；'}当前仓库只能验证 Android/iOS 客户端本地 skip。`;
+    }
+    versionInputs.forEach(id => document.getElementById(id).addEventListener('input', renderGate));
+
+    const STATUS_LABELS = {
+      proven: '已有部分证明',
+      seam: '补接缝后可测',
+      device: '需设备/故障点',
+      missing: '功能未实现',
+      external: '需服务端仓库'
+    };
+    const CORE_TEST_IDS = ['F01', 'F03', 'F04', 'F05', 'F06', 'F07', 'F08', 'F10', 'F11', 'F13', 'F14', 'F15'];
+    const tests = [
+      test({
+        id: 'F01', category: '网络', title: '版本清单超时', status: 'seam',
+        inject: '让 latest-bundle-list 抛出可控 TimeoutError。', expected: 'V1 current/文件不变；没有新 staging 指针；页面仍读取 V1/baseline。',
+        file: 'Android/iOS OtaFailureMatrixTests；Harmony HAR Local Test（均待新增）',
+        command: 'bash scripts/ota-fault/run.sh --case F01 --platform all --tier sdk',
+        fixture: 'V1 已激活 + Fake API timeout', injectionPoint: 'fetchLatestBundleLists()',
+        assertion: 'state.current.releaseId == V1；请求失败被记录；旧 Bundle 仍可 resolve。',
+        cleanup: '删除场景临时 Store。', blocker: 'Harmony 直接 new OtaApiClient，需先抽 interface/factory 并创建 Local Test；Android/iOS 只缺用例。',
+        platforms: ['Android B：OtaApiClient 可 fake，缺精确用例', 'iOS B：FakeOtaAPIClient 已支持错误，缺 current 保留联合断言', 'Harmony C：无注入接口、无 Local Test']
+      }),
+      test({
+        id: 'F02', category: '网络', title: '服务端返回 500', status: 'seam',
+        inject: '清单接口返回 HTTP 500。', expected: '不写新 state、不删除旧 Release，刷新返回失败。',
+        file: '三端 OtaFailureMatrix 对应 F02', command: 'bash scripts/ota-fault/run.sh --case F02 --platform all --tier sdk',
+        fixture: 'V1 已激活 + Fake HTTP 500', injectionPoint: '清单 API 响应边界',
+        assertion: 'current=V1；refresh success=false；错误码/阶段可观测。', cleanup: '关闭 Fake Server，删除临时 Store。',
+        blocker: 'Android/iOS 可通过 Fake API 补用例；Harmony 先补 transport seam。',
+        platforms: ['Android B：可 fake API', 'iOS B：协议可注入', 'Harmony C：具体 HTTP Client']
+      }),
+      test({
+        id: 'F03', category: '网络', title: '下载中途断开', status: 'seam',
+        inject: 'Bundle 只写入部分字节后抛错。', expected: 'V2 不发布；current=V1；残留 part/staging 可恢复或清理。',
+        file: 'OtaFailureMatrix + Android BundleDownloader seam + Harmony transport seam', command: 'bash scripts/ota-fault/run.sh --case F03 --platform all --tier sdk',
+        fixture: 'V2 partial-body fixture', injectionPoint: 'Bundle download/write boundary',
+        assertion: 'state 不引用 V2；V2 Release 目录不可被 current 解析；staging 无有效指针。', cleanup: '删除 partial 与 staging。',
+        blocker: 'iOS 已有 OtaBundleDownloading；Android 固定调用 OtaIO；Harmony 固定系统 HTTP。',
+        platforms: ['Android C：先抽 BundleDownloader', 'iOS B：Downloader 已可注入', 'Harmony C：先抽下载接口']
+      }),
+      test({
+        id: 'F04', category: '文件', title: 'Bundle SHA 错误', status: 'seam',
+        inject: 'Manifest SHA 与下载文件不一致。', expected: '拒绝 V2，current 继续是 V1；candidate 模式下也不能生成候选状态。',
+        file: '三端 OtaFailureMatrix F04', command: 'bash scripts/ota-fault/run.sh --case F04 --platform all --tier sdk',
+        fixture: 'v2-bad-sha/manifest.json + bundle', injectionPoint: '发布前 SHA validator',
+        assertion: '安装抛 checksum mismatch；state.current=V1；V2 不可 resolve。', cleanup: '删除临时 Store。',
+        blocker: 'Android/iOS 可补测试；Harmony 需要 Local Test 与可构造事务依赖。',
+        platforms: ['Android B：校验存在，缺精确测试', 'iOS B：校验存在，缺精确测试', 'Harmony C：无测试任务']
+      }),
+      test({
+        id: 'F05', category: '文件', title: 'Bundle 大小错误', status: 'proven',
+        inject: '声明 size 与真实文件不同。', expected: '拒绝发布 Release，V1 不变。',
+        file: 'Android OtaReleaseSecurityGateTest；iOS OtaSDKTests；Harmony 待新增',
+        command: 'Android :lynx-shell:testDebugUnitTest；iOS cd ios/OtaIOSSDK && swift test',
+        fixture: '错误声明 size 的本地 Bundle', injectionPoint: '发布前 size validator',
+        assertion: 'Android/iOS 已断言安装失败且 current 不更新。', cleanup: 'TemporaryFolder / temporaryDirectory 自动清理。',
+        blocker: '只有 Android/iOS 已有自动证明；Harmony 仍需 Local Test。',
+        platforms: ['Android A：已有测试，本轮 18 tests 通过', 'iOS A：本轮 32 tests 通过', 'Harmony C：只有源码和静态门禁']
+      }),
+      test({
+        id: 'F06', category: '文件', title: '当前文件被替换', status: 'seam',
+        inject: '先命中 SHA 缓存，再替换 current 文件 bytes/mtime。', expected: '缓存必须 miss，重新计算 SHA，坏文件不能交给 LynxView。',
+        file: 'BundleTamperDetectionTest（待新增）', command: 'bash scripts/ota-fault/run.sh --case F06 --platform all --tier sdk',
+        fixture: '同路径、不同内容的 V1 文件', injectionPoint: 'resolveCurrent/currentBundle()',
+        assertion: '第二次 resolve 返回 null/错误；校验次数增加；state 指针不被悄悄信任。', cleanup: '恢复或删除被替换文件。',
+        blocker: '现有缓存测试只测 Key/LRU，没有真实文件替换集成断言；Harmony 无测试任务。',
+        platforms: ['Android B：已有 size/mtime key 测试', 'iOS B：缓存测试未绑定真实文件', 'Harmony C：指纹实现存在但无测试']
+      }),
+      test({
+        id: 'F07', category: '进程', title: 'state 提交前杀进程', status: 'device',
+        inject: 'Release 发布完成、writeState 之前触发测试故障点并终止进程。', expected: '重启仍读取 V1；孤立 V2 不能成为 current，可被后续垃圾回收。',
+        file: '三端 FaultPoint + OtaCrashRecoveryE2E（待新增）', command: 'bash scripts/ota-fault/run.sh --case F07 --platform all --tier device',
+        fixture: 'V1 current + V2 valid + beforeStateCommit failpoint', injectionPoint: 'beforeStateCommit',
+        assertion: '进程重启后 current=V1；state JSON 完整；V2 不被 resolveCurrent 返回。', cleanup: '删除测试 App 数据并关闭 failpoint。',
+        blocker: '三端都没有事务 failpoint；Android/iOS/Harmony 都缺跨进程恢复测试 Target。',
+        platforms: ['Android C：需 test-only failpoint + adb harness', 'iOS C：需 failpoint + simctl/XCTest harness', 'Harmony C：需 failpoint + hdc/ohosTest harness']
+      }),
+      test({
+        id: 'F08', category: '进程', title: 'state 提交后杀进程', status: 'device',
+        inject: 'state 原子提交成功后立即终止进程。', expected: '重启读取完整 V2，不能出现半 JSON 或丢失 current。',
+        file: 'OtaCrashRecoveryE2E F08（待新增）', command: 'bash scripts/ota-fault/run.sh --case F08 --platform all --tier device',
+        fixture: 'V1 current + V2 valid + afterStateCommit failpoint', injectionPoint: 'afterStateCommit',
+        assertion: '重启后 current=V2；Manifest/Bundle 校验通过；previous=V1。', cleanup: '清理测试数据。',
+        blocker: '三端无 afterStateCommit 故障点和自动重启断言。',
+        platforms: ['Android C', 'iOS C', 'Harmony C']
+      }),
+      test({
+        id: 'F09', category: '进程', title: '试运行时杀进程', status: 'missing',
+        inject: '候选 V2 尚未健康确认时终止进程。', expected: 'iOS candidate 模式：重启识别未完成试运行，V1 仍是 current；Android/Harmony 待同步。',
+        file: 'iOS OtaCandidateActivationTests；Android/Harmony 待同步', command: 'cd ios/OtaIOSSDK && swift test --filter OtaCandidateActivationTests',
+        fixture: 'iOS candidate/trial state', injectionPoint: 'beginCandidateTrial 后、confirmCandidateHealthy 前',
+        assertion: 'iOS current=V1；trial 重启恢复后 candidate 清理；健康确认后 current=V2、previous=V1。', cleanup: 'discardCandidate / TemporaryDirectory。',
+        blocker: 'iOS 已完成 opt-in SDK 状态机；Android/Harmony 仍缺 candidate/trial/health API 和对应测试。',
+        platforms: ['Android D：功能未实现', 'iOS A：2 个 candidate 状态测试通过', 'Harmony D：功能未实现']
+      }),
+      test({
+        id: 'F10', category: '回滚', title: '有上一版本时首屏失败', status: 'device',
+        inject: 'V2 文件合法，但 Lynx 首屏稳定失败。', expected: 'Native 容器最多回滚一次，最终渲染 previous V1。',
+        file: 'iOS LynxShellUITests + Android/Harmony 待补', command: 'xcodebuild ... -only-testing:LynxShellUITests/testFirstScreenFailureRollsBackToPreviousRelease',
+        fixture: 'v2-bad-first-screen + V1 previous', injectionPoint: 'Lynx first-screen error callback',
+        assertion: 'current 切回 V1；页面版本卡显示 V1/rollback；无无限重试。', cleanup: '恢复 V1 测试 state。',
+        blocker: 'iOS 已用 Debug fault runtime + XCUITest 证明真实容器回调和 previous 页面恢复；Android/Harmony 仍缺 UI Target。',
+        platforms: ['Android C：容器路径存在，无 androidTest', 'iOS A：XCUITest 通过', 'Harmony C：路径存在，无 ohosTest']
+      }),
+      test({
+        id: 'F11', category: '回滚', title: '没有上一版本时失败', status: 'device',
+        inject: 'V2 首屏失败且 previous 为空。', expected: '删除坏 downloaded current，重新读取 embedded baseline。',
+        file: 'iOS LynxShellUITests + Android/Harmony 待补', command: 'xcodebuild ... -only-testing:LynxShellUITests/testFirstScreenFailureFallsBackToEmbeddedBaselineWithoutPrevious',
+        fixture: 'embedded V1 + downloaded bad V2 + no previous', injectionPoint: 'rollback 返回无 previous 分支',
+        assertion: '坏 state/文件清除；页面 source=rollback_fallback/embedded；版本为 V1。', cleanup: '卸载测试数据或恢复 baseline。',
+        blocker: 'iOS 已用 Debug fault runtime + XCUITest 证明坏 current 清理后回到 embedded；Android/Harmony 仍缺自动故障测试。',
+        platforms: ['Android B/C：Runtime 路径存在', 'iOS A：XCUITest 通过', 'Harmony B/C：模拟器有 baseline 手工证据，无自动故障测试']
+      }),
+      test({
+        id: 'F12', category: '回滚', title: '回滚过程中杀进程', status: 'device',
+        inject: 'rollback state 写入前后触发终止。', expected: '重启至少能解析 current、previous 或 embedded 中一个完整版本。',
+        file: 'iOS LynxShellUITests + Android/Harmony 待补', command: 'xcodebuild ... -only-testing:LynxShellUITests/testRollbackRecoversAfterProcessTermination',
+        fixture: 'V2 current + V1 previous + rollback failpoint', injectionPoint: 'beforeRollbackCommit / afterRollbackCommit',
+        assertion: 'state JSON 完整；没有双丢失；页面可恢复。', cleanup: '关闭故障点并清理 Store。',
+        blocker: 'iOS canonical rollback commit 后 terminate/relaunch 已由 XCUITest 通过；live Server、Android/Harmony 仍需各自环境。', platforms: ['Android C', 'iOS A：Simulator terminate/relaunch 通过', 'Harmony C']
+      }),
+      test({
+        id: 'F13', category: 'Tab', title: 'Tab 切换不联网', status: 'device',
+        inject: 'Home/Settings 往返切换 20 次。', expected: 'latest-list、repair、download 请求计数都不增加；pageId 保持。',
+        file: 'iOS LynxShellUITests + Android/Harmony 待补', command: 'xcodebuild ... -only-testing:LynxShellUITests/testNativeTabSwitchingDoesNotReloadInstances',
+        fixture: 'V1 current + CountingRuntime/CountingApi', injectionPoint: 'Tab Host + resolveCurrent counter',
+        assertion: '请求计数 before==after；Home pageId 返回后不变；releaseId 不变。', cleanup: '重置请求计数和 App 数据。',
+        blocker: 'iOS Debug UI 已断言 Tab 实例/resolve 次数和 mock OTA 请求计数不变；Android/Harmony UI 驱动仍待补。',
+        platforms: ['Android C：需 androidTest/UiAutomator', 'iOS A：XCUITest + HTTP counter 通过', 'Harmony C：需 ohosTest/uitest 封装']
+      }),
+      test({
+        id: 'F14', category: 'Tab', title: '主动刷新失败', status: 'device',
+        inject: '全量同步可控返回失败。', expected: '旧 LynxView、pageId、releaseId 均保持不变。',
+        file: 'iOS LynxShellUITests + Android/Harmony 待补', command: 'xcodebuild ... -only-testing:LynxShellUITests/testTabRefreshFailureKeepsExistingTab',
+        fixture: 'V1 Tab + Fake refresh failure', injectionPoint: 'refreshAllBundles result',
+        assertion: '刷新提示失败；实例 identity 和版本三项联合不变。', cleanup: '恢复成功 Runtime。',
+        blocker: 'iOS 已通过 XCUITest 断言失败提示和实例 identity 保持；Android/Harmony 仍需 Tab Host 自动化。', platforms: ['Android C', 'iOS A：XCUITest 通过', 'Harmony C']
+      }),
+      test({
+        id: 'F15', category: 'Tab', title: '主动刷新成功', status: 'device',
+        inject: '受控同步成功并提交 V2。', expected: '两个 Tab 都读取 V2；旧实例销毁；新 pageId 与同一 releaseId 可见。',
+        file: 'iOS LynxShellUITests + Android/Harmony 待补', command: 'xcodebuild ... -only-testing:LynxShellUITests/testMockedOtaRefreshSucceedsWhenTokenIsProvided',
+        fixture: 'V1 Tab + V2 valid + Fake refresh success', injectionPoint: 'refresh success callback / generation',
+        assertion: 'Home/Settings releaseId=V2；pageId 更新；请求只发生在主动刷新。', cleanup: '清理 V2 测试 state。',
+        blocker: 'iOS 已通过 XCUITest 断言 mock OTA 同步成功后 Tab 实例重建；live Server 和 Android/Harmony 仍待各自环境验证。', platforms: ['Android C', 'iOS A：XCUITest mock OTA 通过', 'Harmony C']
+      }),
+      test({
+        id: 'F16', category: 'Tab', title: '快速切换未完成 Tab', status: 'device',
+        inject: '人为挂起 resolveCurrent，切走后再返回。', expected: '不能永久 Loading；过期结果不能覆盖新实例。',
+        file: 'iOS LynxShellUITests + Android/Harmony 待补', command: 'xcodebuild ... -only-testing:LynxShellUITests/testDeferredTabLoadCannotOverwriteNewGeneration',
+        fixture: 'ControllablePromise/DeferredRuntime', injectionPoint: 'resolveCurrent 延迟与取消',
+        assertion: '最终 Loading=false；只有当前 generation 创建 LynxView；无旧 Context 泄漏。', cleanup: '释放挂起 Promise，注销测试 Runtime。',
+        blocker: 'iOS 已通过 Debug 延迟 resolve + XCUITest 验证旧结果迟到后不能覆盖新 generation；Android/Harmony 仍缺 adapter。', platforms: ['Android C', 'iOS A：XCUITest 通过', 'Harmony C']
+      }),
+      test({
+        id: 'F17', category: '版本门禁', title: '旧客户端遇到新 Bundle', status: 'external',
+        inject: '客户端版本低于 Release 的 minAppVersion。', expected: '客户端侧可证明“不激活”；服务端 no-update 必须在服务端仓库证明。',
+        file: 'Android/iOS ClientVersionGateTests + OTA Server contract tests（服务端路径待提供）',
+        command: '客户端：SDK test；服务端：待确认仓库后填写真实命令', fixture: 'minAppVersion=510，client=500',
+        injectionPoint: '客户端 versionMismatchMessage + 服务端 Release selector',
+        assertion: 'Android/iOS skip 且 current 不变；服务端是否 no-update 不能在本仓库断言。', cleanup: '删除契约 fixture。',
+        blocker: '服务端代码不在工作区；Harmony Snapshot 没有版本范围字段。',
+        platforms: ['Android B：本地 skip 已实现，缺精确测试', 'iOS B：本地 skip 已实现，缺精确测试', 'Harmony D：版本范围模型缺失', 'Server D：仓库/命令/响应 fixture 未提供']
+      }),
+      test({
+        id: 'F18', category: '版本门禁', title: '能力协议不兼容', status: 'external',
+        inject: '客户端 nativeProtocolVersion 低于 Release 要求。', expected: '客户端侧跳过不兼容 Snapshot；服务端“返回最高兼容旧版”需服务端契约测试。',
+        file: 'ClientProtocolGateTests + ServerReleaseSelectorContractTests（待确认）',
+        command: '客户端：SDK test；服务端：待服务端仓库确认', fixture: 'required protocol=3，client=2',
+        injectionPoint: 'nativeProtocolVersionRange / server selector',
+        assertion: 'Android/iOS current 不变；服务端选择结果有响应 fixture 证据。', cleanup: '删除契约 fixture。',
+        blocker: '服务端不在仓库；Harmony 未解析 nativeProtocolVersionRange。',
+        platforms: ['Android B：本地拒绝已实现', 'iOS B：本地拒绝已实现', 'Harmony D：字段缺失', 'Server D：选择逻辑待证']
+      })
+    ];
+    function test(data) { return { ...data, core: CORE_TEST_IDS.includes(data.id) }; }
+
+    const selectedTests = new Set();
+    let currentFilter = '全部';
+    const testGrid = document.getElementById('test-grid');
+    function renderTests() {
+      const visible = tests.filter(item => currentFilter === '全部' || item.category === currentFilter);
+      testGrid.innerHTML = visible.map(item => `
+        <article class="test-card ${selectedTests.has(item.id) ? 'selected' : ''}">
+          <div class="test-meta"><span class="test-id">${item.id}</span><span class="test-cat">${item.category}</span><span class="test-status ${item.status}">${STATUS_LABELS[item.status]}</span>${item.core ? '<span class="test-priority">首批建设</span>' : ''}</div>
+          <h3>${item.title}</h3><p><strong>故障：</strong>${item.inject}</p><p class="expected"><strong>拟验证：</strong>${item.expected}</p>
+          <button type="button" class="select-test" data-test-id="${item.id}" aria-pressed="${selectedTests.has(item.id)}">${selectedTests.has(item.id) ? '已加入建设计划' : '加入建设计划'}</button>
+          <details class="test-detail">
+            <summary>查看脚本落地细节</summary>
+            <div class="detail-body">
+              <div class="detail-row"><strong>计划文件</strong><code>${item.file}</code></div>
+              <div class="detail-row"><strong>计划命令</strong><code>${item.command}</code></div>
+              <div class="detail-row"><strong>测试夹具</strong><span>${item.fixture}</span></div>
+              <div class="detail-row"><strong>注入点</strong><code>${item.injectionPoint}</code></div>
+              <div class="detail-row"><strong>自动断言</strong><span>${item.assertion}</span></div>
+              <div class="detail-row"><strong>清理动作</strong><span>${item.cleanup}</span></div>
+              <div class="detail-row"><strong>当前阻塞</strong><span>${item.blocker}</span></div>
+              <div class="platform-line">${item.platforms.map(platform => `<span>${platform}</span>`).join('')}</div>
+            </div>
+          </details>
+        </article>`).join('');
+      testGrid.querySelectorAll('.select-test').forEach(button => {
+        button.addEventListener('click', () => {
+          const id = button.dataset.testId;
+          selectedTests.has(id) ? selectedTests.delete(id) : selectedTests.add(id);
+          renderTests();
+          renderPlan();
+        });
+      });
+      document.getElementById('test-progress').textContent = `已选 ${selectedTests.size} / ${tests.length} · 首批 ${CORE_TEST_IDS.length} 项`;
+    }
+    function renderPlan() {
+      const chosen = tests.filter(item => selectedTests.has(item.id));
+      document.getElementById('test-plan').value = chosen.length
+        ? ['Lynx OTA 自动化故障测试建设计划', '说明：这是一份实施计划，不是已执行结果。', '', ...chosen.map((item, index) => `${index + 1}. [${item.id} / ${item.category} / ${STATUS_LABELS[item.status]}] ${item.title}\n   故障：${item.inject}\n   拟验证：${item.expected}\n   计划文件：${item.file}\n   计划命令：${item.command}\n   夹具：${item.fixture}\n   注入点：${item.injectionPoint}\n   自动断言：${item.assertion}\n   清理：${item.cleanup}\n   当前阻塞：${item.blocker}\n   平台：${item.platforms.join('；')}`)].join('\n\n')
+        : '尚未选择测试。';
+      document.getElementById('test-progress').textContent = `已选 ${selectedTests.size} / ${tests.length} · 首批 ${CORE_TEST_IDS.length} 项`;
+    }
+    document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
+      currentFilter = button.dataset.filter;
+      document.querySelectorAll('[data-filter]').forEach(item => item.classList.toggle('active', item === button));
+      renderTests();
+    }));
+    document.getElementById('select-core').addEventListener('click', () => { selectedTests.clear(); CORE_TEST_IDS.forEach(id => selectedTests.add(id)); renderTests(); renderPlan(); });
+    document.getElementById('select-all').addEventListener('click', () => { tests.forEach(item => selectedTests.add(item.id)); renderTests(); renderPlan(); });
+    document.getElementById('clear-tests').addEventListener('click', () => { selectedTests.clear(); renderTests(); renderPlan(); });
+    document.getElementById('copy-plan').addEventListener('click', async event => {
+      const text = document.getElementById('test-plan').value;
+      try { await navigator.clipboard.writeText(text); }
+      catch (_) { const area = document.getElementById('test-plan'); area.select(); document.execCommand('copy'); }
+      const button = event.currentTarget; const original = button.textContent; button.textContent = '已复制'; window.setTimeout(() => button.textContent = original, 1200);
+    });
+
+    renderLab();
+    renderGate();
+    renderTests();
+    renderPlan();
+  </script>
+</body>
+</html>

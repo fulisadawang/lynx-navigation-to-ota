@@ -3,6 +3,7 @@ import { BusinessError } from '@ohos.base';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import {
   OtaPrepareSignal,
+  OtaStorageSnapshot,
   PageBundleRuntime,
   PreparedPageBundle
 } from './OtaModels';
@@ -95,9 +96,9 @@ export default class EmbeddedBundleRegistry {
     if (normalizedBundleName.length === 0) return null;
 
     const apps = await this.manifestPromise;
-    const candidates = normalizedAppId.length > 0 ?
+    const matchingApps = normalizedAppId.length > 0 ?
       apps.filter((item: EmbeddedManifestApp) => item.lynxAppId === normalizedAppId) : apps;
-    for (const app of candidates) {
+    for (const app of matchingApps) {
       const descriptor = app.bundles.find(
         (item: EmbeddedManifestBundle) => item.bundleName === normalizedBundleName
       );
@@ -247,5 +248,9 @@ export class EmbeddedOnlyRuntime implements PageBundleRuntime {
 
   storageRoot(): string {
     return this.registry.storageRoot();
+  }
+
+  storageSnapshot(): Promise<OtaStorageSnapshot | null> {
+    return Promise.resolve(null);
   }
 }

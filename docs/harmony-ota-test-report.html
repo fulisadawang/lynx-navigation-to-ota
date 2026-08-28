@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HarmonyOS Lynx OTA Store v2 无候选版本验收报告">
+  <title>HarmonyOS OTA Store v2 验收报告</title>
+  <style>
+    :root { --ink:#172126; --muted:#66747a; --paper:#f3f7f4; --card:#fff; --line:#d7e3dc; --green:#087f5b; --amber:#a35a00; --blue:#3975a8; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; --sans:Inter,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:radial-gradient(circle at 90% 0,#dcefe5,transparent 34rem),var(--paper); font-family:var(--sans); }
+    main { max-width:1180px; margin:0 auto; padding:42px 22px 80px; }
+    header { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; border-bottom:2px solid var(--ink); padding-bottom:18px; }
+    .eyebrow,.mono,.case-id,.run-command { font-family:var(--mono); }
+    .eyebrow { margin:0 0 12px; color:var(--green); font-size:12px; font-weight:800; letter-spacing:.12em; }
+    .top-meta { color:var(--muted); font:700 12px/1.6 var(--mono); text-align:right; }
+    h1 { max-width:800px; margin:20px 0 18px; font-size:clamp(42px,8vw,96px); line-height:.88; letter-spacing:-.07em; }
+    h2 { margin:0 0 8px; font-size:clamp(24px,3vw,38px); letter-spacing:-.04em; }
+    h3 { margin:0 0 8px; font-size:20px; line-height:1.1; }
+    p { line-height:1.65; }
+    .hero { display:grid; grid-template-columns:1fr auto; gap:28px; padding:46px 0 54px; }
+    .lead { max-width:760px; color:var(--muted); font-size:18px; }
+    .stamp { min-width:220px; align-self:start; border:2px solid var(--ink); background:var(--card); padding:18px; transform:rotate(2deg); box-shadow:7px 7px 0 var(--ink); }
+    .stamp strong { display:block; color:var(--green); font-size:42px; letter-spacing:-.08em; }
+    .stamp span { font:800 11px var(--mono); }
+    .section { margin-top:54px; }
+    .section-head { display:flex; justify-content:space-between; gap:18px; align-items:end; margin-bottom:18px; }
+    .section-head p { max-width:620px; margin:0; color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .card { border:1px solid var(--line); background:rgba(255,255,255,.86); padding:20px; min-height:144px; }
+    .metric { font:900 36px var(--mono); letter-spacing:-.08em; }
+    .metric-note { color:var(--muted); font-size:13px; }
+    .callout { border-left:8px solid var(--green); background:#e5f4ea; padding:16px 20px; }
+    .callout p { margin:0; }
+    .facts { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line); }
+    .fact { background:var(--card); padding:14px 16px; }
+    .fact dt { color:var(--muted); font:800 10px var(--mono); text-transform:uppercase; }
+    .fact dd { margin:7px 0 0; font-weight:800; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:18px 0; }
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+    .filter { border:1px solid var(--ink); background:var(--card); padding:9px 13px; border-radius:999px; }
+    .filter[aria-pressed="true"] { color:#fff; background:var(--ink); }
+    .search { min-width:230px; border:1px solid var(--line); background:var(--card); border-radius:999px; padding:9px 13px; }
+    .case-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    .case { border:1px solid var(--line); border-left:8px solid var(--green); background:var(--card); padding:18px; }
+    .case[data-status="pending"] { border-left-color:var(--amber); }
+    .case[data-status="implemented"] { border-left-color:var(--blue); }
+    .case.hidden { display:none; }
+    .case-head { display:flex; justify-content:space-between; gap:12px; }
+    .case-id { color:var(--muted); font-size:11px; }
+    .tag { display:inline-flex; align-items:center; height:24px; padding:0 9px; color:#fff; background:var(--green); border-radius:999px; font:800 10px var(--mono); white-space:nowrap; }
+    .tag.implemented { background:var(--blue); }
+    .tag.pending { background:var(--amber); }
+    .summary { color:var(--muted); font-size:14px; }
+    details { border-top:1px solid var(--line); padding-top:10px; }
+    summary { cursor:pointer; color:var(--green); font-weight:800; }
+    .detail { display:grid; grid-template-columns:110px 1fr; gap:7px 12px; margin-top:12px; font-size:13px; }
+    .detail dt { color:var(--muted); font-weight:800; }
+    .detail dd { margin:0; }
+    code,pre { font-family:var(--mono); }
+    code { background:#edf3ef; padding:2px 4px; }
+    pre { overflow:auto; border:1px solid var(--line); background:#162124; color:#dbf0e1; padding:16px; line-height:1.6; }
+    .run-list { display:grid; gap:8px; }
+    .run { display:grid; grid-template-columns:220px 1fr auto; gap:14px; align-items:center; border-bottom:1px solid var(--line); padding:12px 0; }
+    .run-title { font-weight:800; }
+    .run-command { color:var(--muted); font-size:12px; }
+    .run-result { color:var(--green); font:800 12px var(--mono); }
+    .run-result.pending { color:var(--amber); }
+    .links { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .link { display:block; border:1px solid var(--line); color:var(--ink); background:var(--card); padding:14px; text-decoration:none; font-weight:800; }
+    footer { display:flex; justify-content:space-between; gap:16px; margin-top:54px; padding-top:15px; border-top:2px solid var(--ink); color:var(--muted); font:11px/1.5 var(--mono); }
+    .empty { display:none; color:var(--muted); padding:24px 0; }
+    .empty.show { display:block; }
+    @media (max-width:760px) { header,.hero,.section-head,footer { display:block; } .top-meta { margin-top:16px; text-align:left; } .grid,.facts,.case-grid,.links { grid-template-columns:1fr; } .stamp { margin-top:24px; width:max-content; } .run { grid-template-columns:1fr; gap:4px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header><p class="eyebrow">LYNX 4.0 · HARMONYOS · STORE V2</p><div class="top-meta">CODEX VERIFICATION · 2026-08-27<br>NO CANDIDATE STATE MACHINE · SIMULATOR RUN</div></header>
+  <section class="hero">
+    <div><h1>鸿蒙<br>验收报告</h1><p class="lead"><strong>Store v2 已在 Pura 90 模拟器通过。</strong>本报告区分实现契约、静态检查、ArkTS 编译和设备运行态；本次运行使用仅 TEST 可显式开启的 Mock Source，因为真实 OTA 服务 TLS 连接失败，不能把 Mock 证据写成真实 Server 通过。</p></div>
+    <div class="stamp"><span>OVERALL STATUS</span><strong>SIM PASS</strong><p>静态 / HAR / App / 模拟器<br>通过 · Server / 物理真机待验</p></div>
+  </section>
+  <section class="callout"><p><strong>核心结论：</strong>HarmonyOS 已切换到 <code>apps/&lt;appId&gt;/</code> 物理隔离布局，稳定保留集合是 <code>current + previous + leased</code>。本端不创建候选版本文件、字段或 API；embedded rawfile 仍直接读取，不复制到私有磁盘。Pura 90 模拟器中两个 App ID 各自保留 mock-ota-v1/v2，共 12 个文件，Tab lease、Inspector、删除和冷启动均有运行态证据。</p></section>
+
+  <section class="section">
+    <div class="section-head"><div><p class="eyebrow">RESULTS / SUMMARY</p><h2>结果总览</h2></div><p>静态检查覆盖 Store v2、lease、无候选版本和 Inspector；构建使用当前 checkout。</p></div>
+    <div class="grid">
+      <article class="card"><div class="metric">85</div><div class="metric-note">Harmony 静态 PASS<br>0 WARN · 0 FAIL</div></article>
+      <article class="card"><div class="metric">OK</div><div class="metric-note">HAR CompileArkTS<br>PackageHar 成功</div></article>
+      <article class="card"><div class="metric">OK</div><div class="metric-note">assembleApp<br>PackageHap 成功</div></article>
+      <article class="card"><div class="metric">V2</div><div class="metric-note">apps/&lt;appId&gt;/state.json<br>current / previous</div></article>
+      <article class="card"><div class="metric">0</div><div class="metric-note">Harmony candidate/trial<br>文件、字段、API</div></article>
+      <article class="card"><div class="metric">PASS</div><div class="metric-note">Pura 90 simulator<br>hdc Connected</div></article>
+      <article class="card"><div class="metric">2 / 12</div><div class="metric-note">2 个 App ID · 12 个文件<br>各自 current / previous</div></article>
+      <article class="card"><div class="metric">V1 → V2</div><div class="metric-note">Mock full sync<br>两次全量同步可观测</div></article>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><p class="eyebrow">ENVIRONMENT</p><h2>当前环境</h2></div></div>
+    <dl class="facts">
+      <div class="fact"><dt>Host</dt><dd>macOS / DevEco Studio</dd></div>
+      <div class="fact"><dt>API</dt><dd>HarmonyOS 6.1.1 (24) · Pura 90</dd></div>
+      <div class="fact"><dt>OTA</dt><dd>TEST / 显式 Mock Source</dd></div>
+      <div class="fact"><dt>serverPlatform</dt><dd>android（兼容现有服务端）</dd></div>
+    </dl>
+    <pre>&lt;context.filesDir&gt;/lynx-ota-store/apps/&lt;appId&gt;/
+├── state.json
+├── releases/&lt;releaseId&gt;/
+└── .staging/&lt;releaseId&gt;.&lt;transactionId&gt;/</pre>
+  </section>
+
+  <section class="section" aria-labelledby="matrix-title">
+    <div class="section-head"><div><p class="eyebrow">CONTRACT MATRIX</p><h2 id="matrix-title">契约矩阵</h2></div><p>使用状态筛选或搜索 App ID、lease、Inspector、current 等关键词。</p></div>
+    <div class="toolbar">
+      <button class="filter" data-filter="all" aria-pressed="true">全部</button>
+      <button class="filter" data-filter="pass" aria-pressed="false">已通过</button>
+      <button class="filter" data-filter="implemented" aria-pressed="false">已实现待运行</button>
+      <button class="filter" data-filter="pending" aria-pressed="false">设备待验收</button>
+      <label><span style="position:absolute;left:-9999px">搜索</span><input class="search" id="search" type="search" placeholder="搜索 lease / current / hdc…"></label>
+    </div>
+    <div class="case-grid" id="cases">
+      <article class="case" data-status="pass" data-search="appId isolation release same release path schema state"><div class="case-head"><div><div class="case-id">H-01 / STORE CORE</div><h3>App ID 物理隔离</h3></div><span class="tag">PASS</span></div><p class="summary">远程 Release 路径固定为 <code>apps/&lt;appId&gt;/releases/&lt;releaseId&gt;</code>，同一 releaseId 不会跨 App ID 覆盖。</p><details><summary>查看证据</summary><dl class="detail"><dt>源码</dt><dd><code>ReleaseTransaction.ets</code> 的 app-scoped path helper。</dd><dt>静态</dt><dd>85 项检查包含新路径与 schema v2 约束。</dd><dt>模拟器</dt><dd>Pura 90 Inspector 同时观察到 10000001 和 10000002；两者 releaseId 相同但目录、state 和文件树独立。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-search="current previous retention V1 V10 prune staging"><div class="case-head"><div><div class="case-id">H-02 / RETENTION</div><h3>current / previous 有界保留</h3></div><span class="tag">PASS</span></div><p class="summary">安装完成后只保留当前和直接前驱，下载前先 prune；staging 失败或冷启动后不形成历史爆炸。</p><details><summary>查看证据</summary><dl class="detail"><dt>源码</dt><dd>state 最后提交，<code>pruneUnreferencedReleases</code> 使用 current/previous 引用集合。</dd><dt>构建</dt><dd>HAR/App CompileArkTS 与打包通过。</dd><dt>模拟器</dt><dd>两次全量 Mock 同步得到 mock-ota-v1(previous) 与 mock-ota-v2(current)；App1 7 个文件、App2 5 个文件，共 12 个文件，没有额外历史版本。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-search="embedded rawfile no copy ArrayBuffer filesDir"><div class="case-head"><div><div class="case-id">H-03 / EMBEDDED</div><h3>embedded 不复制</h3></div><span class="tag">PASS</span></div><p class="summary">rawfile 通过 Registry 读取并校验为 ArrayBuffer；Store 只保存远程文件和 state 元数据。</p><details><summary>查看证据</summary><dl class="detail"><dt>源码</dt><dd><code>EmbeddedBundleRegistry</code> 不写 filesDir；Provider 继续支持 bytes。</dd><dt>模拟器</dt><dd>删除全部远程文件后 Inspector 显示远程文件数为 0，rawfile embedded 首页仍正常渲染，证明 embedded bytes 没有依赖 Store 副本。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-search="lease Page Tab stale async delete prune lifecycle"><div class="case-head"><div><div class="case-id">H-04 / LEASE</div><h3>Page / Tab Release lease</h3></div><span class="tag">PASS</span></div><p class="summary">普通 Page 与 ArkUI Tab 持有远程 Release lease；过期异步结果、刷新、错误和销毁路径会释放。</p><details><summary>查看证据</summary><dl class="detail"><dt>源码</dt><dd><code>PreparedPageBundle.lease</code>、Page/Tab <code>releaseCurrentLease</code> 和统一 Runtime 队列。</dd><dt>并发</dt><dd>lease 释放后的 prune 不绕过下载/发布队列。</dd><dt>模拟器</dt><dd>从 Native Tab 进入 Inspector 时 current 显示 leased；返回原生壳后 leased 标记消失。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-search="candidate trial candidate.json no candidate"><div class="case-head"><div><div class="case-id">H-05 / SCOPE</div><h3>明确不加入 candidate</h3></div><span class="tag">PASS</span></div><p class="summary">HarmonyOS 只做 current/previous；没有候选指针、trial 状态、candidate.json 或候选 API。</p><details><summary>查看证据</summary><dl class="detail"><dt>静态</dt><dd>选定 Harmony OTA 源码扫描不到候选状态关键字。</dd><dt>模型</dt><dd><code>OtaReleaseState</code> 只有 schemaVersion、current、previous。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-search="capacity statfs getFreeSizeSync insufficient storage preflight"><div class="case-head"><div><div class="case-id">H-06 / CAPACITY</div><h3>容量预检</h3></div><span class="tag">PASS</span></div><p class="summary">使用 Harmony 官方 statfs 查询可用空间，目标 Bundle、元数据余量和安全保留空间不足时不提交 current。</p><details><summary>查看证据</summary><dl class="detail"><dt>源码</dt><dd><code>statfs.getFreeSizeSync</code>；prune 在 preflight 之前执行。</dd><dt>构建</dt><dd>API 13 CompileArkTS 通过。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-search="inspector read only snapshot launcher tab files bytes staging"><div class="case-head"><div><div class="case-id">H-07 / INSPECTOR</div><h3>只读磁盘浏览器</h3></div><span class="tag">PASS</span></div><p class="summary">Launcher 与 Native Tab 均可推入 Inspector，查看 root、版本角色、文件树、字节数和 staging，不改文件。</p><details><summary>查看证据</summary><dl class="detail"><dt>实现</dt><dd><code>OtaStorageDiagnostics</code>、<code>otaStorageSnapshot()</code>、<code>OtaStorageInspector</code>。</dd><dt>模拟器</dt><dd>两个入口均可打开真实 Store root；Inspector 刷新前后快照一致，且 Mock 路径没有网络请求。</dd></dl></details></article>
+      <article class="case" data-status="pass" data-search="hdc simulator device cold start tab refresh rollback mock"><div class="case-head"><div><div class="case-id">H-08 / SIMULATOR</div><h3>Harmony 模拟器运行态验收</h3></div><span class="tag">PASS</span></div><p class="summary">Pura 90 模拟器已通过新包安装、冷启动、Tab cache-only、主动刷新、Inspector、lease、删除和 embedded fallback。</p><details><summary>查看证据</summary><dl class="detail"><dt>设备</dt><dd><code>127.0.0.1:5555 TCP Connected localhost</code> · HarmonyOS 6.1.1 (24) · Pura 90。</dd><dt>流程</dt><dd>TEST 显式 Mock：卸载重装 → 两次全量同步 → App ID 目录核对 → Native Tab → Inspector → 返回释放 lease → 删除远程文件 → force-stop 冷启动。</dd><dt>结果</dt><dd>两个 App ID 各自 current/previous，共 12 个文件；current leased 可见且退出后消失；删除后 rawfile 继续渲染；冷启动仍加载 current。</dd></dl></details></article>
+      <article class="case" data-status="pending" data-search="real server physical device TLS SSL OTA content difference signed package"><div class="case-head"><div><div class="case-id">H-09 / EXTERNAL</div><h3>真实 Server 与物理真机</h3></div><span class="tag pending">待外部条件</span></div><p class="summary">模拟器 Mock 已通过，但不能替代真实 OTA Server 的版本内容差异、真实下载链路、物理 Harmony 真机和签名包验收。</p><details><summary>待条件恢复后执行</summary><dl class="detail"><dt>真实服务</dt><dd>本次 Mac 请求返回 TLS <code>SSL_ERROR_SYSCALL</code>，HTTP code <code>000</code>；未将服务失败误判为 Store 失败。</dd><dt>物理设备</dt><dd>连接 Harmony 真机后复验冷启动、Tab、Inspector、lease、删除、previous/embedded 回退和签名包。</dd><dt>判定</dt><dd>H-09 单独闭环，不降低已经通过的静态、构建和模拟器结构化证据。</dd></dl></details></article>
+    </div>
+    <p class="empty" id="empty">没有匹配的结果。</p>
+  </section>
+
+  <section class="section"><div class="section-head"><div><p class="eyebrow">EXECUTION LOG</p><h2>执行记录</h2></div></div><div class="run-list">
+    <div class="run"><div class="run-title">Harmony static</div><div class="run-command">python3 harmony/scripts/check_harmony_shell.py --quiet</div><div class="run-result">85 PASS</div></div>
+    <div class="run"><div class="run-title">HAR build</div><div class="run-command">hvigorw assembleHar --mode module -p module=lynx_shell_kit@default --no-daemon</div><div class="run-result">BUILD OK</div></div>
+    <div class="run"><div class="run-title">App build</div><div class="run-command">hvigorw assembleApp --no-daemon</div><div class="run-result">BUILD OK</div></div>
+    <div class="run"><div class="run-title">Device discovery</div><div class="run-command">hdc list targets -v · 127.0.0.1:5555 Connected · Pura 90</div><div class="run-result">CONNECTED</div></div>
+    <div class="run"><div class="run-title">Store v2 simulator</div><div class="run-command">TEST mock · full sync ×2 · Tab / Inspector / delete / cold start</div><div class="run-result">PASS · 2 APPS / 12 FILES</div></div>
+    <div class="run"><div class="run-title">Real OTA Server</div><div class="run-command">TEST endpoint request · TLS handshake</div><div class="run-result pending">WAIT · SSL_ERROR_SYSCALL</div></div>
+  </div></section>
+
+  <section class="section"><div class="section-head"><div><p class="eyebrow">TRACEABLE FILES</p><h2>可追溯文件</h2></div></div><div class="links">
+    <a class="link" href="../harmony/lynx_shell_kit/src/main/ets/ota/ReleaseTransaction.ets">→ Store v2 事务</a>
+    <a class="link" href="../harmony/lynx_shell_kit/src/main/ets/ota/OtaModels.ets">→ OTA 模型与 lease</a>
+    <a class="link" href="../harmony/lynx_shell_kit/src/main/ets/ota/OtaStorageDiagnostics.ets">→ 只读诊断 API</a>
+    <a class="link" href="../harmony/lynx_shell/src/main/ets/pages/OtaStorageInspector.ets">→ 原生 Inspector</a>
+    <a class="link" href="../harmony/README.md">→ Harmony README</a>
+    <a class="link" href="../.workflow/harmonyos-ota-store-v2-candidate/final-report.md">→ Workflow final report</a>
+  </div></section>
+  <footer><span>HarmonyOS Store v2 · SIMULATOR PASS · LIVE SERVER / PHYSICAL DEVICE PENDING</span><span>独立 HTML · 无外部资源 · 无凭据</span></footer>
+</main>
+<script>
+(() => {
+  const state = { filter: 'all', query: '' };
+  const cards = [...document.querySelectorAll('.case')];
+  const empty = document.querySelector('#empty');
+  const search = document.querySelector('#search');
+  function render() {
+    let visible = 0;
+    cards.forEach((card) => {
+      const filterMatch = state.filter === 'all' || card.dataset.status === state.filter;
+      const queryMatch = !state.query || card.dataset.search.toLowerCase().includes(state.query);
+      const shown = filterMatch && queryMatch;
+      card.classList.toggle('hidden', !shown);
+      if (shown) visible += 1;
+    });
+    empty.classList.toggle('show', visible === 0);
+  }
+  document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
+    state.filter = button.dataset.filter;
+    document.querySelectorAll('[data-filter]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+    render();
+  }));
+  search.addEventListener('input', () => { state.query = search.value.trim().toLowerCase(); render(); });
+  render();
+})();
+</script>
+</body>
+</html>

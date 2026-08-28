@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "status": "completed",
+  "platform": "ios",
+  "packets": {
+    "I1": "completed",
+    "I2": "completed",
+    "I3": "completed",
+    "I4": "completed",
+    "I5": "completed"
+  },
+  "approval": {
+    "implementation": true,
+    "demoUninstallReinstall": true,
+    "gitDelivery": false
+  },
+  "verification": {
+    "focusedTests": "RED then GREEN",
+    "fullTests": "47 tests / 8 suites passed",
+    "staticChecks": "111 Android+iOS and 191 three-platform PASS",
+    "debugBuild": "Xcode iOS Simulator Debug build passed",
+    "simulator": "real OTA, Inspector, Native Tab and lease lifecycle passed"
+  }
+}

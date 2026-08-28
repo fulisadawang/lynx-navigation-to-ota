@@ -21,7 +21,7 @@ import ShellMessageHub from '../common/ShellMessageHub';
 import ShellGenericResourceFetcher from '../provider/ShellGenericResourceFetcher';
 import ShellMediaResourceFetcher from '../provider/ShellMediaResourceFetcher';
 import ShellTemplateResourceFetcher from '../provider/ShellTemplateResourceFetcher';
-import PageBundleRuntimeRegistry, { PageBundleRuntime } from '../ota/OtaModels';
+import PageBundleRuntimeRegistry, { OtaBundleLease, PageBundleRuntime } from '../ota/OtaModels';
 
 /** 一个原生 Tab 的逻辑描述，不包含 Tabs、TabBar 或选中态。 */
 export interface LynxTabSpec {
@@ -82,6 +82,7 @@ export struct LynxTabContainer {
   private lynxContext: LynxContext | null = null;
   private prepareGeneration: number = 0;
   private consumedRefreshGeneration: number = 0;
+  private releaseLease: OtaBundleLease | null = null;
   private viewWidth: number | string = '100%';
   private viewHeight: number | string = '100%';
 
@@ -174,6 +175,7 @@ export struct LynxTabContainer {
     ShellMessageHub.unregister(this.request.entryID);
     this.lynxContext = null;
     this.showLynxView = false;
+    this.releaseCurrentLease();
   }
 
   private buildTabGlobalProps(bundleMetadata?: ShellBundleMetadata): Object {
@@ -214,11 +216,17 @@ export struct LynxTabContainer {
       return;
     }
     const generation = ++this.prepareGeneration;
+    let pendingLease: OtaBundleLease | null = null;
     this.isLoading = true;
     this.errorMessage = '';
     runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName)
       .then((prepared) => {
-        if (generation !== this.prepareGeneration) return;
+        pendingLease = prepared?.lease ?? null;
+        if (generation !== this.prepareGeneration) {
+          pendingLease?.close();
+          pendingLease = null;
+          return;
+        }
         if (prepared === null) {
           this.isLoading = false;
           this.errorMessage = `Tab ${this.spec.tabId} 没有 active Bundle；切换 Tab 不联网`;
@@ -245,11 +253,16 @@ export struct LynxTabContainer {
           new TemplateData(this.buildTabGlobalProps(bundleMetadata))
         );
         this.extraTiming.prepareTemplateEnd = new Date().getTime();
+        this.releaseCurrentLease();
+        this.releaseLease = prepared.lease ?? null;
+        pendingLease = null;
         // 保留 Loading 到 LynxView load success/first screen，避免 template 已解析但首帧未出时白闪。
         this.isLoading = true;
         this.showLynxView = true;
       })
       .catch((error: Error) => {
+        pendingLease?.close();
+        pendingLease = null;
         if (generation !== this.prepareGeneration) return;
         this.isLoading = false;
         this.errorMessage = `Tab active Bundle 读取失败：${error.message}`;
@@ -266,8 +279,16 @@ export struct LynxTabContainer {
   }
 
   private handleLoadError(message: string): void {
+    this.disposeCurrentView('arkui_tab_load_failed');
     this.isLoading = false;
     this.errorMessage = message.length > 0 ? message : 'Lynx Tab 加载失败';
+  }
+
+  private releaseCurrentLease(): void {
+    if (this.releaseLease === null) return;
+    const lease = this.releaseLease;
+    this.releaseLease = null;
+    lease.close();
   }
 
   private retry(): void {

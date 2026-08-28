@@ -22,6 +22,11 @@ val otaClientToken = (
 )
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
+val candidateActivationEnabled = providers.environmentVariable("LYNX_OTA_CANDIDATE_MODE").orNull
+    ?.trim()
+    ?.lowercase()
+    ?.let { it == "1" || it == "true" || it == "yes" || it == "on" }
+    ?: false
 
 android {
     namespace = "com.example.lynxshell.sample"
@@ -34,6 +39,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         buildConfigField("String", "LYNX_OTA_CLIENT_TOKEN", "\"$otaClientToken\"")
+        buildConfigField("boolean", "LYNX_OTA_CANDIDATE_MODE", candidateActivationEnabled.toString())
     }
 
     buildTypes {

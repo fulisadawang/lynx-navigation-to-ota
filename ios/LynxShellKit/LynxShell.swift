@@ -177,9 +177,23 @@ public final class LynxTabViewController: UIViewController {
     private let contentView = UIView()
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
+    private var releaseLease: OtaBundleLease?
     private var loadTask: Task<Void, Never>?
     private let pageID: String
     private var didStartLoad = false
+    private var loadGeneration = LynxTabLoadGeneration()
+#if DEBUG
+    private var debugLoadCount = 0
+    private var debugResolveCurrentCount = 0
+    private var debugRenderCount = 0
+    private var debugInstanceID = "none"
+    private var debugLastError = "idle"
+
+    /** 仅供 Debug UI Test 读取，不进入 Release API。 */
+    public var debugState: String {
+        "instance=\(debugInstanceID);load=\(debugLoadCount);resolve=\(debugResolveCurrentCount);render=\(debugRenderCount);error=\(debugLastError)"
+    }
+#endif
 
     public init(spec: LynxTabSpec) {
         self.spec = spec
@@ -197,6 +211,7 @@ public final class LynxTabViewController: UIViewController {
         ShellMessageHub.unregister(pageId: pageID)
         templateProvider?.cancel()
         lynxView = nil
+        releaseCurrentLease()
     }
 
     public override func viewDidLoad() {
@@ -240,11 +255,13 @@ public final class LynxTabViewController: UIViewController {
     public func refreshFromCurrent() {
         loadTask?.cancel()
         loadTask = nil
+        loadGeneration.invalidate()
         templateProvider?.cancel()
         templateProvider = nil
         ShellMessageHub.unregister(pageId: pageID)
         lynxView?.removeFromSuperview()
         lynxView = nil
+        releaseCurrentLease()
         contentView.viewWithTag(0x4C5958)?.removeFromSuperview()
         didStartLoad = false
         if isViewLoaded,
@@ -258,19 +275,45 @@ public final class LynxTabViewController: UIViewController {
     }
 
     private func load() {
+        let generation = loadGeneration.begin()
+#if DEBUG
+        debugLoadCount += 1
+        debugLastError = "loading"
+#endif
         guard let appId = spec.lynxAppId,
               let bundleName = spec.bundleName,
               !appId.isEmpty,
               !bundleName.isEmpty else {
-            render(prefetchedData: nil)
+            render(prefetchedData: nil, generation: generation)
             return
         }
         guard let runtime = LynxShell.otaRuntime() else {
             showError("Tab \(spec.tabId) 没有安装 OTA runtime；Tab 加载不会联网")
             return
         }
+#if DEBUG
+        debugResolveCurrentCount += 1
+        let resolveOrdinal = debugResolveCurrentCount
+#endif
         loadTask = Task { [weak self] in
+            var pendingLease: OtaBundleLease?
+            defer {
+                if let pendingLease {
+                    Task { await pendingLease.close() }
+                }
+            }
             do {
+#if DEBUG
+                if resolveOrdinal == 1,
+                   let rawDelay = ProcessInfo.processInfo.environment[
+                       "LYNX_TEST_TAB_DEFER_FIRST_RESOLVE_MS"
+                   ],
+                   let delayMilliseconds = UInt64(rawDelay),
+                   delayMilliseconds > 0 {
+                    // 故意忽略取消结果，让旧 resolve 迟到；最终由 generation 门禁丢弃。
+                    try? await Task.sleep(nanoseconds: delayMilliseconds * 1_000_000)
+                }
+#endif
                 // Native Tab 只读取已经提交的 current；缺失时不 repair、不请求网络。
                 guard let prepared = try await runtime.resolveCurrent(
                     lynxAppId: appId,
@@ -282,6 +325,7 @@ public final class LynxTabViewController: UIViewController {
                         userInfo: [NSLocalizedDescriptionKey: "Tab \(self?.spec.tabId ?? bundleName) 没有 active Bundle"]
                     )
                 }
+                pendingLease = prepared.releaseLease
                 let data = try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
                 let metadata: [String: Any] = [
                     "lynxAppId": prepared.lynxAppId,
@@ -292,21 +336,43 @@ public final class LynxTabViewController: UIViewController {
                     "loadPolicy": "cache_only",
                     "bundleName": prepared.bundleName
                 ]
-                await MainActor.run { [weak self] in
-                    self?.render(prefetchedData: data, bundleMetadata: metadata)
+                let accepted: Bool = await MainActor.run { [weak self] in
+                    guard let self, self.loadGeneration.accepts(generation) else { return false }
+                    self.render(
+                        prefetchedData: data,
+                        bundleMetadata: metadata,
+                        releaseLease: prepared.releaseLease,
+                        generation: generation
+                    )
+                    return true
                 }
+                if accepted { pendingLease = nil }
             } catch is CancellationError {
                 return
             } catch {
+#if DEBUG
+                self?.debugLastError = error.localizedDescription
+#endif
                 await MainActor.run { [weak self] in
-                    self?.showError("Tab 加载失败：\(error.localizedDescription)")
+                    guard let self, self.loadGeneration.accepts(generation) else { return }
+                    self.showError("Tab 加载失败：\(error.localizedDescription)")
                 }
             }
         }
     }
 
-    private func render(prefetchedData: Data?, bundleMetadata: [String: Any]? = nil) {
-        guard lynxView == nil else { return }
+    private func render(
+        prefetchedData: Data?,
+        bundleMetadata: [String: Any]? = nil,
+        releaseLease: OtaBundleLease? = nil,
+        generation: UUID
+    ) {
+        guard lynxView == nil else {
+            if let releaseLease { Task { await releaseLease.close() } }
+            return
+        }
+        releaseCurrentLease()
+        self.releaseLease = releaseLease
         do {
             let request = try LynxPageRequest(
                 bundleURL: spec.bundleURL,
@@ -332,7 +398,8 @@ public final class LynxTabViewController: UIViewController {
                 allowHTTPInDebug: false,
                 onLoadError: { [weak self] _, error in
                     DispatchQueue.main.async {
-                        self?.showError("Tab 加载失败：\(error.localizedDescription)")
+                        guard let self, self.loadGeneration.accepts(generation) else { return }
+                        self.showError("Tab 加载失败：\(error.localizedDescription)")
                     }
                 },
                 prefetchedURL: request.bundleURL,
@@ -353,6 +420,11 @@ public final class LynxTabViewController: UIViewController {
                 screenSize: contentView.bounds.size,
                 globalProps: props
             )
+#if DEBUG
+            debugRenderCount += 1
+            debugInstanceID = String(UUID().uuidString.prefix(8))
+            debugLastError = "rendered"
+#endif
             created.backgroundColor = contentView.backgroundColor
             created.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview(created)
@@ -380,6 +452,14 @@ public final class LynxTabViewController: UIViewController {
 
     private func showError(_ message: String) {
         guard isViewLoaded else { return }
+        templateProvider?.cancel()
+        templateProvider = nil
+        lynxView?.removeFromSuperview()
+        lynxView = nil
+        releaseCurrentLease()
+#if DEBUG
+        debugLastError = message
+#endif
         let label = contentView.viewWithTag(0x4C5958) as? UILabel ?? UILabel()
         label.tag = 0x4C5958
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -395,5 +475,11 @@ public final class LynxTabViewController: UIViewController {
                 label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             ])
         }
+    }
+
+    private func releaseCurrentLease() {
+        guard let lease = releaseLease else { return }
+        releaseLease = nil
+        Task { await lease.close() }
     }
 }

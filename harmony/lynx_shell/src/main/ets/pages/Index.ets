@@ -1,3 +1,4 @@
+import router from '@ohos.router';
 import {
   ShellConstants,
   LynxRouter,
@@ -173,6 +174,13 @@ struct Index {
     this.prepareTabIdentity(true);
   }
 
+  /** 原生只读 Inspector 作为独立 Page 推入，保留下方 Native Tab 的活体 lease。 */
+  private openStorageInspector(): void {
+    router.pushUrl({ url: 'pages/OtaStorageInspector' }).catch((error: Error) => {
+      this.otaStatusMessage = `打开 OTA 磁盘浏览器失败：${error.message}`;
+    });
+  }
+
   private refreshNativeTabs(): void {
     if (this.isRefreshingOta) return;
     this.isRefreshingOta = true;
@@ -247,6 +255,15 @@ struct Index {
             .onClick(() => this.showNativeTabDemo = false)
 
           Blank()
+
+          Button('磁盘')
+            .height(44)
+            .fontSize(14)
+            .fontColor($r('app.color.shell_text_primary'))
+            .backgroundColor('#FFFFFF')
+            .border({ width: 1, color: $r('app.color.shell_brand') })
+            .borderRadius(12)
+            .onClick(() => this.openStorageInspector())
 
           Button(this.isRefreshingOta ? '正在同步 OTA…' : '刷新 OTA')
             .height(44)
@@ -355,6 +372,17 @@ struct Index {
             .border({ width: 1, color: $r('app.color.shell_brand') })
             .borderRadius(12)
             .onClick(() => this.openNativeTabDemo())
+
+          Button('查看 OTA 磁盘目录')
+            .width('100%')
+            .height(52)
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.shell_text_primary'))
+            .backgroundColor('#FFFFFF')
+            .border({ width: 1, color: $r('app.color.shell_brand') })
+            .borderRadius(12)
+            .onClick(() => this.openStorageInspector())
 
           Button(this.isRefreshingOta ? '正在同步全部 OTA…' : '手动触发全量 OTA 同步')
             .width('100%')

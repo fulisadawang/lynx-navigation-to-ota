@@ -7,7 +7,8 @@ import android.os.SystemClock
 import android.util.Log
 import com.ota.android.sdk.OtaModels
 import com.ota.android.sdk.OtaSdk
-import java.io.File
+import com.ota.android.sdk.OtaStorageDiagnostics
+import com.ota.android.sdk.OtaStorageSnapshot
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -25,7 +26,9 @@ class LynxOtaRuntime(
     private val appContext = context.applicationContext
     private val sdkConfiguration = config.toSdkConfiguration(appContext)
     private val sdk = OtaSdk(sdkConfiguration)
+    private val storageDiagnostics = OtaStorageDiagnostics(sdkConfiguration.storageDirectory)
     private val embeddedBundleRegistry = EmbeddedBundleRegistry(appContext)
+    private val otaEnabled = !config.clientToken.isNullOrBlank()
     /** 生命周期刷新与页面后台刷新共用队列，避免同一个 SDK 实例并发提交激活事务。 */
     private val refreshExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "lynx-shell-ota-refresh").apply { isDaemon = true }
@@ -38,14 +41,18 @@ class LynxOtaRuntime(
     private var fullSyncInFlight = false
     private var fullSyncPending = false
     private val fullSyncWaiters = ArrayList<(Boolean) -> Unit>()
-    private var legacyEmbeddedCleanupCompleted = false
 
     override fun onApplicationStarted() {
-        syncAllBundlesAsync()
+        // Demo 使用最新 schema；这里仅清理 Store v2 的孤儿 Release/残留 staging，不迁移旧布局。
+        refreshExecutor.execute {
+            runCatching { sdk.pruneUnreferencedBundles() }
+                .onFailure { Log.w(TAG, "Store v2 冷启动维护失败，保留现有文件", it) }
+        }
+        if (otaEnabled) syncAllBundlesAsync()
     }
 
     override fun onApplicationForeground() {
-        syncAllBundlesAsync()
+        if (otaEnabled) syncAllBundlesAsync()
     }
 
     /**
@@ -56,6 +63,12 @@ class LynxOtaRuntime(
      * 生命周期事件。
      */
     fun syncAllBundlesAsync(onComplete: ((success: Boolean) -> Unit)? = null) {
+        if (!otaEnabled) {
+            onComplete?.let { callback ->
+                Handler(Looper.getMainLooper()).post { callback(false) }
+            }
+            return
+        }
         val shouldStart = synchronized(refreshStateLock) {
             onComplete?.let(fullSyncWaiters::add)
             if (fullSyncInFlight) {
@@ -71,7 +84,6 @@ class LynxOtaRuntime(
         refreshExecutor.execute {
             var success = false
             try {
-                cleanupLegacyEmbeddedCopies()
                 runCatching { sdk.syncLatestBundleLists() }
                     .onSuccess { result ->
                         success = true
@@ -113,13 +125,15 @@ class LynxOtaRuntime(
 
     /** 用户主动刷新使用的公开入口；完成后通知 Tab Host 重新读取本地 current。 */
     override fun refreshAllBundles(onComplete: (success: Boolean) -> Unit) {
-        syncAllBundlesAsync(onComplete)
+        if (!otaEnabled) onComplete(false) else syncAllBundlesAsync(onComplete)
     }
 
     /** 页面命中 OTA current 后，按 appId 的 30 分钟门控后台检查；不阻塞当前页面。 */
     override fun refreshAppBundleIfNeeded(lynxAppId: String) {
-        syncAppBundleAsync(lynxAppId)
+        if (otaEnabled) syncAppBundleAsync(lynxAppId)
     }
+
+    override fun otaStorageSnapshot(): OtaStorageSnapshot = storageDiagnostics.snapshot()
 
     /** 按 appId 异步直接删除磁盘中的全部 OTA Bundle。 */
     fun deleteBundles(
@@ -209,39 +223,92 @@ class LynxOtaRuntime(
     }
 
     override fun prepare(lynxAppId: String, bundleName: String): PreparedActivityBundle {
-        cleanupLegacyEmbeddedCopies()
-        // current() 已经在 Router 内置 SDK 中做本地 SHA 校验；损坏文件不会直接交给 LynxView。
-        val localFile = runCatching { sdk.current(lynxAppId, bundleName) }.getOrNull()
-        if (localFile != null && localFile.isFile && localFile.canRead()) {
-            val current = sdk.current(lynxAppId)
+        // 解析与 lease 登记在同一个 Store 临界区内，后台更新不能在两者之间删掉旧 Release。
+        val currentLease = runCatching { sdk.acquireCurrentBundleLease(lynxAppId, bundleName) }.getOrNull()
+        if (currentLease != null && currentLease.file.isFile && currentLease.file.canRead()) {
             syncAppBundleAsync(lynxAppId)
-            return prepared(lynxAppId, bundleName, localFile, current)
+            return prepared(lynxAppId, bundleName, currentLease)
         }
 
         // APK 内置 Bundle 是无网络的 baseline；若启动全量同步尚未完成，先交付内置版本。
         resolveEmbedded(lynxAppId, bundleName)?.let { return it }
 
-        // 缺包或校验失败时只请求当前 appId；Activity 会在这段时间显示原生 Loading。
-        val repairedFile = sdk.ensureBundleReady(lynxAppId, bundleName)
-        if (!repairedFile.isFile || !repairedFile.canRead()) {
-            throw IllegalStateException("OTA SDK 返回的 Bundle 不可读：${repairedFile.absolutePath}")
+        if (!otaEnabled) {
+            throw IllegalStateException("OTA 未配置 clientToken，且没有可用的 embedded Bundle：$lynxAppId/$bundleName")
         }
-        return prepared(lynxAppId, bundleName, repairedFile, sdk.current(lynxAppId))
+
+        // 缺包或校验失败时只请求当前 appId；Activity 会在这段时间显示原生 Loading。
+        sdk.ensureBundleReady(lynxAppId, bundleName)
+        val repairedLease = sdk.acquireCurrentBundleLease(lynxAppId, bundleName)
+            ?: throw IllegalStateException("OTA SDK 激活后无法租用 Bundle：$lynxAppId/$bundleName")
+        return prepared(lynxAppId, bundleName, repairedLease)
+    }
+
+    /** 普通 Activity 页面可消费 candidate；Native Tab 仍只调用 resolveCurrent。 */
+    override fun resolvePage(
+        lynxAppId: String,
+        bundleName: String,
+    ): PreparedActivityBundle? {
+        if (config.candidateActivationEnabled) {
+            val candidate = runCatching { sdk.candidate(lynxAppId) }.getOrNull()
+            if (candidate != null) {
+                val trial = runCatching {
+                    if (candidate.status == OtaModels.CandidateStatus.PENDING) {
+                        sdk.beginCandidateTrial(lynxAppId)
+                    } else {
+                        candidate
+                    }
+                }.getOrNull()
+                if (trial != null) {
+                    val candidateLease = runCatching {
+                        sdk.acquireCandidateBundleLease(lynxAppId, bundleName)
+                    }.getOrNull()
+                    if (candidateLease != null && candidateLease.file.isFile && candidateLease.file.canRead()) {
+                        return PreparedActivityBundle(
+                            lynxAppId = lynxAppId,
+                            bundleName = bundleName,
+                            file = candidateLease.file,
+                            releaseId = candidateLease.release.context.releaseId,
+                            sha256 = candidateLease.bundle.bundleSha256,
+                            source = "candidate_trial",
+                            releaseLease = candidateLease,
+                        )
+                    }
+                }
+            }
+        }
+        return resolveCurrent(lynxAppId, bundleName)
+    }
+
+    override fun confirmCandidateHealthy(lynxAppId: String): Boolean {
+        if (!config.candidateActivationEnabled) return false
+        return runCatching {
+            sdk.confirmCandidateHealthy(lynxAppId)
+            clearPageRefreshGate(lynxAppId)
+            true
+        }.getOrDefault(false)
     }
 
     override fun resolveCurrent(
         lynxAppId: String,
         bundleName: String,
     ): PreparedActivityBundle? {
-        cleanupLegacyEmbeddedCopies()
-        val localFile = runCatching { sdk.current(lynxAppId, bundleName) }.getOrNull()
-        if (localFile != null && localFile.isFile && localFile.canRead()) {
-            return prepared(lynxAppId, bundleName, localFile, sdk.current(lynxAppId))
+        val lease = runCatching { sdk.acquireCurrentBundleLease(lynxAppId, bundleName) }.getOrNull()
+        if (lease != null && lease.file.isFile && lease.file.canRead()) {
+            return prepared(lynxAppId, bundleName, lease)
         }
         return resolveEmbedded(lynxAppId, bundleName)
     }
 
     override fun rollback(lynxAppId: String, reason: String): Boolean {
+        if (config.candidateActivationEnabled && runCatching { sdk.candidate(lynxAppId) }.getOrNull() != null) {
+            return runCatching {
+                // candidate/trial 失败时只丢弃候选，不回滚掉仍然稳定的 current。
+                sdk.discardCandidate(lynxAppId)
+                clearPageRefreshGate(lynxAppId)
+                true
+            }.getOrDefault(false)
+        }
         val restoredRemote = runCatching { sdk.rollback(lynxAppId, reason) }.getOrNull()
         if (restoredRemote != null) return true
         if (!embeddedBundleRegistry.containsApp(lynxAppId)) return false
@@ -266,32 +333,6 @@ class LynxOtaRuntime(
         }
     }
 
-    /** 删除旧版本曾生成的 embedded 副本；新版本 baseline 始终直接读取 APK assets。 */
-    private fun cleanupLegacyEmbeddedCopies() {
-        synchronized(refreshStateLock) {
-            if (legacyEmbeddedCleanupCompleted) return
-            val legacyEmbeddedRoot = File(sdkConfiguration.storageDirectory, "embedded")
-            if (legacyEmbeddedRoot.exists()) legacyEmbeddedRoot.deleteRecursively()
-            sdkConfiguration.storageDirectory.listFiles()
-                ?.filter { it.name.startsWith("embedded-release-") }
-                ?.forEach { it.delete() }
-            sdkConfiguration.storageDirectory.listFiles()
-                ?.filter { it.name.startsWith("current-release-") }
-                ?.forEach { pointer ->
-                    val content = runCatching { pointer.readText(Charsets.UTF_8) }.getOrNull().orEmpty()
-                    if (content.contains("/embedded/")) pointer.delete()
-                }
-            sdkConfiguration.storageDirectory.resolve("states").listFiles()
-                ?.forEach { state ->
-                    val content = runCatching { state.readText(Charsets.UTF_8) }.getOrNull().orEmpty()
-                    if (Regex("\\\"current\\\"\\s*:\\s*\\{\\s*\\\"kind\\\"\\s*:\\s*\\\"embedded\\\"").containsMatchIn(content)) {
-                        state.delete()
-                    }
-                }
-            legacyEmbeddedCleanupCompleted = true
-        }
-    }
-
     /** 宿主退出时释放后台队列；Application 通常只需在进程结束时由系统回收。 */
     fun close() {
         refreshExecutor.shutdownNow()
@@ -300,13 +341,14 @@ class LynxOtaRuntime(
     private fun prepared(
         lynxAppId: String,
         bundleName: String,
-        file: File,
-        current: OtaModels.InstalledRelease?,
+        lease: com.ota.android.sdk.ReleaseTransaction.BundleLease,
     ): PreparedActivityBundle = PreparedActivityBundle(
         lynxAppId = lynxAppId,
         bundleName = bundleName,
-        file = file,
-        releaseId = current?.context?.releaseId,
+        file = lease.file,
+        releaseId = lease.release.context.releaseId,
+        sha256 = lease.bundle.bundleSha256,
+        releaseLease = lease,
     )
 
     private companion object {

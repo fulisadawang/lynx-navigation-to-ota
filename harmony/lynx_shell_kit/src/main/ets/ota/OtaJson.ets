@@ -33,8 +33,12 @@ export default class OtaJson {
 
   static parseLocalManifest(raw: string): OtaLocalManifest {
     const root = OtaJson.objectValue(JSON.parse(raw), '本地 Manifest');
+    if (OtaJson.numberValue(root, 'schemaVersion') !== 1) {
+      throw new Error('本地 Manifest schemaVersion 不支持');
+    }
     const bundles = OtaJson.parseBundles(root['bundles'], 'bundles', false);
     return {
+      schemaVersion: 1,
       env: OtaJson.stringValue(root, 'env'),
       hostApp: OtaJson.hostApp(root),
       lynxAppId: OtaJson.stringValue(root, 'lynxAppId'),
@@ -48,27 +52,24 @@ export default class OtaJson {
 
   static parseState(raw: string): OtaReleaseState {
     const root = OtaJson.objectValue(JSON.parse(raw), 'OTA state');
-    const current: OtaReleaseRef = OtaJson.parseRef(root['current']) ?? {
-      kind: 'downloaded' as 'downloaded',
-      releaseId: OtaJson.stringValue(root, 'currentReleaseId')
-    };
-    let previous: OtaReleaseRef | undefined = OtaJson.parseRef(root['previous']);
-    if (previous === undefined) {
-      const legacy = OtaJson.optionalString(root, 'previousReleaseId');
-      if (legacy !== undefined) {
-        previous = { kind: 'downloaded', releaseId: legacy };
-      }
+    if (OtaJson.numberValue(root, 'schemaVersion') !== 2) {
+      throw new Error('OTA state schemaVersion 不支持');
     }
+    const parsedCurrent = OtaJson.parseRef(root['current']);
+    if (parsedCurrent === undefined) {
+      throw new Error('OTA state current 不合法');
+    }
+    const current: OtaReleaseRef = parsedCurrent;
+    const previous: OtaReleaseRef | undefined = OtaJson.parseRef(root['previous']);
     return {
+      schemaVersion: 2,
       env: OtaJson.stringValue(root, 'env'),
       hostApp: OtaJson.hostApp(root),
       lynxAppId: OtaJson.stringValue(root, 'lynxAppId'),
       platform: OtaJson.stringValue(root, 'platform'),
       generation: OtaJson.numberValue(root, 'generation'),
       current,
-      previous,
-      currentReleaseId: current.releaseId,
-      previousReleaseId: previous?.releaseId
+      previous
     };
   }
 

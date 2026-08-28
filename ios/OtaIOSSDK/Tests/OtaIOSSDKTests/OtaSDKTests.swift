@@ -549,7 +549,7 @@ struct OtaSDKTests {
 
         let reusedBundle = installed.bundles.first { $0.bundlePath == "App.lynx.bundle" }
         let changedBundle = installed.bundles.first { $0.bundlePath == "GuideServiceDetail.lynx.bundle" }
-        #expect(reusedBundle?.localFilePath.contains("/store/releases/\(manifest.releaseId)/") == true)
+        #expect(reusedBundle?.localFilePath.contains("/store/apps/\(manifest.lynxAppId)/releases/\(manifest.releaseId)/") == true)
         #expect(changedBundle?.localFilePath.contains(manifest.releaseId) == true)
         #expect(await downloader.downloads() == [changedSourceURL])
 
@@ -647,7 +647,7 @@ struct OtaSDKTests {
         #expect(summary.totalBundleCount == 2)
         #expect(summary.reusedBundleCount == 1)
         #expect(summary.downloadedBundleCount == 1)
-        #expect(installed.bundles.first { $0.bundlePath == "App.lynx.bundle" }?.localFilePath.contains("/store/releases/\(manifest.releaseId)/") == true)
+        #expect(installed.bundles.first { $0.bundlePath == "App.lynx.bundle" }?.localFilePath.contains("/store/apps/\(manifest.lynxAppId)/releases/\(manifest.releaseId)/") == true)
         #expect(await downloader.downloads() == [changedSourceURL])
     }
 
@@ -916,7 +916,7 @@ struct OtaSDKTests {
         #expect(result.results.keys.sorted() == ["10000000", "10000002"])
         #expect(await sdk.getCurrentRelease(lynxAppId: "10000000")?.context.releaseId == firstLatest.releaseId)
         #expect(await sdk.getCurrentRelease(lynxAppId: "10000002")?.context.releaseId == secondLatest.releaseId)
-        #expect(await sdk.getCurrentRelease(lynxAppId: "10000002")?.bundles.first?.localFilePath.contains("/store/releases/\(secondLatest.releaseId)/") == true)
+        #expect(await sdk.getCurrentRelease(lynxAppId: "10000002")?.bundles.first?.localFilePath.contains("/store/apps/10000002/releases/\(secondLatest.releaseId)/") == true)
         #expect(await downloader.downloads().isEmpty)
         #expect(await apiClient.events().filter { $0.event == .checkResult }.map(\.lynxAppId).sorted() == ["10000000", "10000002"])
     }
@@ -1022,7 +1022,7 @@ struct OtaSDKTests {
         #expect(summary.downloadedBundleCount == 0)
         #expect(summary.reusedBundleCount == 1)
         #expect(installedBundle.localFilePath != missingLocalURL.path)
-        #expect(installedBundle.localFilePath.contains("/store/releases/\(latest.releaseId)/"))
+        #expect(installedBundle.localFilePath.contains("/store/apps/\(latest.lynxAppId)/releases/\(latest.releaseId)/"))
         #expect(FileManager.default.fileExists(atPath: installedBundle.localFilePath))
         #expect(await downloader.downloads().isEmpty)
     }
@@ -1163,7 +1163,7 @@ struct OtaSDKTests {
         }
     }
 
-    @Test("release transaction isolates host app scope and rolls back previous release")
+    @Test("release transaction installs and rolls back direct predecessor")
     func releaseTransactionScopeAndRollback() async throws {
         let tempDirectory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1198,13 +1198,10 @@ struct OtaSDKTests {
         }
 
         let cappScope = OtaReleaseScope(app: .capp, lynxAppId: "10000001")
-        let gappScope = OtaReleaseScope(app: .gapp, lynxAppId: "10000001")
         let cappEmbedded = release(app: .capp, appId: cappScope.lynxAppId, releaseId: "capp-embedded")
         let cappUpdate = release(app: .capp, appId: cappScope.lynxAppId, releaseId: "capp-update")
-        let gappEmbedded = release(app: .gapp, appId: gappScope.lynxAppId, releaseId: "gapp-embedded")
 
-        try await store.saveEmbeddedRelease(cappEmbedded)
-        try await store.saveEmbeddedRelease(gappEmbedded)
+        try await transaction.registerEmbedded(cappEmbedded)
         let first = try await transaction.install(OtaReleaseInstallRequest(scope: cappScope, release: cappUpdate))
         guard case let .updated(from, to) = first else {
             Issue.record("Expected scoped install to update capp")
@@ -1214,8 +1211,7 @@ struct OtaSDKTests {
         #expect(to.context.releaseId == cappUpdate.context.releaseId)
         let resolvedBundleURL = try await runtime.ensureBundleReady(scope: cappScope, bundleName: "home.lynx.bundle")
         #expect(resolvedBundleURL.lastPathComponent == "home.lynx.bundle")
-        #expect(resolvedBundleURL.path.contains("/releases/capp-update/"))
-        #expect((await transaction.current(scope: gappScope))?.context.releaseId == gappEmbedded.context.releaseId)
+        #expect(resolvedBundleURL.path.contains("/apps/10000001/releases/capp-update/"))
 
         let rollback = try await transaction.rollback(scope: cappScope)
         guard case let .restored(restored) = rollback else {
@@ -1224,100 +1220,6 @@ struct OtaSDKTests {
         }
         #expect(restored.context.releaseId == cappEmbedded.context.releaseId)
         #expect((await transaction.current(scope: cappScope))?.context.releaseId == cappEmbedded.context.releaseId)
-        #expect((await transaction.current(scope: gappScope))?.context.releaseId == gappEmbedded.context.releaseId)
-    }
-
-    @Test("deletes one appId or all downloaded bundles without hidden backups")
-    func directBundleDeletionPreservesEmbeddedFallback() async throws {
-        let tempDirectory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let storeDirectory = tempDirectory.appendingPathComponent("store", isDirectory: true)
-        let embeddedDirectory = tempDirectory.appendingPathComponent("embedded", isDirectory: true)
-        let store = FileOtaReleaseStore(baseDirectory: storeDirectory)
-        try FileManager.default.createDirectory(at: embeddedDirectory, withIntermediateDirectories: true)
-
-        func makeEmbedded(appId: String) throws -> OtaInstalledRelease {
-            let bundleURL = embeddedDirectory.appendingPathComponent("\(appId)-home.lynx.bundle")
-            try Data("embedded-\(appId)".utf8).write(to: bundleURL)
-            let checksum = try SHA256ChecksumValidator().sha256(for: bundleURL)
-            return OtaInstalledRelease(
-                context: OtaCurrentReleaseContext(
-                    env: .test,
-                    app: .capp,
-                    lynxAppId: appId,
-                    releaseId: "embedded-\(appId)",
-                    platform: .ios,
-                    status: .active
-                ),
-                installedAt: .now,
-                bundles: [
-                    OtaInstalledBundle(
-                        bundleName: "home.lynx.bundle",
-                        bundleSha256: checksum,
-                        remoteURL: bundleURL,
-                        localFilePath: bundleURL.path
-                    )
-                ]
-            )
-        }
-
-        func installDownloaded(appId: String) async throws -> (OtaInstalledRelease, URL) {
-            let releaseId = "downloaded-\(appId)"
-            let localURL = try await store.localBundleURL(
-                app: .capp,
-                lynxAppId: appId,
-                releaseId: releaseId,
-                bundleName: "home.lynx.bundle"
-            )
-            try Data("downloaded-\(appId)".utf8).write(to: localURL)
-            let checksum = try SHA256ChecksumValidator().sha256(for: localURL)
-            let release = OtaInstalledRelease(
-                context: OtaCurrentReleaseContext(
-                    env: .test,
-                    app: .capp,
-                    lynxAppId: appId,
-                    releaseId: releaseId,
-                    platform: .ios,
-                    status: .active
-                ),
-                installedAt: .now,
-                bundles: [
-                    OtaInstalledBundle(
-                        bundleName: "home.lynx.bundle",
-                        bundleSha256: checksum,
-                        remoteURL: localURL,
-                        localFilePath: localURL.path
-                    )
-                ]
-            )
-            try await store.stageRelease(release)
-            _ = try await store.activateStagedRelease(app: .capp, lynxAppId: appId)
-            return (release, localURL)
-        }
-
-        let firstAppId = "10000001"
-        let secondAppId = "10000002"
-        let firstEmbedded = try makeEmbedded(appId: firstAppId)
-        let secondEmbedded = try makeEmbedded(appId: secondAppId)
-        try await store.saveEmbeddedRelease(firstEmbedded)
-        try await store.saveEmbeddedRelease(secondEmbedded)
-        let (_, firstDownloadedURL) = try await installDownloaded(appId: firstAppId)
-        let (secondDownloaded, secondDownloadedURL) = try await installDownloaded(appId: secondAppId)
-
-        try await store.deleteDownloadedBundles(app: .capp, lynxAppId: firstAppId)
-
-        #expect(!FileManager.default.fileExists(atPath: firstDownloadedURL.path))
-        #expect(FileManager.default.fileExists(atPath: secondDownloadedURL.path))
-        #expect(await store.currentRelease(app: .capp, lynxAppId: firstAppId)?.context.releaseId == firstEmbedded.context.releaseId)
-        #expect(await store.currentRelease(app: .capp, lynxAppId: secondAppId)?.context.releaseId == secondDownloaded.context.releaseId)
-
-        try await store.deleteAllDownloadedBundles()
-
-        #expect(!FileManager.default.fileExists(atPath: secondDownloadedURL.path))
-        #expect(await store.currentRelease(app: .capp, lynxAppId: firstAppId)?.context.releaseId == firstEmbedded.context.releaseId)
-        #expect(await store.currentRelease(app: .capp, lynxAppId: secondAppId)?.context.releaseId == secondEmbedded.context.releaseId)
-        let storedNames = (FileManager.default.enumerator(atPath: storeDirectory.path)?.allObjects as? [String]) ?? []
-        #expect(!storedNames.contains { $0.contains(".delete-") || $0.contains(".staging") })
     }
 
     @Test("policy and report payloads encode hostApp and lynxAppId")

@@ -2,19 +2,32 @@ import http from '@ohos.net.http';
 import OtaJson from './OtaJson';
 import { LynxOtaConfig, OtaLatestBundleLists, OtaPrepareSignal, OtaReleaseSnapshot } from './OtaModels';
 
+/** 仅供 TEST 模式注入的本地快照源；不进入默认网络请求链。 */
+export interface OtaMockSource {
+  fetchLatestBundleLists(): Promise<OtaLatestBundleLists>;
+  fetchLatestBundleList(lynxAppId: string): Promise<OtaReleaseSnapshot>;
+  downloadBundle(bundleUrl: string): Promise<ArrayBuffer>;
+}
+
 /** OTA 服务端客户端。只接受 2xx；不限制 Host，但生产 Bundle 必须是 HTTPS。 */
 export default class OtaApiClient {
   private readonly config: LynxOtaConfig;
+  private readonly mockSource: OtaMockSource | null;
   private readonly activeRequests: Set<http.HttpRequest> = new Set();
 
-  constructor(config: LynxOtaConfig) {
+  constructor(config: LynxOtaConfig, mockSource: OtaMockSource | null = null) {
     if (!config.apiBaseUrl.trim().toLowerCase().startsWith('https://')) {
       throw new Error('OTA API 必须使用 HTTPS');
     }
     this.config = config;
+    this.mockSource = mockSource;
   }
 
   async fetchLatestBundleLists(signal?: OtaPrepareSignal): Promise<OtaLatestBundleLists> {
+    if (this.config.debugMockEnabled && this.mockSource !== null) {
+      signal?.throwIfCancelled();
+      return this.mockSource.fetchLatestBundleLists();
+    }
     const query = `env=${encodeURIComponent(this.config.environment)}` +
       `&hostApp=${encodeURIComponent(this.config.hostApp)}` +
       `&platform=${encodeURIComponent(this.config.requestPlatform())}`;
@@ -23,6 +36,10 @@ export default class OtaApiClient {
   }
 
   async fetchLatestBundleList(lynxAppId: string, signal?: OtaPrepareSignal): Promise<OtaReleaseSnapshot> {
+    if (this.config.debugMockEnabled && this.mockSource !== null) {
+      signal?.throwIfCancelled();
+      return this.mockSource.fetchLatestBundleList(lynxAppId);
+    }
     const query = `env=${encodeURIComponent(this.config.environment)}` +
       `&hostApp=${encodeURIComponent(this.config.hostApp)}` +
       `&lynxAppId=${encodeURIComponent(lynxAppId)}` +
@@ -41,6 +58,11 @@ export default class OtaApiClient {
       throw new Error('OTA Bundle 必须使用 HTTPS');
     }
     signal?.throwIfCancelled();
+    if (this.config.debugMockEnabled && this.mockSource !== null) {
+      const binary = await this.mockSource.downloadBundle(bundleUrl);
+      signal?.throwIfCancelled();
+      return binary.slice(0);
+    }
     const request = http.createHttp();
     this.activeRequests.add(request);
     try {

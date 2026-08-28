@@ -33,6 +33,7 @@ class LynxTabFragment : Fragment() {
     private lateinit var spec: LynxTabSpec
     private var lynxView: LynxView? = null
     private var templateProvider: ShellTemplateProvider? = null
+    private var releaseLease: AutoCloseable? = null
     private var pageID: String = ""
     @Volatile
     private var loadGeneration: Long = 0L
@@ -122,7 +123,10 @@ class LynxTabFragment : Fragment() {
                 null
             }
             activity.runOnUiThread {
-                if (!isAdded || view !== host || generation != loadGeneration) return@runOnUiThread
+                if (!isAdded || view !== host || generation != loadGeneration) {
+                    runCatching { resolved?.releaseLease?.close() }
+                    return@runOnUiThread
+                }
                 if (spec.lynxAppId != null && resolved == null) {
                     showError(host, "Tab ${spec.tabId} 没有可用的 active Bundle；Tab 加载不会联网")
                 } else {
@@ -130,6 +134,7 @@ class LynxTabFragment : Fragment() {
                         host = host,
                         preparedFile = resolved?.file,
                         preparedBytes = resolved?.bytes,
+                        nextReleaseLease = resolved?.releaseLease,
                         bundleMetadata = resolved?.let {
                             mapOf(
                                 "lynxAppId" to it.lynxAppId,
@@ -155,6 +160,7 @@ class LynxTabFragment : Fragment() {
         templateProvider = null
         lynxView?.destroy()
         lynxView = null
+        releaseCurrentLease()
         host?.removeAllViews()
     }
 
@@ -162,9 +168,14 @@ class LynxTabFragment : Fragment() {
         host: ViewGroup,
         preparedFile: java.io.File?,
         preparedBytes: ByteArray?,
+        nextReleaseLease: AutoCloseable?,
         bundleMetadata: Map<String, Any>? = null,
     ) {
-        val activity = activity ?: return
+        val activity = activity ?: run {
+            runCatching { nextReleaseLease?.close() }
+            return
+        }
+        replaceReleaseLease(nextReleaseLease)
         val request = LynxPageRequest(
             bundleUrl = spec.bundleUrl,
             lynxAppId = spec.lynxAppId,
@@ -234,6 +245,11 @@ class LynxTabFragment : Fragment() {
     }
 
     private fun showError(host: ViewGroup, message: String) {
+        templateProvider?.close()
+        templateProvider = null
+        lynxView?.destroy()
+        lynxView = null
+        releaseCurrentLease()
         host.removeViews(0, host.childCount)
         host.addView(TextView(requireContext()).apply {
             text = message
@@ -246,6 +262,18 @@ class LynxTabFragment : Fragment() {
 
     private fun unregister() {
         if (pageID.isNotBlank()) ShellMessageHub.unregister(pageID)
+    }
+
+    private fun replaceReleaseLease(next: AutoCloseable?) {
+        if (releaseLease === next) return
+        releaseCurrentLease()
+        releaseLease = next
+    }
+
+    private fun releaseCurrentLease() {
+        val current = releaseLease
+        releaseLease = null
+        runCatching { current?.close() }
     }
 
     companion object {
