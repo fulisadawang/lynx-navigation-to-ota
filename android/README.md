@@ -310,7 +310,7 @@ Lynx 页面可通过 `NativeModules.LynxShellModule.deleteOtaBundles` 和
 APK assets/embedded 描述保留，失败通过 `code !== 0` 返回，不伪造成功。旧的
 `clearOtaCache()` 仍是删除全部下载内容的兼容别名。
 
-如果 Release 正被活体 Activity/Fragment 使用，删除 API 会先清 state/candidate，但把对应目录
+如果 Release 正被活体 Activity/Fragment 使用，删除 API 会先清 `state.json`/candidate 元数据，但把对应目录
 保留到最后一个 lease 释放，避免正在显示的页面突然失去文件。Demo 不实现旧 Store 迁移或 reset；
 首次验收 Store v2 时应卸载旧 Demo 后重新安装。
 
