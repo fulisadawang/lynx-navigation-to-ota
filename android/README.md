@@ -148,8 +148,24 @@ Demo 不再根据文件名猜 appId：`MainActivity` 和 `NativeTabDemoActivity`
 
 Android 的 embedded baseline 不会在启动时复制到 `filesDir`。命中内置 Bundle 时由
 `EmbeddedBundleRegistry` 直接从 APK `AssetManager` 读取、校验 size/SHA 后以 bytes 交给
-LynxView；应用私有磁盘只保存远程 OTA 的 `releases`、`states`、`current/previous` 和
-`.staging`。
+LynxView；应用私有磁盘按 App ID 隔离，只保存远程 OTA 的 `state.json`、`candidate.json`、
+`releases/` 和 `.staging/`。`embedded.json` 仅是逻辑描述，不包含 Bundle bytes。
+
+Android Store v2 的真实路径为：
+
+```text
+files/lynx-ota-store/apps/<lynxAppId>/
+├── state.json
+├── candidate.json                 # 可选
+├── embedded.json                  # 可选逻辑描述，不复制 bytes
+├── releases/<releaseId>/<bundlePath>
+└── .staging/<releaseId>.<tx>/<bundlePath>.part
+```
+
+`lynxAppId` 按服务端契约校验为 8 位数字，因此 `10000009/V5` 与 `10000010/V5` 会落到两套
+独立目录，不再要求 `releaseId` 在整个 App 内全局唯一。普通模式只保留 current/previous；
+candidate 模式最多再保留一份 candidate。导航栈中仍存活的旧页面通过进程内 lease 暂时保留
+其 Release，最后一个页面销毁后再回收。
 
 页面跳转只传逻辑身份和参数，不注册 route 映射，也不传手机文件路径：
 
@@ -219,6 +235,10 @@ lynx-shell/src/main/kotlin/com/ota/android/sdk/*.kt
 不一致时只请求当前 appId，并在下载、校验和原子激活完成后创建 LynxView。OTA 文件保存在
 App 私有目录 `files/lynx-ota-store`，不放进 `assets/ota`。
 
+Demo 原生 Launcher 提供“查看 OTA 磁盘目录”入口。页面使用 `LynxRouter.otaStorageSnapshot()`
+读取与事务共锁的只读快照，展示绝对路径、current/previous/candidate/leased/orphan、staging、
+文件数和字节数；打开和刷新该页面不会触发 OTA 请求或修改 Store。
+
 ## 默认沉浸式容器
 
 Android 打开任意 Bundle 时默认：
@@ -278,10 +298,10 @@ Router 提供两个仅针对“已下载文件”的直接删除入口：
 
 ```kotlin
 LynxRouter.deleteOtaBundles(returnedBundle.lynxAppId) { success, message ->
-    // 只删除该 appId 在 files/lynx-ota-store/releases 下的 Bundle
+    // 只删除 files/lynx-ota-store/apps/<appId> 下的下载状态与远程 Release
 }
 LynxRouter.deleteAllOtaBundles { success, message ->
-    // 删除 releases 下全部 appId 的 Bundle
+    // 删除 apps 下全部 appId 的下载状态与远程 Release
 }
 ```
 
@@ -289,6 +309,10 @@ Lynx 页面可通过 `NativeModules.LynxShellModule.deleteOtaBundles` 和
 `deleteAllOtaBundles` 调用同一能力。删除是永久删除，不创建 `.delete-*` 或其它备份目录；
 APK assets/embedded 描述保留，失败通过 `code !== 0` 返回，不伪造成功。旧的
 `clearOtaCache()` 仍是删除全部下载内容的兼容别名。
+
+如果 Release 正被活体 Activity/Fragment 使用，删除 API 会先清 state/candidate，但把对应目录
+保留到最后一个 lease 释放，避免正在显示的页面突然失去文件。Demo 不实现旧 Store 迁移或 reset；
+首次验收 Store v2 时应卸载旧 Demo 后重新安装。
 
 ## NativeModules
 

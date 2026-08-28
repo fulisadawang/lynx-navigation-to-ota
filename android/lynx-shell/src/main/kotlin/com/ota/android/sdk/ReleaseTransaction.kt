@@ -12,6 +12,7 @@ import java.util.concurrent.ExecutorCompletionService
 import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -39,7 +40,7 @@ class ReleaseTransaction @JvmOverloads constructor(
     @JvmField val platform: OtaModels.Platform,
   ) {
     init {
-      require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }
+      OtaModels.requireLynxAppId(lynxAppId)
     }
 
     companion object {
@@ -118,6 +119,24 @@ class ReleaseTransaction @JvmOverloads constructor(
     @JvmField val toReleaseId: String?,
   )
 
+  /**
+   * 活体页面对一个已解析 Bundle 的进程内租约。
+   *
+   * close 幂等；只有 downloaded Release 会计入保留集合，embedded 只返回无状态租约。
+   */
+  class BundleLease internal constructor(
+    @JvmField val release: OtaModels.InstalledRelease,
+    @JvmField val bundle: OtaModels.InstalledBundle,
+    @JvmField val file: File,
+    private val onClose: () -> Unit,
+  ) : AutoCloseable {
+    private val closed = AtomicBoolean(false)
+
+    override fun close() {
+      if (closed.compareAndSet(false, true)) onClose()
+    }
+  }
+
   enum class StorageStage {
     RECOVERY,
     PREFLIGHT,
@@ -178,19 +197,10 @@ class ReleaseTransaction @JvmOverloads constructor(
   fun registerEmbeddedRelease(release: OtaModels.InstalledRelease) {
     val scope = ReleaseScope.fromRelease(release)
     withStorageLock {
-      val legacyStore = OtaReleaseStore(storageRoot)
-      legacyStore.saveEmbeddedRelease(release)
+      ensureAppDirectories(scope.lynxAppId)
+      EmbeddedReleaseStore(storageRoot).saveEmbeddedRelease(release)
       val state = readState(scope.lynxAppId)
       if (state == null) {
-        // 迁移期间可能已经有 legacy downloaded current；初始化 embedded 不能覆盖它。
-        val legacyCurrent = legacyStore.currentRelease(scope.lynxAppId)
-        if (legacyCurrent != null && matchesScope(scope, legacyCurrent) &&
-          legacyCurrent.context.releaseId != release.context.releaseId
-        ) {
-          // 旧 pointer 仍指向绝对路径，尚未物化到 releases/<releaseId>；保留 pointer，
-          // 让 current/ensureBundleReady 继续走兼容读取，首次事务再完成迁移。
-          return@withStorageLock
-        }
         writeStateAtomic(
           StateRecord(
             scope,
@@ -200,6 +210,7 @@ class ReleaseTransaction @JvmOverloads constructor(
           ),
         )
       }
+      pruneUnreferencedReleases(scope)
     }
   }
 
@@ -215,14 +226,14 @@ class ReleaseTransaction @JvmOverloads constructor(
     }
 
     return withStorageLock {
-      ensureDirectories()
-      recoverStaging()
-      request.embeddedDescriptor?.let { OtaReleaseStore(storageRoot).saveEmbeddedRelease(it) }
+      ensureAppDirectories(request.scope.lynxAppId)
+      recoverStaging(request.scope.lynxAppId)
+      request.embeddedDescriptor?.let { EmbeddedReleaseStore(storageRoot).saveEmbeddedRelease(it) }
 
       val oldState = readState(request.scope.lynxAppId)
       ensureStateScope(oldState, request.scope)
       val oldCurrent = resolveCurrentUnsafe(request.scope, oldState)
-      // 如果损坏的旧 pointer 与目标 releaseId 相同，不能把同一个 release 再写成
+      // 如果损坏的旧 current 与目标 releaseId 相同，不能把同一个 release 再写成
       // previous，否则回滚会回到同一份损坏数据；此时只保留可用 embedded 作为回退。
       val oldCurrentRef = when {
         oldState?.current != null && oldState.current.releaseId != request.targetManifest.releaseId -> oldState.current
@@ -244,6 +255,8 @@ class ReleaseTransaction @JvmOverloads constructor(
         }
       }
 
+      // 先释放不再被 state/candidate/活体页面引用的历史版本，再做容量预检。
+      pruneUnreferencedReleases(request.scope)
       val declaredSizes = request.targetManifest.bundles.mapNotNull { it.size?.toLong() }
       val requiredBytes = if (declaredSizes.size == request.targetManifest.bundles.size) {
         val targetBytes = declaredSizes.sum()
@@ -261,7 +274,11 @@ class ReleaseTransaction @JvmOverloads constructor(
       }
 
       val transactionId = UUID.randomUUID().toString()
-      val stagingDirectory = stagingDirectory(request.targetManifest.releaseId, transactionId)
+      val stagingDirectory = stagingDirectory(
+        request.scope.lynxAppId,
+        request.targetManifest.releaseId,
+        transactionId,
+      )
       var copiedBundleCount = 0
       var copiedBytes = 0L
       var downloadedBundleCount = 0
@@ -288,7 +305,7 @@ class ReleaseTransaction @JvmOverloads constructor(
 
         writeLocalManifestAtomic(stagingDirectory, request.targetManifest)
         verifyStagedRelease(stagingDirectory, request.targetManifest)
-        val targetDirectory = releaseDirectory(request.targetManifest.releaseId)
+        val targetDirectory = releaseDirectory(request.scope.lynxAppId, request.targetManifest.releaseId)
         publishReleaseDirectory(stagingDirectory, targetDirectory, request.scope, request.targetManifest)
         val installed = readPublishedRelease(request.scope, request.targetManifest.releaseId)
           ?: throw transactionError("发布后的 Release Manifest 不可读", "release_publish_failed")
@@ -303,6 +320,7 @@ class ReleaseTransaction @JvmOverloads constructor(
               trialStartedAt = null,
             ),
           )
+          pruneUnreferencedReleases(request.scope)
           return@withStorageLock InstallOutcome(
             InstallResultType.CANDIDATE,
             oldCurrent,
@@ -326,6 +344,7 @@ class ReleaseTransaction @JvmOverloads constructor(
           ),
         )
         faultInjector.check(TransactionFaultPoint.AFTER_STATE_COMMIT)
+        pruneUnreferencedReleases(request.scope)
         return@withStorageLock InstallOutcome(
           InstallResultType.UPDATED,
           oldCurrent,
@@ -360,7 +379,7 @@ class ReleaseTransaction @JvmOverloads constructor(
     embeddedDescriptor: OtaModels.InstalledRelease? = null,
   ): InstallOutcome = install(InstallRequest(scope, targetManifest, embeddedDescriptor))
 
-  /** 读取新 Active State；没有新 state 时兼容旧 pointer。 */
+  /** 读取 Store v2 Active State；没有 state 时回退到 embedded 描述。 */
   @Throws(IOException::class, OtaSdkException::class)
   fun current(scope: ReleaseScope): OtaModels.InstalledRelease? {
     val state = readState(scope.lynxAppId)
@@ -371,8 +390,9 @@ class ReleaseTransaction @JvmOverloads constructor(
   /** 仅按 appId 读取 state，供已有宿主尚未持有完整 scope 时诊断使用。 */
   @Throws(IOException::class, OtaSdkException::class)
   fun current(lynxAppId: String): OtaModels.InstalledRelease? {
-    val state = readState(lynxAppId) ?: return OtaReleaseStore(storageRoot).currentRelease(lynxAppId)
-    return resolveCurrentUnsafe(state.scope, state)
+    OtaModels.requireLynxAppId(lynxAppId)
+    val state = readState(lynxAppId)
+    return if (state != null) resolveCurrentUnsafe(state.scope, state) else EmbeddedReleaseStore(storageRoot).embeddedRelease(lynxAppId)
   }
 
   /** 读取持久化 candidate；不会改变 current，也不会把 pending 自动变成 trial。 */
@@ -441,6 +461,7 @@ class ReleaseTransaction @JvmOverloads constructor(
       writeStateAtomic(next)
       faultInjector.check(TransactionFaultPoint.AFTER_STATE_COMMIT)
       removeCandidateAtomic(scope.lynxAppId)
+      pruneUnreferencedReleases(scope)
       candidate
     }
   }
@@ -455,13 +476,7 @@ class ReleaseTransaction @JvmOverloads constructor(
       val currentState = readState(scope.lynxAppId)
       ensureStateScope(currentState, scope)
       removeCandidateAtomic(scope.lynxAppId)
-      val referenced = setOfNotNull(
-        currentState?.current,
-        currentState?.previous,
-      ).any { it == record.release }
-      if (!referenced && record.release.kind == RefKind.DOWNLOADED) {
-        cleanupRecursively(releaseDirectory(record.release.releaseId))
-      }
+      pruneUnreferencedReleases(scope)
     }
   }
 
@@ -488,12 +503,41 @@ class ReleaseTransaction @JvmOverloads constructor(
     return resolveBundleFromRelease(scope, release, bundleName, verify = true)
   }
 
+  /** 原子解析 current 并在返回前登记 lease，避免解析与 prune 之间出现竞态。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun acquireCurrentBundleLease(scope: ReleaseScope, bundleName: String): BundleLease? {
+    return withStorageLock {
+      val state = readState(scope.lynxAppId)
+      ensureStateScope(state, scope)
+      val ref = state?.current
+        ?: resolveEmbedded(scope)?.let { referenceForRelease(scope, it) }
+        ?: return@withStorageLock null
+      acquireBundleLease(scope, ref, bundleName)
+    }
+  }
+
+  /** 原子解析 candidate 并登记 lease；不改变 pending/trial 状态。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun acquireCandidateBundleLease(scope: ReleaseScope, bundleName: String): BundleLease? {
+    return withStorageLock {
+      val record = readCandidate(scope.lynxAppId) ?: return@withStorageLock null
+      ensureCandidateScope(record, scope)
+      acquireBundleLease(scope, record.release, bundleName)
+    }
+  }
+
   @Throws(IOException::class, OtaSdkException::class)
   /**
    * 路由热路径也必须验证 SHA；否则损坏的 current 会先进入 LynxView，再依赖渲染失败回滚，
    * 用户会看到白屏或黑屏。校验只读取本地文件，不会触发网络请求。
    */
-  fun currentBundle(scope: ReleaseScope, bundleName: String): File? = resolveBundle(scope, bundleName, verify = true)
+  fun currentBundle(scope: ReleaseScope, bundleName: String): File? {
+    return try {
+      resolveBundle(scope, bundleName, verify = true)
+    } catch (error: OtaSdkException) {
+      if (error.reasonCode == "bundle_checksum_failed") null else throw error
+    }
+  }
 
   @Throws(IOException::class, OtaSdkException::class)
   fun current(scope: ReleaseScope, bundleName: String): File? = currentBundle(scope, bundleName)
@@ -518,7 +562,7 @@ class ReleaseTransaction @JvmOverloads constructor(
       ensureDirectories()
       val state = readState(scope.lynxAppId)
       ensureStateScope(state, scope)
-      if (state == null) return@withStorageLock OtaReleaseStore(storageRoot).rollback(scope.lynxAppId)
+      if (state == null) return@withStorageLock null
       val previous = state.previous?.let { resolveRef(scope, it) }
       val embedded = resolveEmbedded(scope)
       val restored = when {
@@ -537,6 +581,7 @@ class ReleaseTransaction @JvmOverloads constructor(
         ),
       )
       faultInjector.check(TransactionFaultPoint.AFTER_ROLLBACK_COMMIT)
+      pruneUnreferencedReleases(scope)
       restored
     }
   }
@@ -544,63 +589,24 @@ class ReleaseTransaction @JvmOverloads constructor(
   @Throws(IOException::class, OtaSdkException::class)
   fun rollback(lynxAppId: String): OtaModels.InstalledRelease? {
     val state = readState(lynxAppId)
-    return if (state != null) rollback(state.scope) else OtaReleaseStore(storageRoot).rollback(lynxAppId)
+    return if (state != null) rollback(state.scope) else null
   }
 
   /**
    * 直接删除指定 appId 的所有已下载 Bundle。
    *
-   * Release 目录通过本地 `release-manifest.json` 的 `lynxAppId` 精确匹配；旧版没有
-   * manifest 的目录只在该 appId 的 current/staged/previous pointer 明确引用时删除，
-   * 不猜测目录归属，避免误删其它 appId。删除失败会抛出异常，调用方不能把失败当成功。
+   * Store v2 的物理目录已经按 appId 隔离。state/candidate 先清除，未被活体页面
+   * lease 的 Release 立即删除；被 lease 的目录在最后一个 lease 释放后删除。
    */
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun deleteDownloadedBundles(lynxAppId: String) {
-    require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }
+    OtaModels.requireLynxAppId(lynxAppId)
     withStorageLock {
-      ensureDirectories()
-      val releaseIds = linkedSetOf<String>()
-      val state = runCatching { readState(lynxAppId) }.getOrNull()
-      if (state?.scope?.lynxAppId == lynxAppId) {
-        if (state.current.kind == RefKind.DOWNLOADED) releaseIds += state.current.releaseId
-        state.previous?.takeIf { it.kind == RefKind.DOWNLOADED }?.let { releaseIds += it.releaseId }
-      }
-      readCandidate(lynxAppId)?.let { candidate ->
-        if (candidate.release.kind == RefKind.DOWNLOADED) releaseIds += candidate.release.releaseId
-      }
-
-      // 兼容旧 pointer layout：pointer 文件名按 appId 生成，内容再做一次 scope 校验。
-      val legacyStore = OtaReleaseStore(storageRoot)
-      listOf(
-        runCatching { legacyStore.currentRelease(lynxAppId) }.getOrNull(),
-        runCatching { legacyStore.stagedRelease(lynxAppId) }.getOrNull(),
-        runCatching { legacyStore.previousRelease(lynxAppId) }.getOrNull(),
-      ).forEach { release ->
-        if (release?.context?.lynxAppId == lynxAppId) releaseIds += release.context.releaseId
-      }
-
-      File(storageRoot, "releases").listFiles()?.forEach { releaseDirectory ->
-        val manifestAppId = readLocalManifestAppId(File(releaseDirectory, LOCAL_MANIFEST_NAME))
-        if (manifestAppId == lynxAppId || releaseDirectory.name in releaseIds) {
-          // 这里是永久删除，不生成 .delete-*、.legacy-* 或其它备份目录。
-          cleanupRecursively(releaseDirectory)
-        }
-      }
-      File(storageRoot, ".staging").listFiles()?.forEach { stagingDirectory ->
-        val manifestAppId = readLocalManifestAppId(File(stagingDirectory, LOCAL_MANIFEST_NAME))
-        val referencesRelease = releaseIds.any { stagingDirectory.name.startsWith("$it.") }
-        if (manifestAppId == lynxAppId || referencesRelease) cleanupRecursively(stagingDirectory)
-      }
-
-      // state 与 legacy downloaded pointer 是下载版本的元数据，也一并删除；embedded
-      // pointer 刻意保留，保证清理后仍可从 APK assets 回退。
-      listOf(
-        statePath(lynxAppId),
-        File(storageRoot, "current-release-${OtaModels.safeFileName(lynxAppId)}.json"),
-        File(storageRoot, "staged-release-${OtaModels.safeFileName(lynxAppId)}.json"),
-        File(storageRoot, "previous-release-${OtaModels.safeFileName(lynxAppId)}.json"),
-        candidatePath(lynxAppId),
-      ).forEach { cleanupRecursively(it) }
+      ensureAppDirectories(lynxAppId)
+      cleanupRecursively(statePath(lynxAppId))
+      cleanupRecursively(candidatePath(lynxAppId))
+      cleanupRecursively(stagingRoot(lynxAppId))
+      pruneDownloadedDirectories(lynxAppId, emptySet())
       bundleValidationCache.clear()
     }
   }
@@ -610,20 +616,13 @@ class ReleaseTransaction @JvmOverloads constructor(
   fun deleteAllDownloadedBundles() {
     withStorageLock {
       ensureDirectories()
-      File(storageRoot, "releases").listFiles()?.forEach { cleanupRecursively(it) }
-      File(storageRoot, ".staging").listFiles()?.forEach { cleanupRecursively(it) }
-      File(storageRoot, "states").listFiles()?.forEach { cleanupRecursively(it) }
-      storageRoot.listFiles()?.forEach { file ->
-        // current/staged/previous pointer 只描述下载版本；embedded pointer 保留。
-        if (file.isFile && (
-            file.name.startsWith("current-release-") ||
-              file.name.startsWith("staged-release-") ||
-              file.name.startsWith("previous-release-") ||
-              file.name.endsWith(".candidate.json")
-          )
-        ) {
-          cleanupRecursively(file)
-        }
+      appsRoot().listFiles()?.filter(File::isDirectory)?.forEach { appDirectory ->
+        val appId = appDirectory.name
+        if (!APP_ID_PATTERN.matches(appId)) return@forEach
+        cleanupRecursively(statePath(appId))
+        cleanupRecursively(candidatePath(appId))
+        cleanupRecursively(stagingRoot(appId))
+        pruneDownloadedDirectories(appId, emptySet())
       }
       bundleValidationCache.clear()
     }
@@ -633,60 +632,191 @@ class ReleaseTransaction @JvmOverloads constructor(
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun clearDownloadedBundles() = deleteAllDownloadedBundles()
 
+  /**
+   * 冷启动维护：按各 App 的 state/candidate/当前进程 lease 回收 orphan 和残留 staging。
+   * 状态文件损坏时跳过该 App，宁可保留文件也不猜测删除。
+   */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun pruneAllUnreferencedReleases() {
+    withStorageLock {
+      if (!appsRoot().isDirectory) return@withStorageLock
+      appsRoot().listFiles().orEmpty()
+        .filter { it.isDirectory && APP_ID_PATTERN.matches(it.name) }
+        .forEach { app ->
+          val appId = app.name
+          val state = try {
+            readState(appId)
+          } catch (_: Exception) {
+            return@forEach
+          }
+          val candidate = try {
+            readCandidate(appId)
+          } catch (_: Exception) {
+            return@forEach
+          }
+          val retained = linkedSetOf<String>()
+          state?.current?.takeIf { it.kind == RefKind.DOWNLOADED }?.let { retained += it.releaseId }
+          state?.previous?.takeIf { it.kind == RefKind.DOWNLOADED }?.let { retained += it.releaseId }
+          candidate?.release?.takeIf { it.kind == RefKind.DOWNLOADED }?.let { retained += it.releaseId }
+          recoverStaging(appId)
+          pruneDownloadedDirectories(appId, retained)
+        }
+    }
+  }
+
+  /** 与写事务共用进程锁的只读磁盘快照；不创建目录、不清理 orphan、不计算 Bundle SHA。 */
+  internal fun storageSnapshot(maxFilesPerTree: Int): OtaStorageSnapshot {
+    return withStorageLock {
+      val root = canonicalOrAbsolute(storageRoot)
+      val rootScan = scanTree(root, maxFilesPerTree)
+      val apps = if (!appsRoot().isDirectory) {
+        emptyList()
+      } else {
+        appsRoot().listFiles().orEmpty()
+          .filter { it.isDirectory && APP_ID_PATTERN.matches(it.name) }
+          .sortedBy(File::getName)
+          .map { snapshotApp(it.name, maxFilesPerTree) }
+      }
+      OtaStorageSnapshot(
+        rootPath = root.path,
+        totalBytes = rootScan.totalBytes,
+        fileCount = rootScan.fileCount,
+        generatedAt = clock.now(),
+        apps = apps,
+      )
+    }
+  }
+
+  private fun snapshotApp(lynxAppId: String, maxFilesPerTree: Int): OtaStorageAppSnapshot {
+    val state = runCatching { readState(lynxAppId) }.getOrNull()
+    val candidate = runCatching { readCandidate(lynxAppId) }.getOrNull()
+    val leased = activeLeasedReleaseIds(lynxAppId)
+    val releaseSnapshots = releasesRoot(lynxAppId).listFiles().orEmpty()
+      .filter(File::isDirectory)
+      .sortedBy(File::getName)
+      .map { releaseDirectory ->
+        val releaseId = releaseDirectory.name
+        val roles = linkedSetOf<OtaStorageReleaseRole>()
+        if (state?.current?.kind == RefKind.DOWNLOADED && state.current.releaseId == releaseId) {
+          roles += OtaStorageReleaseRole.CURRENT
+        }
+        if (state?.previous?.kind == RefKind.DOWNLOADED && state.previous.releaseId == releaseId) {
+          roles += OtaStorageReleaseRole.PREVIOUS
+        }
+        if (candidate?.release?.kind == RefKind.DOWNLOADED && candidate.release.releaseId == releaseId) {
+          roles += OtaStorageReleaseRole.CANDIDATE
+        }
+        if (releaseId in leased) roles += OtaStorageReleaseRole.LEASED
+        if (roles.isEmpty()) roles += OtaStorageReleaseRole.ORPHAN
+        val scan = scanTree(releaseDirectory, maxFilesPerTree)
+        OtaStorageReleaseSnapshot(
+          releaseId = releaseId,
+          roles = roles,
+          totalBytes = scan.totalBytes,
+          fileCount = scan.fileCount,
+          manifestValid = isManifestStructurallyValid(lynxAppId, releaseId, releaseDirectory),
+          files = scan.files,
+          truncated = scan.truncated,
+        )
+      }
+    val stagingSnapshots = stagingRoot(lynxAppId).listFiles().orEmpty()
+      .filter(File::isDirectory)
+      .sortedBy(File::getName)
+      .map { transactionDirectory ->
+        val scan = scanTree(transactionDirectory, maxFilesPerTree)
+        OtaStorageStagingSnapshot(
+          transactionName = transactionDirectory.name,
+          totalBytes = scan.totalBytes,
+          fileCount = scan.fileCount,
+          files = scan.files,
+          truncated = scan.truncated,
+        )
+      }
+    val appScan = scanTree(appDirectory(lynxAppId), maxFilesPerTree)
+    return OtaStorageAppSnapshot(
+      appId = lynxAppId,
+      state = state?.let {
+        OtaStorageStateSnapshot(
+          generation = it.generation,
+          currentReleaseId = it.current.releaseId,
+          currentKind = it.current.kind.wireValue,
+          previousReleaseId = it.previous?.releaseId,
+          previousKind = it.previous?.kind?.wireValue,
+        )
+      },
+      candidate = candidate?.let {
+        OtaStorageCandidateSnapshot(
+          releaseId = it.release.releaseId,
+          status = it.status.wireValue,
+          failureCount = it.failureCount,
+        )
+      },
+      releases = releaseSnapshots,
+      staging = stagingSnapshots,
+      totalBytes = appScan.totalBytes,
+      fileCount = appScan.fileCount,
+    )
+  }
+
+  private fun isManifestStructurallyValid(
+    lynxAppId: String,
+    releaseId: String,
+    releaseDirectory: File,
+  ): Boolean {
+    val manifestPath = File(releaseDirectory, LOCAL_MANIFEST_NAME)
+    if (!manifestPath.isFile) return false
+    return runCatching {
+      val map = OtaJson.asObject(OtaJson.parse(manifestPath.readText(Charsets.UTF_8)), manifestPath.toString())
+      val manifest = OtaModels.ReleaseManifest.fromJsonMap(map)
+      manifest.lynxAppId == lynxAppId && manifest.releaseId == releaseId
+    }.getOrDefault(false)
+  }
+
+  private fun scanTree(root: File, maxFiles: Int): TreeScan {
+    if (!root.exists()) return TreeScan(0L, 0, emptyList(), false)
+    var totalBytes = 0L
+    var fileCount = 0
+    var truncated = false
+    val snapshots = ArrayList<OtaStorageFileSnapshot>(minOf(maxFiles, 64))
+    fun visit(directory: File, depth: Int) {
+      if (depth > DIAGNOSTIC_MAX_DEPTH) {
+        truncated = true
+        return
+      }
+      directory.listFiles().orEmpty().sortedBy(File::getName).forEach { child ->
+        when {
+          child.isDirectory && !isSymlink(child) -> visit(child, depth + 1)
+          child.isFile -> {
+            val byteCount = child.length()
+            totalBytes += byteCount
+            fileCount += 1
+            if (snapshots.size < maxFiles) {
+              snapshots += OtaStorageFileSnapshot(
+                relativePath = relativePath(root, child),
+                byteCount = byteCount,
+                modifiedAt = Instant.ofEpochMilli(child.lastModified()),
+              )
+            } else {
+              truncated = true
+            }
+          }
+        }
+      }
+    }
+    visit(root, 0)
+    return TreeScan(
+      totalBytes = totalBytes,
+      fileCount = fileCount,
+      files = snapshots,
+      truncated = truncated,
+    )
+  }
+
   @Throws(IOException::class, OtaSdkException::class)
   fun rollbackOutcome(scope: ReleaseScope): RollbackOutcome {
     val before = current(scope)?.context?.releaseId
     val restored = rollback(scope)
     return RollbackOutcome(restored, before, restored?.context?.releaseId)
-  }
-
-  /** 将旧 OtaReleaseStore 的 current 物化进新 layout。 */
-  @Throws(IOException::class, OtaSdkException::class)
-  fun adoptLegacyCurrent(
-    release: OtaModels.InstalledRelease,
-    previous: OtaModels.InstalledRelease? = null,
-  ): OtaModels.InstalledRelease {
-    val scope = ReleaseScope.fromRelease(release)
-    validateReleaseScope(scope, release)
-    return withStorageLock {
-      ensureDirectories()
-      val existing = resolveDownloadedRelease(scope, release.context.releaseId)
-      val installed = if (existing != null && isUsableRelease(existing, scope)) {
-        existing
-      } else {
-        val staging = stagingDirectory(release.context.releaseId, UUID.randomUUID().toString())
-        try {
-          ensureDirectory(staging)
-          for (bundle in release.bundles) {
-            val normalized = validateBundlePath(bundle.bundlePath)
-            val source = File(bundle.localFilePath)
-            val part = partPath(resolveInside(staging, normalized))
-            val copied = OtaIO.copyAndHash(source, part)
-            validateStreamResult(bundle.bundleSha256, source.length(), copied)
-            atomicMove(part, resolveInside(staging, normalized))
-          }
-          val manifest = releaseToManifest(release)
-          writeLocalManifestAtomic(staging, manifest)
-          verifyStagedRelease(staging, manifest)
-          publishReleaseDirectory(staging, releaseDirectory(release.context.releaseId), scope, manifest)
-          readPublishedRelease(scope, release.context.releaseId)
-            ?: throw transactionError("旧 Release 物化后不可读取", "release_publish_failed")
-        } finally {
-          runCatching { cleanupRecursively(staging) }
-        }
-      }
-      val oldState = readState(scope.lynxAppId)
-      val oldCurrent = previous ?: resolveCurrentUnsafe(scope, oldState)
-      writeStateAtomic(
-        StateRecord(
-          scope,
-          (oldState?.generation ?: 0L) + 1L,
-          ReleaseRef(RefKind.DOWNLOADED, installed.context.releaseId),
-          oldCurrent?.let { referenceForRelease(scope, it) },
-        ),
-      )
-      installed
-    }
   }
 
   /** 新 runtime 的精确 Bundle 解析；bundleName 优先按完整 bundlePath 匹配。 */
@@ -705,15 +835,7 @@ class ReleaseTransaction @JvmOverloads constructor(
     bundleName: String,
     verify: Boolean,
   ): File? {
-    val exact = release.bundles.filter { it.bundlePath == bundleName }
-    val bundle = when {
-      exact.size == 1 -> exact[0]
-      exact.size > 1 -> throw transactionError("Bundle 路径重复：$bundleName", "duplicate_bundle_path")
-      else -> {
-        val matches = release.bundles.filter { it.bundlePath.substringAfterLast('/') == bundleName }
-        if (matches.size == 1) matches[0] else return null
-      }
-    }
+    val bundle = findBundle(release, bundleName) ?: return null
     val localPath = localPathFor(scope, release, bundle)
     if (!localPath.isFile) return null
     if (verify) {
@@ -734,6 +856,49 @@ class ReleaseTransaction @JvmOverloads constructor(
       }
     }
     return localPath
+  }
+
+  private fun findBundle(
+    release: OtaModels.InstalledRelease,
+    bundleName: String,
+  ): OtaModels.InstalledBundle? {
+    val exact = release.bundles.filter { it.bundlePath == bundleName }
+    return when {
+      exact.size == 1 -> exact[0]
+      exact.size > 1 -> throw transactionError("Bundle 路径重复：$bundleName", "duplicate_bundle_path")
+      else -> {
+        val matches = release.bundles.filter { it.bundlePath.substringAfterLast('/') == bundleName }
+        if (matches.size == 1) matches[0] else null
+      }
+    }
+  }
+
+  private fun acquireBundleLease(
+    scope: ReleaseScope,
+    ref: ReleaseRef,
+    bundleName: String,
+  ): BundleLease? {
+    val release = resolveRef(scope, ref) ?: return null
+    val bundle = findBundle(release, bundleName) ?: return null
+    val file = resolveBundleFromRelease(scope, release, bundleName, verify = true) ?: return null
+    if (ref.kind == RefKind.DOWNLOADED) incrementLease(scope.lynxAppId, ref.releaseId)
+    return BundleLease(release, bundle, file) {
+      if (ref.kind == RefKind.DOWNLOADED) releaseLease(scope, ref.releaseId)
+    }
+  }
+
+  private fun incrementLease(lynxAppId: String, releaseId: String) {
+    val key = leaseKey(lynxAppId, releaseId)
+    LEASE_COUNTS[key] = (LEASE_COUNTS[key] ?: 0) + 1
+  }
+
+  private fun releaseLease(scope: ReleaseScope, releaseId: String) {
+    withStorageLock {
+      val key = leaseKey(scope.lynxAppId, releaseId)
+      val remaining = (LEASE_COUNTS[key] ?: 0) - 1
+      if (remaining > 0) LEASE_COUNTS[key] = remaining else LEASE_COUNTS.remove(key)
+      pruneUnreferencedReleases(scope)
+    }
   }
 
   @Throws(IOException::class, OtaSdkException::class)
@@ -827,12 +992,6 @@ class ReleaseTransaction @JvmOverloads constructor(
     artifact.size?.let { if (result.bytes != it.toLong()) throw transactionError("Bundle size 校验失败：${artifact.bundlePath}", "bundle_size_mismatch") }
     if (!result.sha256.equals(artifact.bundleSha256, ignoreCase = true)) {
       throw OtaSdkException.checksumMismatch(artifact.bundleSha256, result.sha256)
-    }
-  }
-
-  private fun validateStreamResult(expectedSha: String, expectedSize: Long, result: OtaIO.StreamResult) {
-    if (result.bytes != expectedSize || !result.sha256.equals(expectedSha, ignoreCase = true)) {
-      throw OtaSdkException.checksumMismatch(expectedSha, result.sha256)
     }
   }
 
@@ -1055,9 +1214,7 @@ class ReleaseTransaction @JvmOverloads constructor(
         runCatching { cleanupRecursively(stagingDirectory) }
         return
       }
-      // 兼容旧 OtaReleaseStore：旧版本只把 Bundle 写在 releases/<id>，没有
-      // release-manifest.json。新事务可以在完成校验后替换这类 legacy 目录；
-      // 已有新 manifest 但内容不一致时仍拒绝覆盖，避免 releaseId 冲突污染。
+      // 已有 manifest 但身份不一致时拒绝覆盖；身份一致但文件损坏时允许同版本修复。
       if (File(releaseDirectory, LOCAL_MANIFEST_NAME).isFile) {
         val existingReleaseId = readManifestReleaseId(File(releaseDirectory, LOCAL_MANIFEST_NAME))
         if (existingReleaseId != manifest.releaseId) {
@@ -1069,8 +1226,7 @@ class ReleaseTransaction @JvmOverloads constructor(
         atomicMove(stagingDirectory, releaseDirectory)
         return
       }
-      // 旧 OtaReleaseStore 目录没有 manifest，也直接清理后发布新 layout。
-      // 这里宁可让事务明确失败并下次重试，也不保留占磁盘的隐藏备份目录。
+      // 没有 manifest 的目录属于未完成/损坏发布，直接清理后重新发布。
       cleanupRecursively(releaseDirectory)
       atomicMove(stagingDirectory, releaseDirectory)
       return
@@ -1092,21 +1248,8 @@ class ReleaseTransaction @JvmOverloads constructor(
     writeAtomic(File(stagingDirectory, LOCAL_MANIFEST_NAME), OtaJson.stringify(map))
   }
 
-  /** 只读取本地 manifest 的 appId，用于按 appId 清理时识别目录归属。 */
-  private fun readLocalManifestAppId(manifestPath: File): String? {
-    if (!manifestPath.isFile) return null
-    return try {
-      val map = OtaJson.asObject(OtaJson.parse(manifestPath.readText(Charsets.UTF_8)), manifestPath.toString())
-      OtaModels.optionalString(map["lynxAppId"], OtaModels.DEFAULT_LYNX_APP_ID)
-    } catch (_: IOException) {
-      null
-    } catch (_: RuntimeException) {
-      null
-    }
-  }
-
   private fun readPublishedRelease(scope: ReleaseScope, releaseId: String): OtaModels.InstalledRelease? {
-    val releaseDirectory = releaseDirectory(releaseId)
+    val releaseDirectory = releaseDirectory(scope.lynxAppId, releaseId)
     val manifestPath = File(releaseDirectory, LOCAL_MANIFEST_NAME)
     if (!manifestPath.isFile) return null
     return try {
@@ -1117,11 +1260,10 @@ class ReleaseTransaction @JvmOverloads constructor(
       val installedAt = (map["installedAt"] as? String)?.let { Instant.parse(it) } ?: Instant.EPOCH
       val bundles = manifest.bundles.map { artifact ->
         val path = resolveInside(releaseDirectory, validateBundlePath(artifact.bundlePath))
-        // 读取 published release 时再次检查文件存在、大小和 SHA，避免不完整目录
-        // 被写入 Active State，进而把损坏 Bundle 送入 LynxView。
+        // 元数据解析只检查文件存在与声明 size。页面热路径随后仅校验实际要打开的
+        // Bundle，并使用进程内 fingerprint 缓存；全量 SHA 校验保留在安装、同步和回滚门禁。
         if (!path.isFile) return null
         artifact.size?.let { if (path.length() != it.toLong()) return null }
-        if (!OtaIO.sha256(path).equals(artifact.bundleSha256, ignoreCase = true)) return null
         OtaModels.InstalledBundle(artifact.pageId, artifact.bundlePath, artifact.bundleSha256, artifact.bundleUrl, path.toString())
       }
       OtaModels.InstalledRelease(
@@ -1154,7 +1296,7 @@ class ReleaseTransaction @JvmOverloads constructor(
   }
 
   private fun resolveEmbedded(scope: ReleaseScope): OtaModels.InstalledRelease? {
-    val embedded = OtaReleaseStore(storageRoot).embeddedRelease(scope.lynxAppId) ?: return null
+    val embedded = EmbeddedReleaseStore(storageRoot).embeddedRelease(scope.lynxAppId) ?: return null
     return embedded.takeIf { matchesScope(scope, it) }
   }
 
@@ -1167,10 +1309,7 @@ class ReleaseTransaction @JvmOverloads constructor(
 
   private fun resolveCurrentUnsafe(scope: ReleaseScope, state: StateRecord?): OtaModels.InstalledRelease? {
     if (state != null) return resolveRef(scope, state.current)
-    val legacyStore = OtaReleaseStore(storageRoot)
-    val current = legacyStore.currentRelease(scope.lynxAppId)
-    if (current != null && matchesScope(scope, current)) return current
-    return legacyStore.embeddedRelease(scope.lynxAppId)?.takeIf { matchesScope(scope, it) }
+    return resolveEmbedded(scope)
   }
 
   private fun isUsableRelease(release: OtaModels.InstalledRelease, scope: ReleaseScope): Boolean {
@@ -1188,7 +1327,7 @@ class ReleaseTransaction @JvmOverloads constructor(
   private fun localPathFor(scope: ReleaseScope, release: OtaModels.InstalledRelease, bundle: OtaModels.InstalledBundle): File {
     val state = readState(scope.lynxAppId)
     return if (state?.current?.kind == RefKind.DOWNLOADED && state.current.releaseId == release.context.releaseId) {
-      resolveInside(releaseDirectory(release.context.releaseId), validateBundlePath(bundle.bundlePath))
+      resolveInside(releaseDirectory(scope.lynxAppId, release.context.releaseId), validateBundlePath(bundle.bundlePath))
     } else {
       File(bundle.localFilePath)
     }
@@ -1205,28 +1344,6 @@ class ReleaseTransaction @JvmOverloads constructor(
     scope.platform.wireValue,
     scope.lynxAppId,
   ).joinToString("|")
-
-  private fun validateReleaseScope(scope: ReleaseScope, release: OtaModels.InstalledRelease) {
-    if (!matchesScope(scope, release)) throw transactionError("Release scope 不一致", "scope_mismatch")
-    validateReleaseId(release.context.releaseId)
-    release.bundles.forEach { validateBundlePath(it.bundlePath); validateSha(it.bundleSha256) }
-  }
-
-  private fun releaseToManifest(release: OtaModels.InstalledRelease): OtaModels.ReleaseManifest {
-    return OtaModels.ReleaseManifest(
-      release.context.env,
-      release.context.hostApp,
-      release.context.lynxAppId,
-      release.context.releaseId,
-      release.context.platform,
-      listOf(release.context.platform),
-      release.bundles.map { bundle ->
-        val source = File(bundle.localFilePath)
-        OtaModels.BundleArtifact(bundle.pageId, bundle.bundlePath, bundle.bundleSha256, bundle.remoteUrl,
-          if (source.isFile) source.length().coerceAtMost(Int.MAX_VALUE.toLong()).toInt() else null)
-      },
-    )
-  }
 
   private fun referenceForRelease(scope: ReleaseScope, release: OtaModels.InstalledRelease): ReleaseRef {
     val embedded = resolveEmbedded(scope)
@@ -1249,10 +1366,7 @@ class ReleaseTransaction @JvmOverloads constructor(
   )
 
   private fun candidatePath(lynxAppId: String): File {
-    return File(
-      File(storageRoot, "states"),
-      "${OtaModels.safeFileName(lynxAppId)}.candidate.json",
-    )
+    return File(appDirectory(lynxAppId), "candidate.json")
   }
 
   private fun readCandidate(lynxAppId: String): CandidateRecord? {
@@ -1260,6 +1374,9 @@ class ReleaseTransaction @JvmOverloads constructor(
     if (!path.isFile) return null
     return try {
       val map = OtaJson.asObject(OtaJson.parse(path.readText(Charsets.UTF_8)), path.toString())
+      if ((map["schemaVersion"] as? Number)?.toInt() != STORE_SCHEMA_VERSION) {
+        throw transactionError("candidate schemaVersion 不支持", "storage_recovery_failed")
+      }
       val scopeMap = OtaJson.asObject(map["scope"], "candidate.scope")
       CandidateRecord(
         scope = ReleaseScope(
@@ -1283,7 +1400,7 @@ class ReleaseTransaction @JvmOverloads constructor(
 
   private fun writeCandidateAtomic(record: CandidateRecord) {
     val map = linkedMapOf<String, Any?>(
-      "schemaVersion" to 1,
+      "schemaVersion" to STORE_SCHEMA_VERSION,
       "scope" to mapOf(
         "env" to record.scope.env.wireValue,
         "hostApp" to record.scope.hostApp.wireValue,
@@ -1314,6 +1431,9 @@ class ReleaseTransaction @JvmOverloads constructor(
     if (!path.isFile) return null
     return try {
       val map = OtaJson.asObject(OtaJson.parse(path.readText(Charsets.UTF_8)), path.toString())
+      if ((map["schemaVersion"] as? Number)?.toInt() != STORE_SCHEMA_VERSION) {
+        throw transactionError("Active State schemaVersion 不支持", "storage_recovery_failed")
+      }
       val scopeValue = map["scope"]
       val scopeMap = if (scopeValue == null) map else OtaJson.asObject(scopeValue, "state.scope")
       val scope = ReleaseScope(
@@ -1352,7 +1472,7 @@ class ReleaseTransaction @JvmOverloads constructor(
   private fun writeStateAtomic(state: StateRecord) {
     ensureDirectories()
     val map = LinkedHashMap<String, Any?>()
-    map["schemaVersion"] = 1
+    map["schemaVersion"] = STORE_SCHEMA_VERSION
     map["generation"] = state.generation
     map["env"] = state.scope.env.wireValue
     map["hostApp"] = state.scope.hostApp.wireValue
@@ -1412,64 +1532,94 @@ class ReleaseTransaction @JvmOverloads constructor(
     val processLock = PROCESS_LOCKS.computeIfAbsent(root.path) { ReentrantLock() }
     return processLock.withLock {
       ensureNoSymlink(root)
-      val locks = File(root, "locks")
-      ensureDirectory(locks)
-      ensureNoSymlink(locks)
-      val marker = File(locks, "storage.lock")
-      val startedAt = System.currentTimeMillis()
-      while (!marker.mkdir()) {
-        if (!marker.exists()) continue
-        val age = System.currentTimeMillis() - marker.lastModified()
-        if (age > STALE_LOCK_MILLIS && marker.delete()) continue
-        if (System.currentTimeMillis() - startedAt > LOCK_WAIT_MILLIS) {
-          throw IOException("OTA storage 正在被其它事务占用")
-        }
-        try {
-          Thread.sleep(25L)
-        } catch (error: InterruptedException) {
-          Thread.currentThread().interrupt()
-          throw error
-        }
-      }
-      marker.setLastModified(System.currentTimeMillis())
-      try {
-        block()
-      } finally {
-        deleteRecursively(marker)
+      block()
+    }
+  }
+
+  /** state/candidate/活体 lease 是唯一保留来源；其它远程 Release 都是可回收 orphan。 */
+  private fun pruneUnreferencedReleases(scope: ReleaseScope) {
+    val state = readState(scope.lynxAppId)
+    ensureStateScope(state, scope)
+    val candidate = readCandidate(scope.lynxAppId)
+    if (candidate != null) ensureCandidateScope(candidate, scope)
+    val retained = linkedSetOf<String>()
+    state?.current?.takeIf { it.kind == RefKind.DOWNLOADED }?.let { retained += it.releaseId }
+    state?.previous?.takeIf { it.kind == RefKind.DOWNLOADED }?.let { retained += it.releaseId }
+    candidate?.release?.takeIf { it.kind == RefKind.DOWNLOADED }?.let { retained += it.releaseId }
+    pruneDownloadedDirectories(scope.lynxAppId, retained)
+  }
+
+  private fun pruneDownloadedDirectories(lynxAppId: String, retainedReleaseIds: Set<String>) {
+    val retained = retainedReleaseIds + activeLeasedReleaseIds(lynxAppId)
+    var deleted = false
+    releasesRoot(lynxAppId).listFiles()?.forEach { release ->
+      if (release.name !in retained) {
+        cleanupRecursively(release)
+        deleted = true
       }
     }
+    if (deleted) bundleValidationCache.clear()
+  }
+
+  private fun activeLeasedReleaseIds(lynxAppId: String): Set<String> {
+    val rootPath = canonicalOrAbsolute(storageRoot).path
+    return LEASE_COUNTS.entries.asSequence()
+      .filter { (key, count) -> key.rootPath == rootPath && key.lynxAppId == lynxAppId && count > 0 }
+      .map { it.key.releaseId }
+      .toSet()
+  }
+
+  private fun leaseKey(lynxAppId: String, releaseId: String): LeaseKey {
+    return LeaseKey(canonicalOrAbsolute(storageRoot).path, lynxAppId, releaseId)
   }
 
   private fun ensureDirectories() {
     val root = canonicalOrAbsolute(storageRoot)
     ensureNoSymlink(root)
     ensureDirectory(root)
-    for (name in listOf("releases", ".staging", "states")) {
-      val child = File(root, name)
+    val apps = File(root, "apps")
+    ensureNoSymlink(apps)
+    ensureDirectory(apps)
+  }
+
+  private fun ensureAppDirectories(lynxAppId: String) {
+    ensureDirectories()
+    val app = appDirectory(lynxAppId)
+    ensureNoSymlink(app)
+    ensureDirectory(app)
+    for (child in listOf(releasesRoot(lynxAppId), stagingRoot(lynxAppId))) {
       ensureNoSymlink(child)
       ensureDirectory(child)
     }
   }
 
-  private fun recoverStaging() {
-    val stagingRoot = File(storageRoot, ".staging")
-    if (!stagingRoot.isDirectory) return
-    stagingRoot.listFiles()?.forEach { cleanupRecursively(it) }
+  private fun recoverStaging(lynxAppId: String) {
+    val staging = stagingRoot(lynxAppId)
+    if (!staging.isDirectory) return
+    staging.listFiles()?.forEach { cleanupRecursively(it) }
   }
 
-  private fun stagingDirectory(releaseId: String, transactionId: String): File {
+  private fun stagingDirectory(lynxAppId: String, releaseId: String, transactionId: String): File {
     validateReleaseId(releaseId)
-    return File(File(storageRoot, ".staging"), "$releaseId.$transactionId")
+    return File(stagingRoot(lynxAppId), "$releaseId.$transactionId")
   }
 
-  private fun releaseDirectory(releaseId: String): File {
+  private fun releaseDirectory(lynxAppId: String, releaseId: String): File {
     validateReleaseId(releaseId)
-    return File(File(storageRoot, "releases"), releaseId)
+    return File(releasesRoot(lynxAppId), releaseId)
   }
 
   private fun statePath(lynxAppId: String): File {
-    return File(File(storageRoot, "states"), "${OtaModels.safeFileName(lynxAppId)}.json")
+    return File(appDirectory(lynxAppId), "state.json")
   }
+
+  private fun appsRoot(): File = File(canonicalOrAbsolute(storageRoot), "apps")
+
+  private fun appDirectory(lynxAppId: String): File = File(appsRoot(), OtaModels.requireLynxAppId(lynxAppId))
+
+  private fun releasesRoot(lynxAppId: String): File = File(appDirectory(lynxAppId), "releases")
+
+  private fun stagingRoot(lynxAppId: String): File = File(appDirectory(lynxAppId), ".staging")
 
   private fun partPath(path: File): File = File(path.parentFile ?: storageRoot, "${path.name}.part")
 
@@ -1604,9 +1754,22 @@ class ReleaseTransaction @JvmOverloads constructor(
     val trialStartedAt: Instant?,
   )
 
+  private data class TreeScan(
+    val totalBytes: Long,
+    val fileCount: Int,
+    val files: List<OtaStorageFileSnapshot>,
+    val truncated: Boolean,
+  )
+
   private data class ReleaseRef(val kind: RefKind, val releaseId: String) {
     fun toJsonMap(): Map<String, Any?> = mapOf("kind" to kind.wireValue, "releaseId" to releaseId)
   }
+
+  private data class LeaseKey(
+    val rootPath: String,
+    val lynxAppId: String,
+    val releaseId: String,
+  )
 
   private enum class RefKind(val wireValue: String) {
     EMBEDDED("embedded"),
@@ -1620,12 +1783,14 @@ class ReleaseTransaction @JvmOverloads constructor(
     private const val BUNDLE_TRANSFER_MAX_ATTEMPTS = 3
     private const val BUNDLE_RETRY_BASE_DELAY_MILLIS = 250L
     private const val BUNDLE_EXECUTOR_SHUTDOWN_TIMEOUT_MILLIS = 5_000L
+    private const val STORE_SCHEMA_VERSION = 2
+    private const val DIAGNOSTIC_MAX_DEPTH = 32
     private const val LOCAL_MANIFEST_NAME = "release-manifest.json"
     private const val METADATA_ALLOWANCE_BYTES = 1024L * 1024L
     private const val SAFETY_RESERVE_BYTES = 32L * 1024L * 1024L
-    private const val LOCK_WAIT_MILLIS = 30_000L
-    private const val STALE_LOCK_MILLIS = 120_000L
     private val SHA_PATTERN = Regex("sha256:[0-9a-fA-F]{64}")
+    private val APP_ID_PATTERN = Regex("^[0-9]{8}$")
     private val PROCESS_LOCKS = ConcurrentHashMap<String, ReentrantLock>()
+    private val LEASE_COUNTS = ConcurrentHashMap<LeaseKey, Int>()
   }
 }

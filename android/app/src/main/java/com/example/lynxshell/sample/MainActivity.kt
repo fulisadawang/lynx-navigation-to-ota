@@ -37,6 +37,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, NativeTabDemoActivity::class.java))
         }
 
+        findViewById<MaterialButton>(R.id.open_ota_storage_inspector_button).setOnClickListener {
+            startActivity(Intent(this, OtaStorageInspectorActivity::class.java))
+        }
+
         // Demo 脚本入口：复用 Application 启动/回前台的同一条原生全量 OTA 链路，
         // App ID 由接口返回，Demo 不自行拼接、过滤或生成 App ID。
         findViewById<MaterialButton>(R.id.manual_sync_all_ota_button).setOnClickListener {

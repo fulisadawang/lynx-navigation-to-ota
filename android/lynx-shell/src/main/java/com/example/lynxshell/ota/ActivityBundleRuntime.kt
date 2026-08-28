@@ -1,5 +1,6 @@
 package com.example.lynxshell.ota
 
+import com.ota.android.sdk.OtaStorageSnapshot
 import java.io.File
 
 /**
@@ -34,6 +35,9 @@ interface ActivityBundleRuntime {
      * Native Tab 不调用此方法；OTA runtime 自己负责 30 分钟门控。
      */
     fun refreshAppBundleIfNeeded(lynxAppId: String) = Unit
+
+    /** 只读 Store 快照；不触发网络、下载、激活或清理。 */
+    fun otaStorageSnapshot(): OtaStorageSnapshot? = null
 
     /**
      * 为一次页面打开准备指定 appId 下的 Bundle。
@@ -80,6 +84,8 @@ data class PreparedActivityBundle(
     val sha256: String? = null,
     /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
     val source: String = "ota_current",
+    /** downloaded Release 的进程内租约；容器销毁或放弃本次结果时必须 close。 */
+    val releaseLease: AutoCloseable? = null,
 ) {
     init {
         require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }

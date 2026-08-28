@@ -109,8 +109,8 @@ OTA-DEMO-V2
 - `来源 = OTA CURRENT`；
 - 新旧 `Release` 明确不同；
 - 页面内容出现新 Release 的可视标记；
-- Android 远程文件位于 `files/lynx-ota-store/releases/<newReleaseId>/`；
-- `states/<appId>.json` 的 current 指向新 Release；
+- Android 远程文件位于 `files/lynx-ota-store/apps/<appId>/releases/<newReleaseId>/`；
+- `apps/<appId>/state.json` 的 current 指向新 Release；
 - 重新杀进程、重新启动后仍显示新 Release；
 - 内置 baseline 没有被修改。
 

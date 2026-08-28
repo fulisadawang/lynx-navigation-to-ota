@@ -4,13 +4,13 @@ import java.io.File
 import java.net.URI
 import java.time.Instant
 import java.util.Collections
-import java.util.Locale
 
 class OtaModels private constructor() {
   companion object {
     const val DEFAULT_LYNX_APP_ID = "10000000"
     const val DEFAULT_OTA_CLIENT_TOKEN = "ota-client-token-v1-fixed"
     const val MAX_BUNDLE_BYTES = 20 * 1024 * 1024
+    private val LYNX_APP_ID_PATTERN = Regex("^[0-9]{8}$")
 
     @JvmStatic
     fun firstPresent(map: Map<String, Any?>, first: String, second: String): Any? {
@@ -43,17 +43,13 @@ class OtaModels private constructor() {
       return if (value == null) null else intValue(value)
     }
 
+    /** OTA Server 契约中的 App ID 是 8 位数字，可直接作为跨平台无碰撞目录段。 */
     @JvmStatic
-    fun safeFileName(raw: String): String {
-      val builder = StringBuilder()
-      for (character in raw) {
-        if (character.isLetterOrDigit() || character == '-' || character == '_') {
-          builder.append(character)
-        } else {
-          builder.append('_')
-        }
+    fun requireLynxAppId(raw: String): String {
+      require(LYNX_APP_ID_PATTERN.matches(raw)) {
+        "lynxAppId 必须是 8 位数字：$raw"
       }
-      return builder.toString().lowercase(Locale.ROOT)
+      return raw
     }
 
     @JvmStatic

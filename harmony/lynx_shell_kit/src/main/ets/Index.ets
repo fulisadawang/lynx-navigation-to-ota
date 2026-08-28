@@ -28,6 +28,15 @@ export {
 export { default as PageBundleRuntimeRegistry, LynxOtaConfig, OtaPrepareSignal } from './ota/OtaModels';
 export { LynxTabContainer, LynxTabSpec } from './pages/LynxTabContainer';
 export { default as ReleaseTransaction } from './ota/ReleaseTransaction';
+export { default as OtaStorageDiagnostics } from './ota/OtaStorageDiagnostics';
+export {
+  OtaBundleLease,
+  OtaStorageReleaseRole,
+  OtaStorageSnapshot,
+  OtaStorageAppSnapshot,
+  OtaStorageReleaseSnapshot,
+  OtaStorageStagingSnapshot
+} from './ota/OtaModels';
 export { LynxShellModule } from './module/LynxShellModule';
 export {
   ShellViewAppearPayload,

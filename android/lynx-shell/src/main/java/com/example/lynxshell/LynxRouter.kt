@@ -104,6 +104,11 @@ object LynxRouter {
         deleteAllOtaBundles(onComplete)
     }
 
+    /** 返回只读 OTA Store 快照；调用方应在后台线程执行。 */
+    fun otaStorageSnapshot(): com.ota.android.sdk.OtaStorageSnapshot? {
+        return LynxShell.activityBundleRuntime()?.otaStorageSnapshot()
+    }
+
     /** 运行时替换 OTA 适配器；适合宿主完成环境配置后再安装。 */
     fun installActivityBundleRuntime(runtime: ActivityBundleRuntime?) {
         LynxShell.installActivityBundleRuntime(runtime)

@@ -10,7 +10,7 @@ import {
 import LynxRouteParser from './LynxRouteParser';
 import LynxNavigator from './LynxNavigator';
 import LynxOtaRuntime from '../ota/LynxOtaRuntime';
-import PageBundleRuntimeRegistry, { LynxOtaConfig } from '../ota/OtaModels';
+import PageBundleRuntimeRegistry, { LynxOtaConfig, OtaStorageSnapshot } from '../ota/OtaModels';
 import EmbeddedBundleRegistry, {
   EmbeddedBundleIdentity,
   EmbeddedOnlyRuntime
@@ -188,6 +188,13 @@ export default class LynxRouter {
       .catch((error: Error): ShellBridgeResult => {
         return { code: 1500, message: `删除全部 OTA Bundle 失败：${error.message}` };
       });
+  }
+
+  /** 返回真实 Store v2 的只读快照；不会发起 OTA 请求或修改磁盘。 */
+  static otaStorageSnapshot(): Promise<OtaStorageSnapshot | null> {
+    const runtime = PageBundleRuntimeRegistry.current();
+    if (runtime === null) return Promise.resolve(null);
+    return runtime.storageSnapshot();
   }
 
   /** 原位替换当前 Page，保留 entry 的 session/page 身份。 */

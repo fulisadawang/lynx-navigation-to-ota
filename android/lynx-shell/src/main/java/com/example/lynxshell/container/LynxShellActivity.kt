@@ -68,6 +68,7 @@ class LynxShellActivity : AppCompatActivity() {
     private var lynxView: LynxView? = null
     private var lynxViewClient: LynxViewClient? = null
     private var templateProvider: ShellTemplateProvider? = null
+    private var releaseLease: AutoCloseable? = null
     private var contentGeneration = 0L
     private var rebuildAfterSnapshotRelease = false
     /** OTA prepare/rollback 任务；Activity 销毁或 replace 时必须取消。 */
@@ -326,6 +327,7 @@ class LynxShellActivity : AppCompatActivity() {
         }
         lynxView = null
         lynxViewClient = null
+        releaseCurrentLease()
         bundleRuntimeMetadata = null
         firstScreenReadyGeneration = null
         contentGeneration += 1L
@@ -487,7 +489,10 @@ class LynxShellActivity : AppCompatActivity() {
             val cached = runCatching { runtime.resolvePage(appId, bundleName) }.getOrNull()
             if (cached != null) {
                 runOnUiThread {
-                    if (!isCurrentGeneration(generation)) return@runOnUiThread
+                    if (!isCurrentGeneration(generation)) {
+                        runCatching { cached.releaseLease?.close() }
+                        return@runOnUiThread
+                    }
                     bundleFuture = null
                     if (cached.source != "embedded_baseline" && cached.source != "candidate_trial") {
                         // 页面先使用本地 current；版本检查在后台按 App ID 30 分钟门控执行，
@@ -507,7 +512,10 @@ class LynxShellActivity : AppCompatActivity() {
             }
             val result = runCatching { runtime.prepare(appId, bundleName) }
             runOnUiThread {
-                if (!isCurrentGeneration(generation)) return@runOnUiThread
+                if (!isCurrentGeneration(generation)) {
+                    result.getOrNull()?.let { runCatching { it.releaseLease?.close() } }
+                    return@runOnUiThread
+                }
                 bundleFuture = null
                 result.fold(
                     onSuccess = { prepared ->
@@ -540,6 +548,7 @@ class LynxShellActivity : AppCompatActivity() {
         }
         checked.fold(
             onSuccess = { value ->
+                replaceReleaseLease(value.releaseLease)
                 bundleRuntimeMetadata = mapOf(
                     "lynxAppId" to value.lynxAppId,
                     "releaseId" to (value.releaseId ?: "unknown"),
@@ -561,6 +570,7 @@ class LynxShellActivity : AppCompatActivity() {
                 )
             },
             onFailure = { error ->
+                runCatching { prepared.releaseLease?.close() }
                 handleTemplateLoadFailure(
                     generation,
                     error.message ?: "OTA Bundle 身份校验失败",
@@ -572,6 +582,17 @@ class LynxShellActivity : AppCompatActivity() {
     /** 根 Bundle prepare/首屏失败时按 appId 回滚一次并重新准备。 */
     private fun handleTemplateLoadFailure(generation: Long, message: String) {
         if (!isCurrentGeneration(generation)) return
+        unregisterMessageEndpoint()
+        templateProvider?.close()
+        templateProvider = null
+        lynxView?.let { view ->
+            lynxViewClient?.let(view::removeLynxViewClient)
+            container.removeView(view)
+            view.destroy()
+        }
+        lynxView = null
+        lynxViewClient = null
+        releaseCurrentLease()
         loadingView.hide()
         if (
             request.isOtaRequest() &&
@@ -645,6 +666,7 @@ class LynxShellActivity : AppCompatActivity() {
         view.destroy()
         lynxView = null
         lynxViewClient = null
+        releaseCurrentLease()
         rebuildAfterSnapshotRelease = true
         return true
     }
@@ -740,7 +762,20 @@ class LynxShellActivity : AppCompatActivity() {
         }
         lynxView = null
         lynxViewClient = null
+        releaseCurrentLease()
         super.onDestroy()
+    }
+
+    private fun replaceReleaseLease(next: AutoCloseable?) {
+        if (releaseLease === next) return
+        releaseCurrentLease()
+        releaseLease = next
+    }
+
+    private fun releaseCurrentLease() {
+        val current = releaseLease
+        releaseLease = null
+        runCatching { current?.close() }
     }
 
     /** 登记当前 Activity 对应的活体 LynxView；原位换 Bundle 时会重新登记。 */

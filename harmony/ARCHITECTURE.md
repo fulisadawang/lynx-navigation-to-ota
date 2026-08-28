@@ -37,6 +37,27 @@ Runtime 初始化、XElement、Provider、Bridge、路由和容器。`lynx_shell
 - `ShellGenericResourceFetcher`：字体、图片和二进制资源；
 - `ShellMediaResourceFetcher`：本地逻辑 URL 转 rawfile URL。
 
+## OTA Store v2 层
+
+`ReleaseTransaction` 只管理远程 OTA 文件，不管理 rawfile 内置 Bundle：
+
+```text
+<context.filesDir>/lynx-ota-store/apps/<lynxAppId>/
+├── state.json
+├── releases/<releaseId>/release-manifest.json + Bundle files
+└── .staging/<releaseId>.<transactionId>/
+```
+
+状态文件使用 schema v2，只包含 `current/previous`；本端不实现候选版本状态机。每次发布先在
+App ID 目录下完成 staging、size/SHA 校验、完整 Manifest 校验和可用空间预检，再最后写入 state。
+写入后 prune 历史 Release，只保留 current、previous 和仍被 Page/Tab lease 使用的目录。
+
+`OtaBundleLease` 与 `PreparedPageBundle` 一起返回给容器。Runtime 的操作队列同时串行化下载、
+发布、删除、冷启动清理和 lease 释放后的 prune，避免异步网络事务期间误删尚未提交的 Release。
+
+`OtaStorageDiagnostics` 只读扫描 Runtime 已绑定的 Store root，提供 Inspector 所需的路径、角色、
+文件树和字节统计，不接受任意外部路径。
+
 ## 路由层
 
 `LynxRouteParser` 统一解析 Explorer、Sparkling 和 `lynxshell` 协议；`LynxNavigator` 统一 ArkUI Router 调用。

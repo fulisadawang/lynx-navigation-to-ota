@@ -24,5 +24,10 @@
             android:name=".NativeTabDemoActivity"
             android:exported="false"
             android:label="原生 Tab 承载 Demo" />
+
+        <activity
+            android:name=".OtaStorageInspectorActivity"
+            android:exported="false"
+            android:label="OTA 磁盘浏览器" />
     </application>
 </manifest>

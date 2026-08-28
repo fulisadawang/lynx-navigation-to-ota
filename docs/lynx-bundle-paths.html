@@ -281,7 +281,7 @@
       </article>
       <article class="question">
         <button type="button" class="question-button">什么时候才会写手机磁盘？</button>
-        <div class="answer">只有远程 OTA Bundle 下载时写入 <code>releases/</code>，事务完成后写 <code>states/&lt;appId&gt;.json</code>。内置 baseline 本身不写磁盘。</div>
+        <div class="answer">只有远程 OTA Bundle 下载时写磁盘。Android 与 iOS Store v2 都写入 <code>apps/&lt;appId&gt;/releases/</code>，事务完成后提交同目录的 <code>state.json</code>。内置 baseline bytes 本身不写私有磁盘。</div>
       </article>
       <article class="question">
         <button type="button" class="question-button">下次启动到底读哪一份？</button>
@@ -298,6 +298,14 @@
       <article class="question">
         <button type="button" class="question-button">三端是不是完全一样？</button>
         <div class="answer">职责一样，读取载体不同：Android 是 AssetManager bytes，iOS 是 App Bundle file URL，HarmonyOS 是 rawfile ArrayBuffer；远程 OTA 都进入各自的私有 Store。</div>
+      </article>
+      <article class="question">
+        <button type="button" class="question-button">Android / iOS 会不会把十个历史版本全留着？</button>
+        <div class="answer">不会。普通模式只保留 current 与 previous；candidate 模式最多再保留一份 candidate。仍被活体页面 lease 的旧 Release 会临时保留，页面销毁后回收。</div>
+      </article>
+      <article class="question">
+        <button type="button" class="question-button">怎样直接看手机里的真实目录？</button>
+        <div class="answer">Android Demo 原生 Launcher 点击“查看 OTA 磁盘目录”。它只读展示 root、App ID、版本角色、staging、文件与字节数，不会发 OTA 请求或修改文件。</div>
       </article>
     </div>
   </section>
@@ -342,19 +350,19 @@
       <tr>
         <td><strong>Android</strong></td>
         <td><code>AssetManager.open("bundles/lynx/...")</code><br>校验后直接以 bytes 交给 LynxView，不复制到 <code>filesDir</code>。</td>
-        <td><code>/data/user/0/&lt;package&gt;/files/lynx-ota-store/releases/</code><br><code>states/&lt;safeAppId&gt;.json</code>、<code>.staging/</code></td>
+        <td><code>/data/user/0/&lt;package&gt;/files/lynx-ota-store/apps/&lt;appId&gt;/releases/</code><br><code>state.json</code>、<code>candidate.json</code>、<code>.staging/</code></td>
         <td>已校验的远程 current；没有 current 时直接读取 APK assets。</td>
       </tr>
       <tr>
         <td><strong>iOS</strong></td>
         <td><code>Bundle.main/.../Bundles/lynx/...</code><br>直接得到 App Bundle file URL，不复制。</td>
-        <td>默认由 Shell 配置到<br><code>Application Support/lynx-ota-store/</code></td>
+        <td><code>Application Support/lynx-ota-store/apps/&lt;appId&gt;/releases/</code><br><code>state.json</code>、<code>candidate.json</code>、<code>.staging/</code></td>
         <td>current file URL；没有 current 时直接读取 App Bundle。</td>
       </tr>
       <tr>
         <td><strong>HarmonyOS</strong></td>
         <td><code>resourceManager.getRawFileContent("bundles/lynx/...")</code><br>校验后直接以 ArrayBuffer 交给 Provider，不写 <code>filesDir/lynx-embedded</code>。</td>
-        <td><code>&lt;context.filesDir&gt;/lynx-ota-store/releases/</code><br><code>states/</code>、<code>.staging/</code></td>
+        <td><code>&lt;context.filesDir&gt;/lynx-ota-store/apps/&lt;appId&gt;/releases/</code><br><code>state.json</code>、<code>.staging/</code></td>
         <td>已校验的 current file；没有 current 时直接读取 rawfile ArrayBuffer。</td>
       </tr>
     </tbody>
@@ -367,21 +375,29 @@ android/app/src/main/assets/bundles/lynx/10000001/releases/r20260806_pw0yl6/home
 android/app/src/main/assets/bundles/lynx/10000002/releases/r20260806_dhax5q/home.lynx.bundle
 
 Android 远程 OTA（运行时）
-/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/releases/r20260806_pw0yl6/home.lynx.bundle
-/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/releases/r20260806_dhax5q/home.lynx.bundle
+/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/apps/10000001/releases/r20260806_pw0yl6/home.lynx.bundle
+/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/apps/10000002/releases/r20260806_dhax5q/home.lynx.bundle
 
 Android 状态
-/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/states/10000001.json
-/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/states/10000002.json</pre>
+/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/apps/10000001/state.json
+/data/user/0/com.example.lynxshell.debug/files/lynx-ota-store/apps/10000002/state.json
+
+iOS 远程 OTA（运行时）
+Application Support/lynx-ota-store/apps/10000001/releases/r20260823_qc8ffc/main.lynx.bundle
+Application Support/lynx-ota-store/apps/10000001/state.json
+
+HarmonyOS 远程 OTA（运行时）
+&lt;context.filesDir&gt;/lynx-ota-store/apps/10000001/releases/r20260823_qc8ffc/main.lynx.bundle
+&lt;context.filesDir&gt;/lynx-ota-store/apps/10000001/state.json</pre>
 
   <h2>5. current、previous、baseline 的关系</h2>
   <div class="grid two">
     <article class="card">
       <span class="tag">REMOTE OTA</span>
       <h3>有远程更新</h3>
-      <pre>releases/remote-v2/       ← 远程 Bundle
-states/10000001.json      ← current = downloaded/remote-v2
-                           ← previous = downloaded/remote-v1</pre>
+      <pre>apps/10000001/releases/remote-v2/ ← 远程 Bundle
+apps/10000001/state.json          ← current = downloaded/remote-v2
+                                   ← previous = downloaded/remote-v1</pre>
       <p>远程版本完整下载、size/SHA 校验和原子发布后，才切换 current。</p>
     </article>
     <article class="card">
@@ -421,8 +437,8 @@ states/10000001.json      ← current = downloaded/remote-v2
       baseline: 'AssetManager.open("bundles/lynx/...") → ByteArray',
       baselinePath: 'assets/bundles/lynx/<lynxAppId>/releases/<releaseId>/...',
       store: '<filesDir>/lynx-ota-store/',
-      remotePath: '<filesDir>/lynx-ota-store/releases/<releaseId>/...',
-      statePath: '<filesDir>/lynx-ota-store/states/<safeAppId>.json',
+      remotePath: '<filesDir>/lynx-ota-store/apps/<appId>/releases/<releaseId>/...',
+      statePath: '<filesDir>/lynx-ota-store/apps/<appId>/state.json',
       direct: '校验后直接把 bytes 交给 LynxView；不创建 embedded 磁盘副本。'
     },
     ios: {
@@ -430,8 +446,8 @@ states/10000001.json      ← current = downloaded/remote-v2
       baseline: 'Bundle.main URL → Data(contentsOf:)',
       baselinePath: 'App Bundle/Bundles/lynx/<lynxAppId>/releases/<releaseId>/...',
       store: 'Application Support/lynx-ota-store/',
-      remotePath: 'Application Support/lynx-ota-store/releases/<releaseId>/...',
-      statePath: 'Application Support/lynx-ota-store/states/<lynxAppId>.json',
+      remotePath: 'Application Support/lynx-ota-store/apps/<appId>/releases/<releaseId>/...',
+      statePath: 'Application Support/lynx-ota-store/apps/<appId>/state.json',
       direct: '直接消费 App Bundle file URL；不复制内置 baseline。'
     },
     harmony: {
@@ -439,9 +455,9 @@ states/10000001.json      ← current = downloaded/remote-v2
       baseline: 'resourceManager.getRawFileContent(...) → ArrayBuffer',
       baselinePath: 'rawfile/bundles/lynx/<lynxAppId>/releases/<releaseId>/...',
       store: '<context.filesDir>/lynx-ota-store/',
-      remotePath: '<context.filesDir>/lynx-ota-store/releases/<releaseId>/...',
-      statePath: '<context.filesDir>/lynx-ota-store/states/<lynxAppId>.json',
-      direct: '校验后直接把 ArrayBuffer 交给 Provider；不写 lynx-embedded。'
+      remotePath: '<context.filesDir>/lynx-ota-store/apps/<appId>/releases/<releaseId>/...',
+      statePath: '<context.filesDir>/lynx-ota-store/apps/<appId>/state.json',
+      direct: '校验后直接把 ArrayBuffer 交给 Provider；不写 lynx-embedded。只保留 current/previous。'
     }
   };
 

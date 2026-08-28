@@ -16,6 +16,8 @@ export class LynxOtaConfig {
    */
   serverPlatform: string = '';
   clientToken: string = '';
+  /** 仅 TEST + Want 显式注入时启用；生产默认永远关闭。 */
+  debugMockEnabled: boolean = false;
   storageDirectory: string = '';
   pageRefreshIntervalMillis: number = 30 * 60 * 1000;
 
@@ -82,8 +84,9 @@ export interface OtaLatestBundleLists {
   bundleLists: OtaReleaseSnapshot[];
 }
 
-/** 写入 releases/<releaseId>/release-manifest.json 的本地 Manifest。 */
+/** 写入 apps/<lynxAppId>/releases/<releaseId>/release-manifest.json 的本地 Manifest。 */
 export interface OtaLocalManifest {
+  schemaVersion: number;
   env: string;
   hostApp: string;
   lynxAppId: string;
@@ -94,8 +97,9 @@ export interface OtaLocalManifest {
   installedAt: number;
 }
 
-/** states/<appId>.json；state 始终在 Release 完整发布后最后原子提交。 */
+/** apps/<appId>/state.json；state 始终在 Release 完整发布后最后原子提交。 */
 export interface OtaReleaseState {
+  schemaVersion: number;
   env: string;
   hostApp: string;
   lynxAppId: string;
@@ -103,14 +107,28 @@ export interface OtaReleaseState {
   generation: number;
   current: OtaReleaseRef;
   previous?: OtaReleaseRef;
-  /** 旧 state 兼容读取字段；canonical 写入不再生成。 */
-  currentReleaseId?: string;
-  previousReleaseId?: string;
 }
 
 export interface OtaReleaseRef {
   kind: 'embedded' | 'downloaded';
   releaseId: string;
+}
+
+/** 远程 Release 的进程内生命周期租约；rawfile baseline 不需要租约。 */
+export class OtaBundleLease {
+  private closed: boolean = false;
+  private readonly releaseAction: () => void;
+
+  constructor(releaseAction: () => void) {
+    this.releaseAction = releaseAction;
+  }
+
+  /** 幂等释放；最后一个 lease 释放后由 Store 执行 app-scoped prune。 */
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.releaseAction();
+  }
 }
 
 /** Router 容器只消费已校验的文件或 rawfile bytes；绝对路径不会写入 ArkUI Router 参数。 */
@@ -124,6 +142,64 @@ export interface PreparedPageBundle {
   sha256: string;
   /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
   source?: string;
+  /** 远程 current 的容器级租约；embedded rawfile 不设置。 */
+  lease?: OtaBundleLease;
+}
+
+export enum OtaStorageReleaseRole {
+  CURRENT = 'current',
+  PREVIOUS = 'previous',
+  LEASED = 'leased',
+  ORPHAN = 'orphan'
+}
+
+export interface OtaStorageFileSnapshot {
+  relativePath: string;
+  byteCount: number;
+  modifiedAt: number;
+}
+
+export interface OtaStorageStateSnapshot {
+  generation: number;
+  currentReleaseId: string;
+  currentKind: string;
+  previousReleaseId?: string;
+  previousKind?: string;
+}
+
+export interface OtaStorageReleaseSnapshot {
+  releaseId: string;
+  roles: OtaStorageReleaseRole[];
+  totalBytes: number;
+  fileCount: number;
+  manifestValid: boolean;
+  files: OtaStorageFileSnapshot[];
+  truncated: boolean;
+}
+
+export interface OtaStorageStagingSnapshot {
+  transactionName: string;
+  totalBytes: number;
+  fileCount: number;
+  files: OtaStorageFileSnapshot[];
+  truncated: boolean;
+}
+
+export interface OtaStorageAppSnapshot {
+  appId: string;
+  state?: OtaStorageStateSnapshot;
+  releases: OtaStorageReleaseSnapshot[];
+  staging: OtaStorageStagingSnapshot[];
+  totalBytes: number;
+  fileCount: number;
+}
+
+export interface OtaStorageSnapshot {
+  rootPath: string;
+  totalBytes: number;
+  fileCount: number;
+  generatedAt: number;
+  apps: OtaStorageAppSnapshot[];
 }
 
 /** 页面关闭时只置位，异步任务完成后必须检查，防止过期结果创建 LynxView。 */
@@ -153,6 +229,8 @@ export interface PageBundleRuntime {
   rollback(lynxAppId: string, reason: string): Promise<boolean>;
   deleteBundles(lynxAppId: string): Promise<void>;
   deleteAllBundles(): Promise<void>;
+  /** 只读快照；不触发网络、SHA、prune 或目录写入。 */
+  storageSnapshot(): Promise<OtaStorageSnapshot | null>;
   /** Provider 只允许读取受控 prepared file，或消费已校验的 embedded rawfile bytes。 */
   storageRoot(): string;
 }

@@ -98,6 +98,9 @@ assets://bundles/main.lynx.bundle
 lynx_shell/src/main/resources/rawfile/bundles/main.lynx.bundle
 ```
 
+rawfile 内置 Bundle 是发布资产，首次命中时直接读取并校验为 `ArrayBuffer`，不会复制到
+`filesDir/lynx-ota-store`。远程 OTA 才会写入下面的 Store v2。
+
 ## 路由示例
 
 ```text
@@ -234,8 +237,8 @@ ota.serverPlatform = 'android'; // 临时复用 Android release；后端支持 h
 
 OTA 与直连边界：
 
-- `openOta(appId, bundleName, params)`：Manifest/latest-list、staging、size/SHA、
-  `states/<appId>.json` 的 `current/previous` Release ref、repair/rollback；新 state 不写
+- `openOta(appId, bundleName, params)`：Manifest/latest-list、app-scoped staging、size/SHA、
+  `apps/<appId>/state.json` 的 `current/previous` Release ref、repair/rollback；新 state 不写
   Bundle 绝对路径。
 - `open('https://...lynx.bundle', params)`：直接下载渲染，不进入 OTA、不过 30 分钟门控。
 - 当前 Bundle 下载会在 `ArrayBuffer` 返回后执行 20 MB 硬上限；这是 Harmony Lynx 4.0
@@ -255,6 +258,35 @@ OTA 与直连边界：
   Release/文件指纹变化自动失效。
 - 首屏失败时先尝试 previous；没有 previous 但 Manifest 存在 rawfile baseline 时删除坏的
   downloaded current，下一次 `prepare` 直接读 rawfile，不复制 baseline 到应用私有目录。
+
+### HarmonyOS Store v2（不含候选版本）
+
+HarmonyOS 与 Android/iOS 使用同一份远程存储契约，但本端只保留稳定的 `current/previous`，不引入
+候选版本状态：
+
+```text
+<context.filesDir>/lynx-ota-store/
+└── apps/<8位lynxAppId>/
+    ├── state.json                         # schemaVersion=2
+    ├── releases/<releaseId>/
+    │   ├── release-manifest.json          # schemaVersion=1
+    │   └── <bundlePath>
+    └── .staging/<releaseId>.<transactionId>/
+```
+
+- 相同 `releaseId` 在不同 App ID 下分别保存，删除一个 App ID 不会影响另一个。
+- 连续 V1…V10 后只保留 V9/V10；活体 Page/Tab 持有 lease 时，旧 Release 临时保留，最后一个
+  lease 关闭后再回收。
+- 冷启动会清理可确认无引用的 orphan/staging；损坏的 `state.json` 保守跳过。
+- 下载前先 prune，再用 Harmony 官方 `statfs.getFreeSizeSync` 做容量预检；空间不足不提交新 current。
+- 不创建 `candidate.json`，也不改变 `current/previous` 的回滚语义。
+
+`ReleaseTransaction` 的校验缓存只保存 Bundle 指纹，不缓存 bytes；指纹包含环境、host、平台、
+App ID、Release、Bundle 路径、期望 SHA、文件大小、mtime、ctime 和 inode。
+
+Launcher 和原生 ArkUI Tabs 顶部的“磁盘”入口会推入只读 Inspector Page。Inspector 展示 Store
+真实 root、App ID、current/previous、leased/orphan 角色、文件树、staging、文件数和字节数；
+刷新不请求 OTA、不计算 SHA、不修改文件，并且从 Tab 进入时不会销毁下层 Tab 的 lease。
 
 ### Demo 与 Android/iOS 的可见行为契约
 
@@ -284,11 +316,21 @@ Tab 普通切换不会递增 `refreshGeneration`，因此保留 LynxView、滚�
 Manifest 身份缺失时直接显示错误，不静默降级成 `assets://` 直读。
 
 当前 checkout 已执行 `ohpm install`、`assembleHar` 和 `assembleApp`，HAR 与完整 App 均构建成功；
-`python3 scripts/check_harmony_shell.py --quiet` 为 `80 PASS / 0 WARN / 0 FAIL`。Pura 90 / HarmonyOS
-6.1.1(24) 模拟器已验证冷启动 `10000001/home.lynx.bundle`、Home Tab 的
-`10000001 / r20260823_qc8ffc / embedded baseline / main.lynx.bundle`、Settings 内容和 Tab 切换；
-普通 Home/Settings 往返前后 OTA 同步日志计数保持不变。主动刷新失败时旧 Tab/Release 保留。
-当前本机与模拟器无法连通测试 OTA 域名，因此在线刷新成功、remote current 和回滚仍需网络恢复后验收。
+`python3 scripts/check_harmony_shell.py --quiet` 为 `85 PASS / 0 WARN / 0 FAIL`。
+本轮新 Store v2 已使用 HarmonyOS Pura 90 模拟器重新安装验收。HDC 目标为
+`127.0.0.1:5555 TCP Connected localhost`；由于本次运行环境访问 TEST OTA 服务时 TLS 连接失败，
+仅在 `env=TEST` 且显式传入 `lynx_ota_mock=1` 时启用确定性的本地 Mock Source，生产默认不会启用。
+模拟器运行态已证明：两个 App ID 可以同时保存相同的 `mock-ota-v1`/`mock-ota-v2` release，最终各自
+保留 current/previous，共 12 个文件；Launcher 和 Native Tab 都能打开只读 Inspector，Tab 进入时
+current 显示 `leased`，返回后 lease 消失；删除全部远程文件后 rawfile embedded 页面仍能渲染；强制停止
+并冷启动后 current/previous 仍可 cache-first 加载。模拟器证据覆盖 Store v2、Tab、Inspector、lease、
+删除和冷启动链路，但不是真实服务端版本内容差异证据。
+
+真实 TEST OTA 服务和 Harmony 物理真机仍是单独的待验收边界：本次 Mac 请求返回 TLS
+`SSL_ERROR_SYSCALL`（HTTP code 000），当前没有物理 Harmony 设备连接。因此不能把模拟器 Mock 结果
+表述为真实 Server 或物理真机通过，也不能沿用旧全局 Store 布局的历史运行记录。
+
+独立 HTML 报告：[harmony-ota-test-report.html](../docs/harmony-ota-test-report.html)。
 
 它与 Android `LynxRouter.open(context, bundle, params)`、iOS
 `LynxRouter.open(bundle:params:)` 对齐；不需要预注册 routeId，也不引入 Fragment。
