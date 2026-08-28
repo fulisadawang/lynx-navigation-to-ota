@@ -45,6 +45,9 @@ LynxNativeShells-4.0-XElement-Full-Android-iOS-Harmony/
 - Bundle 路径说明：[docs/lynx-bundle-paths.html](docs/lynx-bundle-paths.html)
 - Bundle/OTA 验收清单：[docs/lynx-bundle-ota-test-checklist.md](docs/lynx-bundle-ota-test-checklist.md)
 - Bundle 版本可见性测试：[docs/lynx-bundle-version-visibility-test-case.md](docs/lynx-bundle-version-visibility-test-case.md)
+- Android OTA 验收报告：[docs/android-ota-test-report.html](docs/android-ota-test-report.html)
+- iOS OTA 验收报告：[docs/ios-ota-test-report.html](docs/ios-ota-test-report.html)
+- HarmonyOS OTA 验收报告：[docs/harmony-ota-test-report.html](docs/harmony-ota-test-report.html)
 - 在线入口：`https://fulisadawang.github.io/lynx-navigation-to-ota/`
 - 页面内容：接口搜索与切换、请求头、全量/定向 `latest-bundle-list`、Manifest、策略匹配、
   结果上报、Bundle 校验、错误处理和三端状态。
@@ -57,9 +60,35 @@ Base URL 和 CDN 地址都是占位符，不包含真实凭证。
 
 | 平台 | 原生页面模型 | Runtime 入口 | Bundle 容器 |
 |---|---|---|---|
-| Android | `android/lynx-shell`，一个页面一个 `LynxShellActivity` | `LynxRouter.install + LynxOtaConfig` | Activity-first；Router AAR 内置 OTA；默认沉浸式 `LynxView` |
-| iOS | `LynxShellKit`，一个页面一个 `LynxContainerViewController` | `LynxRouter.install(to:otaConfiguration:)` | UINavigationController；默认沉浸式 `LynxView` |
-| HarmonyOS | `lynx_shell_kit`，一个 ArkUI 路由页一个 `LynxContainer` | `LynxRouter.install(context, otaConfig?)` | ArkUI Router Page（NavPathStack 可替换适配层）；默认沉浸式 `LynxView` |
+| Android | `android/lynx-shell`，一个页面一个 `LynxShellActivity`；Native Tab 使用 `Fragment` | `LynxRouter.install + LynxOtaConfig` | Activity-first Page + Fragment Tab；Router AAR 内置 OTA；默认沉浸式 `LynxView` |
+| iOS | `LynxShellKit`，一个页面一个 `LynxContainerViewController`；Native Tab 使用原生 `UIViewController` | `LynxRouter.install(to:otaConfiguration:)` | UINavigationController + UIViewController Tab；默认沉浸式 `LynxView` |
+| HarmonyOS | `lynx_shell_kit`，一个 ArkUI 路由页一个 `LynxContainer`；Native Tab 使用 ArkUI Tabs | `LynxRouter.install(context, otaConfig?)` | ArkUI Page/Container + ArkUI Tabs；默认沉浸式 `LynxView` |
+
+### 三端 OTA Store v2 与 Native Tab
+
+三端的普通页面和 Native Tab 都由原生容器承载，但两条加载策略明确分开：普通页面可以按平台
+配置执行后台版本检查或候选版本流程；Native Tab 只读取已经提交的 `current`，普通 Tab 切换不
+发起网络请求，用户主动刷新或下一次冷启动再消费新版本。
+
+| 平台 | 普通页面容器 | Native Tab 容器 | Store 版本角色 |
+| --- | --- | --- | --- |
+| Android | `Activity` | `Fragment + BottomNavigation` Demo | `current + previous`，可选 `candidate/trial` |
+| iOS | `UIViewController` | `UIViewController + UITabBarController` Demo | `current + previous`，可选 `candidate/trial` |
+| HarmonyOS | `ArkUI Page/Container` | `ArkUI Tabs` Demo | 只有 `current + previous`，不加入 candidate |
+
+远程 Bundle 在三个平台都按 App ID 物理隔离：
+
+```text
+<private-app-storage>/lynx-ota-store/apps/<lynxAppId>/
+├── state.json
+├── releases/<releaseId>/
+└── .staging/<releaseId>.<transactionId>/
+```
+
+embedded Bundle 仍从 Android assets、iOS App Bundle 或 HarmonyOS rawfile 直接读取，不复制到
+OTA Store。远程 Bundle 才写入上面的私有目录；`current/previous` 由原子 state 提交，活体页面或
+Tab 通过 Release lease 防止正在使用的目录被清理。Android/iOS 可以按需开启 candidate/trial，
+HarmonyOS 按本项目约定不创建 candidate 文件、字段或 API。
 
 三端默认模式统一称为 **Native Page Stack**：统一的是 `open(bundle, params)`、
 `replace/pop/popTo/closeAll`、页面身份、生命周期和消息语义，不复制 Android 的
@@ -448,9 +477,13 @@ current 缺失/损坏：忽略 30 分钟门控，进入原生 Loading
 `lynxAppId` 做 30 分钟门控的后台检查，不会每次切页都请求全量清单。缺包或损坏时必须等待
 准备完成，不能先把不存在的绝对路径交给 LynxView。
 
+Native Tab 的规则更严格：首次进入和普通切换只执行 cache-only `resolveCurrent`，不 repair、不
+发起页面级网络检查；主动 OTA 同步成功后，宿主显式重建 Tab 以读取新 `current`。因此 Tab 不会
+因为每次打开而重复请求服务端，也不会在后台检查期间替换正在显示的实例。
+
 | API | 行为 |
 | --- | --- |
-| `deleteOtaBundles(appId)` | 永久删除该 appId 在磁盘中的 `releases`、`states` 等下载内容；不生成 `.delete-*` 备份目录 |
+| `deleteOtaBundles(appId)` | 永久删除该 appId 在磁盘中的 `state.json`、`releases` 和 `.staging` 下载内容；不生成 `.delete-*` 备份目录 |
 | `deleteAllOtaBundles()` | 永久删除所有 appId 的 OTA 下载内容；HAP rawfile、App Bundle 内置资源不受影响 |
 
 删除完成后再次打开 OTA 页面会重新走下载和校验。删除 API 是诊断/验收能力，生产 App 是否
@@ -670,8 +703,9 @@ python3 scripts/static_check.py
 Android/iOS 不限制远程 Host；官方 Bundle URL 仍按 HTTPS、后缀、响应码、重定向协议和体积策略校验。
 
 本轮 iOS 使用 iPhone 16 Pro / iOS 18.1 Simulator 完成 CocoaPods/Xcode 编译、安装和
-真实 OTA Bundle 加载；截图见工作流验收报告。HarmonyOS 完成 HAR/HAP 构建、模拟器安装、
-原生 OTA Loading/错误态/删除入口验收；在临时 `serverPlatform=android` 配置和运行时令牌注入
-下，Harmony 已完成真实 Manifest/OSS Bundle 下载并加载验收；正式 `platform=harmony` 仍等待
-服务端放开。最终契约审计还在当前 `android/lynx-shell` 补充了远程 HTTPS 与 OTA 字段
-隔离 guard。
+真实 OTA Bundle 加载；Android 保留 OnePlus IN2010 真机 OTA、Native Tab、回退和故障矩阵证据。
+HarmonyOS 完成 HAR/HAP 构建、Pura 90 模拟器安装，以及 Store v2、Native Tab、Inspector、lease、
+删除、embedded fallback 和冷启动验收；由于本次环境请求 TEST OTA Server 返回 TLS
+`SSL_ERROR_SYSCALL`（HTTP code 000），Harmony 运行态使用仅 TEST 可显式开启的 Mock Source，
+不把 Mock 结果写成真实 Manifest/OSS 下载通过。真实 Harmony Server 版本差异、物理真机和签名包
+仍需单独验收。最终契约审计还在当前 `android/lynx-shell` 补充了远程 HTTPS 与 OTA 字段隔离 guard。
