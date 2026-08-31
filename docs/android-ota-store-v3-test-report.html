@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Android OTA Store v3 测试报告</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #647089;
+      --line: #dce3ef;
+      --surface: #fff;
+      --surface-soft: #f5f8fc;
+      --blue: #2563eb;
+      --green: #0f9d72;
+      --amber: #b7791f;
+      --red: #c24141;
+      --shadow: 0 18px 50px rgba(37, 65, 112, .10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #edf2f8;
+      font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    .hero {
+      color: #fff;
+      background: linear-gradient(130deg, #14264b 0%, #1d4ed8 55%, #0f9d72 140%);
+      border-radius: 24px;
+      padding: 34px 36px;
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { margin: 0 0 8px; opacity: .75; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+    h1, h2, h3 { line-height: 1.25; margin: 0; }
+    h1 { font-size: clamp(28px, 4vw, 46px); letter-spacing: -.03em; }
+    h2 { font-size: 24px; margin-bottom: 16px; }
+    h3 { font-size: 17px; margin-bottom: 8px; }
+    .hero p { max-width: 850px; margin: 14px 0 0; color: rgba(255,255,255,.82); }
+    .hero-grid, .stats, .columns { display: grid; gap: 14px; }
+    .hero-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: 24px; }
+    .hero-fact { padding-top: 14px; border-top: 1px solid rgba(255,255,255,.24); }
+    .hero-fact small { display: block; opacity: .65; font-size: 12px; }
+    .hero-fact strong { display: block; margin-top: 3px; font-size: 16px; }
+    section { margin-top: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 8px 30px rgba(37, 65, 112, .05); }
+    .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .stat { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .stat strong { display: block; font-size: 28px; letter-spacing: -.04em; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .pass { color: var(--green); }
+    .skip { color: var(--amber); }
+    .fail { color: var(--red); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 820px; }
+    th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: 12px 10px; }
+    th { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    td:first-child { white-space: nowrap; font-weight: 700; }
+    code, pre { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    code { background: #eef2f7; border-radius: 5px; padding: 2px 5px; }
+    pre { overflow: auto; margin: 0; background: #111827; color: #e5edf9; border-radius: 12px; padding: 16px; }
+    .columns { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .callout { border-left: 4px solid var(--blue); background: #eff6ff; padding: 14px 16px; border-radius: 10px; }
+    .callout strong { display: block; margin-bottom: 3px; }
+    figure { margin: 0; }
+    figure img { display: block; width: 100%; max-height: 620px; object-fit: contain; background: #e9eef6; border: 1px solid var(--line); border-radius: 12px; }
+    figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+    details { border-top: 1px solid var(--line); padding: 12px 0; }
+    details:first-of-type { border-top: 0; }
+    summary { cursor: pointer; font-weight: 700; }
+    ul { margin: 8px 0 0; padding-left: 22px; }
+    .footer { color: var(--muted); font-size: 13px; }
+    @media (max-width: 620px) {
+      main { padding: 16px 12px 44px; }
+      .hero, section { padding: 20px; border-radius: 16px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">Lynx Navigation · OTA Store v3</p>
+    <h1>Android OTA Store v3 测试报告</h1>
+    <p>本报告记录 Android 端从空 Store 安装 100 个 Bundle、V1 → V2 单 Bundle 增量、CAS 对象复用、ETag、Activity 路由快照、原生 Fragment/BottomNavigation、candidate、坏 SHA 保护和设备磁盘证据。OTA 使用本地 Golden Fixture Server，未把外网服务不可达伪装成通过。</p>
+    <div class="hero-grid">
+      <div class="hero-fact"><small>Android Gate</small><strong class="pass">核心链路通过</strong></div>
+      <div class="hero-fact"><small>设备</small><strong>emulator-5554 / Android_SDK_built_for_arm64</strong></div>
+      <div class="hero-fact"><small>系统</small><strong>Android API 35 / arm64</strong></div>
+      <div class="hero-fact"><small>Fixture</small><strong>ota-store-v3-golden-100-v1-v2</strong></div>
+      <div class="hero-fact"><small>App ID</small><strong>10000001（另含 10000002 embedded）</strong></div>
+      <div class="hero-fact"><small>执行日期</small><strong>2026-08-31</strong></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>一眼结论</h2>
+    <div class="stats">
+      <div class="stat"><strong class="pass">47</strong><span>Android JVM 单测通过</span></div>
+      <div class="stat"><strong class="pass">0</strong><span>JVM 失败 / 跳过</span></div>
+      <div class="stat"><strong class="pass">100 → 1</strong><span>V1 全量 / V2 新增二进制请求</span></div>
+      <div class="stat"><strong class="pass">101</strong><span>V1+V2 去重后的 CAS 对象数</span></div>
+      <div class="stat"><strong class="pass">0</strong><span>未变化 Bundle 文件复制次数</span></div>
+      <div class="stat"><strong class="pass">200 / 304</strong><span>同进程 latest ETag 响应</span></div>
+    </div>
+    <div class="callout" style="margin-top:16px">
+      <strong>Android Store v3 Gate：PASS（基于本地真实运行态）</strong>
+      100 个 Bundle 的完整 Manifest 没有被拆成“增量 Manifest”；客户端按 Manifest 中的 SHA-256 对象引用下载。V1 → V2 只变 050 时，真实服务指标只出现 1 个 Bundle GET，磁盘从 100 个对象变为 101 个；路由快照、Tab cache-only、主动刷新、candidate 和错误 SHA 保留旧 current 均已验证。
+    </div>
+  </section>
+
+  <section>
+    <h2>测试矩阵与实际结果</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>用例</th><th>动作</th><th>实际结果</th><th>证据层</th></tr></thead>
+        <tbody>
+          <tr><td>T01 Fixture</td><td>验证 Android/跨端 V1、V2 Manifest</td><td><span class="pass">PASS</span>：各 100 条，路径集合一致，仅 050 的 bytes/size/SHA 变化。</td><td><code>verify-ota-store-v3-fixture.mjs</code></td></tr>
+          <tr><td>T10 首次 V1</td><td>卸载重装 Debug APK，启动本地 OTA</td><td><span class="pass">PASS</span>：latest 1 次；100 个 Bundle；8,775,400 bytes；100 个 CAS 对象；1 份 Manifest；current=V1，previous=embedded。</td><td>模拟器 + 本地 Server metrics + OTA Storage Inspector</td></tr>
+          <tr><td>T11 V1 → V2</td><td>服务端切换 V2，点击“刷新 OTA 后重载 Tab”</td><td><span class="pass">PASS</span>：Manifest 仍为 100 条；只请求 <code>pages/10000001/bundle-050.lynx.bundle</code>；87,754 bytes；新增 1 个对象；current=V2，previous=V1。</td><td>真实 HTTP + CAS 磁盘快照 + V2 页面截图</td></tr>
+          <tr><td>T12 ETag</td><td>启动收到 200 后，同一进程再次刷新 latest</td><td><span class="pass">PASS</span>：本轮启动 latest=200；再次刷新返回 <code>304</code>；Bundle=0、bytes=0。</td><td>本地 Server metrics</td></tr>
+          <tr><td>T20 单独打开</td><td>Activity-first 直接打开 <code>bundle-050</code></td><td><span class="pass">PASS</span>：页面分别显示 <code>V1-050</code>、<code>V2-050</code>，实际加载文件与 Manifest SHA 一致。</td><td>Android LynxView 运行态截图</td></tr>
+          <tr><td>T21 Route Snapshot</td><td>根页固定 V1；后台 current 切到 V2；同 session 打开子页</td><td><span class="pass">PASS</span>：子页仍显示 V1；State current 已是 V2；子页没有额外 Bundle 请求，证明路由不会跟随 current 漂移。</td><td>同 session Intent + previous lease + 截图</td></tr>
+          <tr><td>T23 Tab cache-only</td><td>原生 Fragment 的 Home/Settings 来回切换</td><td><span class="pass">PASS</span>：两个 Tab 显示同一 OTA V2；切换后 latest/bundle 请求均为 0；没有因为切 Tab 重新检查网络。</td><td>Fragment + BottomNavigation 运行态 + Server metrics</td></tr>
+          <tr><td>T24 Tab 主动刷新</td><td>服务端切回 V1，点击“刷新 OTA 后重载 Tab”</td><td><span class="pass">PASS</span>：current 变为 V1；两个 Fragment 都重新创建内容；Bundle 请求为 0，因为 V1 对象已在 CAS previous 中。</td><td>Tab V1 截图 + State + metrics</td></tr>
+          <tr><td>T07 坏 SHA</td><td>V1 Manifest 将 050 SHA 改为全 0，再主动刷新</td><td><span class="pass">PASS</span>：只下载候选 050 后校验失败；提示 OTA 同步失败；current 仍为 V2；没有提交坏 Manifest/State。</td><td>异常日志 + State + Tab 截图</td></tr>
+          <tr><td>T14 App ID 隔离</td><td>相同对象 SHA 放入 10000001/10000002</td><td><span class="pass">PASS</span>：两个 <code>apps/&lt;appId&gt;</code> 各自维护对象库，删除/GC/State 不跨 App ID 污染。</td><td>Store v3 JVM 单测</td></tr>
+          <tr><td>T15 Candidate</td><td>Debug candidate 模式启动、打开页面、首屏健康</td><td><span class="pass">PASS</span>：启动时 <code>current=embedded, candidate=pending</code>；页面进入 trial；首屏成功后 promote 为 current，candidate 被清理。</td><td>Store v3 JVM 单测</td></tr>
+          <tr><td>T16/T18 故障、回滚、删除 lease</td><td>Manifest 提交故障、回滚、显式删除和 active lease</td><td><span class="pass">PASS</span>：v3 Manifest 故障不改 current；回滚使用 previous CAS；删除时 leased V1 仍可读，lease 关闭后才回收；全套 Android JVM 共 47/47 通过。</td><td>JUnit XML + Store v3 测试</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Android 运行态截图</h2>
+    <div class="gallery">
+      <figure><img src="assets/android-ota-store-v3/v1-route.png" alt="Android OTA Store v3 V1 Bundle 050 页面"><figcaption>V1：独立 Activity 页面显示版本 V1、Bundle 050、标识 V1-050。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/v2-route.png" alt="Android OTA Store v3 V2 Bundle 050 页面"><figcaption>V2：同一逻辑页面显示 V2-050，证明 current 切换和 CAS 读取生效。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/tab-v2.png" alt="Android 原生 Fragment Tab 显示 V2"><figcaption>Native Tab：Fragment + BottomNavigation 承载 OTA V2。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/tab-v1-refresh.png" alt="Android Tab 主动刷新后显示 V1"><figcaption>Tab 主动刷新：两个 Tab 重载后读取 V1 current。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/navigation-snapshot-v1.png" alt="Android 路由快照子页面仍显示 V1"><figcaption>NavigationSnapshot：State 已切到 V2，旧 session 子页仍固定显示 V1。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/bad-sha-kept-v2.png" alt="坏 SHA 刷新后仍保留 V2 页面"><figcaption>坏 SHA：刷新失败后页面仍保留可用的 V2。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/candidate-promoted.png" alt="Android candidate 健康确认后显示 V1"><figcaption>Candidate：pending/trial 健康确认后显示并 promote V1。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/storage-inspector.png" alt="Android Store v3 磁盘浏览器"><figcaption>磁盘 Inspector：10000001 有 101 个 CAS 对象、2 份完整 Manifest；10000002 只有 embedded 描述。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/tab-v1-runtime-20260831.png" alt="Android 本轮 V1 Tab 页面"><figcaption>本轮最终 Debug APK 的 V1 Tab：显示 V1-050。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/tab-v2-refresh-runtime-20260831.png" alt="Android 本轮 V2 Tab 刷新页面"><figcaption>本轮最终 Debug APK 刷新后的 V2 Tab：显示 V2-050，只下载 1 个变化 Bundle。</figcaption></figure>
+      <figure><img src="assets/android-ota-store-v3/storage-v2-runtime-20260831.png" alt="Android 本轮 V2 磁盘 Inspector"><figcaption>本轮设备 Inspector：10000001 current=V2、previous=V1、CAS=101、两个完整 Manifest。</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>磁盘与网络实证</h2>
+    <div class="columns">
+      <div>
+        <h3>V1 首次安装</h3>
+        <pre>latestRequestCount: 1
+bundleRequestCount: 100
+bundleBytes: 8775400
+objects: 100
+manifests: 1
+state.current: ota-v3-golden-v1-100
+state.previous: embedded:r20260823_qc8ffc</pre>
+      </div>
+      <div>
+        <h3>V2 单 Bundle 增量</h3>
+        <pre>latestRequestCount: 1
+bundleRequestCount: 1
+bundlePath: pages/10000001/bundle-050.lynx.bundle
+bundleBytes: 87754
+objects: 101
+manifests: 2
+state.current: ota-v3-golden-v2-100-one-change
+state.previous: ota-v3-golden-v1-100</pre>
+      </div>
+      <div>
+        <h3>Store v3 真实目录</h3>
+        <pre>files/lynx-ota-store/apps/10000001/
+├─ state.json
+├─ embedded.json
+├─ manifests/&lt;manifestId&gt;.json
+├─ objects/&lt;sha 前两位&gt;/&lt;sha&gt;.lynx.bundle
+└─ transactions/&lt;tx&gt;/
+
+Inspector: 107 files / 8.5 MB
+冷启动 V2：latest=1、Bundle=0、bytes=0
+同进程 ETag：latest=304、Bundle=0、bytes=0</pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>执行命令与复现方式</h2>
+    <details open>
+      <summary>验证 Golden Fixture</summary>
+      <pre>node scripts/verify-ota-store-v3-fixture.mjs
+# result: PASS
+# bundleCount=100, changedBundleIndex=50, changedBundleCount=1</pre>
+    </details>
+    <details>
+      <summary>启动本地 OTA 服务</summary>
+      <pre>node scripts/ota-store-v3/local-server.mjs
+# 默认 http://127.0.0.1:18765
+# Android emulator 通过 adb reverse 访问该 loopback 地址</pre>
+    </details>
+    <details>
+      <summary>Android JVM 测试</summary>
+      <pre>cd android
+JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+  /Users/nieyutan/.gradle/wrapper/dists/gradle-8.14.4-bin/92wwslzcyst3phie3o264zltu/gradle-8.14.4/bin/gradle \
+  :lynx-shell:testDebugUnitTest --no-daemon
+# 47 tests completed, 0 failed</pre>
+    </details>
+    <details>
+      <summary>Android 模拟器 APK 验收</summary>
+      <pre>adb -P 5038 reverse tcp:18765 tcp:18765
+adb -P 5038 install -r android/app/build/outputs/apk/debug/app-debug.apk
+adb -P 5038 shell am start -S -f 0x10008000 \
+  -n com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity \
+  --ez lynx_shell.show_native_launcher true
+# 通过 Launcher 打开 OTA 页面、原生 Tab 和磁盘 Inspector</pre>
+    </details>
+  </section>
+
+  <section>
+    <h2>剩余边界</h2>
+    <ul>
+      <li>本报告的 Android 真实网络链路使用本机 loopback Fixture Server；已真实覆盖 HTTP 请求、完整 Manifest、Bundle、SHA、CAS、State 和 LynxView，不等同于外网生产服务可达。</li>
+      <li>本轮使用 API 35 模拟器；没有把 Android 实体机、不同 OEM 文件系统和真实低磁盘 ENOSPC 写成已通过。</li>
+      <li>candidate、Manifest fault、App ID 隔离和回滚已有 JVM/模拟器证据；candidate 本身使用 Debug 开关，普通 APK 默认关闭。</li>
+      <li>仓库没有 Gradle Wrapper；复现需要本机已有 Gradle 发行版和 Android Studio JBR。AGP/compileSdk 的兼容性提示不影响本次构建结果。</li>
+      <li>HarmonyOS 已有独立的 v3 报告；本报告只描述 Android 当前运行态。</li>
+    </ul>
+  </section>
+
+  <p class="footer">报告和截图均位于本仓库 <code>docs/</code>。测试凭证未写入源码、报告或 Git。</p>
+</main>
+</body>
+</html>

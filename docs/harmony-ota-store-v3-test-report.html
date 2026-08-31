@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HarmonyOS OTA Store v3 测试报告</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #647089;
+      --line: #dce3ef;
+      --surface: #fff;
+      --surface-soft: #f5f8fc;
+      --blue: #2563eb;
+      --green: #0f9d72;
+      --amber: #b7791f;
+      --red: #c24141;
+      --shadow: 0 18px 50px rgba(37, 65, 112, .10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #edf2f8;
+      font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+    }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    .hero {
+      color: #fff;
+      background: linear-gradient(130deg, #12233d 0%, #2563eb 56%, #0f9d72 145%);
+      border-radius: 24px;
+      padding: 34px 36px;
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { margin: 0 0 8px; opacity: .75; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+    h1, h2, h3 { line-height: 1.25; margin: 0; }
+    h1 { font-size: clamp(28px, 4vw, 46px); letter-spacing: -.03em; }
+    h2 { font-size: 24px; margin-bottom: 16px; }
+    h3 { font-size: 17px; margin-bottom: 8px; }
+    .hero p { max-width: 900px; margin: 14px 0 0; color: rgba(255,255,255,.84); }
+    .hero-grid, .stats, .columns { display: grid; gap: 14px; }
+    .hero-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: 24px; }
+    .hero-fact { padding-top: 14px; border-top: 1px solid rgba(255,255,255,.24); }
+    .hero-fact small { display: block; opacity: .65; font-size: 12px; }
+    .hero-fact strong { display: block; margin-top: 3px; font-size: 16px; }
+    section { margin-top: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 8px 30px rgba(37, 65, 112, .05); }
+    .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .stat { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .stat strong { display: block; font-size: 28px; letter-spacing: -.04em; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .pass { color: var(--green); }
+    .blocked { color: var(--amber); }
+    .fail { color: var(--red); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; }
+    th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: 12px 10px; }
+    th { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    td:first-child { white-space: nowrap; font-weight: 700; }
+    code, pre { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    code { background: #eef2f7; border-radius: 5px; padding: 2px 5px; }
+    pre { overflow: auto; margin: 0; background: #111827; color: #e5edf9; border-radius: 12px; padding: 16px; }
+    .columns { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .callout { border-left: 4px solid var(--blue); background: #eff6ff; padding: 14px 16px; border-radius: 10px; }
+    .callout strong { display: block; margin-bottom: 3px; }
+    .callout.warn { border-left-color: var(--amber); background: #fff9eb; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+    figure { margin: 0; }
+    figure img { display: block; width: 100%; max-height: 620px; object-fit: contain; background: #e9eef6; border: 1px solid var(--line); border-radius: 12px; }
+    figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; }
+    details { border-top: 1px solid var(--line); padding: 12px 0; }
+    details:first-of-type { border-top: 0; }
+    summary { cursor: pointer; font-weight: 700; }
+    ul { margin: 8px 0 0; padding-left: 22px; }
+    .footer { color: var(--muted); font-size: 13px; }
+    @media (max-width: 620px) {
+      main { padding: 16px 12px 44px; }
+      .hero, section { padding: 20px; border-radius: 16px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">Lynx Navigation · OTA Store v3</p>
+    <h1>HarmonyOS OTA Store v3 测试报告</h1>
+    <p>本报告记录 HarmonyOS ArkUI/ArkUI Tabs 对 OTA Store v3 的实现、构建和模拟器运行态验收。验证使用本地 Golden Fixture Server，不把外网服务或历史 Store v2 Mock 结果伪装成当前 v3 通过。</p>
+    <div class="hero-grid">
+      <div class="hero-fact"><small>Harmony Gate</small><strong class="pass">核心链路通过</strong></div>
+      <div class="hero-fact"><small>设备</small><strong>DevEco 模拟器 emulator / 127.0.0.1:5557</strong></div>
+      <div class="hero-fact"><small>系统</small><strong>HarmonyOS 6.1.0.126</strong></div>
+      <div class="hero-fact"><small>Fixture</small><strong>ota-store-v3-golden-100-v1-v2</strong></div>
+      <div class="hero-fact"><small>App ID</small><strong>10000001 / Bundle 050</strong></div>
+      <div class="hero-fact"><small>执行日期</small><strong>2026-08-31</strong></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>一眼结论</h2>
+    <div class="stats">
+      <div class="stat"><strong class="pass">89</strong><span>Harmony Store v3 静态检查通过</span></div>
+      <div class="stat"><strong class="pass">BUILD</strong><span>Hvigor assembleApp 通过</span></div>
+      <div class="stat"><strong class="pass">100 → 1</strong><span>V1 全量 / V2 新增 Bundle 请求</span></div>
+      <div class="stat"><strong class="pass">101</strong><span>去重后的 CAS Object 数</span></div>
+      <div class="stat"><strong class="pass">0</strong><span>ArkUI Tab 普通切换网络请求</span></div>
+      <div class="stat"><strong class="blocked">5 类</strong><span>物理/生产边界待补</span></div>
+    </div>
+    <div class="callout" style="margin-top:16px">
+      <strong>HarmonyOS Store v3 Gate：PASS（当前 DevEco 模拟器核心链路）</strong>
+      服务端仍返回完整 100 条 Manifest；客户端按 App ID 作用域的 SHA-256 CAS 查对象。V1 首次写入 100 个对象，V2 只下载并写入 050 的 1 个新对象；Tab 切换不发请求，主动刷新才重读 current；坏 SHA 不改变 current。HarmonyOS 按约定不提供 candidate/trial。
+    </div>
+    <div class="callout warn" style="margin-top:14px">
+      <strong>报告边界</strong>
+      这是当前源码 + DevEco emulator + 本地 OTA Server 的证据；HDC force-stop 已通过，仍不等于 HarmonyOS 物理真机、生产 CDN/TLS、签名发布包或真实低磁盘全部通过。
+    </div>
+  </section>
+
+  <section>
+    <h2>测试矩阵与实际结果</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>用例</th><th>动作</th><th>结果</th><th>证据</th></tr></thead>
+        <tbody>
+          <tr><td>H01 Fixture</td><td>检查 V1/V2 及三端 Fixture</td><td><span class="pass">PASS</span>：两版各 100 个 Bundle，路径集合一致，只有 050 的 bytes/size/SHA 变化。</td><td><code>verify-ota-store-v3-fixture.mjs</code>，exit 0</td></tr>
+          <tr><td>H02 构建</td><td>执行 HAR/App Hvigor 构建</td><td><span class="pass">PASS</span>：<code>assembleHar</code> 与 <code>assembleApp --no-daemon</code> 均 BUILD SUCCESSFUL；保留 DevEco/Lynx 依赖既有警告和 unsigned signing 提示。</td><td>最终产物 <code>harmony-default-unsigned.app</code>，SHA-256=<code>cfd7bed0…e59cd6</code></td></tr>
+          <tr><td>H03 V1 首次安装</td><td>卸载重装 App，服务端 active=V1，冷启动</td><td><span class="pass">PASS</span>：latest=1；Bundle=100；8,775,400 bytes；Store 写入 100 个 CAS Object 和 1 份完整 Manifest；页面显示 V1-050。</td><td>HDC 启动、Server metrics、V1 截图</td></tr>
+          <tr><td>H04 V1 → V2 增量</td><td>服务端切换 V2，点击 ArkUI Tab 的“刷新 OTA”</td><td><span class="pass">PASS</span>：latest=1；只请求 <code>pages/10000001/bundle-050.lynx.bundle</code>；87,754 bytes；新增 1 个对象；页面显示 V2-050。</td><td>最终产物真实 HTTP metrics、V2 截图、Inspector</td></tr>
+          <tr><td>H05 完整 Manifest</td><td>检查 V1/V2 本地 Manifest 与对象引用</td><td><span class="pass">PASS</span>：Manifest 始终是 100 条完整快照；V2 只替换 050 的 Object 引用，不生成“只有 1 条”的增量 Manifest。</td><td>Store v3 源码、Fixture 校验、Inspector 文本</td></tr>
+          <tr><td>H06 Tab cache-only</td><td>ArkUI Tabs Home/Settings 来回切换</td><td><span class="pass">PASS</span>：latest=0、Bundle=0；Tab 使用已提交 current 和 lease，不因切换触发 OTA。</td><td>ArkUI Tabs 截图、Server metrics</td></tr>
+          <tr><td>H07 Tab 主动刷新</td><td>V1 current 下服务端切换 V2，点击“刷新 OTA”</td><td><span class="pass">PASS</span>：刷新完成后两个 Tab 重建并显示 V2-050；Bundle=1、87,754 bytes。</td><td>最终产物 Tab 刷新截图、Server metrics、current/previous</td></tr>
+          <tr><td>H08 ETag</td><td>同一进程再次刷新同一 latest</td><td><span class="pass">PASS</span>：本轮再次刷新返回 304；Bundle=0、bytes=0。</td><td>最终产物 Server metrics：304 / Bundle=0</td></tr>
+          <tr><td>H09 坏 SHA</td><td>V2 050 返回错误 SHA，主动刷新</td><td><span class="pass">PASS</span>：提示“OTA 同步失败，保留当前 Tab 版本”；current 仍为 V1，previous 仍为 V2，CAS=101，没有提交坏 Manifest/State。</td><td>坏 SHA 截图、Inspector、Server metrics</td></tr>
+          <tr><td>H10 回滚与 lease</td><td>V2→V1 切换并查看 Store 快照</td><td><span class="pass">PASS</span>：current/previous 指向正确 Manifest；活跃 LynxView 显示 leased；刷新和页面重建未删除被引用对象。</td><td>Inspector 文本/截图、Runtime lease 代码</td></tr>
+          <tr><td>H11 rawfile baseline</td><td>无 remote current 时打开内置 Bundle</td><td><span class="pass">PASS</span>：rawfile 直接读取 ArrayBuffer，不复制到 <code>files/lynx-ota-store</code>；v3 CAS 只保存远程对象。</td><td>EmbeddedBundleRegistry、Provider、静态门禁</td></tr>
+          <tr><td>H12 no candidate</td><td>源码与运行入口扫描 candidate/trial</td><td><span class="pass">PASS</span>：Harmony Store v3 只有 current/previous；没有 candidate 文件、字段或 API。</td><td><code>check_harmony_shell.py</code> 89/89</td></tr>
+          <tr><td>H13 App ID 隔离</td><td>检查 CAS/Manifest/State 路径作用域</td><td><span class="pass">PASS（静态与实现）</span>：路径固定为 <code>apps/&lt;appId&gt;/...</code>，对象不会跨 App ID 复用。当前本轮未在设备上同时安装两个业务 App。</td><td>Store v3 静态门禁与路径代码</td></tr>
+          <tr><td>H14 事务边界探针</td><td>TEST-only 注入 Object、Manifest、State 提交边界</td><td><span class="pass">PASS</span>：10 个 fault/ENOSPC 点均由脚本执行并通过 JSONL 机器断言；提交前 current 保持 V1；after_state_commit_report_failure 的 current 正确为 V2；重试结果符合对象复用预期。</td><td><a href="assets/harmony-ota-store-v3/fault-test-results.jsonl">故障矩阵 JSONL</a> + 自动断言 + HDC Inspector</td></tr>
+          <tr><td>H15 容量/ENOSPC/断连恢复</td><td>capacity override=0；Object/Manifest/State 受控 ENOSPC；Server disconnect</td><td><span class="pass">PASS（受控模拟）</span>：容量预检 latest=1、Bundle=0、current V1；三个写入点 ENOSPC 均不提前激活，Manifest/State 前已 durable Object 可在重试时 Bundle=0；断连后 current V1、CAS 100。</td><td>故障矩阵 JSONL + Inspector</td></tr>
+          <tr><td>H16 进程级 force-stop</td><td>在 Object、Objects、Manifest、State 提交前/后的 15 秒暂停点由 HDC force-stop</td><td><span class="pass">PASS</span>：5 个暂停点全部以唯一 token 命中；保护性冷启动分别看到提交前 current=V1/CAS=101、提交后 current=V2/CAS=101；10 行结果机器断言通过，正常恢复 Bundle=0。</td><td><a href="assets/harmony-ota-store-v3/process-crash-results.jsonl">进程 crash JSONL</a> + 自动断言 + HDC Inspector</td></tr>
+          <tr><td>H17 物理/生产边界</td><td>真实断电、ENOSPC、物理设备、签名包和生产 CDN/TLS</td><td><span class="blocked">BLOCKED</span>：HDC force-stop 已覆盖进程终止，但不等同真实断电；容量 override 不等同 OS 真实 ENOSPC；未连接物理 Harmony 设备，也未配置签名。</td><td>保留为发布前门禁</td></tr>
+          <tr><td>H18 删除与内置基线</td><td>删除全部 OTA，force-stop 后以空 latest 启动，查看 Inspector，再打开 rawfile baseline</td><td><span class="pass">PASS</span>：删除时活体 lease 先保护对象；进程重启后无 State/lease 的 orphan 被回收，Inspector 显示 files=0、CAS=0、Manifest=0；打开内置基线不发 OTA 请求。</td><td>删除 Inspector + 内置基线截图、metrics</td></tr>
+          <tr><td>H19 NavigationSnapshot</td><td>同一 session 连续打开两个 OTA Page，再返回宿主页重新打开内置基线</td><td><span class="pass">PASS</span>：两个 Page 日志复用同一个 snapshot ID 和 Manifest；返回两次后新页面建立新 Snapshot，不再出现旧 Snapshot 失效，metrics=0。</td><td><a href="assets/harmony-ota-store-v3/navigation-snapshot-evidence.txt">HDC 日志</a>、V1 截图、返回后内置基线截图</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>HarmonyOS 运行态截图</h2>
+    <div class="gallery">
+      <figure><img src="assets/harmony-ota-store-v3/final-v1-route-20260831.jpeg" alt="HarmonyOS 最终产物 V1 Bundle 050 页面"><figcaption>最终产物 V1：页面显示 V1、Bundle 050、标识 V1-050。</figcaption></figure>
+      <figure><img src="assets/harmony-ota-store-v3/final-tab-v2-20260831.jpeg" alt="HarmonyOS 最终产物 ArkUI Tabs 显示 V2"><figcaption>最终产物 ArkUI Tabs：主动刷新后显示 V2-050，并显示 OTA 同步完成。</figcaption></figure>
+      <figure><img src="assets/harmony-ota-store-v3/final-tab-v1-20260831.jpeg" alt="HarmonyOS 最终产物 ArkUI Tabs 显示 V1"><figcaption>最终产物 ArkUI Tabs：刷新前显示 V1-050；切换 Tab 的 metrics 为 0。</figcaption></figure>
+      <figure><img src="assets/harmony-ota-store-v3/final-storage-v2-20260831.jpeg" alt="HarmonyOS 最终产物 OTA Store v3 磁盘浏览器"><figcaption>最终产物 Inspector：101 个 CAS Object、2 份完整 Manifest，current=V2、previous=V1。</figcaption></figure>
+      <figure><img src="assets/harmony-ota-store-v3/bad-sha-kept-v1.jpeg" alt="HarmonyOS 坏 SHA 后保留 V1 页面"><figcaption>坏 SHA：刷新失败但保留可用的 V1 Tab 版本。</figcaption></figure>
+      <figure><img src="assets/harmony-ota-store-v3/delete-inspector.jpeg" alt="HarmonyOS 删除 OTA 后磁盘为空"><figcaption>删除并重启回收 orphan 后：Inspector 显示 files=0、CAS objects=0、Manifests=0。</figcaption></figure>
+      <figure><img src="assets/harmony-ota-store-v3/embedded-after-delete.jpeg" alt="HarmonyOS 删除 OTA 后打开内置 rawfile 基线"><figcaption>内置基线：删除远程 OTA 后仍可直接读取 HAP rawfile，metrics 没有 OTA 请求。</figcaption></figure>
+      <figure><img src="assets/harmony-ota-store-v3/navigation-snapshot-v1.jpeg" alt="HarmonyOS NavigationSnapshot 子页显示 V1"><figcaption>同 session Snapshot：两个 Page 都固定在 V1-050；日志记录相同 Snapshot ID。</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>网络与磁盘实证</h2>
+    <div class="columns">
+      <div>
+        <h3>V1 首次同步</h3>
+        <pre>latestRequestCount: 1
+bundleRequestCount: 100
+bundleBytes: 8775400
+state.current: ota-v3-golden-v1-100
+state.previous: embedded baseline
+CAS objects: 100</pre>
+      </div>
+      <div>
+        <h3>V2 只变 050</h3>
+        <pre>latestRequestCount: 1
+bundleRequestCount: 1
+bundleBytes: 87754
+bundlePath: pages/10000001/bundle-050.lynx.bundle
+state.current: ota-v3-golden-v2-100-one-change
+state.previous: ota-v3-golden-v1-100
+CAS objects: 101</pre>
+      </div>
+      <div>
+        <h3>Inspector 实际读取</h3>
+        <pre>root: /data/storage/el2/base/haps/lynx_shell/files/lynx-ota-store
+apps: 1
+files: 104
+disk: 8.5 MB
+manifests: 73.3 KB
+current: ota-v3-golden-v2-100-one-change (downloaded)
+previous: ota-v3-golden-v1-100 (downloaded)
+CAS objects: 101 / 8.5 MB
+files: 104</pre>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:16px">
+      <strong>路径含义</strong>
+      <code>rawfile</code> 是 HAP 内置只读资产；远程 Bundle 只写入 <code>files/lynx-ota-store/apps/10000001/objects/&lt;sha 前两位&gt;/</code>，Manifest 写入 <code>manifests/&lt;manifestId&gt;.json</code>，激活点是最后原子提交的 <code>state.json</code>。下载中的数据只存在 <code>transactions/&lt;tx&gt;/*.part</code>；删除时的 <code>.purge</code> 只是短暂控制标记，不是 Bundle 备份。
+    </div>
+  </section>
+
+  <section>
+    <h2>故障注入与恢复实证</h2>
+    <p>脚本 <a href="../scripts/ota-store-v3/run-harmony-fault-tests.sh">run-harmony-fault-tests.sh</a>
+      每个场景都先卸载重装并建立 V1，再切换服务端 V2；故障点通过 TEST-only HDC Want 参数注入，
+      不进入生产配置。结果文件记录 latest/Bundle 请求、状态码、字节数和故障后 Inspector 摘要。</p>
+      <pre>before_object_publish        Bundle=1  CAS=100  current=V1
+after_object_publish         Bundle=1  CAS=101  current=V1
+after_objects_ready          Bundle=1  CAS=101  current=V1
+after_manifest_commit        Bundle=1  CAS=101  manifests=2 current=V1
+before_state_commit          Bundle=1  CAS=101  manifests=2 current=V1
+after_state_commit_report_failure Bundle=1 CAS=101 current=V2
+enospc_object_publish        Bundle=1  CAS=100  current=V1 → retry Bundle=1
+enospc_manifest_commit      Bundle=1  CAS=101  current=V1 → retry Bundle=0
+enospc_state_commit          Bundle=1  CAS=101  current=V1 → retry Bundle=0
+retry-after_objects_ready    Bundle=0  current=V2
+retry-after_manifest_commit  Bundle=0  current=V2
+retry-before_state_commit    Bundle=0  current=V2
+retry-after_state_commit     Bundle=0  current=V2
+capacity_override=0          Bundle=0  current=V1
+server disconnect             Bundle=0 bytes=0 current=V1</pre>
+    <div class="callout" style="margin-top:16px">
+      <strong>断言边界</strong>
+      before/after Object、Manifest 和 before State 的故障都证明“不提前激活”；after_state_commit_report_failure
+      证明的是“State 已经提交，调用方收到失败后重试幂等”，不能错误地断言旧 current 不变。真实断电和
+      系统级异常终止仍需单独设备实验。
+    </div>
+  </section>
+
+  <section>
+    <h2>进程级 force-stop 恢复实证</h2>
+    <p>脚本 <a href="../scripts/ota-store-v3/run-harmony-process-crash-tests.sh">run-harmony-process-crash-tests.sh</a>
+      在事务边界暂停 15 秒后由 HDC 强制停止 App。随后先用 capacity=0 的保护启动读取被杀后的 State，
+      再用正常启动执行恢复；结果写入 <a href="assets/harmony-ota-store-v3/process-crash-results.jsonl">process-crash-results.jsonl</a>。</p>
+    <pre>after_object_publish   kill 后 current=V1/CAS=101  → recovery Bundle=0/current=V2
+after_objects_ready    kill 后 current=V1/CAS=101  → recovery Bundle=0/current=V2
+after_manifest_commit  kill 后 current=V1/CAS=101  → recovery Bundle=0/current=V2
+before_state_commit    kill 后 current=V1/CAS=101  → recovery Bundle=0/current=V2
+after_state_commit     kill 后 current=V2/CAS=101  → recovery Bundle=0/current=V2</pre>
+    <div class="callout">
+      <strong>结论</strong>
+      事务不会产生半个可见 Release：State 提交前的强杀保持旧 current，State 提交后的强杀保留新 current；
+      重新启动不重复下载 050；有效 transaction 索引保护中断期间已发布的 CAS 对象，成功提交后再清理事务目录。
+    </div>
+  </section>
+
+  <section>
+    <h2>实现链路</h2>
+    <div class="columns">
+      <div>
+        <h3>入口与路由</h3>
+        <p><code>LynxRouter → LynxOtaRuntime → ContentAddressedOtaStore</code>。普通页面优先读 current/rawfile；首次读取按 <code>sessionID + App ID</code> 建立 NavigationSnapshot，后续页面固定 Manifest；ArkUI Tabs 只调用 cache-only 的 <code>resolveCurrent</code>；主动刷新成功后 reset Tab Snapshot、递增 generation，重建两个 LynxView。</p>
+      </div>
+      <div>
+        <h3>Store v3</h3>
+        <p>Manifest 是完整快照；对象按 SHA-256 内容寻址并按 App ID 隔离；下载对象先校验 size/SHA，再原子发布 Manifest，最后提交 State；GC 以 current、previous、lease 为 root。</p>
+      </div>
+      <div>
+        <h3>平台约束</h3>
+        <p>HarmonyOS 不实现 candidate/trial。内置 rawfile 不复制；本地 HTTP 只在 TEST + 显式调试配置下允许。当前 Demo 为复用 Golden Fixture，向服务端请求 <code>platform=android</code>，宿主页面身份仍是 HarmonyOS。</p>
+      </div>
+    </div>
+    <p>相关实现：<a href="../harmony/lynx_shell_kit/src/main/ets/ota/ContentAddressedOtaStore.ets">ContentAddressedOtaStore.ets</a>、<a href="../harmony/lynx_shell_kit/src/main/ets/ota/LynxOtaRuntime.ets">LynxOtaRuntime.ets</a>、<a href="../harmony/lynx_shell_kit/src/main/ets/ota/OtaApiClient.ets">OtaApiClient.ets</a>、<a href="../harmony/scripts/check_harmony_shell.py">Harmony 静态门禁</a>。</p>
+  </section>
+
+  <section>
+    <h2>执行命令与复现方式</h2>
+    <details open>
+      <summary>Fixture 与静态门禁</summary>
+      <pre>node scripts/verify-ota-store-v3-fixture.mjs
+# PASS: bundleCount=100, changedBundleIndex=50, changedBundleCount=1
+
+python3 harmony/scripts/check_harmony_shell.py --quiet
+# {"pass":89,"warn":0,"fail":0}</pre>
+    </details>
+    <details>
+      <summary>Hvigor 构建</summary>
+      <pre>cd harmony
+DEVECO_SDK_HOME="/Applications/DevEco-Studio.app/Contents/sdk" \
+NODE_HOME="/Applications/DevEco-Studio.app/Contents/tools/node" \
+"/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw" \
+assembleApp --no-daemon
+# BUILD SUCCESSFUL</pre>
+    </details>
+    <details>
+      <summary>本地 OTA Server 与 HDC</summary>
+      <pre>node scripts/ota-store-v3/local-server.mjs \
+  --host 0.0.0.0 --public-host 10.0.2.2 --port 18766
+
+HDC="/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc"
+"$HDC" -t 127.0.0.1:5557 install -r \
+  harmony/build/outputs/default/harmony-default-unsigned.app
+"$HDC" -t 127.0.0.1:5557 shell \
+  "aa start -a EntryAbility -b com.example.lynxshell -W"</pre>
+    </details>
+    <details>
+      <summary>故障结果机器断言</summary>
+      <pre>node scripts/ota-store-v3/assert-harmony-results.mjs fault \
+  docs/assets/harmony-ota-store-v3/fault-test-results.jsonl
+node scripts/ota-store-v3/assert-harmony-results.mjs process-crash \
+  docs/assets/harmony-ota-store-v3/process-crash-results.jsonl
+# 两项均输出 assertions PASS</pre>
+    </details>
+  </section>
+
+  <section>
+    <h2>未覆盖项与下一步</h2>
+    <ul>
+      <li>需要真实 HarmonyOS 物理真机再验一次：安装、TLS/生产网络、冷启动、Tab、回滚、删除和文件替换语义。</li>
+      <li>进程级 HDC force-stop 已覆盖 Object、Manifest、State 提交边界；仍需要真实断电/系统级异常终止验证。</li>
+      <li>本轮已通过受控容量探针；仍需要真实 ENOSPC 和不同目标 SDK 的 rename/fsync 兼容性验证。</li>
+      <li>本地夹具为便于三端复用暂按 <code>platform=android</code> 返回；服务端正式支持 Harmony 后，应将 <code>serverPlatform</code> 清空并单独做一次真实 Harmony Release 验收。</li>
+      <li>旧的 <code>harmony/VALIDATION.md</code>、<code>harmony/VALIDATION_REPORT.txt</code> 和 <code>docs/harmony-ota-test-report.html</code> 保留为 Store v2 历史记录，不代表当前 v3。</li>
+    </ul>
+  </section>
+
+  <p class="footer">报告生成于 2026-08-31。最终产物为 07:51:58 构建的 harmony-default-unsigned.app（SHA-256=cfd7bed0…e59cd6）；退出码、请求计数和截图只对本报告列出的 DevEco emulator、本地 Golden Fixture 和当前 checkout 有效；未覆盖边界不会被推断为通过。</p>
+</main>
+</body>
+</html>

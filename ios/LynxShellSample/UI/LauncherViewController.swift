@@ -191,6 +191,17 @@ final class LauncherViewController: UIViewController {
         stack.setCustomSpacing(20, after: statusLabel)
         stack.addArrangedSubview(openButton)
 
+#if DEBUG
+        let fixtureButton = makeButton(
+            title: "打开当前 OTA v3 Bundle-050",
+            filled: false,
+            action: #selector(openOtaV3FixtureBundle)
+        )
+        fixtureButton.accessibilityIdentifier = "open-ota-v3-fixture-bundle"
+        stack.setCustomSpacing(12, after: openButton)
+        stack.addArrangedSubview(fixtureButton)
+#endif
+
         let deleteButton = makeButton(
             title: "删除全部 OTA Bundle",
             filled: false,
@@ -301,6 +312,29 @@ final class LauncherViewController: UIViewController {
             )
         }
     }
+
+#if DEBUG
+    /** 直接验证当前 v3 CAS release 的真实 Bundle；页面内容自带 V1/V2 标识。 */
+    @objc private func openOtaV3FixtureBundle() {
+        do {
+            _ = try LynxRouter.open(
+                lynxAppId: "10000001",
+                bundleName: "pages/10000001/bundle-050.lynx.bundle",
+                params: ["source": "ios-ota-store-v3-fixture"],
+                options: [
+                    "title": "OTA v3 Bundle-050",
+                    "fullscreen": false,
+                    "showNavigationBar": true,
+                ]
+            )
+        } catch {
+            presentShellAlert(
+                title: "无法打开 OTA v3 Fixture",
+                message: error.localizedDescription
+            )
+        }
+    }
+#endif
 
     @objc private func openNativeTabDemo() {
         navigationController?.pushViewController(
@@ -463,6 +497,8 @@ final class OtaStorageInspectorViewController: UIViewController {
                 "previous: \(app.state?.previousReleaseId ?? "—")",
                 "candidate: \(app.candidate?.releaseId ?? "—")" + (app.candidate.map { " (\($0.status))" } ?? ""),
                 "disk: \(formatBytes(app.totalBytes)) / \(app.fileCount) files",
+                "CAS objects: \(app.objectCount) / \(formatBytes(app.objectBytes))",
+                "manifests: \(formatBytes(app.manifestBytes))",
             ]
             for release in app.releases {
                 let roles = release.roles.map(roleLabel).sorted().joined(separator: " · ")

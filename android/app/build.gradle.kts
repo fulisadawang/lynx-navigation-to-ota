@@ -27,6 +27,15 @@ val candidateActivationEnabled = providers.environmentVariable("LYNX_OTA_CANDIDA
     ?.lowercase()
     ?.let { it == "1" || it == "true" || it == "yes" || it == "on" }
     ?: false
+val localOtaServerEnabled = providers.environmentVariable("LYNX_OTA_LOCAL_SERVER").orNull
+    ?.trim()
+    ?.lowercase()
+    ?.let { it == "1" || it == "true" || it == "yes" || it == "on" }
+    ?: false
+val localOtaBaseUrl = providers.environmentVariable("LYNX_OTA_LOCAL_BASE_URL").orNull
+    ?.takeIf { it.isNotBlank() }
+    ?: "http://127.0.0.1:18765"
+val escapedLocalOtaBaseUrl = localOtaBaseUrl.replace("\"", "\\\"")
 
 android {
     namespace = "com.example.lynxshell.sample"
@@ -40,6 +49,8 @@ android {
         versionName = "1.0.0"
         buildConfigField("String", "LYNX_OTA_CLIENT_TOKEN", "\"$otaClientToken\"")
         buildConfigField("boolean", "LYNX_OTA_CANDIDATE_MODE", candidateActivationEnabled.toString())
+        buildConfigField("boolean", "LYNX_OTA_LOCAL_SERVER", localOtaServerEnabled.toString())
+        buildConfigField("String", "LYNX_OTA_LOCAL_BASE_URL", "\"$escapedLocalOtaBaseUrl\"")
     }
 
     buildTypes {

@@ -27,8 +27,7 @@ export {
 } from './ota/EmbeddedBundleRegistry';
 export { default as PageBundleRuntimeRegistry, LynxOtaConfig, OtaPrepareSignal } from './ota/OtaModels';
 export { LynxTabContainer, LynxTabSpec } from './pages/LynxTabContainer';
-export { default as ReleaseTransaction } from './ota/ReleaseTransaction';
-export { default as OtaStorageDiagnostics } from './ota/OtaStorageDiagnostics';
+export { default as ContentAddressedOtaStore } from './ota/ContentAddressedOtaStore';
 export {
   OtaBundleLease,
   OtaStorageReleaseRole,

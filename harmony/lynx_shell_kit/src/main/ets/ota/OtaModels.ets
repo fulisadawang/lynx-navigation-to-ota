@@ -18,6 +18,18 @@ export class LynxOtaConfig {
   clientToken: string = '';
   /** 仅 TEST + Want 显式注入时启用；生产默认永远关闭。 */
   debugMockEnabled: boolean = false;
+  /** 仅本地 TEST OTA Server 使用；生产和普通远程地址仍强制 HTTPS。 */
+  allowLocalHTTPForTest: boolean = false;
+  /** 仅 TEST 启动参数可注入的故障点；生产环境校验时会清空。 */
+  testFaultPoint: string = '';
+  /** 仅 TEST 启动参数可注入的容量探针，-1 表示读取真实 statfs。 */
+  testAvailableCapacityBytes: number = -1;
+  /** 仅 TEST 启动参数可注入的提交边界暂停点；用于 HDC force-stop 验证。 */
+  testPausePoint: string = '';
+  /** TEST 提交边界暂停时长，单位毫秒。 */
+  testPauseMillis: number = 0;
+  /** TEST 暂停实例标识，只用于匹配当前 HDC 日志，不进入 Store State。 */
+  testPauseToken: string = '';
   storageDirectory: string = '';
   pageRefreshIntervalMillis: number = 30 * 60 * 1000;
 
@@ -26,9 +38,33 @@ export class LynxOtaConfig {
   }
 
   validate(context: common.UIAbilityContext): void {
+    const isTestEnvironment = this.environment.toUpperCase() === 'TEST';
+    if (!isTestEnvironment) {
+      this.debugMockEnabled = false;
+      this.allowLocalHTTPForTest = false;
+      this.testFaultPoint = '';
+      this.testAvailableCapacityBytes = -1;
+      this.testPausePoint = '';
+      this.testPauseMillis = 0;
+      this.testPauseToken = '';
+    }
+    if (this.testAvailableCapacityBytes < -1) {
+      throw new Error('testAvailableCapacityBytes 不能小于 -1');
+    }
+    if (isTestEnvironment && !LynxOtaConfig.isSupportedTestFaultPoint(this.testFaultPoint)) {
+      throw new Error(`TEST fault point 不支持：${this.testFaultPoint}`);
+    }
+    if (this.testPauseMillis < 0 || this.testPauseMillis > 30000 || this.testPauseMillis !== Math.floor(this.testPauseMillis)) {
+      throw new Error('testPauseMillis 必须是 0 到 30000 的整数');
+    }
+    if (isTestEnvironment && !LynxOtaConfig.isSupportedTestPausePoint(this.testPausePoint)) {
+      throw new Error(`TEST pause point 不支持：${this.testPausePoint}`);
+    }
     const normalized = this.apiBaseUrl.trim();
-    if (!normalized.startsWith('https://')) {
-      throw new Error('OTA apiBaseUrl 必须使用 HTTPS');
+    const localHttp = LynxOtaConfig.isTestHttpUrl(normalized);
+    if (!normalized.startsWith('https://') &&
+      !(this.allowLocalHTTPForTest && this.environment.toUpperCase() === 'TEST' && localHttp)) {
+      throw new Error('OTA apiBaseUrl 必须使用 HTTPS；仅 TEST + loopback 调试地址允许 HTTP');
     }
     if (this.hostApp.trim().length === 0 || this.environment.trim().length === 0) {
       throw new Error('OTA hostApp/environment 不能为空');
@@ -54,6 +90,44 @@ export class LynxOtaConfig {
   requestPlatform(): string {
     return this.serverPlatform.trim().length > 0 ? this.serverPlatform.trim() : this.platform.trim();
   }
+
+  private static isTestHttpUrl(value: string): boolean {
+    if (!value.startsWith('http://')) return false;
+    const hostPort = value.substring('http://'.length).split('/')[0].split(':')[0];
+    return hostPort === '127.0.0.1' || hostPort === 'localhost' || hostPort === '[::1]' ||
+      hostPort === '10.0.2.2' || hostPort.startsWith('10.') || hostPort.startsWith('192.168.') ||
+      hostPort.startsWith('172.16.') || hostPort.startsWith('172.17.') || hostPort.startsWith('172.18.') ||
+      hostPort.startsWith('172.19.') || hostPort.startsWith('172.20.') || hostPort.startsWith('172.21.') ||
+      hostPort.startsWith('172.22.') || hostPort.startsWith('172.23.') || hostPort.startsWith('172.24.') ||
+      hostPort.startsWith('172.25.') || hostPort.startsWith('172.26.') || hostPort.startsWith('172.27.') ||
+      hostPort.startsWith('172.28.') || hostPort.startsWith('172.29.') || hostPort.startsWith('172.30.') ||
+      hostPort.startsWith('172.31.');
+  }
+
+  private static isSupportedTestFaultPoint(value: string): boolean {
+    return value.trim().length === 0 || [
+      'before_object_publish',
+      'after_object_publish',
+      'after_objects_ready',
+      'before_manifest_commit',
+      'after_manifest_commit',
+      'before_state_commit',
+      'after_state_commit_report_failure',
+      'enospc_object_publish',
+      'enospc_manifest_commit',
+      'enospc_state_commit'
+    ].includes(value.trim().toLowerCase());
+  }
+
+  private static isSupportedTestPausePoint(value: string): boolean {
+    return value.trim().length === 0 || [
+      'after_object_publish',
+      'after_objects_ready',
+      'after_manifest_commit',
+      'before_state_commit',
+      'after_state_commit'
+    ].includes(value.trim().toLowerCase());
+  }
 }
 
 /** latest-bundle-list / Manifest 中的单个 Bundle。 */
@@ -63,6 +137,8 @@ export interface OtaBundleArtifact {
   bundleSha256: string;
   bundleUrl: string;
   size?: number;
+  /** Store v3 的对象 ID；服务端缺省时由客户端使用 bundleSha256。 */
+  objectId?: string;
 }
 
 /** 服务端 Release Snapshot；changedBundles 在当前服务端契约中是完整 Bundle 快照。 */
@@ -84,9 +160,10 @@ export interface OtaLatestBundleLists {
   bundleLists: OtaReleaseSnapshot[];
 }
 
-/** 写入 apps/<lynxAppId>/releases/<releaseId>/release-manifest.json 的本地 Manifest。 */
+/** 写入 apps/<lynxAppId>/manifests/<manifestId>.json 的本地 Store v3 Manifest。 */
 export interface OtaLocalManifest {
   schemaVersion: number;
+  manifestId?: string;
   env: string;
   hostApp: string;
   lynxAppId: string;
@@ -112,6 +189,7 @@ export interface OtaReleaseState {
 export interface OtaReleaseRef {
   kind: 'embedded' | 'downloaded';
   releaseId: string;
+  manifestId?: string;
 }
 
 /** 远程 Release 的进程内生命周期租约；rawfile baseline 不需要租约。 */
@@ -139,6 +217,10 @@ export interface PreparedPageBundle {
   /** 内置 rawfile 直接读取时使用；远程 OTA 文件保持 bytes 未定义。 */
   bytes?: ArrayBuffer;
   releaseId: string;
+  /** 远程 current 对应的完整 Manifest ID；用于 session 级 NavigationSnapshot。 */
+  manifestId?: string;
+  /** 进程内 session 级快照 ID；不会写入持久化 State。 */
+  navigationSnapshotID?: string;
   sha256: string;
   /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
   source?: string;
@@ -165,6 +247,8 @@ export interface OtaStorageStateSnapshot {
   currentKind: string;
   previousReleaseId?: string;
   previousKind?: string;
+  currentManifestId?: string;
+  previousManifestId?: string;
 }
 
 export interface OtaStorageReleaseSnapshot {
@@ -175,6 +259,9 @@ export interface OtaStorageReleaseSnapshot {
   manifestValid: boolean;
   files: OtaStorageFileSnapshot[];
   truncated: boolean;
+  manifestId?: string;
+  bundleCount?: number;
+  objectIds?: string[];
 }
 
 export interface OtaStorageStagingSnapshot {
@@ -192,6 +279,10 @@ export interface OtaStorageAppSnapshot {
   staging: OtaStorageStagingSnapshot[];
   totalBytes: number;
   fileCount: number;
+  objectCount?: number;
+  objectBytes?: number;
+  manifestBytes?: number;
+  lastOperation?: string;
 }
 
 export interface OtaStorageSnapshot {
@@ -221,9 +312,9 @@ export class OtaPrepareSignal {
 export interface PageBundleRuntime {
   onApplicationStarted(): void;
   onApplicationForeground(): void;
-  prepare(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal): Promise<PreparedPageBundle>;
+  prepare(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal, navigationSessionID?: string): Promise<PreparedPageBundle>;
   /** 只读已经提交的 current；Tab 切换禁止触发网络、repair 或后台刷新。 */
-  resolveCurrent(lynxAppId: string, bundleName: string): Promise<PreparedPageBundle | null>;
+  resolveCurrent(lynxAppId: string, bundleName: string, navigationSessionID?: string): Promise<PreparedPageBundle | null>;
   /** 普通页面命中 remote current 后的非阻塞 App ID 级 30 分钟后台检查；Tab 不调用。 */
   refreshAppBundleIfNeeded(lynxAppId: string): void;
   rollback(lynxAppId: string, reason: string): Promise<boolean>;
@@ -233,6 +324,10 @@ export interface PageBundleRuntime {
   storageSnapshot(): Promise<OtaStorageSnapshot | null>;
   /** Provider 只允许读取受控 prepared file，或消费已校验的 embedded rawfile bytes。 */
   storageRoot(): string;
+  /** 释放一个 session consumer 的 Snapshot lease。 */
+  releaseNavigationSnapshot(navigationSessionID: string, lynxAppId: string): void;
+  /** 主动刷新后重置 Snapshot，旧页面 lease 仍由页面生命周期保护。 */
+  resetNavigationSnapshot(navigationSessionID: string, lynxAppId: string): void;
 }
 
 /** 进程级 Runtime 注册表，避免把文件路径写入页面参数或全局 Props。 */

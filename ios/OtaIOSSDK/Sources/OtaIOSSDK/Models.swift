@@ -1036,6 +1036,10 @@ public struct OtaSDKConfiguration: Sendable {
     public let storageDirectory: URL
     /// 开启后下载校验只写 candidate/trial，健康确认后才 promote 到 current。
     public let candidateActivationEnabled: Bool
+    /// 低层 SDK 默认保留 v2 兼容；宿主的 LynxOtaConfiguration 默认切到 v3。
+    public let storeVersion: OtaStoreVersion
+    /// 仅供 TEST 环境连接 loopback 本地 OTA fixture；Release 必须保持 false。
+    public let allowLocalHTTPForTest: Bool
 
     public init(
         apiBaseURL: URL,
@@ -1055,7 +1059,9 @@ public struct OtaSDKConfiguration: Sendable {
         lynxSdkVersion: String? = nil,
         otaClientToken: String = OtaDefaults.otaClientToken,
         storageDirectory: URL? = nil,
-        candidateActivationEnabled: Bool = false
+        candidateActivationEnabled: Bool = false,
+        storeVersion: OtaStoreVersion = .v2,
+        allowLocalHTTPForTest: Bool = false
     ) {
         self.apiBaseURL = apiBaseURL
         self.app = app
@@ -1076,5 +1082,7 @@ public struct OtaSDKConfiguration: Sendable {
         self.storageDirectory = storageDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ota-ios-sdk", isDirectory: true)
         self.candidateActivationEnabled = candidateActivationEnabled
+        self.storeVersion = storeVersion
+        self.allowLocalHTTPForTest = allowLocalHTTPForTest
     }
 }

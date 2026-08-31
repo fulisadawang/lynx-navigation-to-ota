@@ -8,6 +8,9 @@
     "build": "rspeedy build",
     "dev": "rspeedy dev",
     "preview": "rspeedy preview",
+    "ota:v3:fixture": "node scripts/generate-ota-store-v3-fixture.mjs",
+    "ota:v3:fixture:verify": "node ../scripts/verify-ota-store-v3-fixture.mjs --fixture fixtures/ota-store-v3-golden-100-v1-v2",
+    "ota:v3:server": "node ../scripts/ota-store-v3/local-server.mjs --fixture fixtures/ota-store-v3-golden-100-v1-v2",
     "ota:publish": "node scripts/publish-ota-bundle.mjs",
     "ota:publish:dry-run": "node scripts/publish-ota-bundle.mjs --dry-run",
     "ota:build-and-publish": "pnpm build && node scripts/publish-ota-bundle.mjs"

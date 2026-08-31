@@ -27,12 +27,20 @@ class LynxShellSampleApplication : Application() {
         LynxRouter.install(
             this,
             LynxOtaConfig(
-                apiBaseUri = URI.create("https://lynx-ota-server.test.huangbaoche.com"),
+                apiBaseUri = URI.create(
+                    if (BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER) {
+                        BuildConfig.LYNX_OTA_LOCAL_BASE_URL
+                    } else {
+                        "https://lynx-ota-server.test.huangbaoche.com"
+                    },
+                ),
                 hostApp = "capp",
                 environment = "TEST",
                 platform = "android",
                 clientToken = BuildConfig.LYNX_OTA_CLIENT_TOKEN,
                 candidateActivationEnabled = BuildConfig.LYNX_OTA_CANDIDATE_MODE,
+                storeVersion = com.ota.android.sdk.OtaModels.StoreVersion.V3,
+                allowLocalHTTPForTest = BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER,
             ),
         )
 

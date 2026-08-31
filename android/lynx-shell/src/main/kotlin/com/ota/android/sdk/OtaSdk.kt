@@ -7,19 +7,31 @@ class OtaSdk {
   private val configuration: OtaModels.Configuration
   private val apiClient: OtaApiClient
   private val embeddedStore: EmbeddedReleaseStore
-  private val releaseTransaction: ReleaseTransaction
+  private val releaseTransaction: OtaReleaseStore
   private val bundleRuntime: BundleRuntime
 
   constructor(configuration: OtaModels.Configuration) : this(
     configuration,
-    OtaApiClient.server(configuration.apiBaseUri, configuration.otaClientToken),
+    OtaApiClient.server(
+      configuration.apiBaseUri,
+      configuration.otaClientToken,
+      configuration.environment,
+      configuration.allowLocalHTTPForTest,
+    ),
   )
 
   constructor(configuration: OtaModels.Configuration, apiClient: OtaApiClient) {
     this.configuration = configuration
     this.apiClient = apiClient
     this.embeddedStore = EmbeddedReleaseStore(configuration.storageDirectory)
-    this.releaseTransaction = ReleaseTransaction(configuration.storageDirectory)
+    this.releaseTransaction = when (configuration.storeVersion) {
+      OtaModels.StoreVersion.V2 -> LegacyOtaReleaseStore(configuration.storageDirectory)
+      OtaModels.StoreVersion.V3 -> ContentAddressedOtaStore(
+        configuration.storageDirectory,
+        allowLocalHTTPForTest = configuration.allowLocalHTTPForTest,
+        environment = configuration.environment,
+      )
+    }
     this.bundleRuntime = BundleRuntime(releaseTransaction)
   }
 
@@ -309,6 +321,16 @@ class OtaSdk {
     return releaseTransaction.acquireCandidateBundleLease(scopeFor(lynxAppId), bundleName)
   }
 
+  /** NavigationSnapshot 按固定 releaseId 解析 Bundle，防止路由中途切换到新 current。 */
+  @Throws(IOException::class, OtaSdkException::class)
+  fun acquireBundleLeaseForRelease(
+    lynxAppId: String,
+    releaseId: String,
+    bundleName: String,
+  ): ReleaseTransaction.BundleLease? {
+    return releaseTransaction.acquireBundleLeaseForRelease(scopeFor(lynxAppId), releaseId, bundleName)
+  }
+
   /** 路由进入 Lynx 容器前的 Bundle 门禁，失败不会读取 staging/part 文件。 */
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun ensureBundleReady(lynxAppId: String, bundleName: String): File {
@@ -450,6 +472,7 @@ class OtaSdk {
             latest.changedBundles.size,
             0,
             latest.changedBundles.size,
+            0,
           ),
         )
       }
@@ -520,6 +543,7 @@ class OtaSdk {
           manifest.releaseId,
           manifest.bundles.size,
           transaction.downloadedBundleCount,
+          transaction.reusedBundleCount,
           transaction.copiedBundleCount,
         ),
       )
@@ -528,6 +552,7 @@ class OtaSdk {
       manifest.releaseId,
       manifest.bundles.size,
       transaction.downloadedBundleCount,
+      transaction.reusedBundleCount,
       transaction.copiedBundleCount,
     )
     report(
@@ -663,6 +688,11 @@ class OtaSdk {
   }
 
   private fun hasAllLocalBundles(release: OtaModels.InstalledRelease): Boolean {
+    // embedded descriptor 的 localFilePath 是受控 asset URI，不是 filesDir 普通文件；它的
+    // 内容由宿主 EmbeddedBundleRegistry 在真正交付 LynxView 时从 APK AssetManager 校验。
+    if (embeddedStore.embeddedRelease(release.context.lynxAppId)?.context?.releaseId == release.context.releaseId) {
+      return true
+    }
     for (bundle in release.bundles) {
       val file = File(bundle.localFilePath)
       if (!file.isFile) {

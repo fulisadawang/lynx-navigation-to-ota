@@ -60,6 +60,8 @@ OTA Runtime current/SHA 热路径
 - `lynx_shell_kit` 内置 `LynxOtaRuntime` 与 `ReleaseTransaction`；宿主身份始终使用
   `platform=harmony`。在服务端尚未开放该枚举的过渡期，Demo 只把查询/Release 校验值设置为
   `serverPlatform=android`，不改变 AppInfo/GlobalProps；后端开放后删除该兼容值。
+  OTA 主链使用 `ContentAddressedOtaStore`：完整 Manifest、App ID 作用域 CAS、current/previous、
+  lease 和原子 State；HarmonyOS 不加入 candidate。
 
 ## 3. Runtime 与 XElement
 

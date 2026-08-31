@@ -1,5 +1,10 @@
 import Foundation
 
+public enum OtaStoreVersion: String, Codable, Sendable {
+    case v2
+    case v3
+}
+
 /**
  * iOS OTA Store v2 的 storage root 描述。
  *
@@ -9,9 +14,11 @@ import Foundation
  */
 public struct OtaStorageRoot: Sendable {
     public let baseDirectoryURL: URL
+    public let version: OtaStoreVersion
 
-    public init(baseDirectory: URL) {
+    public init(baseDirectory: URL, version: OtaStoreVersion = .v2) {
         self.baseDirectoryURL = baseDirectory
+        self.version = version
     }
 }
 

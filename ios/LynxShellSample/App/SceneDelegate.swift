@@ -313,10 +313,22 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             environment["LYNX_OTA_CLIENT_TOKEN"]
                 ?? info["LynxOtaClientToken"] as? String
         )
+        let otaEnvironment = environment["LYNX_OTA_ENV"]
+            ?? info["LynxOtaEnvironment"] as? String
+            ?? "TEST"
         guard let baseValue,
-              let apiBaseURL = URL(string: baseValue),
-              let token,
-              apiBaseURL.scheme?.lowercased() == "https",
+              let apiBaseURL = URL(string: baseValue) else {
+            return nil
+        }
+        let allowLocalHTTP = Self.booleanValue(
+            environment["LYNX_OTA_ALLOW_LOCAL_HTTP"]
+                ?? info["LynxOtaAllowLocalHTTPForTest"] as? String
+        )
+        let isLocalHTTP = allowLocalHTTP &&
+            otaEnvironment.uppercased() == "TEST" &&
+            Self.isLoopbackHost(apiBaseURL.host)
+        guard let token,
+              apiBaseURL.scheme?.lowercased() == "https" || isLocalHTTP,
               apiBaseURL.host?.isEmpty == false else {
             return nil
         }
@@ -326,14 +338,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 ?? info["LynxOtaHostApp"] as? String
                 ?? "capp",
             defaultLynxAppId: "10000001",
-            environment: environment["LYNX_OTA_ENV"]
-                ?? info["LynxOtaEnvironment"] as? String
-                ?? "TEST",
+            environment: otaEnvironment,
             clientToken: token,
             candidateActivationEnabled: Self.booleanValue(
                 environment["LYNX_OTA_CANDIDATE_MODE"]
                     ?? info["LynxOtaCandidateActivationEnabled"] as? String
-            )
+            ),
+            allowLocalHTTPForTest: isLocalHTTP
         )
     }
 
@@ -347,6 +358,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private static func booleanValue(_ value: String?) -> Bool {
         guard let value else { return false }
         return ["1", "true", "yes", "on"].contains(value.lowercased())
+    }
+
+    private static func isLoopbackHost(_ host: String?) -> Bool {
+        guard let host else { return false }
+        let normalized = host.lowercased()
+        return normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
     }
 
 }

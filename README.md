@@ -64,7 +64,7 @@ Base URL 和 CDN 地址都是占位符，不包含真实凭证。
 | iOS | `LynxShellKit`，一个页面一个 `LynxContainerViewController`；Native Tab 使用原生 `UIViewController` | `LynxRouter.install(to:otaConfiguration:)` | UINavigationController + UIViewController Tab；默认沉浸式 `LynxView` |
 | HarmonyOS | `lynx_shell_kit`，一个 ArkUI 路由页一个 `LynxContainer`；Native Tab 使用 ArkUI Tabs | `LynxRouter.install(context, otaConfig?)` | ArkUI Page/Container + ArkUI Tabs；默认沉浸式 `LynxView` |
 
-### 三端 OTA Store v2 与 Native Tab
+### 三端 OTA Store v3 与 Native Tab
 
 三端的普通页面和 Native Tab 都由原生容器承载，但两条加载策略明确分开：普通页面可以按平台
 配置执行后台版本检查或候选版本流程；Native Tab 只读取已经提交的 `current`，普通 Tab 切换不
@@ -76,18 +76,22 @@ Base URL 和 CDN 地址都是占位符，不包含真实凭证。
 | iOS | `UIViewController` | `UIViewController + UITabBarController` Demo | `current + previous`，可选 `candidate/trial` |
 | HarmonyOS | `ArkUI Page/Container` | `ArkUI Tabs` Demo | 只有 `current + previous`，不加入 candidate |
 
-远程 Bundle 在三个平台都按 App ID 物理隔离：
+远程 Bundle 在三个平台都按 App ID 物理隔离；Store v3 使用完整 Manifest + App ID 作用域 CAS：
 
 ```text
 <private-app-storage>/lynx-ota-store/apps/<lynxAppId>/
 ├── state.json
-├── releases/<releaseId>/
-└── .staging/<releaseId>.<transactionId>/
+├── embedded.json
+├── manifests/<manifestSha256>.json
+├── objects/<sha256-prefix>/<sha256>.lynx.bundle
+└── transactions/<transactionId>/
 ```
 
 embedded Bundle 仍从 Android assets、iOS App Bundle 或 HarmonyOS rawfile 直接读取，不复制到
-OTA Store。远程 Bundle 才写入上面的私有目录；`current/previous` 由原子 state 提交，活体页面或
-Tab 通过 Release lease 防止正在使用的目录被清理。Android/iOS 可以按需开启 candidate/trial，
+OTA Store。远程 Bundle 才写入上面的私有目录；Manifest 始终是完整版本快照，客户端只下载 CAS
+中缺失的 SHA 对象，因此 100 个 Bundle 只有 1 个变更时只产生 1 个二进制下载和 1 个新对象。
+`current/previous` 由原子 state 提交，同一个 Native Page Stack 通过 NavigationSnapshot + Release
+lease 防止版本漂移或正在使用的对象被清理。Android/iOS 可以按需开启 candidate/trial，
 HarmonyOS 按本项目约定不创建 candidate 文件、字段或 API。
 
 三端默认模式统一称为 **Native Page Stack**：统一的是 `open(bundle, params)`、
@@ -466,9 +470,9 @@ Application 启动 / 回到前台
 current 存在且 size/SHA 有效：立即加载；当前 appId 30 分钟内检查过则后台跳过
 current 缺失/损坏：忽略 30 分钟门控，进入原生 Loading
         ↓
-定向 Manifest → 下载 changedBundles → 校验大小 → 校验 SHA-256
+完整 Manifest → 查询 App ID 作用域 CAS → 只下载缺失 Object → 校验大小 → 校验 SHA-256
         ↓
-写入 staging → 原子激活 current，旧版本保留为 previous
+写入 `.part` → 原子 rename Object → 原子提交 Manifest/State，旧版本保留为 previous
         ↓
 创建 LynxView；首屏失败最多回滚一次
 ```
@@ -483,8 +487,8 @@ Native Tab 的规则更严格：首次进入和普通切换只执行 cache-only 
 
 | API | 行为 |
 | --- | --- |
-| `deleteOtaBundles(appId)` | 永久删除该 appId 在磁盘中的 `state.json`、`releases` 和 `.staging` 下载内容；不生成 `.delete-*` 备份目录 |
-| `deleteAllOtaBundles()` | 永久删除所有 appId 的 OTA 下载内容；HAP rawfile、App Bundle 内置资源不受影响 |
+| `deleteOtaBundles(appId)` | 永久删除该 appId 的下载 Manifest/Object/transaction 内容并恢复 embedded；不生成 `.delete-*` 备份目录 |
+| `deleteAllOtaBundles()` | 永久删除所有 appId 的 OTA Manifest/Object/transaction 内容；HAP rawfile、App Bundle 内置资源不受影响 |
 
 删除完成后再次打开 OTA 页面会重新走下载和校验。删除 API 是诊断/验收能力，生产 App 是否
 向用户暴露按钮由业务决定。
@@ -703,9 +707,16 @@ python3 scripts/static_check.py
 Android/iOS 不限制远程 Host；官方 Bundle URL 仍按 HTTPS、后缀、响应码、重定向协议和体积策略校验。
 
 本轮 iOS 使用 iPhone 16 Pro / iOS 18.1 Simulator 完成 CocoaPods/Xcode 编译、安装和
-真实 OTA Bundle 加载；Android 保留 OnePlus IN2010 真机 OTA、Native Tab、回退和故障矩阵证据。
-HarmonyOS 完成 HAR/HAP 构建、Pura 90 模拟器安装，以及 Store v2、Native Tab、Inspector、lease、
-删除、embedded fallback 和冷启动验收；由于本次环境请求 TEST OTA Server 返回 TLS
-`SSL_ERROR_SYSCALL`（HTTP code 000），Harmony 运行态使用仅 TEST 可显式开启的 Mock Source，
-不把 Mock 结果写成真实 Manifest/OSS 下载通过。真实 Harmony Server 版本差异、物理真机和签名包
-仍需单独验收。最终契约审计还在当前 `android/lynx-shell` 补充了远程 HTTPS 与 OTA 字段隔离 guard。
+本地 Golden OTA Bundle 加载；本轮 iOS 的 Store v3 本地 Golden 证据另见独立 HTML 报告。Android
+使用 `emulator-5554` / API 35 完成 Store v3 的 100 → 1 增量、CAS、ETag、Activity 路由快照、
+Fragment + BottomNavigation、Tab 刷新、candidate 和坏 SHA 运行态验收，详见 Android HTML 报告。
+HarmonyOS 使用 Pura 90 / HarmonyOS 6.1.1(24) 模拟器完成 Store v3 的真实本地 OTA Server 验收：
+100 → 1 增量、CAS、ETag、ArkUI Tabs cache-only、主动刷新、current/previous 回滚和坏 SHA 保留旧版，
+详见 HarmonyOS HTML 报告。旧 Store v2/Mock Source 报告仍保留为历史基线，不与当前 v3 结果混用。
+最终契约审计还在当前 `android/lynx-shell` 补充了远程 HTTPS 与 OTA 字段隔离 guard。
+
+Store v3 的本地 Golden Fixture、100 Bundle 真实编译、loopback OTA Server、三端按 iOS → Android →
+HarmonyOS 顺序执行的测试用例见 [lynx-ota-store-v3-test-cases.md](docs/lynx-ota-store-v3-test-cases.md)。
+三个平台的报告分别为 `docs/ios-ota-store-v3-test-report.html`、
+`docs/android-ota-store-v3-test-report.html` 和 `docs/harmony-ota-store-v3-test-report.html`；
+报告没有覆盖的物理设备、生产 CDN/TLS、低磁盘及独立进程崩溃场景仍不视为已通过。

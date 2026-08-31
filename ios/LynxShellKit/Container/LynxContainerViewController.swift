@@ -76,6 +76,15 @@ final class LynxContainerViewController: UIViewController {
         debugRollbackMarkerTimer?.invalidate()
 #endif
         finishReadiness(success: false, reason: "page_destroyed")
+        if navigationParentEntryID == nil,
+           let runtime = LynxShell.otaRuntime() as? LynxNavigationSnapshotRuntime {
+            let sessionID = navigationSessionID
+            Task { [runtime, sessionID] in
+                await runtime.releaseNavigationSnapshot(
+                    navigationSessionID: sessionID
+                )
+            }
+        }
     }
 
     override func viewDidLoad() {
@@ -508,6 +517,7 @@ final class LynxContainerViewController: UIViewController {
             handleTemplateLoadFailure(generation: generation, message: "OTA 页面未配置 Router 内置 OTA runtime")
             return
         }
+        let sessionID = navigationSessionID
         otaPrepareTask = Task { [weak self] in
             var pendingLease: OtaBundleLease?
             defer {
@@ -516,14 +526,25 @@ final class LynxContainerViewController: UIViewController {
                 }
             }
             do {
-                let cached = try await runtime.resolvePage(
-                    lynxAppId: appId,
-                    bundleName: bundleName
-                )
+                let cached: PreparedOtaBundle?
+                if let snapshotRuntime = runtime as? LynxNavigationSnapshotRuntime {
+                    cached = try await snapshotRuntime.resolvePage(
+                        lynxAppId: appId,
+                        bundleName: bundleName,
+                        navigationSessionID: sessionID
+                    )
+                } else {
+                    cached = try await runtime.resolvePage(
+                        lynxAppId: appId,
+                        bundleName: bundleName
+                    )
+                }
                 let prepared: PreparedOtaBundle
                 if let cached {
                     prepared = cached
-                    if cached.source != "embedded_baseline" && cached.source != "candidate_trial" {
+                    if cached.source != "embedded_baseline" &&
+                        cached.source != "candidate_trial" &&
+                        cached.source != "ota_snapshot" {
                         await runtime.refreshAppBundleIfNeeded(lynxAppId: appId)
                     }
                 } else {
@@ -532,7 +553,18 @@ final class LynxContainerViewController: UIViewController {
                               !self.request.transitionSpec.explicitlyRequested else { return }
                         self.loadingView.show(message: "正在检查 \(appId)/\(bundleName)…")
                     }
-                    prepared = try await runtime.prepare(lynxAppId: appId, bundleName: bundleName)
+                    if let snapshotRuntime = runtime as? LynxNavigationSnapshotRuntime {
+                        prepared = try await snapshotRuntime.prepare(
+                            lynxAppId: appId,
+                            bundleName: bundleName,
+                            navigationSessionID: sessionID
+                        )
+                    } else {
+                        prepared = try await runtime.prepare(
+                            lynxAppId: appId,
+                            bundleName: bundleName
+                        )
+                    }
                 }
                 pendingLease = prepared.releaseLease
                 if Task.isCancelled { return }
@@ -555,7 +587,7 @@ final class LynxContainerViewController: UIViewController {
                     self.releaseCurrentLease()
                     self.releaseLease = prepared.releaseLease
                     self.preparedBundleData = data
-                    self.bundleRuntimeMetadata = [
+                    var metadata: [String: Any] = [
                         "lynxAppId": prepared.lynxAppId,
                         "releaseId": prepared.releaseId ?? "unknown",
                         // 只有没有 previous、重新回到 App Bundle baseline 时才标记 fallback；
@@ -565,6 +597,10 @@ final class LynxContainerViewController: UIViewController {
                             : prepared.source,
                         "bundleName": prepared.bundleName
                     ]
+                    if let snapshotID = prepared.navigationSnapshotID {
+                        metadata["navigationSnapshotId"] = snapshotID
+                    }
+                    self.bundleRuntimeMetadata = metadata
 #if DEBUG
                     self.updateDebugRuntimeState(
                         "prepared:\(prepared.releaseId ?? "unknown"):" +

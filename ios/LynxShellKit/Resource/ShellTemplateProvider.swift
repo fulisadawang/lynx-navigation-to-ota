@@ -302,7 +302,9 @@ final class EmbeddedBundleRegistry {
     }
 
     private struct ManifestBundle: Decodable {
+        let pageId: Int?
         let bundleName: String
+        let bundlePath: String?
         let assetPath: String
         let size: Int
         let sha256: String
@@ -395,6 +397,50 @@ final class EmbeddedBundleRegistry {
     /** 判断 App ID 是否存在随包 baseline；只查 Manifest，不读取或复制 Bundle。 */
     func containsApp(lynxAppId: String) -> Bool {
         entries.contains { $0.lynxAppId == lynxAppId }
+    }
+
+    func isEmbeddedRelease(lynxAppId: String, releaseId: String) -> Bool {
+        entries.contains { $0.lynxAppId == lynxAppId && $0.releaseId == releaseId }
+    }
+
+    /** 将 Manifest 中的全部内置 App 转成 OTA Store 只读 baseline 描述。 */
+    func installedReleases(
+        env: OtaEnvironment,
+        app: OtaAppID,
+        platform: OtaPlatform
+    ) throws -> [OtaInstalledRelease] {
+        try entries.map { entry in
+            let bundles = try entry.bundles.map { item -> OtaInstalledBundle in
+                guard let descriptor = try resolve(
+                    lynxAppId: entry.lynxAppId,
+                    bundleName: item.bundleName
+                ) else {
+                    throw NSError(domain: "LynxShellEmbedded", code: 1007, userInfo: [
+                        NSLocalizedDescriptionKey: "内置 Bundle 解析失败：\(entry.lynxAppId)/\(item.bundleName)"
+                    ])
+                }
+                return OtaInstalledBundle(
+                    bundleName: descriptor.bundleName,
+                    bundleSha256: descriptor.sha256,
+                    remoteURL: descriptor.fileURL,
+                    localFilePath: descriptor.fileURL.path,
+                    pageId: item.pageId ?? 0,
+                    bundlePath: item.bundlePath ?? descriptor.bundleName
+                )
+            }
+            return OtaInstalledRelease(
+                context: OtaCurrentReleaseContext(
+                    env: env,
+                    app: app,
+                    lynxAppId: entry.lynxAppId,
+                    releaseId: entry.releaseId,
+                    platform: platform,
+                    status: .active
+                ),
+                installedAt: .distantPast,
+                bundles: bundles
+            )
+        }
     }
 
     private func validateAssetPath(_ value: String) throws -> String {

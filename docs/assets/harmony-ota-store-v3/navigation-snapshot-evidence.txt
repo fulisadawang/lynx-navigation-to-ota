@@ -1,0 +1,13 @@
+HarmonyOS Pura 90 / HDC 127.0.0.1:5557
+
+同一 session 的两个 Page：
+[LynxHarmonyShell] prepared 10000001/pages/10000001/bundle-050.lynx.bundle, release=ota-v3-golden-v1-100, manifest=sha256:ddb5da03d525251ba6b426870fa8bf7bb653f648064db786e2e5187b7d37d7f4, snapshot=lynx-snapshot-1788127897684-2
+[LynxHarmonyShell] prepared 10000001/pages/10000001/bundle-050.lynx.bundle, release=ota-v3-golden-v1-100, manifest=sha256:ddb5da03d525251ba6b426870fa8bf7bb653f648064db786e2e5187b7d37d7f4, snapshot=lynx-snapshot-1788127897684-2
+
+返回宿主页后新 Page：
+[LynxHarmonyShell] prepared 10000001/home.lynx.bundle, release=r20260823_qc8ffc, manifest=embedded, snapshot=lynx-snapshot-1788127995689-3
+
+返回后本地 Server metrics：
+latestRequestCount=0
+bundleRequestCount=0
+bundleBytes=0

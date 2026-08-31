@@ -9,8 +9,13 @@ final class LynxShellUITests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--show-native-launcher"]
         if let token = Self.testOtaToken {
-            app.launchEnvironment["LYNX_OTA_API_BASE_URL"] = "https://lynx-ota-server.test.huangbaoche.com"
+            app.launchEnvironment["LYNX_OTA_API_BASE_URL"] = Self.testOtaBaseURL
             app.launchEnvironment["LYNX_OTA_CLIENT_TOKEN"] = token
+            app.launchEnvironment["LYNX_OTA_ENV"] = Self.testOtaEnvironment
+            if Self.testOtaBaseURL.lowercased().hasPrefix("http://127.0.0.1") ||
+                Self.testOtaBaseURL.lowercased().hasPrefix("http://localhost") {
+                app.launchEnvironment["LYNX_OTA_ALLOW_LOCAL_HTTP"] = "1"
+            }
             // UI suite 中由具体用例显式点击“刷新 OTA”；避免启动全量同步与故障/Tab断言竞争。
             app.launchEnvironment["LYNX_TEST_SKIP_STARTUP_SYNC"] = "1"
             // 当前外网可能不可达；OTA 成功语义通过 Debug mock 复现，F12 会显式关闭它。
@@ -48,6 +53,7 @@ final class LynxShellUITests: XCTestCase {
     func testNativeTabSwitchingDoesNotReloadInstances() {
         launchApp(extraEnvironment: [
             "LYNX_UI_TEST_EXPOSE_RUNTIME_STATE": "1",
+            "LYNX_TEST_OTA_V3_FIXTURE": "1",
         ])
         let tabDemo = app.buttons["打开原生 Tab 承载 Demo"]
         XCTAssertTrue(tabDemo.waitForExistence(timeout: 10))
@@ -177,6 +183,7 @@ final class LynxShellUITests: XCTestCase {
         }
         launchApp(extraEnvironment: [
             "LYNX_UI_TEST_EXPOSE_RUNTIME_STATE": "1",
+            "LYNX_TEST_OTA_V3_FIXTURE": "1",
         ])
         let tabDemo = app.buttons["打开原生 Tab 承载 Demo"]
         XCTAssertTrue(tabDemo.waitForExistence(timeout: 10))
@@ -358,6 +365,18 @@ final class LynxShellUITests: XCTestCase {
     private static var testOtaToken: String? {
         ProcessInfo.processInfo.environment["LYNX_OTA_CLIENT_TOKEN"]
             ?? ProcessInfo.processInfo.environment["TEST_RUNNER_LYNX_OTA_CLIENT_TOKEN"]
+    }
+
+    private static var testOtaBaseURL: String {
+        ProcessInfo.processInfo.environment["LYNX_TEST_OTA_BASE_URL"]
+            ?? ProcessInfo.processInfo.environment["TEST_RUNNER_LYNX_TEST_OTA_BASE_URL"]
+            ?? "https://lynx-ota-server.test.huangbaoche.com"
+    }
+
+    private static var testOtaEnvironment: String {
+        ProcessInfo.processInfo.environment["LYNX_TEST_OTA_ENV"]
+            ?? ProcessInfo.processInfo.environment["TEST_RUNNER_LYNX_TEST_OTA_ENV"]
+            ?? "TEST"
     }
 
     private static var useLiveOta: Bool {

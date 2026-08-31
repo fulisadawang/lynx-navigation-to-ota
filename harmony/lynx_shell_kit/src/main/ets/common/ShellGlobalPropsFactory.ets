@@ -10,6 +10,8 @@ export interface ShellBundleMetadata {
   source: string;
   bundleName: string;
   sha256: string;
+  manifestId?: string;
+  navigationSnapshotID?: string;
   loadPolicy?: string;
 }
 
@@ -51,7 +53,7 @@ export default class ShellGlobalPropsFactory {
     business['__lynxRouterPlatformContainer'] = 'arkui_page';
     business['__lynxRouterParams'] = queryItems;
     if (bundleMetadata !== undefined) {
-      business['__lynxBundleMeta'] = bundleMetadata;
+    business['__lynxBundleMeta'] = bundleMetadata;
     }
     return business;
   }

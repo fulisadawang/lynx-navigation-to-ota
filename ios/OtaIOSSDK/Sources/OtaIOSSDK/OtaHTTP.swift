@@ -93,9 +93,14 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
     }
 
     private let allowLocalFileURLs: Bool
+    private let allowLocalHTTPURLs: Bool
 
-    public init(allowLocalFileURLs: Bool = false) {
+    public init(
+        allowLocalFileURLs: Bool = false,
+        allowLocalHTTPURLs: Bool = false
+    ) {
         self.allowLocalFileURLs = allowLocalFileURLs
+        self.allowLocalHTTPURLs = allowLocalHTTPURLs
     }
 
     public func download(from remoteURL: URL, to localURL: URL) async throws {
@@ -103,8 +108,8 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: localURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        switch remoteURL.scheme?.lowercased() {
-        case "file" where allowLocalFileURLs:
+        let scheme = remoteURL.scheme?.lowercased()
+        if scheme == "file" && allowLocalFileURLs {
             let sourcePath = remoteURL.path
             guard fileManager.fileExists(atPath: sourcePath) else {
                 throw OtaSDKError.fileNotFound(sourcePath)
@@ -114,7 +119,16 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
             }
             try fileManager.copyItem(at: remoteURL, to: localURL)
             try Task.checkCancellation()
-        case "https":
+            return
+        }
+
+        let isHTTPS = scheme == "https"
+        let isLocalHTTP = allowLocalHTTPURLs && OtaLocalTestURLPolicy.isAllowedLocalHTTP(remoteURL)
+        guard isHTTPS || isLocalHTTP else {
+            throw OtaSDKError.unsupportedDownloadScheme(remoteURL.scheme ?? "unknown")
+        }
+
+        do {
             let (temporaryURL, response) = try await downloadTemporaryFile(from: remoteURL)
             // URLSession 回调内部已经把 CFNetwork 的临时文件移动到了 SDK 自己的
             // 临时目录。这里无论 HTTP 状态是否成功都负责清理，避免失败响应留下孤儿文件。
@@ -123,7 +137,11 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
                 throw OtaSDKError.invalidResponse(statusCode: statusCode, body: "")
             }
-            guard http.url?.scheme?.lowercased() == "https" else {
+            let responseURL = http.url
+            let responseIsHTTPS = responseURL?.scheme?.lowercased() == "https"
+            let responseIsLocalHTTP = allowLocalHTTPURLs &&
+                responseURL.map(OtaLocalTestURLPolicy.isAllowedLocalHTTP) == true
+            guard responseIsHTTPS || responseIsLocalHTTP else {
                 throw OtaSDKError.unsupportedDownloadScheme(http.url?.scheme ?? "unknown")
             }
 
@@ -159,8 +177,6 @@ public struct URLSessionBundleDownloader: OtaBundleDownloading {
                 try? fileManager.removeItem(at: localURL)
                 throw error
             }
-        default:
-            throw OtaSDKError.unsupportedDownloadScheme(remoteURL.scheme ?? "unknown")
         }
     }
 
@@ -218,25 +234,52 @@ public struct SHA256ChecksumValidator: OtaChecksumValidating {
     }
 }
 
+private actor OtaHTTPResponseCache {
+    struct Entry: Sendable {
+        let etag: String
+        let data: Data
+    }
+
+    private var entries: [String: Entry] = [:]
+
+    func entry(for key: String) -> Entry? {
+        entries[key]
+    }
+
+    func store(_ entry: Entry, for key: String) {
+        entries[key] = entry
+    }
+}
+
 public struct ServerOtaAPIClient: OtaAPIClientProtocol {
     private static let otaClientTokenHeader = "x-ota-client-token"
     private let baseURL: URL
     private let otaClientToken: String
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private let allowLocalHTTPForTest: Bool
+    private let responseCache: OtaHTTPResponseCache
 
-    public init(baseURL: URL, otaClientToken: String = OtaDefaults.otaClientToken) {
+    public init(
+        baseURL: URL,
+        otaClientToken: String = OtaDefaults.otaClientToken,
+        allowLocalHTTPForTest: Bool = false
+    ) {
+        let isHTTPS = baseURL.scheme?.lowercased() == "https"
+        let isLocalHTTP = allowLocalHTTPForTest && OtaLocalTestURLPolicy.isAllowedLocalHTTP(baseURL)
         precondition(
-            baseURL.scheme?.lowercased() == "https" &&
+            (isHTTPS || isLocalHTTP) &&
                 baseURL.host?.isEmpty == false &&
                 baseURL.user == nil &&
                 baseURL.fragment == nil,
-            "OTA API 必须使用 HTTPS 并包含 Host"
+            "OTA API 必须使用 HTTPS 并包含 Host；本地 TEST 仅允许显式 loopback HTTP"
         )
         self.baseURL = baseURL
         self.otaClientToken = otaClientToken
         self.decoder = JSONDecoder()
         self.encoder = JSONEncoder()
+        self.allowLocalHTTPForTest = allowLocalHTTPForTest
+        self.responseCache = OtaHTTPResponseCache()
     }
 
     public func checkForUpdate(_ request: OtaPolicyMatchRequest) async throws -> OtaPolicyMatchResponse {
@@ -266,7 +309,11 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
         let url = components?.url ?? manifestURL
         var urlRequest = URLRequest(url: url)
         applyClientToken(to: &urlRequest)
-        return try await send(urlRequest, as: OtaReleaseManifest.self)
+        return try await sendConditional(
+            urlRequest,
+            as: OtaReleaseManifest.self,
+            cacheKey: url.absoluteString
+        )
     }
 
     public func fetchLatestBundleList(
@@ -286,7 +333,11 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
         let url = components?.url ?? latestURL
         var urlRequest = URLRequest(url: url)
         applyClientToken(to: &urlRequest)
-        return try await send(urlRequest, as: OtaLatestBundleList.self)
+        return try await sendConditional(
+            urlRequest,
+            as: OtaLatestBundleList.self,
+            cacheKey: url.absoluteString
+        )
     }
 
     public func fetchLatestBundleLists(
@@ -304,7 +355,11 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
         let url = components?.url ?? latestURL
         var urlRequest = URLRequest(url: url)
         applyClientToken(to: &urlRequest)
-        return try await send(urlRequest, as: OtaHostLatestBundleLists.self)
+        return try await sendConditional(
+            urlRequest,
+            as: OtaHostLatestBundleLists.self,
+            cacheKey: url.absoluteString
+        )
     }
 
     public func reportEvent(_ payload: OtaReportPayload) async throws -> OtaReportResponse {
@@ -321,15 +376,51 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
     }
 
     private func send<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
+        try await send(
+            request,
+            as: type,
+            cacheKey: nil
+        )
+    }
+
+    private func sendConditional<T: Decodable>(
+        _ request: URLRequest,
+        as type: T.Type,
+        cacheKey: String
+    ) async throws -> T {
+        try await send(request, as: type, cacheKey: cacheKey)
+    }
+
+    private func send<T: Decodable>(
+        _ request: URLRequest,
+        as type: T.Type,
+        cacheKey: String?
+    ) async throws -> T {
 #if DEBUG
         OtaDebugHTTPMetrics.recordRequest()
 #endif
-        let (data, response) = try await URLSession.shared.data(for: request)
+        var conditionalRequest = request
+        if let cacheKey,
+           let cachedEntry = await responseCache.entry(for: cacheKey) {
+            conditionalRequest.setValue(cachedEntry.etag, forHTTPHeaderField: "If-None-Match")
+        }
+        let (data, response) = try await URLSession.shared.data(for: conditionalRequest)
         guard let http = response as? HTTPURLResponse else {
             throw OtaSDKError.invalidResponse(statusCode: -1, body: "Missing HTTPURLResponse")
         }
-        guard http.url?.scheme?.lowercased() == "https" else {
+        let responseURL = http.url
+        let responseIsHTTPS = responseURL?.scheme?.lowercased() == "https"
+        let responseIsLocalHTTP = allowLocalHTTPForTest &&
+            responseURL.map(OtaLocalTestURLPolicy.isAllowedLocalHTTP) == true
+        guard responseIsHTTPS || responseIsLocalHTTP else {
             throw OtaSDKError.unsupportedDownloadScheme(http.url?.scheme ?? "unknown")
+        }
+        if http.statusCode == 304 {
+            guard let cacheKey,
+                  let cachedEntry = await responseCache.entry(for: cacheKey) else {
+                throw OtaSDKError.invalidResponse(statusCode: 304, body: "Missing cached response")
+            }
+            return try decoder.decode(T.self, from: cachedEntry.data)
         }
         guard 200..<300 ~= http.statusCode else {
             throw OtaSDKError.invalidResponse(
@@ -337,6 +428,32 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
                 body: String(data: data, encoding: .utf8) ?? ""
             )
         }
+        if let cacheKey,
+           let etag = http.value(forHTTPHeaderField: "ETag"),
+           !etag.isEmpty {
+            await responseCache.store(
+                OtaHTTPResponseCache.Entry(etag: etag, data: data),
+                for: cacheKey
+            )
+        }
         return try decoder.decode(T.self, from: data)
+    }
+}
+
+/** 本地 OTA fixture 的网络边界；不允许任意 HTTP 或非 loopback Host。 */
+enum OtaLocalTestURLPolicy {
+    static func isAllowedLocalHTTP(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "http" &&
+            isLoopbackHost(url.host) &&
+            url.user == nil &&
+            url.fragment == nil
+    }
+
+    static func isLoopbackHost(_ host: String?) -> Bool {
+        guard let host else { return false }
+        let normalized = host.lowercased()
+        return normalized == "localhost" ||
+            normalized == "127.0.0.1" ||
+            normalized == "::1"
     }
 }

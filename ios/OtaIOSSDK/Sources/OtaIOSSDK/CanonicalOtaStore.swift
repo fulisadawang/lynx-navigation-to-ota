@@ -5,6 +5,10 @@ import Foundation
 /// 生产初始化使用 no-op 注入器，不改变正常运行路径；测试可以在 state 写入前后
 /// 模拟进程退出或磁盘写入异常，验证重启后的 current/previous 恢复边界。
 enum OtaTransactionFaultPoint: Sendable, Equatable {
+    case beforeObjectCommit
+    case afterObjectCommit
+    case beforeManifestCommit
+    case afterManifestCommit
     case beforeStateCommit
     case afterStateCommit
     case beforeRollbackCommit
@@ -383,6 +387,7 @@ actor CanonicalOtaStore {
         bundleName: String
     ) throws -> OtaBundleLease? {
         guard let state = readState(app: app, lynxAppId: lynxAppId) else { return nil }
+        guard state.current.kind == .downloaded else { return nil }
         return try acquireBundleLease(
             reference: state.current,
             app: app,

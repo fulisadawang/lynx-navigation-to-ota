@@ -49,6 +49,14 @@ interface ActivityBundleRuntime {
     @Throws(Exception::class)
     fun prepare(lynxAppId: String, bundleName: String): PreparedActivityBundle
 
+    /** 带导航会话的 prepare；默认实现保持旧宿主行为。 */
+    @Throws(Exception::class)
+    fun prepare(
+        lynxAppId: String,
+        bundleName: String,
+        navigationSnapshotID: String?,
+    ): PreparedActivityBundle = prepare(lynxAppId, bundleName)
+
     /**
      * 只读取启动同步后已经提交的 current；绝不下载、检查 Manifest 或触发后台刷新。
      * Native Tab Container 只能使用这个 cache-only 入口，避免每次切 Tab 都访问网络。
@@ -58,6 +66,19 @@ interface ActivityBundleRuntime {
     /** 普通 Activity 页面可选择消费 candidate；Native Tab 固定使用 resolveCurrent。 */
     fun resolvePage(lynxAppId: String, bundleName: String): PreparedActivityBundle? =
         resolveCurrent(lynxAppId, bundleName)
+
+    /** 带导航会话的页面解析；实现可以固定一次 session 的 release。 */
+    fun resolvePage(
+        lynxAppId: String,
+        bundleName: String,
+        navigationSnapshotID: String?,
+    ): PreparedActivityBundle? = resolvePage(lynxAppId, bundleName)
+
+    /** 新页面加入已有导航会话时增加一个快照引用。 */
+    fun retainNavigationSnapshot(navigationSnapshotID: String?) = Unit
+
+    /** 导航会话最后一个页面销毁时释放快照引用。 */
+    fun releaseNavigationSnapshot(navigationSnapshotID: String?) = Unit
 
     /** candidate 页面首屏健康后由容器调用；默认 runtime 没有 candidate。 */
     fun confirmCandidateHealthy(lynxAppId: String): Boolean = false
@@ -86,6 +107,8 @@ data class PreparedActivityBundle(
     val source: String = "ota_current",
     /** downloaded Release 的进程内租约；容器销毁或放弃本次结果时必须 close。 */
     val releaseLease: AutoCloseable? = null,
+    /** 路由固定的导航会话；只用于诊断与 Store v3 snapshot，不参与 Bundle URL。 */
+    val navigationSnapshotID: String? = null,
 ) {
     init {
         require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }

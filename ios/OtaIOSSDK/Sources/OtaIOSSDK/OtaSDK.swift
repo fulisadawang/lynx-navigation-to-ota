@@ -123,9 +123,14 @@ public actor OtaSDK {
         self.configuration = configuration
         self.apiClient = apiClient ?? ServerOtaAPIClient(
             baseURL: configuration.apiBaseURL,
-            otaClientToken: configuration.otaClientToken
+            otaClientToken: configuration.otaClientToken,
+            allowLocalHTTPForTest: configuration.allowLocalHTTPForTest
         )
-        let resolvedStore = store ?? FileOtaReleaseStore(baseDirectory: configuration.storageDirectory)
+        // 宿主的 LynxOtaConfiguration 默认使用 v3；低层 SDK 仍允许测试/迁移方显式选择 v2。
+        let resolvedStore = store ?? FileOtaReleaseStore(
+            baseDirectory: configuration.storageDirectory,
+            version: configuration.storeVersion
+        )
         if let transactionFaultInjectorOptional {
             self.releaseTransaction = ReleaseTransaction(
                 store: resolvedStore,
@@ -137,7 +142,8 @@ public actor OtaSDK {
         self.bundleRuntime = BundleRuntime(transaction: releaseTransaction)
         self.downloader = downloader ?? URLSessionBundleDownloader(
             allowLocalFileURLs: configuration.environment == .test &&
-                configuration.apiBaseURL.scheme?.lowercased() == "http"
+                configuration.apiBaseURL.scheme?.lowercased() == "http",
+            allowLocalHTTPURLs: configuration.allowLocalHTTPForTest
         )
         self.checksumValidator = checksumValidator
     }
@@ -958,6 +964,28 @@ public actor OtaSDK {
                 continue
             }
 
+            if let objectURL = try await releaseTransaction.existingObjectURL(
+                scope: OtaReleaseScope(
+                    app: manifest.app,
+                    lynxAppId: manifest.lynxAppId
+                ),
+                objectId: bundle.bundleSha256,
+                expectedSize: bundle.size.map(Int64.init)
+            ) {
+                reusedBundleCount += 1
+                bundles.append(
+                    OtaInstalledBundle(
+                        bundleName: bundle.bundleName,
+                        bundleSha256: bundle.bundleSha256,
+                        remoteURL: bundle.bundleURL,
+                        localFilePath: objectURL.path,
+                        pageId: bundle.pageId,
+                        bundlePath: bundle.bundlePath
+                    )
+                )
+                continue
+            }
+
             let safePath = try normalizedBundleName(bundle.bundlePath)
             let localURL = downloadDirectory.appendingPathComponent(safePath, isDirectory: false)
             try FileManager.default.createDirectory(
@@ -1085,23 +1113,25 @@ public actor OtaSDK {
         guard manifest.status == .active else {
             throw OtaSDKError.invalidReleaseStatus(manifest.status.rawValue)
         }
-        let allowLocalTestFixtures = configuration.environment == .test &&
+        let allowLocalFileFixtures = configuration.environment == .test &&
             configuration.apiBaseURL.scheme?.lowercased() == "http"
         guard !manifest.bundles.isEmpty else {
-            if allowLocalTestFixtures { return }
+                if allowLocalFileFixtures || configuration.allowLocalHTTPForTest { return }
             throw OtaSDKError.invalidBundleName("Release bundles 不能为空")
         }
         for bundle in manifest.bundles {
             let scheme = bundle.bundleURL.scheme?.lowercased()
             let isHTTPS = scheme == "https" && bundle.bundleURL.host?.isEmpty == false
-            let isLocalFixture = allowLocalTestFixtures && scheme == "file"
+            let isLocalFixture = (allowLocalFileFixtures && scheme == "file") ||
+                (configuration.allowLocalHTTPForTest &&
+                    OtaLocalTestURLPolicy.isAllowedLocalHTTP(bundle.bundleURL))
             guard (isHTTPS || isLocalFixture),
                   bundle.bundleURL.user == nil,
                   bundle.bundleURL.fragment == nil else {
                 throw OtaSDKError.invalidBundleURL(bundle.bundlePath)
             }
             guard let size = bundle.size else {
-                if allowLocalTestFixtures { continue }
+                    if allowLocalFileFixtures || configuration.allowLocalHTTPForTest { continue }
                 throw OtaSDKError.missingBundleSize(bundle.bundlePath)
             }
             guard size > 0, size <= 20 * 1024 * 1024 else {

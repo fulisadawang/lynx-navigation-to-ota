@@ -112,7 +112,7 @@ Native Tab Demo 的两个 Tab 都从 embedded Manifest 解析 `main.lynx.bundle`
 `main.lynx.bundle` 的 Bundle、releaseId 和内容来源一致。Demo 顶部“刷新 OTA”会先做一次全量
 同步，再让两个 Tab 重新读取已经提交的 current。
 
-### iOS OTA Store v2 与磁盘浏览器
+### iOS OTA Store v3 与磁盘浏览器
 
 iOS 现在与 Android 使用同一套存储契约，但保留平台自己的目录 API。远程 Release 按
 `lynxAppId` 物理隔离，默认位于：
@@ -121,23 +121,44 @@ iOS 现在与 Android 使用同一套存储契约，但保留平台自己的目�
 Application Support/lynx-ota-store/
 └── apps/<lynxAppId>/
     ├── state.json
-    ├── candidate.json              # 仅 candidate 模式存在
     ├── embedded.json               # 只保存 baseline 描述，不复制 Bundle bytes
-    ├── releases/<releaseId>/
-    │   ├── release-manifest.json
-    │   └── <bundlePath>
-    └── .staging/<releaseId>.<transactionId>/
+    ├── manifests/<manifestSha256>.json
+    ├── objects/<sha256-prefix>/<sha256>.lynx.bundle
+    └── transactions/<transactionId>/
+        ├── transaction.json
+        └── *.part
 ```
 
 - 普通模式最多保留 `current + previous`；candidate 模式最多再保留一个 candidate。
+- Manifest 始终是完整快照；Bundle bytes 按 SHA-256 进入当前 App ID 的 CAS，V1 → V2 只变一个
+  Bundle 时只下载/写入一个新对象，未变化对象不复制。
 - 普通 UIViewController 与 Native Tab 在展示远程 Bundle 时持有 Release lease。即使此时发生
-  删除、回滚或新版本激活，活体页面仍可继续读取；最后一个页面释放后再回收无引用目录。
-- 冷启动先清理无引用 Release 和残留 staging；状态文件损坏时保守跳过，不猜测删除。
+  删除、回滚或新版本激活，活体页面仍可继续读取；最后一个页面释放后再回收无引用对象。
+- 同一个 Lynx session 会固定 NavigationSnapshot；子路由不会在一次页面栈中混用 V1/V2。
+- 冷启动先清理无引用 Manifest/Object 和残留 transaction；状态文件损坏时保守跳过，不猜测删除。
 - 下载前先清理无引用版本并做可用空间预检；空间不足不会提交半成品 current。
 - Launcher 和 Native Tab 导航栏都可进入“OTA 磁盘浏览器”。它只读取快照，展示真实 root、
-  App ID、current/previous/candidate/lease、文件树与占用字节，不做 SHA、不触发网络、不修改 Store。
+  App ID、current/previous/candidate/lease、CAS 对象数、Manifest 和占用字节，不做 SHA、不触发
+  网络、不修改 Store。
 
-Demo 不迁移旧 Store。需要从旧 schema 验证新布局时，卸载并重装 Demo，直接生成 Store v2。
+Demo 不迁移旧 Store。需要从旧 schema 验证新布局时，卸载并重装 Demo，直接生成 Store v3。
+
+### iOS 本地 OTA Store v3 Golden 验收
+
+在外网 OTA Server 不可达时，使用 Playground 真实 ReactLynx/Rspeedy 编译链生成 100 个 Bundle：
+
+```bash
+cd playground
+pnpm ota:v3:fixture
+pnpm ota:v3:fixture:verify
+pnpm ota:v3:server
+```
+
+然后用 Debug Scheme 注入 `LYNX_OTA_API_BASE_URL=http://127.0.0.1:18765`、
+`LYNX_OTA_ALLOW_LOCAL_HTTP=1`、`LYNX_OTA_ENV=TEST` 和任意本地测试 token。该 HTTP 例外只允许
+显式 TEST + loopback，Release 仍强制 HTTPS。完整测试矩阵见
+`../docs/lynx-ota-store-v3-test-cases.md`，本次 iOS 结果见
+`../docs/ios-ota-store-v3-test-report.html`。
 
 ### iOS OTA 故障测试入口
 
@@ -148,9 +169,9 @@ bash scripts/ota-fault/run.sh --platform ios --tier sdk --case all
 bash scripts/ota-fault/run.sh --platform ios --tier sdk --case F07
 ```
 
-`swift test` 当前覆盖 47 个测试、8 个测试套件，包含清单/下载/SHA/文件篡改、版本门禁、
+`swift test` 当前覆盖 53 个测试、9 个测试套件，包含清单/下载/SHA/文件篡改、版本门禁、
 `current/previous/embedded/candidate`、提交前后故障、回滚重启恢复、App ID 物理隔离、
-有界版本保留、lease、冷启动清理、容量不足和只读诊断快照。Native Tab 的异步结果代际门禁
+有界版本保留、CAS 任意历史对象复用、lease、冷启动清理、容量不足和只读诊断快照。Native Tab 的异步结果代际门禁
 另有无 Lynx 依赖的快速契约测试：
 
 ```bash
@@ -189,8 +210,8 @@ Sample Debug 可用环境变量打开这条链路：`LYNX_OTA_CANDIDATE_MODE=1`�
 - Hero Sheet 上滑到全屏、下拉关闭；Bottom Sheet 打开、下拉关闭；原生 Back 可返回。
 - 无 token 的 embedded-only 刷新失败保留 current，以及注入 TEST 配置后的远程 OTA 成功、
   冷启动读取和 Tab 刷新均已在模拟器分别验证；token 只作为进程环境变量使用，不写入仓库。
-- 真实 TEST OTA 同步后，Inspector 展示 3 个 App ID、53 个文件、约 5.1 MB；顶层没有旧
-  `releases/`、`states/` 或 `.staging/`。Native Tab 打开时当前 Release 标记“页面使用中”，
+- 本地 Golden OTA 同步后，Inspector 展示 3 个 App ID、10000001 下 101 个 CAS objects 和 2 份
+  完整 Manifest；顶层没有旧 `releases/`、`states/` 或 `.staging/`。Native Tab 打开时当前 Release 标记“页面使用中”，
   退出 Tab 后标记消失，证明 lease 随容器生命周期释放。
 - 完整左边缘拖动已由 XCUITest 坐标手势通过并返回原生 Launcher；`agent-device` 的高层 swipe
   仍受驱动能力限制只能产生约 7px 位移，这不等同于壳侧滑功能失败。
@@ -213,8 +234,8 @@ live-only skip / 0 failed；成功刷新使用真实 embedded Bundle + Router/Ta
 请求计数、实例和 generation 均有断言，F12 rollback terminate/relaunch 也已通过。真实 OTA
 Server 模式为 9 passed / 1 mock-only skip / 0 failed，live smoke 单项 1/1 通过。
 
-独立 HTML 测试报告：[ios-ota-test-report.html](../docs/ios-ota-test-report.html)，包含 live、mock、
-无 token 三组结果、用例筛选、证据展开和可追溯源码链接。
+独立 HTML 测试报告：[ios-ota-store-v3-test-report.html](../docs/ios-ota-store-v3-test-report.html)，
+包含本地真实 OTA、CAS/Tab/故障结果、截图、请求计数、磁盘快照和可复现命令。
 
 ## 默认沉浸式容器
 

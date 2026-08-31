@@ -64,7 +64,7 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
   }
 
   /**
-   * OTA 根 Bundle 已经在 ReleaseTransaction 中完成 size/SHA 校验；Fetcher 对远程文件仍二次
+   * OTA 根 Bundle 已经在 ContentAddressedOtaStore 中完成 size/SHA 校验；Fetcher 对远程文件仍二次
    * 限制路径、普通文件和体积；embedded rawfile 则直接消费已校验的 ArrayBuffer。
    */
   private loadPreparedBundle(callback: AsyncCallback<ArrayBuffer, void>): void {

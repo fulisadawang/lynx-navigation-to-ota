@@ -40,7 +40,7 @@ android/lynx-shell/
 │   ├── bridge/                         NativeModules、Storage、页面消息
 │   └── runtime/                        Lynx 4.0/XElement/Provider
 └── src/main/kotlin/com/ota/android/sdk/
-    └── Manifest、下载、SHA、ReleaseTransaction 与回滚
+    └── 完整 Manifest、CAS 下载、SHA、current/previous 与回滚
 ```
 
 业务方只依赖 `:lynx-shell` 或发布后的 AAR，不需要另外接 OTA SDK。
@@ -67,7 +67,7 @@ harmony/
 │       ├── pages/                       LynxContainer
 │       ├── provider/                    Bundle/资源 Provider
 │       ├── module/                      LynxShellModule Bridge
-│       └── ota/                         OTA Runtime、事务、回滚
+│       └── ota/                         OTA Runtime、Store v3 CAS/Manifest、回滚
 └── lynx_shell/                          Entry Demo，只直接依赖 HAR
 ```
 

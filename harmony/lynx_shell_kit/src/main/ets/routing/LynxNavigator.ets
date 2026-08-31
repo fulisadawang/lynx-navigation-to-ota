@@ -220,6 +220,35 @@ export default class LynxNavigator {
     return LynxNavigator.entries.some((entry: InternalNavigationEntry) => entry.entryID === entryID);
   }
 
+  /** 判断一个 Lynx session 是否仍有页面；用于最后一个页面退出时释放 OTA Snapshot。 */
+  static hasSession(sessionID: string): boolean {
+    if (sessionID.trim().length === 0) return false;
+    return LynxNavigator.entries.some((entry: InternalNavigationEntry) => entry.sessionID === sessionID);
+  }
+
+  /** 同步 ArkUI Router 已经由系统返回键移除的逻辑 entry，避免 session/Snapshot 残留。 */
+  static reconcileWithRouter(): void {
+    let routerLength: number;
+    try {
+      routerLength = Number(router.getLength());
+    } catch (error) {
+      return;
+    }
+    if (!Number.isFinite(routerLength) || routerLength < 0) return;
+    const currentEntryStillPresent = LynxNavigator.entries.some((entry: InternalNavigationEntry) => {
+      return entry.routerIndex <= routerLength;
+    });
+    if (currentEntryStillPresent && LynxNavigator.entries.every((entry: InternalNavigationEntry) => entry.routerIndex <= routerLength)) {
+      return;
+    }
+    LynxNavigator.entries = LynxNavigator.entries.filter((entry: InternalNavigationEntry) => entry.routerIndex <= routerLength);
+    LynxNavigator.reindex();
+    if (!LynxNavigator.hasEntry(LynxNavigator.currentEntryID)) {
+      const target = LynxNavigator.entries.length > 0 ? LynxNavigator.entries[LynxNavigator.entries.length - 1] : null;
+      LynxNavigator.currentEntryID = target?.entryID ?? '';
+    }
+  }
+
   static close(): void {
     try {
       router.back();

@@ -1,6 +1,7 @@
 # iOS OTA SDK
 
-`LynxPlatformKit/sdks/ios-ota` 是 iOS 宿主级 OTA runtime 的 PlatformKit 入口。
+`ios/OtaIOSSDK` 是本仓库 iOS 宿主级 OTA runtime 的 SwiftPM 单测边界；业务工程通过
+`LynxShellKit.podspec` 一起编译，不需要再单独接一个 OTA Pod。
 
 ## PlatformKit 边界
 
@@ -12,20 +13,11 @@
 ## 发布
 
 - 发布 SwiftPM / SPM package，入口为 `Package.swift`。
-- 发布 CocoaPods package，入口为 `OtaIOSSDK.podspec`。
+- CocoaPods 业务入口为 `../LynxShellKit.podspec`，OTA 源码作为同一个 Router Module 的内部实现。
 - 版本说明必须包含 Sparkling SDK 兼容范围、Lynx engine 兼容范围和 OTA API contract 版本。
 
-## 旧目录兼容
-
-迁移期旧目录暂时保留为兼容参考：
-
-```text
-LynxOtaPlatform/ios/sdk
-```
-
-这是当前仓库的 iOS OTA SDK。
-
-它的目标不是只做一个底层下载器，而是让你的主工程后面可以按“接一个 SDK”的方式直接用起来。
+它的目标不是只做一个底层下载器，而是让主工程按“接一个 Router Module”的方式使用完整 OTA
+Store、容器和路由链路。
 
 ## 当前能力
 
@@ -39,33 +31,35 @@ LynxOtaPlatform/ios/sdk
 - 获取当前版本
 - 获取当前 bundle 本地文件地址
 - 按 `lynxAppId` 物理隔离 Release
+- Store v3：完整 Manifest + App ID 作用域 CAS Object，按 SHA 复用任意历史对象
 - 有界保留 current / previous / candidate
 - 页面级 Release lease 与延迟回收
+- 导航 session release snapshot，保证同一页面栈不混用不同版本
 - 冷启动 orphan / staging 清理
 - 下载前容量预检
 - 只读磁盘诊断快照
 
-### Canonical 本地 Release 布局
+### Canonical 本地 Store v3 布局
 
-下载版本与 Android 保持同一目标模型：Bundle 不把绝对文件路径写进 current state，完整 Release
-自包含于固定目录，state 只保存 Release 引用。
+下载版本与 Android 保持同一目标模型：Bundle bytes 按 SHA-256 存入 App ID 作用域的 CAS，完整
+Manifest 只保存逻辑路径和 Object 引用，State 只保存 current/previous/candidate 指针。未变化的
+Bundle 不复制到新 Release。
 
 ```text
 <storageDirectory>/
 └── apps/<lynxAppId>/
     ├── state.json
-    ├── staged.json
-    ├── candidate.json
     ├── embedded.json
-    ├── releases/<releaseId>/
-    │   ├── release-manifest.json
-    │   └── <bundlePath>
-    └── .staging/<releaseId>.<transactionId>/
+    ├── manifests/<manifestSha256>.json
+    ├── objects/<sha256-prefix>/<sha256>.lynx.bundle
+    └── transactions/<transactionId>/
+        ├── transaction.json
+        └── *.part
 ```
 
-`state.json`、`staged.json` 与 `candidate.json` 使用 Store schema v2。Store 不再读取或迁移旧
-`current-release*.json` / 顶层 `releases` / `states` 布局；Demo 通过卸载重装获得空沙盒。
-两个 App ID 即使收到相同 `releaseId`，也会写入不同物理目录，互不覆盖。
+`state.json` 和本地 Manifest 使用 Store schema v3。Store 不再读取或迁移旧 `current-release*.json`、
+顶层 `releases`、`states` 或 v2 Release 目录；Demo 通过卸载重装获得空沙盒。两个 App ID 即使收到
+相同 `releaseId` 和 SHA，也会写入不同的 `apps/<lynxAppId>/objects`，互不覆盖。
 
 embedded baseline 的 Bundle bytes 始终留在 App Bundle。`embedded.json` 只保存逻辑描述，
 不会在 Application Support 再复制一份 baseline。
@@ -76,7 +70,8 @@ embedded baseline 的 Bundle bytes 始终留在 App Bundle。`embedded.json` 只
 - candidate 模式最多额外保留一个 candidate；新的 candidate 会替换旧候选。
 - `OtaBundleLease` 把远程 Release 的生命周期绑定到正在展示它的 UIViewController/Native Tab。
   删除或激活新版本只会先移除指针，被 lease 引用的目录等最后一个 lease 关闭后再删除。
-- 冷启动维护只删除 schema v2 中可确认无引用的 Release 和 staging；状态损坏时保守保留。
+- 冷启动维护从 current、previous、candidate、活体 lease 和 transaction roots 重建引用集合，
+  只删除可确认无引用的 Manifest/Object；状态损坏时保守保留。
 - staging 前先 prune，再按目标 Bundle 大小、元数据余量和安全保留空间做容量预检；不足时抛出
   `OtaSDKError.insufficientStorage`，旧 current 保持不变。
 
@@ -156,11 +151,11 @@ let templateURL = await LynxHotUpdate.shared.currentTemplateURL(pageId: 10000000
 
 服务端每个 release 的 manifest 是完整版本快照，里面会包含当前版本应具备的所有 bundle。SDK 下载时不会盲目全量下载，而是先拿当前已安装 release 的本地 bundle 做对比：
 
-1. 用 `bundlePath + bundleSha256` 查找本地已安装 bundle。
-2. 如果 SHA 一致且本地文件存在，复制到新 Release 的 staging 目录，并重新校验 SHA；不会把旧
-   Release 的绝对 `localFilePath` 持久化到新 current。
-3. 如果 SHA 不一致或本地文件不存在，才下载 manifest 中的 `bundleUrl`。
-4. 新下载和从旧 Release 复用的 Bundle 都在发布前校验，只有完整 Release 才能提交 current。
+1. 解析服务端返回的完整 Manifest，按 `bundlePath + bundleSha256` 建立完整逻辑快照。
+2. 先查当前 App ID 的 CAS Object；对象存在且 SHA/size 一致时直接复用，不请求网络、不复制字节。
+3. 如果 Object 缺失或校验失败，才下载 Manifest 中的 `bundleUrl`，先写 `.part`，校验通过后原子
+   rename 到 CAS。
+4. 完整 Manifest durable 后再原子提交 State；只有完整 release 才能成为 current。
 
 因此发布侧可以保持“全量 manifest”，客户端实际网络下载仍然是“按 SHA 增量下载”。这样既能保证 release 是完整快照，也能避免 bundle 很多时重复下载未变化文件。
 
@@ -180,5 +175,7 @@ let templateURL = await LynxHotUpdate.shared.currentTemplateURL(pageId: 10000000
 ## 当前状态
 
 这个 SDK 已经可以作为主工程的 OTA 核心能力接入。本仓库的 `LynxShellKit` 已完成
-UIViewController、Native Tab、首屏健康确认、lease 与只读 Inspector 的宿主接线，可作为业务
-工程集成参考。
+UIViewController、Native Tab、首屏健康确认、release snapshot、CAS lease 与只读 Inspector 的
+宿主接线。Debug 环境还提供 `playground/scripts/generate-ota-store-v3-fixture.mjs` 生成 100 Bundle
+Golden Fixture，以及本地 OTA Server 用于验证真实 URLSession/Manifest/Bundle 请求链路；业务接入
+仍应在 Release 配置中保持 HTTPS。

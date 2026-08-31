@@ -23,6 +23,8 @@ data class OtaStorageStateSnapshot(
   @JvmField val currentKind: String,
   @JvmField val previousReleaseId: String?,
   @JvmField val previousKind: String?,
+  @JvmField val currentManifestId: String? = null,
+  @JvmField val previousManifestId: String? = null,
 )
 
 data class OtaStorageCandidateSnapshot(
@@ -39,6 +41,9 @@ data class OtaStorageReleaseSnapshot(
   @JvmField val manifestValid: Boolean,
   @JvmField val files: List<OtaStorageFileSnapshot>,
   @JvmField val truncated: Boolean,
+  @JvmField val manifestId: String? = null,
+  @JvmField val bundleCount: Int = 0,
+  @JvmField val objectIds: Set<String> = emptySet(),
 )
 
 data class OtaStorageStagingSnapshot(
@@ -57,6 +62,10 @@ data class OtaStorageAppSnapshot(
   @JvmField val staging: List<OtaStorageStagingSnapshot>,
   @JvmField val totalBytes: Long,
   @JvmField val fileCount: Int,
+  @JvmField val objectCount: Int = 0,
+  @JvmField val objectBytes: Long = 0,
+  @JvmField val manifestBytes: Long = 0,
+  @JvmField val lastOperation: String? = null,
 )
 
 data class OtaStorageSnapshot(
@@ -76,8 +85,12 @@ data class OtaStorageSnapshot(
 class OtaStorageDiagnostics(
   storageRoot: File,
   private val maxFilesPerTree: Int = DEFAULT_MAX_FILES_PER_TREE,
+  storeVersion: OtaModels.StoreVersion = OtaModels.StoreVersion.V2,
 ) {
-  private val transaction = ReleaseTransaction(storageRoot)
+  private val transaction: OtaReleaseStore = when (storeVersion) {
+    OtaModels.StoreVersion.V2 -> LegacyOtaReleaseStore(storageRoot)
+    OtaModels.StoreVersion.V3 -> ContentAddressedOtaStore(storageRoot)
+  }
 
   init {
     require(maxFilesPerTree > 0) { "maxFilesPerTree 必须大于 0" }

@@ -35,7 +35,10 @@ public enum LynxRouter {
             return runtime
         }
 #endif
-        Task { await runtime.synchronizeAllBundles() }
+        Task {
+            await runtime.registerEmbeddedReleases()
+            _ = await runtime.synchronizeAllBundles()
+        }
         return runtime
     }
 
