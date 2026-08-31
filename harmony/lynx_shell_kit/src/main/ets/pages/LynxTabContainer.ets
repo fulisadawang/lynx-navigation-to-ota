@@ -219,7 +219,7 @@ export struct LynxTabContainer {
     let pendingLease: OtaBundleLease | null = null;
     this.isLoading = true;
     this.errorMessage = '';
-    runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName)
+    runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName, this.request.sessionID)
       .then((prepared) => {
         pendingLease = prepared?.lease ?? null;
         if (generation !== this.prepareGeneration) {
@@ -243,6 +243,8 @@ export struct LynxTabContainer {
         const bundleMetadata: ShellBundleMetadata = {
           lynxAppId: prepared.lynxAppId,
           releaseId: prepared.releaseId,
+          manifestId: prepared.manifestId,
+          navigationSnapshotID: prepared.navigationSnapshotID,
           source: prepared.source ?? 'ota_current',
           loadPolicy: 'cache_only',
           bundleName: prepared.bundleName,
@@ -253,6 +255,7 @@ export struct LynxTabContainer {
           new TemplateData(this.buildTabGlobalProps(bundleMetadata))
         );
         this.extraTiming.prepareTemplateEnd = new Date().getTime();
+        console.info(`[${ShellConstants.TAG}] tab prepared ${prepared.lynxAppId}/${prepared.bundleName}, release=${prepared.releaseId}, manifest=${prepared.manifestId ?? 'embedded'}, snapshot=${prepared.navigationSnapshotID ?? 'none'}`);
         this.releaseCurrentLease();
         this.releaseLease = prepared.lease ?? null;
         pendingLease = null;

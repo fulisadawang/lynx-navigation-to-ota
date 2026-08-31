@@ -41,7 +41,7 @@ class NativeTabDemoActivity : AppCompatActivity() {
                 initDataJson = "{\"source\":\"android-native-tab-demo\"}",
                 globalPropsJson = "{\"queryItems\":{\"native_tab_id\":\"home\"}}",
                 lynxAppId = appId,
-                bundleName = PLAYGROUND_OTA_BUNDLE_NAME,
+                bundleName = demoTabBundleName(),
             ),
             LynxTabSpec(
                 tabId = "settings",
@@ -51,7 +51,7 @@ class NativeTabDemoActivity : AppCompatActivity() {
                 initDataJson = "{\"source\":\"android-native-tab-demo\"}",
                 globalPropsJson = "{\"queryItems\":{\"native_tab_id\":\"settings\"}}",
                 lynxAppId = appId,
-                bundleName = PLAYGROUND_OTA_BUNDLE_NAME,
+                bundleName = demoTabBundleName(),
             ),
         )
 
@@ -164,8 +164,16 @@ class NativeTabDemoActivity : AppCompatActivity() {
 
     private fun fragmentTag(tabId: String): String = "native-lynx-tab-$tabId"
 
+    private fun demoTabBundleName(): String =
+        if (BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER) {
+            OTA_STORE_V3_FIXTURE_BUNDLE_NAME
+        } else {
+            PLAYGROUND_OTA_BUNDLE_NAME
+        }
+
     companion object {
         private const val MENU_ID_BASE = 0x4C5958
         private const val PLAYGROUND_OTA_BUNDLE_NAME = "main.lynx.bundle"
+        private const val OTA_STORE_V3_FIXTURE_BUNDLE_NAME = "pages/10000001/bundle-050.lynx.bundle"
     }
 }

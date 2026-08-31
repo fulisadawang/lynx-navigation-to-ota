@@ -105,6 +105,9 @@ class ReleaseTransaction @JvmOverloads constructor(
     @JvmField val copiedBytes: Long = 0,
     @JvmField val downloadedBundleCount: Int = 0,
     @JvmField val downloadedBytes: Long = 0,
+    /** Store v3 命中已有 CAS 对象的数量；没有发生文件复制。 */
+    @JvmField val reusedBundleCount: Int = 0,
+    @JvmField val reusedBytes: Long = 0,
     @JvmField val errorCode: String? = null,
     @JvmField val stage: StorageStage? = null,
     @JvmField val retryable: Boolean = false,
@@ -331,6 +334,8 @@ class ReleaseTransaction @JvmOverloads constructor(
             copiedBytes = copiedBytes,
             downloadedBundleCount = downloadedBundleCount,
             downloadedBytes = downloadedBytes,
+            reusedBundleCount = copiedBundleCount,
+            reusedBytes = copiedBytes,
             writtenBytes = writtenBytes,
           )
         }
@@ -355,6 +360,8 @@ class ReleaseTransaction @JvmOverloads constructor(
           copiedBytes = copiedBytes,
           downloadedBundleCount = downloadedBundleCount,
           downloadedBytes = downloadedBytes,
+          reusedBundleCount = copiedBundleCount,
+          reusedBytes = copiedBytes,
           writtenBytes = writtenBytes,
         )
       } catch (error: Throwable) {

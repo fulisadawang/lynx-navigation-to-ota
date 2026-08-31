@@ -53,12 +53,27 @@ interface OtaApiClient {
 
     @JvmStatic
     fun server(baseUri: URI): OtaApiClient {
-      return ServerOtaApiClient(baseUri, OtaModels.DEFAULT_OTA_CLIENT_TOKEN)
+      return ServerOtaApiClient(
+        baseUri,
+        OtaModels.DEFAULT_OTA_CLIENT_TOKEN,
+        OtaModels.Environment.TEST,
+        false,
+      )
     }
 
     @JvmStatic
     fun server(baseUri: URI, otaClientToken: String?): OtaApiClient {
-      return ServerOtaApiClient(baseUri, otaClientToken)
+      return ServerOtaApiClient(baseUri, otaClientToken, OtaModels.Environment.TEST, false)
+    }
+
+    @JvmStatic
+    fun server(
+      baseUri: URI,
+      otaClientToken: String?,
+      environment: OtaModels.Environment,
+      allowLocalHTTPForTest: Boolean,
+    ): OtaApiClient {
+      return ServerOtaApiClient(baseUri, otaClientToken, environment, allowLocalHTTPForTest)
     }
   }
 }
@@ -66,10 +81,12 @@ interface OtaApiClient {
 private class ServerOtaApiClient(
   private val baseUri: URI,
   otaClientToken: String?,
+  private val environment: OtaModels.Environment,
+  private val allowLocalHTTPForTest: Boolean,
 ) : OtaApiClient {
   init {
-    require(baseUri.scheme.equals("https", ignoreCase = true) && baseUri.host?.isNotBlank() == true) {
-      "OTA API 必须使用 HTTPS 且包含 Host"
+    require(OtaURLPolicy.isAllowed(baseUri, environment, allowLocalHTTPForTest)) {
+      "OTA API 必须使用 HTTPS；仅 TEST + loopback 调试地址允许 HTTP"
     }
     require(baseUri.userInfo == null && baseUri.query == null && baseUri.fragment == null) {
       "OTA API 地址不能包含 userInfo、query 或 fragment"
@@ -181,6 +198,13 @@ private class ServerOtaApiClient(
 
   @Throws(IOException::class)
   private fun send(method: String, uri: URI, body: String?): HttpResult {
+    val cacheKey = if (method == "GET") uri.toString() else null
+    val cached = cacheKey?.let { responseCache[it] }
+    val requestHeaders = if (cached?.etag != null) {
+      mapOf("If-None-Match" to cached.etag)
+    } else {
+      emptyMap()
+    }
     val connection = uri.toURL().openConnection() as HttpURLConnection
     connection.instanceFollowRedirects = false
     connection.requestMethod = method
@@ -188,6 +212,7 @@ private class ServerOtaApiClient(
     connection.readTimeout = 30_000
     connection.setRequestProperty("Accept", "application/json")
     connection.setRequestProperty(OtaApiClient.OTA_CLIENT_TOKEN_HEADER, otaClientToken)
+    requestHeaders.forEach { (name, value) -> connection.setRequestProperty(name, value) }
     if (body != null) {
       val bytes = body.toByteArray(Charsets.UTF_8)
       connection.doOutput = true
@@ -196,10 +221,18 @@ private class ServerOtaApiClient(
       connection.outputStream.use { it.write(bytes) }
     }
     val statusCode = connection.responseCode
+    if (statusCode == HttpURLConnection.HTTP_NOT_MODIFIED && cached != null) {
+      connection.disconnect()
+      return HttpResult(200, cached.body, cached.etag)
+    }
     val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
     val responseBody = stream?.use { String(readAll(it), Charsets.UTF_8) } ?: ""
+    val etag = connection.getHeaderField("ETag")
     connection.disconnect()
-    return HttpResult(statusCode, responseBody)
+    if (statusCode in 200..299 && cacheKey != null && etag != null) {
+      responseCache[cacheKey] = CachedResponse(responseBody, etag)
+    }
+    return HttpResult(statusCode, responseBody, etag)
   }
 
   @Throws(OtaSdkException::class)
@@ -212,7 +245,15 @@ private class ServerOtaApiClient(
   private data class HttpResult(
     val statusCode: Int,
     val body: String,
+    val etag: String? = null,
   )
+
+  private data class CachedResponse(
+    val body: String,
+    val etag: String,
+  )
+
+  private val responseCache = LinkedHashMap<String, CachedResponse>()
 
   @Throws(IOException::class)
   private fun readAll(inputStream: InputStream): ByteArray {

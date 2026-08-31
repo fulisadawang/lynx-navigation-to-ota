@@ -53,6 +53,11 @@ export default class LynxRouter {
     return runtime.refreshAllBundles();
   }
 
+  /** 主动刷新成功后清除指定 session 的旧 Manifest Snapshot；页面 lease 仍独立保护旧对象。 */
+  static resetNavigationSnapshot(navigationSessionID: string, lynxAppId: string): void {
+    PageBundleRuntimeRegistry.current()?.resetNavigationSnapshot(navigationSessionID, lynxAppId);
+  }
+
   /**
    * 打开 assets/HTTPS Bundle；params 同时作为 initData 和 queryItems。
    *
@@ -190,7 +195,7 @@ export default class LynxRouter {
       });
   }
 
-  /** 返回真实 Store v2 的只读快照；不会发起 OTA 请求或修改磁盘。 */
+  /** 返回真实 Store v3 CAS/Manifest 的只读快照；不会发起 OTA 请求或修改磁盘。 */
   static otaStorageSnapshot(): Promise<OtaStorageSnapshot | null> {
     const runtime = PageBundleRuntimeRegistry.current();
     if (runtime === null) return Promise.resolve(null);

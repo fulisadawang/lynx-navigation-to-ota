@@ -1,10 +1,13 @@
 package com.example.lynxshell.ota
 
 import android.content.Context
+import com.ota.android.sdk.OtaModels
 import org.json.JSONObject
 import java.io.FileNotFoundException
 import java.io.InputStream
+import java.net.URI
 import java.security.MessageDigest
+import java.time.Instant
 
 /** 已校验的 APK 内置 Bundle；assetPath 只来自受控 Manifest，不来自页面参数。 */
 data class EmbeddedBundle(
@@ -85,6 +88,43 @@ class EmbeddedBundleRegistry(
             .filterValues { descriptors -> bundleNames.all { name -> descriptors.any { it.bundleName == name } } }
             .keys
             .singleOrNull()
+    }
+
+    /**
+     * 将 APK asset Manifest 转成 OTA Store 的内置 Release 描述。
+     *
+     * 这里只生成元数据和受控 asset URI，不读取 Bundle bytes，也不会把 asset 复制到
+     * files/lynx-ota-store；实际页面仍由 resolve() 直接通过 AssetManager 读取。
+     */
+    fun installedReleases(
+        environment: OtaModels.Environment = OtaModels.Environment.TEST,
+        hostApp: OtaModels.HostApp = OtaModels.HostApp.CAPP,
+        platform: OtaModels.Platform = OtaModels.Platform.ANDROID,
+    ): List<OtaModels.InstalledRelease> {
+        return entries.groupBy { it.lynxAppId to it.releaseId }
+            .toSortedMap(compareBy<Pair<String, String>> { it.first }.thenBy { it.second })
+            .map { (identity, descriptors) ->
+                OtaModels.InstalledRelease(
+                    OtaModels.CurrentReleaseContext(
+                        environment,
+                        hostApp,
+                        identity.first,
+                        identity.second,
+                        platform,
+                        OtaModels.ReleaseStatus.ACTIVE,
+                    ),
+                    Instant.EPOCH,
+                    descriptors.map { descriptor ->
+                        OtaModels.InstalledBundle(
+                            descriptor.pageId,
+                            descriptor.bundlePath,
+                            descriptor.sha256,
+                            URI.create("asset://${descriptor.assetPath}"),
+                            "asset://${descriptor.assetPath}",
+                        )
+                    },
+                )
+            }
     }
 
     private fun loadManifest(): List<Descriptor> {

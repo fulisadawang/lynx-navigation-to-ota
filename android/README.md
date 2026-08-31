@@ -148,24 +148,26 @@ Demo 不再根据文件名猜 appId：`MainActivity` 和 `NativeTabDemoActivity`
 
 Android 的 embedded baseline 不会在启动时复制到 `filesDir`。命中内置 Bundle 时由
 `EmbeddedBundleRegistry` 直接从 APK `AssetManager` 读取、校验 size/SHA 后以 bytes 交给
-LynxView；应用私有磁盘按 App ID 隔离，只保存远程 OTA 的 `state.json`、`candidate.json`、
-`releases/` 和 `.staging/`。`embedded.json` 仅是逻辑描述，不包含 Bundle bytes。
+LynxView；应用私有磁盘按 App ID 隔离，只保存远程 OTA 的 `state.json`、完整 Manifest 快照、
+SHA-256 CAS 对象和事务临时目录。`embedded.json` 仅是逻辑描述，不包含 Bundle bytes。
 
-Android Store v2 的真实路径为：
+Android Store v3 的真实路径为：
 
 ```text
 files/lynx-ota-store/apps/<lynxAppId>/
 ├── state.json
-├── candidate.json                 # 可选
-├── embedded.json                  # 可选逻辑描述，不复制 bytes
-├── releases/<releaseId>/<bundlePath>
-└── .staging/<releaseId>.<tx>/<bundlePath>.part
+├── embedded.json                  # 逻辑描述，不复制 bytes
+├── manifests/<manifestId>.json    # 完整 Manifest 快照
+├── objects/<sha 前两位>/<sha>.lynx.bundle
+└── transactions/<transactionId>/  # .part 与事务日志
 ```
 
 `lynxAppId` 按服务端契约校验为 8 位数字，因此 `10000009/V5` 与 `10000010/V5` 会落到两套
-独立目录，不再要求 `releaseId` 在整个 App 内全局唯一。普通模式只保留 current/previous；
-candidate 模式最多再保留一份 candidate。导航栈中仍存活的旧页面通过进程内 lease 暂时保留
-其 Release，最后一个页面销毁后再回收。
+独立目录，不再要求 `releaseId` 在整个 App 内全局唯一。Manifest 是完整快照，Bundle 本体按
+`bundleSha256` 写入 CAS；V1 到 V2 只有 1 个 Bundle 改变时只新增 1 个对象，不复制另外 99 个。
+普通模式只保留 current/previous 指针；candidate 模式把候选指针写入同一个 `state.json`。
+导航栈中的 NavigationSnapshot 会固定 releaseId，活体页面 lease 暂时保留其对象，最后一个页面
+销毁后再由 mark-and-sweep GC 回收无引用 Manifest/对象。
 
 页面跳转只传逻辑身份和参数，不注册 route 映射，也不传手机文件路径：
 
@@ -312,7 +314,7 @@ APK assets/embedded 描述保留，失败通过 `code !== 0` 返回，不伪造�
 
 如果 Release 正被活体 Activity/Fragment 使用，删除 API 会先清 `state.json`/candidate 元数据，但把对应目录
 保留到最后一个 lease 释放，避免正在显示的页面突然失去文件。Demo 不实现旧 Store 迁移或 reset；
-首次验收 Store v2 时应卸载旧 Demo 后重新安装。
+首次验收 Store v3 时应卸载旧 Demo 后重新安装；Demo 不提供 v2 到 v3 的在线迁移。
 
 ## NativeModules
 

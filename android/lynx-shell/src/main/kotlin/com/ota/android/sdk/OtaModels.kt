@@ -136,6 +136,12 @@ class OtaModels private constructor() {
     }
   }
 
+  /** Android 宿主可选择的本地 OTA Store schema；低层旧调用默认保持 v2。 */
+  enum class StoreVersion {
+    V2,
+    V3,
+  }
+
   enum class ReleaseStatus(@JvmField val wireValue: String) {
     DRAFT("DRAFT"),
     ACTIVE("ACTIVE"),
@@ -707,6 +713,7 @@ class OtaModels private constructor() {
     @JvmField val totalBundleCount: Int,
     @JvmField val downloadedBundleCount: Int,
     @JvmField val reusedBundleCount: Int,
+    @JvmField val copiedBundleCount: Int = 0,
   )
 
   class LatestBundleListUpdateResult private constructor(
@@ -794,6 +801,10 @@ class OtaModels private constructor() {
     @JvmField val storageDirectory: File
     /** 开启后最新 Release 先进入 candidate/trial，健康确认后才替换 current。 */
     @JvmField val candidateActivationEnabled: Boolean
+    /** Store v3 使用 App ID 隔离的 Manifest + SHA-256 CAS 对象库。 */
+    @JvmField val storeVersion: StoreVersion
+    /** 仅 TEST + loopback 调试地址允许 HTTP；生产配置仍强制 HTTPS。 */
+    @JvmField val allowLocalHTTPForTest: Boolean
 
     constructor(
       apiBaseUri: URI,
@@ -831,6 +842,8 @@ class OtaModels private constructor() {
       DEFAULT_OTA_CLIENT_TOKEN,
       storageDirectory,
       false,
+      StoreVersion.V2,
+      false,
     )
 
     constructor(
@@ -852,6 +865,8 @@ class OtaModels private constructor() {
       otaClientToken: String?,
       storageDirectory: File,
       candidateActivationEnabled: Boolean = false,
+      storeVersion: StoreVersion = StoreVersion.V2,
+      allowLocalHTTPForTest: Boolean = false,
     ) {
       this.apiBaseUri = apiBaseUri
       this.hostApp = hostApp
@@ -871,12 +886,22 @@ class OtaModels private constructor() {
       this.otaClientToken = if (otaClientToken.isNullOrBlank()) DEFAULT_OTA_CLIENT_TOKEN else otaClientToken
       this.storageDirectory = storageDirectory
       this.candidateActivationEnabled = candidateActivationEnabled
-      require(apiBaseUri.scheme.equals("https", ignoreCase = true) && apiBaseUri.host?.isNotBlank() == true) {
-        "OTA API 必须使用 HTTPS 且包含 Host"
+      this.storeVersion = storeVersion
+      this.allowLocalHTTPForTest = allowLocalHTTPForTest
+      require(
+        apiBaseUri.host?.isNotBlank() == true &&
+          (apiBaseUri.scheme.equals("https", ignoreCase = true) ||
+            (allowLocalHTTPForTest && environment == Environment.TEST && isLoopbackHost(apiBaseUri.host))),
+      ) {
+        "OTA API 必须使用 HTTPS；仅 TEST + loopback 调试地址允许 HTTP"
       }
       require(apiBaseUri.userInfo == null && apiBaseUri.query == null && apiBaseUri.fragment == null) {
         "OTA API 地址不能包含 userInfo、query 或 fragment"
       }
+    }
+
+    private companion object {
+      fun isLoopbackHost(host: String?): Boolean = host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "10.0.2.2"
     }
   }
 }

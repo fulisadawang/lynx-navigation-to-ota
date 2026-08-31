@@ -1,6 +1,9 @@
-# HarmonyOS 验收范围
+# HarmonyOS Store v2 历史验收范围
 
-当前静态结果：`85 PASS / 0 WARN / 0 FAIL`；检查器已覆盖 Store v2、无候选版本、lease 和只读
+> 本文件记录 2026-08-27 的 Store v2/Mock Source 基线，仅作历史留档，不代表当前 checkout 的
+> Store v3 实现或运行结果。当前 v3 证据请查看 `docs/harmony-ota-store-v3-test-report.html`。
+
+历史静态结果：`85 PASS / 0 WARN / 0 FAIL`；当时检查器已覆盖 Store v2、无候选版本、lease 和只读
 Inspector 契约，依赖口径为 `parameter.json=4.0.0`。
 
 ## 已完成

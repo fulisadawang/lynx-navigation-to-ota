@@ -119,6 +119,7 @@ export struct LynxContainer {
     }
     // 下载阶段还没有 LynxContext，也必须在 Page 真正移除后取消 prepare；被下一页覆盖则保留。
     setTimeout(() => {
+      LynxNavigator.reconcileWithRouter();
       if (LynxNavigator.hasEntry(this.request.entryID)) {
         return;
       }
@@ -127,6 +128,12 @@ export struct LynxContainer {
       this.cancelPendingRequests();
       if (this.lynxContext === disappearingContext) {
         this.lynxContext = null;
+      }
+      if (!LynxNavigator.hasSession(this.request.sessionID)) {
+        PageBundleRuntimeRegistry.current()?.releaseNavigationSnapshot(
+          this.request.sessionID,
+          this.request.lynxAppId
+        );
       }
     }, 0);
     ShellWindowController.restore();
@@ -205,7 +212,7 @@ export struct LynxContainer {
     const signal = this.prepareSignal;
     const generation = ++this.prepareGeneration;
     let pendingLease: OtaBundleLease | null = null;
-    runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName)
+    runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName, this.request.sessionID)
       .then((cached: PreparedPageBundle | null) => {
         if (cached !== null) {
           if (cached.source !== 'embedded_baseline') {
@@ -214,7 +221,7 @@ export struct LynxContainer {
           return cached;
         }
         this.isLoading = true;
-        return runtime.prepare(this.request.lynxAppId, this.request.bundleName, signal);
+        return runtime.prepare(this.request.lynxAppId, this.request.bundleName, signal, this.request.sessionID);
       })
       .then((prepared: PreparedPageBundle) => {
         pendingLease = prepared.lease ?? null;
@@ -235,6 +242,8 @@ export struct LynxContainer {
         const bundleMetadata: ShellBundleMetadata = {
           lynxAppId: prepared.lynxAppId,
           releaseId: prepared.releaseId,
+          manifestId: prepared.manifestId,
+          navigationSnapshotID: prepared.navigationSnapshotID,
           source: this.rollbackAttempted ? 'rollback_fallback' : (prepared.source ?? 'ota_current'),
           bundleName: prepared.bundleName,
           sha256: prepared.sha256
@@ -248,6 +257,7 @@ export struct LynxContainer {
           ))
         );
         this.extraTiming.prepareTemplateEnd = new Date().getTime();
+        console.info(`[${ShellConstants.TAG}] prepared ${prepared.lynxAppId}/${prepared.bundleName}, release=${prepared.releaseId}, manifest=${prepared.manifestId ?? 'embedded'}, snapshot=${prepared.navigationSnapshotID ?? 'none'}`);
         this.preparing = false;
         this.releaseCurrentLease();
         this.releaseLease = prepared.lease ?? null;

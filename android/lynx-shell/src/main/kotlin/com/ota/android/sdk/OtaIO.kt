@@ -36,15 +36,21 @@ object OtaIO {
     localPath: File,
     expectedBytes: Long?,
     maxBytes: Long,
+    allowLocalHTTPForTest: Boolean = false,
+    environment: OtaModels.Environment = OtaModels.Environment.TEST,
   ): StreamResult {
     if (Thread.currentThread().isInterrupted) {
       throw InterruptedException("Bundle 下载任务已取消")
     }
     validateExpectedBytes(expectedBytes, maxBytes)
-    if (!remoteUri.scheme.equals("https", ignoreCase = true) || remoteUri.host.isNullOrBlank() ||
+    if (!OtaURLPolicy.isAllowed(remoteUri, environment, allowLocalHTTPForTest) ||
       remoteUri.userInfo != null || remoteUri.fragment != null
     ) {
-      throw OtaSdkException("远程 Bundle URL 必须使用 HTTPS", null, OtaModels.ReasonCodes.INVALID_BUNDLE_URL)
+      throw OtaSdkException(
+        "远程 Bundle URL 必须使用 HTTPS；仅 TEST + loopback 调试地址允许 HTTP",
+        null,
+        OtaModels.ReasonCodes.INVALID_BUNDLE_URL,
+      )
     }
     localPath.parentFile?.let { ensureDirectory(it) }
     val connection = remoteUri.toURL().openConnection() as HttpURLConnection

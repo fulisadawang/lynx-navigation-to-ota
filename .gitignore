@@ -28,3 +28,7 @@ LynxScreens-Android/
 *.jks
 *.keystore
 **/__pycache__/
+
+# OTA Store v3 本地 Golden Fixture（由 Playground 脚本按需重建，不提交二进制）
+playground/fixtures/ota-store-v3-golden-100-v1-v2/
+playground/.ota-store-v3-build-*/

@@ -6,7 +6,7 @@ import {
   OtaStorageSnapshot
 } from '@lynx/lynx-shell-kit';
 
-/** Demo-only 原生只读 Store v2 浏览器；不会扫描任意目录或触发 OTA。 */
+/** Demo-only 原生只读 Store v3 浏览器；不会扫描任意目录或触发 OTA。 */
 @Entry
 @Component
 struct OtaStorageInspector {
@@ -29,7 +29,7 @@ struct OtaStorageInspector {
 
   private renderSnapshot(snapshot: OtaStorageSnapshot): string {
     const lines: string[] = [
-      'OTA 磁盘浏览器（只读）',
+      'OTA Store v3 磁盘浏览器（只读）',
       '',
       `root: ${snapshot.rootPath}`,
       `apps: ${snapshot.apps.length}`,
@@ -46,9 +46,12 @@ struct OtaStorageInspector {
         lines.push(`current: ${app.state.currentReleaseId} (${app.state.currentKind})`);
         lines.push(`previous: ${app.state.previousReleaseId ?? '—'}${app.state.previousKind === undefined ? '' : ` (${app.state.previousKind})`}`);
       }
+      lines.push(`CAS objects: ${app.objectCount ?? 0} / ${this.formatBytes(app.objectBytes ?? 0)}`);
+      lines.push(`Manifests: ${this.formatBytes(app.manifestBytes ?? 0)}`);
       lines.push(`disk: ${this.formatBytes(app.totalBytes)} / ${app.fileCount} files`);
       app.releases.forEach((release: OtaStorageReleaseSnapshot) => {
         lines.push(`  ${release.releaseId} [${release.roles.join(' · ')}] manifest=${release.manifestValid ? 'valid' : 'invalid'} ${this.formatBytes(release.totalBytes)}`);
+        lines.push(`    manifestId=${release.manifestId ?? '—'} bundles=${release.bundleCount ?? 0} objects=${release.objectIds?.length ?? 0}`);
         release.files.forEach((file) => lines.push(`    ├─ ${file.relativePath} ${this.formatBytes(file.byteCount)}`));
         if (release.truncated) lines.push('    … 文件树已截断');
       });

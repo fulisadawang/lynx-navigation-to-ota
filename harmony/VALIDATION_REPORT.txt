@@ -1,4 +1,4 @@
-Lynx 4.0 HarmonyOS OTA Store v2 验收报告
+Lynx 4.0 HarmonyOS OTA Store v2 历史验收报告（非当前 v3 结果）
 日期: 2026-08-27
 范围: HarmonyOS ArkTS/ArkUI；不包含 candidate/trial 状态机
 

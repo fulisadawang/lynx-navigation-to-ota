@@ -26,7 +26,10 @@ class LynxOtaRuntime(
     private val appContext = context.applicationContext
     private val sdkConfiguration = config.toSdkConfiguration(appContext)
     private val sdk = OtaSdk(sdkConfiguration)
-    private val storageDiagnostics = OtaStorageDiagnostics(sdkConfiguration.storageDirectory)
+    private val storageDiagnostics = OtaStorageDiagnostics(
+        sdkConfiguration.storageDirectory,
+        storeVersion = sdkConfiguration.storeVersion,
+    )
     private val embeddedBundleRegistry = EmbeddedBundleRegistry(appContext)
     private val otaEnabled = !config.clientToken.isNullOrBlank()
     /** 生命周期刷新与页面后台刷新共用队列，避免同一个 SDK 实例并发提交激活事务。 */
@@ -41,12 +44,34 @@ class LynxOtaRuntime(
     private var fullSyncInFlight = false
     private var fullSyncPending = false
     private val fullSyncWaiters = ArrayList<(Boolean) -> Unit>()
+    private val navigationSnapshotLock = Any()
+    private val navigationSnapshots = LinkedHashMap<String, NavigationSnapshot>()
+
+    private data class NavigationSnapshot(
+        val lynxAppId: String,
+        val releaseId: String,
+        var activityCount: Int,
+    )
+
+    init {
+        // Store v3 首次启动只登记 embedded 元数据；APK 内置 Bundle 仍由 AssetManager
+        // 直接读取，不复制到 files/lynx-ota-store。
+        runCatching {
+            embeddedBundleRegistry.installedReleases(
+                environment = sdkConfiguration.environment,
+                hostApp = sdkConfiguration.hostApp,
+                platform = sdkConfiguration.platform,
+            ).forEach(sdk::initializeEmbeddedRelease)
+        }.onFailure { error ->
+            Log.w(TAG, "内置 Bundle Manifest 登记失败，页面仍可尝试直接读取 assets", error)
+        }
+    }
 
     override fun onApplicationStarted() {
-        // Demo 使用最新 schema；这里仅清理 Store v2 的孤儿 Release/残留 staging，不迁移旧布局。
+        // Demo 使用 Store v3；启动维护只回收无引用 CAS 对象和残留事务，不迁移旧布局。
         refreshExecutor.execute {
             runCatching { sdk.pruneUnreferencedBundles() }
-                .onFailure { Log.w(TAG, "Store v2 冷启动维护失败，保留现有文件", it) }
+                .onFailure { Log.w(TAG, "Store v3 冷启动维护失败，保留现有文件", it) }
         }
         if (otaEnabled) syncAllBundlesAsync()
     }
@@ -244,8 +269,66 @@ class LynxOtaRuntime(
         return prepared(lynxAppId, bundleName, repairedLease)
     }
 
+    /** 带 session 的缺包准备：优先从已固定 release 恢复，避免路由中途漂移。 */
+    override fun prepare(
+        lynxAppId: String,
+        bundleName: String,
+        navigationSnapshotID: String?,
+    ): PreparedActivityBundle {
+        val pinnedReleaseId = navigationSnapshotRelease(navigationSnapshotID, lynxAppId)
+        if (pinnedReleaseId != null) {
+            val pinnedLease = runCatching {
+                sdk.acquireBundleLeaseForRelease(lynxAppId, pinnedReleaseId, bundleName)
+            }.getOrNull()
+            if (pinnedLease != null && pinnedLease.file.isFile && pinnedLease.file.canRead()) {
+                return prepared(
+                    lynxAppId,
+                    bundleName,
+                    pinnedLease,
+                    source = "ota_snapshot",
+                    navigationSnapshotID = navigationSnapshotID,
+                )
+            }
+        }
+        val value = prepare(lynxAppId, bundleName)
+        pinNavigationSnapshot(navigationSnapshotID, value)
+        return value.copy(navigationSnapshotID = navigationSnapshotID)
+    }
+
     /** 普通 Activity 页面可消费 candidate；Native Tab 仍只调用 resolveCurrent。 */
     override fun resolvePage(
+        lynxAppId: String,
+        bundleName: String,
+    ): PreparedActivityBundle? = resolvePageUnpinned(lynxAppId, bundleName)
+
+    /** 路由页按 session 固定 release；current 后续变化不会让子路由换 Bundle。 */
+    override fun resolvePage(
+        lynxAppId: String,
+        bundleName: String,
+        navigationSnapshotID: String?,
+    ): PreparedActivityBundle? {
+        if (navigationSnapshotID.isNullOrBlank()) return resolvePageUnpinned(lynxAppId, bundleName)
+        val pinnedReleaseId = navigationSnapshotRelease(navigationSnapshotID, lynxAppId)
+        if (pinnedReleaseId != null) {
+            val pinnedLease = runCatching {
+                sdk.acquireBundleLeaseForRelease(lynxAppId, pinnedReleaseId, bundleName)
+            }.getOrNull()
+            if (pinnedLease != null && pinnedLease.file.isFile && pinnedLease.file.canRead()) {
+                return prepared(
+                    lynxAppId,
+                    bundleName,
+                    pinnedLease,
+                    source = "ota_snapshot",
+                    navigationSnapshotID = navigationSnapshotID,
+                )
+            }
+        }
+        val prepared = resolvePageUnpinned(lynxAppId, bundleName) ?: return null
+        pinNavigationSnapshot(navigationSnapshotID, prepared)
+        return prepared.copy(navigationSnapshotID = navigationSnapshotID)
+    }
+
+    private fun resolvePageUnpinned(
         lynxAppId: String,
         bundleName: String,
     ): PreparedActivityBundle? {
@@ -278,6 +361,22 @@ class LynxOtaRuntime(
             }
         }
         return resolveCurrent(lynxAppId, bundleName)
+    }
+
+    override fun retainNavigationSnapshot(navigationSnapshotID: String?) {
+        if (navigationSnapshotID.isNullOrBlank()) return
+        synchronized(navigationSnapshotLock) {
+            navigationSnapshots[navigationSnapshotID]?.let { it.activityCount += 1 }
+        }
+    }
+
+    override fun releaseNavigationSnapshot(navigationSnapshotID: String?) {
+        if (navigationSnapshotID.isNullOrBlank()) return
+        synchronized(navigationSnapshotLock) {
+            val snapshot = navigationSnapshots[navigationSnapshotID] ?: return
+            snapshot.activityCount -= 1
+            if (snapshot.activityCount <= 0) navigationSnapshots.remove(navigationSnapshotID)
+        }
     }
 
     override fun confirmCandidateHealthy(lynxAppId: String): Boolean {
@@ -342,14 +441,41 @@ class LynxOtaRuntime(
         lynxAppId: String,
         bundleName: String,
         lease: com.ota.android.sdk.ReleaseTransaction.BundleLease,
+        source: String = "ota_current",
+        navigationSnapshotID: String? = null,
     ): PreparedActivityBundle = PreparedActivityBundle(
         lynxAppId = lynxAppId,
         bundleName = bundleName,
         file = lease.file,
         releaseId = lease.release.context.releaseId,
         sha256 = lease.bundle.bundleSha256,
+        source = source,
         releaseLease = lease,
+        navigationSnapshotID = navigationSnapshotID,
     )
+
+    private fun navigationSnapshotRelease(snapshotID: String?, lynxAppId: String): String? {
+        if (snapshotID.isNullOrBlank()) return null
+        synchronized(navigationSnapshotLock) {
+            return navigationSnapshots[snapshotID]
+                ?.takeIf { it.lynxAppId == lynxAppId }
+                ?.releaseId
+        }
+    }
+
+    private fun pinNavigationSnapshot(snapshotID: String?, prepared: PreparedActivityBundle) {
+        if (snapshotID.isNullOrBlank() || prepared.source == "embedded_baseline") return
+        val releaseId = prepared.releaseId?.takeIf { it.isNotBlank() } ?: return
+        synchronized(navigationSnapshotLock) {
+            val existing = navigationSnapshots[snapshotID]
+            if (existing == null) {
+                navigationSnapshots[snapshotID] = NavigationSnapshot(prepared.lynxAppId, releaseId, 1)
+            } else if (existing.lynxAppId == prepared.lynxAppId && existing.releaseId != releaseId) {
+                existing.activityCount = 1
+                navigationSnapshots[snapshotID] = existing.copy(releaseId = releaseId)
+            }
+        }
+    }
 
     private companion object {
         const val TAG = "LynxOtaRuntime"

@@ -104,8 +104,7 @@ def expected_files() -> None:
         "lynx_shell_kit/src/main/ets/ota/OtaModels.ets",
         "lynx_shell_kit/src/main/ets/ota/OtaJson.ets",
         "lynx_shell_kit/src/main/ets/ota/OtaApiClient.ets",
-        "lynx_shell_kit/src/main/ets/ota/ReleaseTransaction.ets",
-        "lynx_shell_kit/src/main/ets/ota/OtaStorageDiagnostics.ets",
+        "lynx_shell_kit/src/main/ets/ota/ContentAddressedOtaStore.ets",
         "lynx_shell_kit/src/main/ets/ota/LynxOtaRuntime.ets",
         "lynx_shell/src/main/ets/pages/OtaStorageInspector.ets",
         "lynx_shell/src/main/resources/base/profile/main_pages.json",
@@ -424,23 +423,23 @@ def comments_and_structure() -> None:
     router = shell_read("src/main/ets/routing/LynxRouter.ets")
     container = shell_read("src/main/ets/pages/LynxContainer.ets")
     provider = shell_read("src/main/ets/provider/ShellTemplateResourceFetcher.ets")
-    transaction = shell_read("src/main/ets/ota/ReleaseTransaction.ets")
+    transaction = shell_read("src/main/ets/ota/ContentAddressedOtaStore.ets")
     runtime = shell_read("src/main/ets/ota/LynxOtaRuntime.ets")
     require(all(marker in router for marker in [
         "openOta(", "openEmbedded(", "embeddedIdentity(", "refreshAllOtaBundles(",
         "deleteOtaBundles(", "deleteAllOtaBundles("
     ]), "HarmonyOS Router 暴露 Manifest 身份、主动刷新、appId + bundleName OTA 与删除 API")
-    require(all(marker in container for marker in ["prepareOtaBundle", "正在准备 OTA 页面", "attemptRollback", "PreparedPageBundle"]), "HarmonyOS 容器先 prepare/Loading 后创建 LynxView，首屏失败只回滚一次")
+    require(all(marker in container for marker in ["prepareOtaBundle", "正在准备 OTA 页面", "attemptRollback", "PreparedPageBundle", "reconcileWithRouter", "releaseNavigationSnapshot"]), "HarmonyOS 容器先 prepare/Loading 后创建 LynxView，首屏失败只回滚一次")
     require(
         all(marker in provider for marker in ["loadPreparedBundle", "preparedStorageRoot", "ArrayBuffer"]) and
         ("preparedBytes" in provider or "NOFOLLOW" in provider),
         "HarmonyOS Provider 读取 direct rawfile bytes 或受控 prepared file 为 Lynx ArrayBuffer",
     )
     require(
-        all(marker in transaction for marker in [".staging", "bundleSha256", "fs.fsyncSync", "deleteAllBundles"])
+        all(marker in transaction for marker in [".part", "bundleSha256", "fs.fsyncSync", "deleteAllBundles"])
         and ("current:" in transaction or "currentReleaseId" in transaction)
         and ("previous:" in transaction or "previousReleaseId" in transaction),
-        "HarmonyOS ReleaseTransaction 包含 staging/SHA/state/current-previous/直接删除",
+        "HarmonyOS Store v3 包含事务临时文件/SHA/state/current-previous/直接删除",
     )
     require(all(marker in runtime for marker in [
         "syncAllBundlesAsync", "refreshAllBundles", "fullSyncWaiters", "pageRefreshIntervalMillis",
@@ -460,14 +459,14 @@ def native_tab_ota_parity() -> None:
     router = shell_read("src/main/ets/routing/LynxRouter.ets")
     runtime = shell_read("src/main/ets/ota/LynxOtaRuntime.ets")
     registry = shell_read("src/main/ets/ota/EmbeddedBundleRegistry.ets")
-    transaction = shell_read("src/main/ets/ota/ReleaseTransaction.ets")
+    transaction = shell_read("src/main/ets/ota/ContentAddressedOtaStore.ets")
     initializer = shell_read("src/main/ets/common/LynxRuntimeInitializer.ets")
     ability_stage = read("lynx_shell/src/main/ets/entryability/LynxAbilityStage.ets")
 
     require(
         all(marker in index for marker in [
             "LynxRouter.openEmbedded(",
-            "LynxRouter.embeddedIdentity(this.playgroundBundleName, this.otaTestAppId)",
+            "LynxRouter.embeddedIdentity(this.embeddedPlaygroundBundleName, this.otaTestAppId)",
             "lynxAppId: this.tabLynxAppId",
             "bundleName: this.tabBundleName",
             "native_tab_id",
@@ -484,7 +483,7 @@ def native_tab_ota_parity() -> None:
         "HarmonyOS 主动 OTA 成功后才重载 Tab，失败保留当前实例",
     )
     require(
-        "runtime.resolveCurrent(" in tab and "runtime.prepare(" not in tab and
+        "runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName, this.request.sessionID)" in tab and "runtime.prepare(" not in tab and
         "runtime.refreshAppBundleIfNeeded(" not in tab,
         "HarmonyOS Tab 严格 cache-only，不调用 repair 或页面后台刷新",
     )
@@ -520,14 +519,14 @@ def native_tab_ota_parity() -> None:
         all(marker in runtime for marker in [
             "refreshAllBundles(): Promise<boolean>", "fullSyncWaiters", "fullSyncPending",
             "embeddedBundleRegistry.containsApp", "restored=embedded",
-        ]),
+        ]) and "resetNavigationSnapshot('native-tab-host'" in index,
         "HarmonyOS 全量同步合并并通知等待者，无 previous 时回 rawfile baseline",
     )
     require(
         all(marker in transaction for marker in [
-            "source: 'ota_current'", "String(stat.mtime)", "String(stat.ctime)", "stat.ino.toString()"
-        ]),
-        "HarmonyOS 进程内 SHA 缓存包含 release、size、mtime、ctime 与 inode 文件指纹",
+            "source: 'ota_current'", "stat.mtime", "stat.ctime", "stat.ino"
+        ]) and "validatedObjects" in transaction,
+        "HarmonyOS 进程内 SHA 缓存包含 App ID、Object、size、mtime、ctime 与 inode 文件指纹",
     )
     require(
         "ImageKnife.getInstance().initFileCache(context)" in initializer and
@@ -572,9 +571,9 @@ def native_tab_ota_parity() -> None:
     )
 
 
-def ota_store_v2_no_candidate() -> None:
-    """Store v2 的 Harmony 契约：按 App ID 隔离、current/previous、lease、无候选版本。"""
-    transaction = shell_read("src/main/ets/ota/ReleaseTransaction.ets")
+def ota_store_v3_no_candidate() -> None:
+    """Store v3 的 Harmony 契约：完整 Manifest、App ID 隔离 CAS、current/previous、lease、无候选版本。"""
+    transaction = shell_read("src/main/ets/ota/ContentAddressedOtaStore.ets")
     models = shell_read("src/main/ets/ota/OtaModels.ets")
     runtime = shell_read("src/main/ets/ota/LynxOtaRuntime.ets")
     tab = shell_read("src/main/ets/pages/LynxTabContainer.ets")
@@ -586,23 +585,66 @@ def ota_store_v2_no_candidate() -> None:
 
     require(
         all(marker in transaction for marker in [
-            "appsRoot()", "statePath(lynxAppId)", "releasesRoot(lynxAppId)",
-            "stagingRoot(lynxAppId)", "STORE_SCHEMA_VERSION: number = 2",
-            "pruneUnreferencedReleases", "pruneAllUnreferencedReleases",
+            "appsRoot()", "statePath(appId)", "manifestsRoot(appId)", "objectsRoot(appId)",
+            "transactionRoot(appId)", "STORE_SCHEMA_VERSION: number = 3",
+            "manifestId", "objectId", "pruneApp", "pruneAllUnreferencedReleases",
             "statfs.getFreeSizeSync", "METADATA_ALLOWANCE_BYTES", "SAFETY_RESERVE_BYTES",
+            "writeBinaryAtomic", "fs.fsyncSync", "transactionDirectory",
+            "acquireBundleLeaseForRelease", "acquireReleaseLease", "manifestId: string = ''",
+            "recoverExistingStorage", "recoverTransactions", "purgeMarkerPath",
+            "after_objects_ready", "after_manifest_commit", "before_state_commit",
+            "after_state_commit_report_failure",
+            "enospc_object_publish", "enospc_manifest_commit", "enospc_state_commit",
+            "TEST pause reached", "testPauseToken",
         ]) and
         "this.root}/releases" not in transaction and
         "this.root}/states" not in transaction and
         "statesRoot" not in transaction,
-        "HarmonyOS Store v2 使用 apps/<appId>/ 隔离、schema v2、prune 与容量预检",
+        "HarmonyOS Store v3 使用 apps/<appId>/ 隔离、schema v3、CAS、Manifest、prune 与容量预检",
+    )
+    require(
+        all(marker in transaction for marker in [
+            "syncDirectory",
+            "fs.OpenMode.DIR",
+            "this.syncDirectory(transaction)",
+            "this.syncDirectory(objectPath.substring(0, objectPath.lastIndexOf('/')))",
+        ]),
+        "HarmonyOS CAS 发布同步文件与源/目标目录，保证 force-stop 后对象可见",
+    )
+    require(
+        all(marker in transaction for marker in [
+            "const recoveredObjectIds = this.transactionObjectIds(snapshot.lynxAppId)",
+            "recoveredObjectIds",
+            "保留 transaction.json 作为下一次进程启动的恢复索引",
+            "entry.endsWith('.part')",
+        ]),
+        "HarmonyOS 进程恢复保留有效事务索引、清理 part 并保护可复用对象",
+    )
+    require(
+        all(marker in models for marker in [
+            "testFaultPoint", "testAvailableCapacityBytes", "testPausePoint", "testPauseMillis", "testPauseToken",
+            "isTestEnvironment", "debugMockEnabled = false", "allowLocalHTTPForTest = false",
+            "isSupportedTestFaultPoint", "isSupportedTestPausePoint",
+        ]),
+        "HarmonyOS TEST-only 故障/容量/暂停入口有环境与参数白名单保护",
     )
     require(
         "OtaBundleLease" in models and "lease?: OtaBundleLease" in models and
         "acquireCurrentBundleLease" in transaction and
-        "releaseLease" in transaction and
+        "new OtaBundleLease" in transaction and
         "private releaseLease: OtaBundleLease | null" in tab and
         "private releaseLease: OtaBundleLease | null" in container,
-        "HarmonyOS Page/Tab 使用 Release lease 并在销毁或过期结果时释放",
+        "HarmonyOS Page/Tab 使用 Store v3 Release lease 并在销毁或过期结果时释放",
+    )
+    require(
+        all(marker in runtime for marker in [
+            "navigationSnapshots", "createOrAttachSnapshot", "prepareFromSnapshot",
+            "releaseNavigationSnapshot", "resetNavigationSnapshot",
+        ]) and "navigationSnapshotID" in models and
+        all(marker in transaction for marker in [
+            "acquireBundleLeaseForRelease", "acquireReleaseLease",
+        ]),
+        "HarmonyOS Runtime 使用 session 级 NavigationSnapshot 并固定 Manifest lease",
     )
     ota_sources = "\n".join([transaction, models, runtime, tab, container, router])
     require(
@@ -615,15 +657,15 @@ def ota_store_v2_no_candidate() -> None:
             "acquireCurrentBundleLease", "storageSnapshot(): Promise<OtaStorageSnapshot>",
         ]) and
         all(marker in router for marker in ["otaStorageSnapshot()", "storageSnapshot()"]),
-        "HarmonyOS Runtime/Router 暴露有 lease 的 current 与只读 snapshot",
+        "HarmonyOS Store v3 Runtime/Router 暴露有 lease 的 current 与只读 snapshot",
     )
     require(
         all(marker in inspector for marker in [
-            "OTA 磁盘浏览器（只读）", "LynxRouter.otaStorageSnapshot()",
-            "root:", "current:", "previous:", "staging/", "mode: read-only",
+            "OTA Store v3 磁盘浏览器（只读）", "LynxRouter.otaStorageSnapshot()",
+            "root:", "current:", "previous:", "CAS objects:", "Manifests:", "mode: read-only",
         ]) and "pages/OtaStorageInspector" in main_pages and
         "OtaStorageInspector" in index,
-        "HarmonyOS Demo Launcher/Native Tab 可进入只读 OTA 磁盘浏览器",
+        "HarmonyOS Demo Launcher/Native Tab 可进入 Store v3 只读磁盘浏览器",
     )
 
 
@@ -711,7 +753,7 @@ def main() -> int:
         sparkling_boundary,
         comments_and_structure,
         native_tab_ota_parity,
-        ota_store_v2_no_candidate,
+        ota_store_v3_no_candidate,
         delimiter_and_script_syntax,
     ]
     for check in checks:

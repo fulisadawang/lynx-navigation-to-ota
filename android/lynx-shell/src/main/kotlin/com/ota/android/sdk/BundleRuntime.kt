@@ -7,8 +7,8 @@ import java.io.IOException
  * Bundle 运行时门面：路由按 `lynxAppId + bundleName` 取已提交 current，绝不读取
  * `.staging`。pageId 解析只保留在 [OtaSdk.currentTemplatePath] 兼容入口中。
  */
-class BundleRuntime(private val transaction: ReleaseTransaction) {
-  constructor(storageRoot: File) : this(ReleaseTransaction(storageRoot))
+class BundleRuntime(private val transaction: OtaReleaseStore) {
+  constructor(storageRoot: File) : this(LegacyOtaReleaseStore(storageRoot))
 
   @Throws(IOException::class, OtaSdkException::class)
   fun current(scope: ReleaseTransaction.ReleaseScope, bundleName: String): File? {

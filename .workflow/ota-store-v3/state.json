@@ -1,0 +1,28 @@
+{
+  "title": "OTA Store v3 \u4e09\u7aef\u771f\u6b63\u589e\u91cf\u66f4\u65b0\u4e0e\u8fd0\u884c\u6001\u9a8c\u6536",
+  "slug": "ota-store-v3",
+  "created_at": "2026-08-30T15:10:06+00:00",
+  "status": "in_progress",
+  "approval": {
+    "required": true,
+    "granted": true,
+    "notes": "用户已授权多 Agent、本地 OTA 服务、Playground 100 Bundle 和三端按顺序实现/验收。"
+  },
+  "packets": [
+    {"id": "P0", "status": "completed"},
+    {"id": "P1", "status": "completed"},
+    {"id": "P2", "status": "completed"},
+    {"id": "P3", "status": "completed"},
+    {"id": "P4", "status": "completed"}
+  ],
+  "verification": {
+    "status": "completed_with_explicit_boundaries",
+    "checks": [
+      "P0 测试用例、Golden Fixture 和本地 OTA Server 契约完成",
+      "P1 iOS Store v3、路由快照、54/54 单测、XCUITest 和截图报告已完成",
+      "P2 Android Store v3、路由快照、47/47 JVM 单测、模拟器运行态和截图报告已完成",
+      "P3 HarmonyOS Store v3、ArkUI Tabs、89 项静态门禁、删除/故障/force-stop/受控容量模拟器运行态和截图报告已完成，且不启用 candidate",
+      "P4 三端静态门禁合计 200 PASS；物理真机、签名包、真实断电、真实 ENOSPC 和生产 CDN/TLS 仍按边界保留"
+    ]
+  }
+}

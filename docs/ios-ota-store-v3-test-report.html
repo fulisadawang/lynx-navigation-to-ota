@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iOS OTA Store v3 测试报告</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #647089;
+      --line: #dce3ef;
+      --surface: #ffffff;
+      --surface-soft: #f5f8fc;
+      --blue: #2563eb;
+      --green: #0f9d72;
+      --amber: #b7791f;
+      --red: #c24141;
+      --shadow: 0 18px 50px rgba(37, 65, 112, .10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #edf2f8;
+      font: 15px/1.65 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    .hero {
+      color: #fff;
+      background: linear-gradient(130deg, #14264b 0%, #1d4ed8 55%, #0f9d72 140%);
+      border-radius: 24px;
+      padding: 34px 36px;
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { margin: 0 0 8px; opacity: .75; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+    h1, h2, h3 { line-height: 1.25; margin: 0; }
+    h1 { font-size: clamp(28px, 4vw, 46px); letter-spacing: -.03em; }
+    h2 { font-size: 24px; margin-bottom: 16px; }
+    h3 { font-size: 17px; margin-bottom: 8px; }
+    .hero p { max-width: 820px; margin: 14px 0 0; color: rgba(255,255,255,.82); }
+    .hero-grid, .stats, .columns { display: grid; gap: 14px; }
+    .hero-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: 24px; }
+    .hero-fact { padding-top: 14px; border-top: 1px solid rgba(255,255,255,.24); }
+    .hero-fact small { display: block; opacity: .65; font-size: 12px; }
+    .hero-fact strong { display: block; margin-top: 3px; font-size: 16px; }
+    section { margin-top: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 8px 30px rgba(37, 65, 112, .05); }
+    .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .stat { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .stat strong { display: block; font-size: 28px; letter-spacing: -.04em; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .pass { color: var(--green); }
+    .skip { color: var(--amber); }
+    .fail { color: var(--red); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: 12px 10px; }
+    th { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    td:first-child { white-space: nowrap; font-weight: 700; }
+    code, pre { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    code { background: #eef2f7; border-radius: 5px; padding: 2px 5px; }
+    pre { overflow: auto; margin: 0; background: #111827; color: #e5edf9; border-radius: 12px; padding: 16px; }
+    .columns { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .callout { border-left: 4px solid var(--blue); background: #eff6ff; padding: 14px 16px; border-radius: 10px; }
+    .callout strong { display: block; margin-bottom: 3px; }
+    figure { margin: 0; }
+    figure img { display: block; width: 100%; max-height: 620px; object-fit: contain; background: #e9eef6; border: 1px solid var(--line); border-radius: 12px; }
+    figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+    details { border-top: 1px solid var(--line); padding: 12px 0; }
+    details:first-of-type { border-top: 0; }
+    summary { cursor: pointer; font-weight: 700; }
+    ul { margin: 8px 0 0; padding-left: 22px; }
+    .footer { color: var(--muted); font-size: 13px; }
+    @media (max-width: 620px) {
+      main { padding: 16px 12px 44px; }
+      .hero, section { padding: 20px; border-radius: 16px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">Lynx Navigation · OTA Store v3</p>
+    <h1>iOS OTA Store v3 测试报告</h1>
+    <p>本报告记录 iOS 端从空 Store 安装 100 个 Bundle、V1 → V2 单 Bundle 增量、ETag、CAS 历史对象复用、原生 Tab、失败保护和模拟器运行态截图。OTA 使用本地 fixture server，未依赖外网服务。</p>
+    <div class="hero-grid">
+      <div class="hero-fact"><small>结果</small><strong class="pass">通过</strong></div>
+      <div class="hero-fact"><small>设备</small><strong>iPhone 16 Pro / iOS 18.1</strong></div>
+      <div class="hero-fact"><small>Fixture</small><strong>ota-store-v3-golden-100-v1-v2</strong></div>
+      <div class="hero-fact"><small>App ID</small><strong>10000001</strong></div>
+      <div class="hero-fact"><small>Server</small><strong>127.0.0.1:18765</strong></div>
+      <div class="hero-fact"><small>执行日期</small><strong>2026-08-31</strong></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>一眼结论</h2>
+    <div class="stats">
+      <div class="stat"><strong class="pass">54</strong><span>Swift 单测通过</span></div>
+      <div class="stat"><strong class="pass">7 / 0</strong><span>XCUITest 通过 / 失败</span></div>
+      <div class="stat"><strong class="skip">3</strong><span>XCUITest 条件跳过</span></div>
+      <div class="stat"><strong class="pass">100 → 1</strong><span>V1 全量 / V2 二进制下载</span></div>
+      <div class="stat"><strong class="pass">101</strong><span>V1+V2 去重后 CAS 对象数</span></div>
+      <div class="stat"><strong class="pass">0</strong><span>未变化 Bundle 复制次数</span></div>
+    </div>
+    <div class="callout" style="margin-top:16px">
+      <strong>iOS Gate：PASS</strong>
+      v3 的核心验收条件已在 iOS 完成：完整 Manifest 仍为 100 条；V1 → V2 只请求并写入变化的 <code>bundle-050</code>；回滚到已有历史对象时 Bundle 请求为 0；Tab 切换不请求 OTA，主动刷新才重读 current；错误 SHA 不提交新 State/Manifest。
+    </div>
+  </section>
+
+  <section>
+    <h2>测试矩阵与实际结果</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>用例</th><th>动作</th><th>实际结果</th><th>证据</th></tr></thead>
+        <tbody>
+          <tr><td>T01 Fixture</td><td>校验 V1/V2 和 iOS/Android/Harmony Manifest</td><td><span class="pass">PASS</span>：各 100 条；路径集合相同；仅 050 的 bytes/size/SHA 变化。</td><td><code>verify-ota-store-v3-fixture.mjs</code></td></tr>
+          <tr><td>T10 首次安装 V1</td><td>卸载重装 App，启动本地 OTA</td><td><span class="pass">PASS</span>：latest 200 + 304；100 个 Bundle 请求；8,775,400 bytes；100 个 CAS 对象；1 份 Manifest；current=V1，previous=embedded。</td><td>真实 URLSession + 模拟器磁盘快照</td></tr>
+          <tr><td>T11 V1 → V2</td><td>本地 Server 切到 V2，点击原生 Tab 的“刷新 OTA”</td><td><span class="pass">PASS</span>：Manifest 仍 100 条；仅请求 <code>pages/10000001/bundle-050.lynx.bundle</code>；1 个新对象；CAS=101；current=V2，previous=V1。</td><td>真实 URLSession + Server metrics + V2 截图</td></tr>
+          <tr><td>T03 ETag</td><td>同一进程两次同步 latest</td><td><span class="pass">PASS</span>：第二次 latest 返回 HTTP 304；没有 Manifest/Bundle 字节下载和 Store 写入。</td><td>Server latest statuses: 200, 304</td></tr>
+          <tr><td>T20 Route</td><td>打开当前 OTA <code>bundle-050</code></td><td><span class="pass">PASS</span>：V1/V2 页面分别显示自身版本；Debug 状态显示 <code>ota_snapshot</code>，说明页面从固定的导航 release 快照读取。</td><td>V1/V2 route screenshots</td></tr>
+          <tr><td>T23 Tab</td><td>原生 UITabBarController 的 Home/Settings 往返</td><td><span class="pass">PASS</span>：两个 Tab 都显示 OTA V2；实例只创建一次；切换过程 latest/bundle 请求计数不增加；不消费 candidate。</td><td>Tab Debug 状态 + Server metrics</td></tr>
+          <tr><td>T24 Tab 刷新</td><td>服务端切回 V1，点击“刷新 OTA”</td><td><span class="pass">PASS</span>：两个 Tab 重载为 V1；load/resolve/render 从 1 变 2；Bundle 请求=0，因为 V1 的 050 对象已在 CAS。</td><td>Tab V1 screenshot + metrics</td></tr>
+          <tr><td>T07 错误 SHA</td><td>服务端把 V2 的 050 SHA 改成全 0，刷新 Tab</td><td><span class="pass">PASS</span>：提示“OTA 同步失败”；current 保持 V1；CAS 对象数和 Manifest 数不变；恢复 normal 后可无下载切回 V2。</td><td>错误日志 + State/CAS 快照</td></tr>
+          <tr><td>T14 App 隔离</td><td>相同 SHA 在两个 App ID 下安装</td><td><span class="pass">PASS</span>：两个 <code>apps/&lt;appId&gt;</code> 各自拥有对象和 State，删除/校验互不污染。</td><td>v3 单测</td></tr>
+          <tr><td>T15/T17/T18</td><td>Manifest 故障恢复、candidate、容量/删除 lease/旧契约回归</td><td><span class="pass">PASS</span>：v3 Manifest 提交故障可重试恢复；candidate 确认前不替换 current；删除时 active lease 延迟回收；既有 v2 故障/容量测试继续通过。</td><td>54 个 Swift 单测</td></tr>
+          <tr><td>本轮本地 OTA UI smoke</td><td>测试运行器注入本地 Base URL，运行 V1→V2 Tab 刷新</td><td><span class="pass">PASS</span>：1 passed，0 failed，0 skipped；只下载 V2 的 050。</td><td>XcodeBuildMCP test_sim + Server metrics</td></tr>
+          <tr><td>平台回归</td><td>运行 XCUITest Target</td><td><span class="pass">PASS</span>：7 passed，0 failed，3 skipped。跳过项是 live OTA / mock token / F12 条件车道，不是失败。</td><td>XcodeBuildMCP test_sim + xcresult</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>运行态截图</h2>
+    <div class="gallery">
+      <figure><img src="assets/ios-ota-store-v3/v1-route.jpg" alt="iOS OTA Store v3 V1 Bundle 050 页面"><figcaption>V1：页面显示版本 V1、Bundle 050、标识 V1-050，导航状态为 ota_snapshot。</figcaption></figure>
+      <figure><img src="assets/ios-ota-store-v3/v2-route.jpg" alt="iOS OTA Store v3 V2 Bundle 050 页面"><figcaption>V2：同一个逻辑路由显示 V2 和标识 V2-050，证明 current 切换生效。</figcaption></figure>
+      <figure><img src="assets/ios-ota-store-v3/tab-v1-refresh.jpg" alt="iOS 原生 Tab 主动刷新后的 V1 页面"><figcaption>原生 Tab：主动刷新后两个 Tab 的内容回到 V1，实例代际递增。</figcaption></figure>
+      <figure><img src="assets/ios-ota-store-v3/storage-inspector.jpg" alt="iOS OTA 磁盘浏览器显示 CAS 和 current previous"><figcaption>磁盘 Inspector：3 个 App ID；10000001 有 101 个 CAS 对象、2 份完整 Manifest、current/previous 清晰可见。</figcaption></figure>
+      <figure><img src="assets/ios-ota-store-v3/tab-v1-runtime-20260831.jpg" alt="iOS 本轮真实本地 OTA V1 Tab 页面"><figcaption>本轮最终 XCUITest 配置下的 V1 Tab：显示 V1-050，作为 V2 刷新前基线。</figcaption></figure>
+      <figure><img src="assets/ios-ota-store-v3/tab-v2-refresh-runtime-20260831.jpg" alt="iOS 本轮真实本地 OTA V2 Tab 页面"><figcaption>本轮真实本地 OTA 刷新后的 V2 Tab：显示 V2-050，Server 只记录 1 个 Bundle GET。</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>磁盘与状态实证</h2>
+    <div class="columns">
+      <div>
+        <h3>V1 首次同步</h3>
+        <pre>{
+  "latestRequestCount": 2,
+  "bundleRequestCount": 100,
+  "bundleBytes": 8775400,
+  "objects": 100,
+  "manifests": 1,
+  "current": "ota-v3-golden-v1-100",
+  "previous": "r20260823_qc8ffc (embedded)"
+}</pre>
+      </div>
+      <div>
+        <h3>V2 增量同步</h3>
+        <pre>{
+  "latestStatuses": [200, 304],
+  "bundleRequestCount": 1,
+  "bundlePath": ".../bundle-050.lynx.bundle",
+  "objects": 101,
+  "manifests": 2,
+  "current": "ota-v3-golden-v2-100-one-change",
+  "previous": "ota-v3-golden-v1-100"
+}</pre>
+      </div>
+      <div>
+        <h3>Tab 主动刷新 / CAS 回滚</h3>
+        <pre>{
+  "tabReleaseAfterRefresh": "V1",
+  "tabLoadResolveRender": "2 / 2 / 2",
+  "bundleRequestCount": 0,
+  "bundleBytes": 0,
+  "objects": 101,
+  "current": "V1"
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>执行命令与可复现方式</h2>
+    <details open>
+      <summary>生成并验证 100 Bundle Golden Fixture</summary>
+      <pre>cd playground
+pnpm ota:v3:fixture
+pnpm ota:v3:fixture:verify</pre>
+    </details>
+    <details>
+      <summary>启动本地 OTA Server</summary>
+      <pre>cd playground
+pnpm ota:v3:server
+# 默认：http://127.0.0.1:18765</pre>
+    </details>
+    <details>
+      <summary>iOS Store 单测</summary>
+      <pre>cd ios/OtaIOSSDK
+swift test --no-parallel
+# 54 tests in 9 suites passed</pre>
+    </details>
+    <details>
+      <summary>iOS Simulator 构建与 UI 回归</summary>
+      <pre>xcodebuild -workspace ios/LynxShell.xcworkspace \
+  -scheme LynxShell -configuration Debug \
+  -destination 'platform=iOS Simulator,id=F2C9901B-4A82-4A5F-AB89-C0C4A0311C5C' \
+  CODE_SIGNING_ALLOWED=NO build
+
+// 默认回归：7 passed / 0 failed / 3 skipped
+// 本地真实 OTA：LYNX_TEST_LIVE_OTA=1、LYNX_TEST_OTA_BASE_URL=http://127.0.0.1:18765
+// testLiveOtaServerRefreshSmoke：1 passed / 0 failed / 0 skipped</pre>
+    </details>
+  </section>
+
+  <section>
+    <h2>剩余边界</h2>
+    <ul>
+      <li>本报告的真实 OTA 是 loopback 本地 fixture，已验证 URLSession、HTTP、Manifest、Bundle、CAS 和容器运行态；没有宣称外网生产服务可达。</li>
+      <li>本轮 iOS 平台门禁使用 iPhone 16 Pro / iOS 18.1 Simulator；iOS 真机网络权限、签名产物和低磁盘实机行为仍需业务发布前单独验证。</li>
+      <li>candidate、Manifest 故障和 App ID 隔离已经有 SDK/Store 单测；本报告没有把未执行的 candidate 真机灰度写成运行态通过。</li>
+      <li>本轮 XCUITest 的本地 URL 覆盖只存在于测试 harness；生产仍要求宿主显式注入 HTTPS Base URL 和 clientToken。</li>
+      <li>第三方 Pod 存在部署版本和 PrimJS Script Phase 输出声明警告，均未阻断构建；没有改动第三方依赖。</li>
+    </ul>
+  </section>
+
+  <p class="footer">报告文件与截图位于本仓库 <code>docs/</code>；本地测试 token 未写入源码、报告或 Git。</p>
+</main>
+</body>
+</html>

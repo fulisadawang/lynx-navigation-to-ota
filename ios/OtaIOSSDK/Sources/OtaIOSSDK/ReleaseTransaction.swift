@@ -40,26 +40,20 @@ public enum OtaReleaseRollbackOutcome: Equatable, Sendable {
 /// 所有 current/previous/candidate 与下载文件都由 canonical Store v2 管理。
 /// `FileOtaReleaseStore` 只保留 storage root 构造兼容，不再读写旧 pointer。
 public actor ReleaseTransaction {
-    private let canonicalStore: CanonicalOtaStore
+    private let canonicalStore: any OtaReleaseStoreBackend
 
     public init(store: FileOtaReleaseStore) {
-        self.canonicalStore = CanonicalOtaStore(baseDirectory: store.baseDirectoryURL)
+        self.canonicalStore = Self.makeBackend(store: store)
     }
 
     /// 测试专用初始化：把持久化提交前后的故障点注入 canonical store。
     /// 生产调用方继续使用 `init(store:)`，因此不会暴露或依赖故障控制能力。
     init(store: FileOtaReleaseStore, faultInjector: any OtaTransactionFaultInjecting) {
-        self.canonicalStore = CanonicalOtaStore(
-            baseDirectory: store.baseDirectoryURL,
-            faultInjector: faultInjector
-        )
+        self.canonicalStore = Self.makeBackend(store: store, faultInjector: faultInjector)
     }
 
     init(store: FileOtaReleaseStore, capacityProbe: any OtaStorageCapacityProbing) {
-        self.canonicalStore = CanonicalOtaStore(
-            baseDirectory: store.baseDirectoryURL,
-            capacityProbe: capacityProbe
-        )
+        self.canonicalStore = Self.makeBackend(store: store, capacityProbe: capacityProbe)
     }
 
     /// 返回作用域内 current；没有 OTA current 时由 embedded 作为首次运行回退。
@@ -74,6 +68,20 @@ public actor ReleaseTransaction {
 
     public func current(app: OtaAppID, lynxAppId: String) async -> OtaInstalledRelease? {
         await current(scope: OtaReleaseScope(app: app, lynxAppId: lynxAppId))
+    }
+
+    /** v3 按 SHA 查找已存在对象；v2 返回 nil，保持旧目录行为不变。 */
+    func existingObjectURL(
+        scope: OtaReleaseScope,
+        objectId: String,
+        expectedSize: Int64?
+    ) async throws -> URL? {
+        try await canonicalStore.existingObject(
+            app: scope.app,
+            lynxAppId: scope.lynxAppId,
+            objectId: objectId,
+            expectedSize: expectedSize
+        )
     }
 
     /// 只解析 current 中精确的 bundleName；不会读取 staged 或历史目录。
@@ -251,6 +259,27 @@ public actor ReleaseTransaction {
         }
         let nameMatches = release.bundles.filter { $0.bundleName == bundleName }
         return nameMatches.count == 1 ? nameMatches[0] : nil
+    }
+
+    private static func makeBackend(
+        store: FileOtaReleaseStore,
+        faultInjector: any OtaTransactionFaultInjecting = NoopOtaTransactionFaultInjector(),
+        capacityProbe: any OtaStorageCapacityProbing = SystemOtaStorageCapacityProbe()
+    ) -> any OtaReleaseStoreBackend {
+        switch store.version {
+        case .v2:
+            return LegacyOtaStoreBackend(
+                baseDirectory: store.baseDirectoryURL,
+                faultInjector: faultInjector,
+                capacityProbe: capacityProbe
+            )
+        case .v3:
+            return ContentAddressedOtaStore(
+                baseDirectory: store.baseDirectoryURL,
+                faultInjector: faultInjector,
+                capacityProbe: capacityProbe
+            )
+        }
     }
 
 }

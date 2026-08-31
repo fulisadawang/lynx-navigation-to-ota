@@ -18,6 +18,7 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val OTA_TEST_BUNDLE_NAME = "home.lynx.bundle"
         const val PLAYGROUND_OTA_BUNDLE_NAME = "main.lynx.bundle"
+        const val OTA_STORE_V3_FIXTURE_BUNDLE_NAME = "pages/10000001/bundle-050.lynx.bundle"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,7 +87,7 @@ class MainActivity : AppCompatActivity() {
             LynxRouter.open(
                 context = this,
                 lynxAppId = appId,
-                bundleName = OTA_TEST_BUNDLE_NAME,
+                bundleName = demoBundleName(OTA_TEST_BUNDLE_NAME),
                 params = mapOf(
                     "source" to "android-ota-acceptance-home",
                     "acceptance" to true,
@@ -109,7 +110,7 @@ class MainActivity : AppCompatActivity() {
             LynxRouter.open(
                 context = this,
                 lynxAppId = appId,
-                bundleName = PLAYGROUND_OTA_BUNDLE_NAME,
+                bundleName = demoBundleName(PLAYGROUND_OTA_BUNDLE_NAME),
                 params = mapOf("source" to "android-playground-ota-home"),
                 options = mapOf(
                     "title" to "Playground OTA 首页",
@@ -128,6 +129,13 @@ class MainActivity : AppCompatActivity() {
         EmbeddedBundleRegistry(this).uniqueAppIdForBundles(
             setOf(OTA_TEST_BUNDLE_NAME, PLAYGROUND_OTA_BUNDLE_NAME),
         ) ?: error("内置 Manifest 中没有唯一的 OTA Demo appId")
+
+    private fun demoBundleName(embeddedBundleName: String): String =
+        if (BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER) {
+            OTA_STORE_V3_FIXTURE_BUNDLE_NAME
+        } else {
+            embeddedBundleName
+        }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

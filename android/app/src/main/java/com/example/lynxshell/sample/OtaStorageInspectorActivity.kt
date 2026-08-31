@@ -82,7 +82,7 @@ class OtaStorageInspectorActivity : AppCompatActivity() {
 
     private fun renderSnapshot(snapshot: OtaStorageSnapshot) {
         rootPath.text = snapshot.rootPath
-        summary.text = "${snapshot.apps.size} 个 App ID · ${snapshot.fileCount} 个文件 · ${formatBytes(snapshot.totalBytes)} · 只读"
+        summary.text = "${snapshot.apps.size} 个 App ID · ${snapshot.fileCount} 个文件 · ${formatBytes(snapshot.totalBytes)} · Store v3 CAS · 只读"
         content.removeAllViews()
         if (snapshot.apps.isEmpty()) {
             content.addView(bodyText("当前没有远程 OTA Bundle；页面会直接使用 APK embedded baseline。"))
@@ -117,6 +117,8 @@ class OtaStorageInspectorActivity : AppCompatActivity() {
                     "previous: ${state?.previousReleaseId ?: "—"}\n" +
                     "candidate: ${app.candidate?.releaseId ?: "—"}" +
                     (app.candidate?.status?.let { " ($it)" } ?: "") +
+                    "\nCAS 对象: ${app.objectCount} 个 / ${formatBytes(app.objectBytes)}" +
+                    "\nManifest: ${formatBytes(app.manifestBytes)}" +
                     "\n占用: ${formatBytes(app.totalBytes)} / ${app.fileCount} 文件",
             ),
         )
@@ -126,6 +128,8 @@ class OtaStorageInspectorActivity : AppCompatActivity() {
             box.addView(
                 codeText(
                     "manifest: ${if (release.manifestValid) "valid" else "invalid"}\n" +
+                        "manifestId: ${release.manifestId ?: "—"}\n" +
+                        "Bundle 数: ${release.bundleCount} · CAS 对象引用: ${release.objectIds.size}\n" +
                         "size: ${formatBytes(release.totalBytes)} / ${release.fileCount} 文件\n" +
                         release.files.joinToString("\n") { file ->
                             "├─ ${file.relativePath}  ${formatBytes(file.byteCount)}"

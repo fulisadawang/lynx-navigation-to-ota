@@ -65,6 +65,7 @@ class LynxShellActivity : AppCompatActivity() {
     private lateinit var transitionOverlay: FrameLayout
     private lateinit var transitionCoordinator: LynxTransitionCoordinator
     private lateinit var request: LynxPageRequest
+    private var navigationSnapshotID: String? = null
     private var lynxView: LynxView? = null
     private var lynxViewClient: LynxViewClient? = null
     private var templateProvider: ShellTemplateProvider? = null
@@ -140,6 +141,8 @@ class LynxShellActivity : AppCompatActivity() {
         request = parsed.getOrThrow()
         // 登记 routeKey/sessionID 后，Native Module 才能执行 popTo/closeAll/redirect。
         LynxNavigator.register(this, request)
+        navigationSnapshotID = LynxNavigator.routerPageIdentity(this)?.sessionID
+        LynxShell.activityBundleRuntime()?.retainNavigationSnapshot(navigationSnapshotID)
         onBackPressedDispatcher.addCallback(this, disabledSystemBackCallback)
         configureWindow(request)
         transitionCoordinator = LynxTransitionCoordinator(
@@ -486,7 +489,9 @@ class LynxShellActivity : AppCompatActivity() {
             // 本地 current/baseline 命中时，转场不应该先露出 OTA Loading。
             // resolveCurrent 只读已经提交的本地状态，不检查 Manifest、不联网；启动/回前台
             // 的全量同步负责把新的 current 提前准备好。
-            val cached = runCatching { runtime.resolvePage(appId, bundleName) }.getOrNull()
+            val cached = runCatching {
+                runtime.resolvePage(appId, bundleName, navigationSnapshotID)
+            }.getOrNull()
             if (cached != null) {
                 runOnUiThread {
                     if (!isCurrentGeneration(generation)) {
@@ -510,7 +515,9 @@ class LynxShellActivity : AppCompatActivity() {
                     loadingView.show("正在检查 $appId/$bundleName…")
                 }
             }
-            val result = runCatching { runtime.prepare(appId, bundleName) }
+            val result = runCatching {
+                runtime.prepare(appId, bundleName, navigationSnapshotID)
+            }
             runOnUiThread {
                 if (!isCurrentGeneration(generation)) {
                     result.getOrNull()?.let { runCatching { it.releaseLease?.close() } }
@@ -754,6 +761,8 @@ class LynxShellActivity : AppCompatActivity() {
             transitionCoordinator.onDestroy(isChangingConfigurations)
         }
         LynxNavigator.unregister(this)
+        LynxShell.activityBundleRuntime()?.releaseNavigationSnapshot(navigationSnapshotID)
+        navigationSnapshotID = null
         templateProvider?.close()
         templateProvider = null
         lynxView?.let { view ->

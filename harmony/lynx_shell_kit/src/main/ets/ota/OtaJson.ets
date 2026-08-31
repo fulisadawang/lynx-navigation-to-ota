@@ -33,12 +33,14 @@ export default class OtaJson {
 
   static parseLocalManifest(raw: string): OtaLocalManifest {
     const root = OtaJson.objectValue(JSON.parse(raw), '本地 Manifest');
-    if (OtaJson.numberValue(root, 'schemaVersion') !== 1) {
+    const schemaVersion = OtaJson.numberValue(root, 'schemaVersion');
+    if (schemaVersion !== 1 && schemaVersion !== 3) {
       throw new Error('本地 Manifest schemaVersion 不支持');
     }
     const bundles = OtaJson.parseBundles(root['bundles'], 'bundles', false);
     return {
-      schemaVersion: 1,
+      schemaVersion: schemaVersion,
+      manifestId: OtaJson.optionalString(root, 'manifestId'),
       env: OtaJson.stringValue(root, 'env'),
       hostApp: OtaJson.hostApp(root),
       lynxAppId: OtaJson.stringValue(root, 'lynxAppId'),
@@ -52,7 +54,8 @@ export default class OtaJson {
 
   static parseState(raw: string): OtaReleaseState {
     const root = OtaJson.objectValue(JSON.parse(raw), 'OTA state');
-    if (OtaJson.numberValue(root, 'schemaVersion') !== 2) {
+    const schemaVersion = OtaJson.numberValue(root, 'schemaVersion');
+    if (schemaVersion !== 2 && schemaVersion !== 3) {
       throw new Error('OTA state schemaVersion 不支持');
     }
     const parsedCurrent = OtaJson.parseRef(root['current']);
@@ -62,7 +65,7 @@ export default class OtaJson {
     const current: OtaReleaseRef = parsedCurrent;
     const previous: OtaReleaseRef | undefined = OtaJson.parseRef(root['previous']);
     return {
-      schemaVersion: 2,
+      schemaVersion: schemaVersion,
       env: OtaJson.stringValue(root, 'env'),
       hostApp: OtaJson.hostApp(root),
       lynxAppId: OtaJson.stringValue(root, 'lynxAppId'),
@@ -101,7 +104,8 @@ export default class OtaJson {
         bundleUrl: OtaJson.optionalString(object, 'remoteUrl') ??
           OtaJson.optionalString(object, 'bundleUrl') ??
           OtaJson.stringValue(object, 'bundleURL'),
-        size
+        size,
+        objectId: OtaJson.optionalString(object, 'objectId')
       });
     });
     return bundles;
@@ -116,7 +120,11 @@ export default class OtaJson {
     if (kind !== 'embedded' && kind !== 'downloaded') {
       throw new Error(`未知 Release ref：${kind}`);
     }
-    return { kind: kind as 'embedded' | 'downloaded', releaseId: OtaJson.stringValue(object, 'releaseId') };
+    return {
+      kind: kind as 'embedded' | 'downloaded',
+      releaseId: OtaJson.stringValue(object, 'releaseId'),
+      manifestId: OtaJson.optionalString(object, 'manifestId')
+    };
   }
 
   private static objectValue(value: Object, field: string): Record<string, Object> {

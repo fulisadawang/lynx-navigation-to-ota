@@ -1,4 +1,4 @@
-# Router 内置 OTA Runtime
+# Router 内置 OTA Runtime（Store v3）
 
 `lynx-shell` 现在同时包含 Router、Lynx 容器和 Android OTA Runtime。三方接入不需要再
 引入外部 `sdk-0.1.0.jar`，也不需要复制 Demo 的 OTA 适配器。
@@ -14,6 +14,7 @@ LynxRouter.install(
         environment = "PROD",
         platform = "android",
         clientToken = BuildConfig.LYNX_OTA_CLIENT_TOKEN,
+        storeVersion = OtaModels.StoreVersion.V3,
         // 本地 Bundle 有效时，页面打开触发当前 appId 后台检查的间隔；默认 30 分钟。
         pageRefreshIntervalMillis = 30L * 60L * 1000L,
     ),
@@ -65,14 +66,15 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 <application filesDir>/lynx-ota-store/
 └── apps/<lynxAppId>/
     ├── state.json
-    ├── candidate.json                  # candidate 模式才存在
     ├── embedded.json                   # 可选逻辑描述，不包含 Bundle bytes
-    ├── releases/<releaseId>/<bundlePath>
-    └── .staging/<releaseId>.<tx>/<bundlePath>.part
+    ├── manifests/<manifestId>.json     # 完整 Manifest 快照
+    ├── objects/<sha 前两位>/<sha>.lynx.bundle
+    └── transactions/<transactionId>/   # .part 与事务日志
 ```
 
-`apps/<appId>/state.json` 保存 `current/previous={kind,releaseId}` 指针；Bundle 本体位于已发布的
-Release 目录，不把下载 Bundle 的绝对路径写入 state。
+`apps/<appId>/state.json` 保存 `current/previous={kind,releaseId,manifestId}` 指针；Bundle 本体位于
+App ID 作用域的 CAS 对象库，不把下载 Bundle 的绝对路径写入 state。完整 Manifest 快照记录每个
+`bundlePath -> objectId` 映射，因此新版本只写入缺失对象。
 路由只读取已提交 current，不读取 `.part` 或 `.staging`。
 
 服务端 App ID 契约是 8 位数字，可直接作为无碰撞目录段。同名 `releaseId` 允许分别存在于不同
@@ -112,7 +114,7 @@ NativeModules.LynxShellModule.deleteAllOtaBundles?.((result) => {
 Demo 原生 Launcher 的“查看 OTA 磁盘目录”通过 `LynxRouter.otaStorageSnapshot()` 展示只读快照；
 该调用不联网、不清理 orphan、不重新计算全部 SHA，也不接受任意外部扫描路径。
 
-Store v2 不读取或迁移旧路径。Demo 验收时卸载旧 App、重新安装，以全新沙盒直接使用最新 schema。
+Store v3 不读取或迁移旧 v2 路径。Demo 验收时卸载旧 App、重新安装，以全新沙盒直接使用最新 schema。
 
 ## 源码边界
 

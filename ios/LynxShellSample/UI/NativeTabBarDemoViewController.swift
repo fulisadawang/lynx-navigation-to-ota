@@ -5,11 +5,16 @@ import UIKit
  * iOS sample-only Tab Host。
  *
  * UITabBarController 只负责系统 TabBar 和选中态；每个 child 都是库层提供的
- * LynxTabViewController。移除这个文件不会影响 LynxShellKit 的无 Tab 容器能力。
+ * LynxTabViewController。设置 `LYNX_TEST_OTA_V3_FIXTURE=1` 时，两个 Tab 会读取本地
+ * Golden Fixture 的 current；普通运行仍从 embedded Manifest 解析 Bundle 身份。
+ * 移除这个文件不会影响 LynxShellKit 的无 Tab 容器能力。
  */
 final class NativeTabBarDemoViewController: UITabBarController {
     private var tabControllers: [LynxTabViewController] = []
     private var refreshItem: UIBarButtonItem?
+    private let otaV3FixtureEnabled = ProcessInfo.processInfo.environment[
+        "LYNX_TEST_OTA_V3_FIXTURE"
+    ] == "1"
 #if DEBUG
     private var debugStateLabel: UILabel?
     private var debugStateTimer: Timer?
@@ -53,7 +58,10 @@ final class NativeTabBarDemoViewController: UITabBarController {
         }
 #endif
 
-        guard let identity = LynxRouter.embeddedIdentity(bundleName: "main.lynx.bundle") else {
+        let identity = otaV3FixtureEnabled
+            ? (lynxAppId: "10000001", bundleName: "pages/10000001/bundle-050.lynx.bundle")
+            : LynxRouter.embeddedIdentity(bundleName: "main.lynx.bundle")
+        guard let identity else {
             presentShellAlert(
                 title: "Tab Bundle 不可用",
                 message: "embedded Manifest 没有找到 main.lynx.bundle 的 App ID"
@@ -64,8 +72,10 @@ final class NativeTabBarDemoViewController: UITabBarController {
         let home = LynxTabViewController(
             spec: LynxTabSpec(
                 tabId: "home",
-                bundleURL: "assets://bundles/main.lynx.bundle",
-                title: "首页",
+                bundleURL: otaV3FixtureEnabled
+                    ? identity.bundleName
+                    : "assets://bundles/main.lynx.bundle",
+                title: otaV3FixtureEnabled ? "首页（OTA v3）" : "首页",
                 routeKey: "native-tab-home",
                 initialData: ["source": "native-tab-demo"],
                 globalProps: [
@@ -84,8 +94,10 @@ final class NativeTabBarDemoViewController: UITabBarController {
         let settings = LynxTabViewController(
             spec: LynxTabSpec(
                 tabId: "settings",
-                bundleURL: "assets://bundles/main.lynx.bundle",
-                title: "设置",
+                bundleURL: otaV3FixtureEnabled
+                    ? identity.bundleName
+                    : "assets://bundles/main.lynx.bundle",
+                title: otaV3FixtureEnabled ? "设置（OTA v3）" : "设置",
                 routeKey: "native-tab-settings",
                 initialData: ["source": "native-tab-demo"],
                 globalProps: [

@@ -216,7 +216,8 @@ export class EmbeddedOnlyRuntime implements PageBundleRuntime {
   async prepare(
     lynxAppId: string,
     bundleName: string,
-    signal: OtaPrepareSignal
+    signal: OtaPrepareSignal,
+    navigationSessionID?: string
   ): Promise<PreparedPageBundle> {
     signal.throwIfCancelled();
     const result = await this.registry.resolve(lynxAppId, bundleName);
@@ -227,7 +228,7 @@ export class EmbeddedOnlyRuntime implements PageBundleRuntime {
     return result;
   }
 
-  resolveCurrent(lynxAppId: string, bundleName: string): Promise<PreparedPageBundle | null> {
+  resolveCurrent(lynxAppId: string, bundleName: string, navigationSessionID?: string): Promise<PreparedPageBundle | null> {
     return this.registry.resolve(lynxAppId, bundleName);
   }
 
@@ -252,5 +253,11 @@ export class EmbeddedOnlyRuntime implements PageBundleRuntime {
 
   storageSnapshot(): Promise<OtaStorageSnapshot | null> {
     return Promise.resolve(null);
+  }
+
+  releaseNavigationSnapshot(navigationSessionID: string, lynxAppId: string): void {
+  }
+
+  resetNavigationSnapshot(navigationSessionID: string, lynxAppId: string): void {
   }
 }

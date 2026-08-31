@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import com.ota.android.sdk.OtaModels
+import com.ota.android.sdk.OtaURLPolicy
 import java.io.File
 import java.net.URI
 
@@ -37,6 +38,10 @@ data class LynxOtaConfig(
     val pageRefreshIntervalMillis: Long = DEFAULT_PAGE_REFRESH_INTERVAL_MILLIS,
     /** 可选的候选版本模式；开启后页面首屏健康确认后才 promote 到 current。 */
     val candidateActivationEnabled: Boolean = false,
+    /** 宿主新接入默认使用 Store v3；低层 OtaModels.Configuration 仍兼容 v2。 */
+    val storeVersion: OtaModels.StoreVersion = OtaModels.StoreVersion.V3,
+    /** 仅本地 TEST OTA server 使用；生产配置必须保持 false。 */
+    val allowLocalHTTPForTest: Boolean = false,
 ) {
     companion object {
         /** 页面后台刷新默认 30 分钟；传 0 可用于测试时每次页面打开都检查。 */
@@ -44,8 +49,12 @@ data class LynxOtaConfig(
     }
 
     init {
-        require(apiBaseUri.scheme.equals("https", ignoreCase = true)) {
-            "OTA apiBaseUri 必须使用 HTTPS"
+        require(
+            apiBaseUri.scheme.equals("https", ignoreCase = true) ||
+                (allowLocalHTTPForTest && environment.equals("TEST", ignoreCase = true) &&
+                    OtaURLPolicy.isLoopbackOrEmulatorHost(apiBaseUri.host)),
+        ) {
+            "OTA apiBaseUri 必须使用 HTTPS；仅 TEST + loopback 调试地址允许 HTTP"
         }
         require(apiBaseUri.host?.isNotBlank() == true) {
             "OTA apiBaseUri 必须包含 Host"
@@ -95,6 +104,8 @@ data class LynxOtaConfig(
             clientToken,
             storageDirectory ?: File(appContext.filesDir, "lynx-ota-store"),
             candidateActivationEnabled,
+            storeVersion,
+            allowLocalHTTPForTest,
         )
     }
 }

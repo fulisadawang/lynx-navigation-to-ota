@@ -34,10 +34,19 @@ struct Index {
   private consumedInitialVersion: number = -1;
   private hasRequestedDefaultHome: boolean = false;
   private readonly otaTestAppId: string = '10000001';
-  private readonly otaHomeBundleName: string = 'home.lynx.bundle';
-  private readonly playgroundBundleName: string = 'main.lynx.bundle';
+  private readonly embeddedHomeBundleName: string = 'home.lynx.bundle';
+  private readonly embeddedPlaygroundBundleName: string = 'main.lynx.bundle';
+  private otaHomeBundleName: string = 'home.lynx.bundle';
+  private playgroundBundleName: string = 'main.lynx.bundle';
+  private useLocalFixture: boolean = false;
+  private static readonly LOCAL_FIXTURE_BUNDLE_NAME: string = 'pages/10000001/bundle-050.lynx.bundle';
 
   aboutToAppear(): void {
+    this.useLocalFixture = AppStorage.get<string>('lynx_ota_local_fixture') === '1';
+    if (this.useLocalFixture) {
+      this.otaHomeBundleName = Index.LOCAL_FIXTURE_BUNDLE_NAME;
+      this.playgroundBundleName = Index.LOCAL_FIXTURE_BUNDLE_NAME;
+    }
     this.prepareTabIdentity(false);
     if (!this.consumeInitialRoute()) {
       this.openDefaultOtaHome();
@@ -100,12 +109,10 @@ struct Index {
     options['title'] = 'OTA 验收首页';
     options['fullscreen'] = true;
     options['showNavigationBar'] = false;
-    LynxRouter.openEmbedded(
-      this.otaHomeBundleName,
-      params,
-      options,
-      this.otaTestAppId
-    ).then((result) => {
+    const openResult = this.useLocalFixture ?
+      LynxRouter.openOta(this.otaTestAppId, this.otaHomeBundleName, params, options) :
+      LynxRouter.openEmbedded(this.otaHomeBundleName, params, options, this.otaTestAppId);
+    openResult.then((result) => {
       this.otaStatusMessage = result.code === 0 ? '已打开 OTA 验收首页' : result.message;
     }).catch((error: Error) => {
       this.otaStatusMessage = `打开 OTA 页面失败：${error.message}`;
@@ -126,18 +133,39 @@ struct Index {
     options['title'] = 'Playground OTA 首页';
     options['fullscreen'] = true;
     options['showNavigationBar'] = false;
-    LynxRouter.openEmbedded(
-      this.playgroundBundleName,
-      params,
-      options,
-      this.otaTestAppId
-    ).then((result) => {
+    const openResult = this.useLocalFixture ?
+      LynxRouter.openOta(this.otaTestAppId, this.playgroundBundleName, params, options) :
+      LynxRouter.openEmbedded(this.playgroundBundleName, params, options, this.otaTestAppId);
+    openResult.then((result) => {
       this.otaStatusMessage = result.code === 0 ? '已打开 Playground OTA 首页' : result.message;
     }).catch((error: Error) => {
       this.otaStatusMessage = `打开 Playground 首页失败：${error.message}`;
     }).finally(() => {
       this.isOpening = false;
     });
+  }
+
+  /** Demo-only rawfile 基线入口；用于验证删除 OTA 后不需要复制或联网即可恢复内置资源。 */
+  private openEmbeddedBaseline(): void {
+    if (this.isOpening) {
+      return;
+    }
+    this.isOpening = true;
+    this.otaStatusMessage = `正在打开内置基线 ${this.otaTestAppId}/${this.embeddedHomeBundleName}…`;
+    const params: Record<string, Object> = {};
+    params['source'] = 'harmony-embedded-baseline';
+    const options: Record<string, Object> = {};
+    options['title'] = '内置基线';
+    options['fullscreen'] = true;
+    options['showNavigationBar'] = false;
+    LynxRouter.openEmbedded(this.embeddedHomeBundleName, params, options, this.otaTestAppId)
+      .then((result) => {
+        this.otaStatusMessage = result.code === 0 ? '已打开内置 rawfile 基线' : result.message;
+      }).catch((error: Error) => {
+        this.otaStatusMessage = `打开内置基线失败：${error.message}`;
+      }).finally(() => {
+        this.isOpening = false;
+      });
   }
 
   private prepareTabIdentity(showWhenReady: boolean): void {
@@ -150,15 +178,15 @@ struct Index {
       return;
     }
     this.otaStatusMessage = `正在解析 ${this.otaTestAppId}/${this.playgroundBundleName} 的 Manifest 身份…`;
-    LynxRouter.embeddedIdentity(this.playgroundBundleName, this.otaTestAppId)
+    LynxRouter.embeddedIdentity(this.embeddedPlaygroundBundleName, this.otaTestAppId)
       .then((identity) => {
         if (identity === null) {
-          this.otaStatusMessage = `内置 Manifest 没有找到 ${this.otaTestAppId}/${this.playgroundBundleName}`;
+          this.otaStatusMessage = `内置 Manifest 没有找到 ${this.otaTestAppId}/${this.embeddedPlaygroundBundleName}`;
           return;
         }
         this.tabLynxAppId = identity.lynxAppId;
-        this.tabBundleName = identity.bundleName;
-        this.otaStatusMessage = `Tab 已绑定 ${identity.lynxAppId}/${identity.bundleName}`;
+        this.tabBundleName = this.useLocalFixture ? Index.LOCAL_FIXTURE_BUNDLE_NAME : identity.bundleName;
+        this.otaStatusMessage = `Tab 已绑定 ${identity.lynxAppId}/${this.tabBundleName}`;
         if (showWhenReady) {
           this.selectedNativeTab = 0;
           this.tabStatusMessage = '';
@@ -172,6 +200,41 @@ struct Index {
 
   private openNativeTabDemo(): void {
     this.prepareTabIdentity(true);
+  }
+
+  private closeNativeTabDemo(): void {
+    LynxRouter.resetNavigationSnapshot('native-tab-host', this.tabLynxAppId);
+    this.showNativeTabDemo = false;
+  }
+
+  /** Demo-only 同 session 双 Page 演示；第二页必须继承第一页面的 NavigationSnapshot。 */
+  private openSnapshotDemo(): void {
+    if (this.isOpening) {
+      return;
+    }
+    this.isOpening = true;
+    const options: Record<string, Object> = {};
+    options['title'] = 'NavigationSnapshot 演示';
+    options['fullscreen'] = true;
+    options['showNavigationBar'] = false;
+    const rootParams: Record<string, Object> = { 'snapshotStage': 'root' };
+    LynxRouter.openOta(this.otaTestAppId, this.otaHomeBundleName, rootParams, options)
+      .then((rootResult) => {
+        if (rootResult.code !== 0) {
+          throw new Error(rootResult.message);
+        }
+        const childParams: Record<string, Object> = { 'snapshotStage': 'child' };
+        return LynxRouter.openOta(this.otaTestAppId, this.otaHomeBundleName, childParams, options);
+      })
+      .then((childResult) => {
+        this.otaStatusMessage = childResult.code === 0 ? '已打开同 session Snapshot 子页' : childResult.message;
+      })
+      .catch((error: Error) => {
+        this.otaStatusMessage = `Snapshot 演示失败：${error.message}`;
+      })
+      .finally(() => {
+        this.isOpening = false;
+      });
   }
 
   /** 原生只读 Inspector 作为独立 Page 推入，保留下方 Native Tab 的活体 lease。 */
@@ -188,6 +251,7 @@ struct Index {
     LynxRouter.refreshAllOtaBundles()
       .then((success: boolean) => {
         if (success) {
+          LynxRouter.resetNavigationSnapshot('native-tab-host', this.tabLynxAppId);
           this.tabReloadGeneration += 1;
           this.tabStatusMessage = 'OTA 同步完成，Home/Settings 已重新读取 current';
         } else {
@@ -252,7 +316,7 @@ struct Index {
             .backgroundColor('#FFFFFF')
             .border({ width: 1, color: $r('app.color.shell_brand') })
             .borderRadius(12)
-            .onClick(() => this.showNativeTabDemo = false)
+            .onClick(() => this.closeNativeTabDemo())
 
           Blank()
 
@@ -361,6 +425,28 @@ struct Index {
             .border({ width: 1, color: $r('app.color.shell_brand') })
             .borderRadius(12)
             .onClick(() => this.openOtaHome())
+
+          Button('打开内置基线（不走 OTA）')
+            .width('100%')
+            .height(52)
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.shell_text_primary'))
+            .backgroundColor('#FFFFFF')
+            .border({ width: 1, color: $r('app.color.shell_brand') })
+            .borderRadius(12)
+            .onClick(() => this.openEmbeddedBaseline())
+
+          Button('打开 Snapshot 同 session 子页')
+            .width('100%')
+            .height(52)
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.shell_text_primary'))
+            .backgroundColor('#FFFFFF')
+            .border({ width: 1, color: $r('app.color.shell_brand') })
+            .borderRadius(12)
+            .onClick(() => this.openSnapshotDemo())
 
           Button('打开原生 Tabs 承载 Demo')
             .width('100%')

@@ -37,26 +37,32 @@ Runtime 初始化、XElement、Provider、Bridge、路由和容器。`lynx_shell
 - `ShellGenericResourceFetcher`：字体、图片和二进制资源；
 - `ShellMediaResourceFetcher`：本地逻辑 URL 转 rawfile URL。
 
-## OTA Store v2 层
+## OTA Store v3 层
 
-`ReleaseTransaction` 只管理远程 OTA 文件，不管理 rawfile 内置 Bundle：
+`ContentAddressedOtaStore` 只管理远程 OTA 对象，不管理 rawfile 内置 Bundle。内置 Bundle 是
+HAP 发布资产，首次命中时直接读取；远程对象才进入 App ID 作用域的 CAS：
 
 ```text
 <context.filesDir>/lynx-ota-store/apps/<lynxAppId>/
 ├── state.json
-├── releases/<releaseId>/release-manifest.json + Bundle files
-└── .staging/<releaseId>.<transactionId>/
+├── manifests/<manifestId>.json
+├── objects/<sha 前两位>/<sha>.lynx.bundle
+└── transactions/<transactionId>/*.part
 ```
 
-状态文件使用 schema v2，只包含 `current/previous`；本端不实现候选版本状态机。每次发布先在
-App ID 目录下完成 staging、size/SHA 校验、完整 Manifest 校验和可用空间预检，再最后写入 state。
-写入后 prune 历史 Release，只保留 current、previous 和仍被 Page/Tab lease 使用的目录。
+状态文件使用 schema v3，只包含 `current/previous`；本端不实现候选版本状态机。服务端下发的
+`changedBundles` 仍是完整 Manifest 快照，但客户端按 SHA 查找 App ID 内的 CAS 对象：命中则复用，
+未命中才下载到 `transactions/` 临时文件。每个对象先完成 size/SHA 校验，再原子发布对象、Manifest，
+最后原子写入 state；state 是唯一激活点。写入后执行 Mark-and-Sweep，只保留 current、previous、
+活跃 Page/Tab lease 引用的 Manifest 和对象。
 
 `OtaBundleLease` 与 `PreparedPageBundle` 一起返回给容器。Runtime 的操作队列同时串行化下载、
 发布、删除、冷启动清理和 lease 释放后的 prune，避免异步网络事务期间误删尚未提交的 Release。
 
-`OtaStorageDiagnostics` 只读扫描 Runtime 已绑定的 Store root，提供 Inspector 所需的路径、角色、
-文件树和字节统计，不接受任意外部路径。
+`LynxOtaRuntime.storageSnapshot()` 只读扫描 Runtime 已绑定的 Store root，提供 Inspector 所需的
+路径、Manifest、current/previous、lease、CAS 对象和字节统计，不接受任意外部路径。旧的
+`ReleaseTransaction`/`OtaStorageDiagnostics` 文件仅作为源码历史兼容物保留，不属于当前 Runtime
+主链，也不再从 HAR 公开入口导出。
 
 ## 路由层
 
