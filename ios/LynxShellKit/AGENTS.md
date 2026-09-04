@@ -14,6 +14,8 @@
 
 `ios/OtaIOSSDK` 不是业务方需要额外声明的第二个 Pod；其 Sources 由 `LynxShellKit.podspec` 编入 Module，并保留独立 Swift Package 测试边界。`ios/LynxShellSample` 是 Sample App，不属于本目录。
 
+`ios/LynxCapacitorKit/` 是 sibling 原生能力源码，当前尚未加入 `LynxShellKit.podspec` 或默认 Xcode Target。它不属于 Shell/OTA 实现；任务明确涉及该模块时先读 `ios/LynxCapacitorKit/AGENTS.md`，再显式决定 Pod/Target、Module 注册、权限和宿主生命周期接线。
+
 ## 开工前必须读取
 
 按任务相关性读取：
@@ -25,6 +27,7 @@
 5. 转场：`TRANSITIONS_README.md`。
 6. OTA：`ios/OtaIOSSDK/README.md`、`Package.swift` 和相关 Tests。
 7. 验证：根目录 `VALIDATION.md` 和最新 iOS HTML 报告。
+8. 跨到原生能力层时：`ios/LynxCapacitorKit/AGENTS.md` 和 `LynxNativeCapabilityCatalog.swift`。
 
 文档、代码和运行结果冲突时，以当前 Swift/Objective-C 源码、Podspec、Xcode 工程和最新运行证据为准。
 
@@ -105,6 +108,7 @@ Native/       Objective-C 原生 Runtime 接线
 - 不提交 Pods、DerivedData、xcresult、App/IPA 和生成 Fixture 二进制。
 - 保留用户现有 Xcode 工程、Podfile 和转场协调器改动；禁止 reset/checkout 覆盖。
 - 不修改 `ios/LynxShellSample`，除非任务明确要求 Demo 或 Simulator 验收。
+- 不隐式编译或注册 `ios/LynxCapacitorKit`；默认 Podspec/Xcode Target 尚未包含它。
 
 ## 修改后的最低验证
 
