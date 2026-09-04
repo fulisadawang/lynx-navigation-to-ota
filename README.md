@@ -1,639 +1,105 @@
-# Lynx Navigation to OTA：Lynx 4.0 三端原生壳
+# Lynx Navigation to OTA
 
-这是一套面向业务 App 的 **Lynx 4.0 三端原生宿主壳**。工程不是把官方 Explorer 或 Sparkling Playground 原样复制进业务仓，而是按原生平台习惯重新拆分 Runtime、Container、Provider、Router、Native Module、安全策略和错误态。
+`lynx-navigation-to-ota` 是一套面向业务 App 的 Lynx 4.0 三端原生宿主工程。它把 Runtime、原生页面容器、Router、NativeModules、XElement、OTA Store v3 和页面转场放进可复用的 Android、iOS、HarmonyOS Module，同时保留可以直接运行的三端 Sample 与 ReactLynx Playground。
 
-参考边界：
-
-- Lynx `release/4.0` Explorer：Android、iOS、HarmonyOS 的 Runtime 初始化、Service、`LynxView`、资源 Provider、Native Module、`initData`、`globalProps`、尺寸与生命周期。
-- Sparkling `main/packages/playground`：iOS 默认首页复刻其 ReactLynx 页面和多 Bundle 组织方式。
-- 默认主链路直接接入 Lynx 4.0；只复用 Playground 页面，不引入 Sparkling 原生 SDK。前端通过 `NativeModules.LynxShellModule` 调用当前壳手写能力，不使用 autolink。
-
-## 交付结构
+这个仓库解决的不是“如何打开一个 Lynx Bundle”这么小的问题。它解决完整链路：
 
 ```text
-LynxNativeShells-4.0-XElement-Full-Android-iOS-Harmony/
-├── android/                     # Android Library Module + 可运行 Sample
-├── ios/                         # CocoaPods LynxShellKit Module + 可运行 Sample
-├── harmony/                     # ArkTS + ArkUI + Stage 模型
-├── playground/                  # ReactLynx 多 Bundle 首页与 typed NativeModules wrapper
-├── examples/                    # Android/iOS 完整与 HarmonyOS 基础 NativeModules 声明
-├── scripts/                     # 三端 Bundle 同步与静态验收
-├── PROJECT_MAP.md               # 当前架构、关键源码和数据流索引
-├── MODULE_INTEGRATION.md        # 双端 Module 安装、宿主接线与调用
-├── ARCHITECTURE.md
-├── BRIDGE_CONTRACT.md
-├── ROUTER_CONTRACT_V1.md
-├── COMPATIBILITY.md
-├── HARMONY_INTEGRATION.md
-├── XELEMENT_INTEGRATION.md
-├── NAVIGATION_README.md
-├── TRANSITIONS_README.md
-├── ROUTING.md
-├── SECURITY.md
-├── SOURCE_MAPPING.md
-└── VALIDATION.md
-```
-
-三端对齐主线是根目录的 `android/`、`ios/`、`harmony/`。此前独立的
-`LynxScreens-Android` 工程不属于本仓库，避免与当前 Activity-first Router 混淆。
-
-## GitHub Pages API 文档
-
-仓库已提供一份可直接发布的静态 API 文档页：
-
-- 本地文件：[docs/index.html](docs/index.html)
-- Bundle 路径说明：[docs/lynx-bundle-paths.html](docs/lynx-bundle-paths.html)
-- Bundle/OTA 验收清单：[docs/lynx-bundle-ota-test-checklist.md](docs/lynx-bundle-ota-test-checklist.md)
-- Bundle 版本可见性测试：[docs/lynx-bundle-version-visibility-test-case.md](docs/lynx-bundle-version-visibility-test-case.md)
-- Android OTA 验收报告：[docs/android-ota-test-report.html](docs/android-ota-test-report.html)
-- iOS OTA 验收报告：[docs/ios-ota-test-report.html](docs/ios-ota-test-report.html)
-- HarmonyOS OTA 验收报告：[docs/harmony-ota-test-report.html](docs/harmony-ota-test-report.html)
-- 在线入口：`https://fulisadawang.github.io/lynx-navigation-to-ota/`
-- 页面内容：接口搜索与切换、请求头、全量/定向 `latest-bundle-list`、Manifest、策略匹配、
-  结果上报、Bundle 校验、错误处理和三端状态。
-
-仓库已包含 `.github/workflows/deploy-pages.yml`，使用 GitHub Actions 构建并发布 `docs/`；
-GitHub 仓库设置中选择 **Settings → Pages → Source → GitHub Actions**。页面中的示例令牌、
-Base URL 和 CDN 地址都是占位符，不包含真实凭证。
-
-## 平台实现
-
-| 平台 | 原生页面模型 | Runtime 入口 | Bundle 容器 |
-|---|---|---|---|
-| Android | `android/lynx-shell`，一个页面一个 `LynxShellActivity`；Native Tab 使用 `Fragment` | `LynxRouter.install + LynxOtaConfig` | Activity-first Page + Fragment Tab；Router AAR 内置 OTA；默认沉浸式 `LynxView` |
-| iOS | `LynxShellKit`，一个页面一个 `LynxContainerViewController`；Native Tab 使用原生 `UIViewController` | `LynxRouter.install(to:otaConfiguration:)` | UINavigationController + UIViewController Tab；默认沉浸式 `LynxView` |
-| HarmonyOS | `lynx_shell_kit`，一个 ArkUI 路由页一个 `LynxContainer`；Native Tab 使用 ArkUI Tabs | `LynxRouter.install(context, otaConfig?)` | ArkUI Page/Container + ArkUI Tabs；默认沉浸式 `LynxView` |
-
-### 三端 OTA Store v3 与 Native Tab
-
-三端的普通页面和 Native Tab 都由原生容器承载，但两条加载策略明确分开：普通页面可以按平台
-配置执行后台版本检查或候选版本流程；Native Tab 只读取已经提交的 `current`，普通 Tab 切换不
-发起网络请求，用户主动刷新或下一次冷启动再消费新版本。
-
-| 平台 | 普通页面容器 | Native Tab 容器 | Store 版本角色 |
-| --- | --- | --- | --- |
-| Android | `Activity` | `Fragment + BottomNavigation` Demo | `current + previous`，可选 `candidate/trial` |
-| iOS | `UIViewController` | `UIViewController + UITabBarController` Demo | `current + previous`，可选 `candidate/trial` |
-| HarmonyOS | `ArkUI Page/Container` | `ArkUI Tabs` Demo | 只有 `current + previous`，不加入 candidate |
-
-远程 Bundle 在三个平台都按 App ID 物理隔离；Store v3 使用完整 Manifest + App ID 作用域 CAS：
-
-```text
-<private-app-storage>/lynx-ota-store/apps/<lynxAppId>/
-├── state.json
-├── embedded.json
-├── manifests/<manifestSha256>.json
-├── objects/<sha256-prefix>/<sha256>.lynx.bundle
-└── transactions/<transactionId>/
-```
-
-embedded Bundle 仍从 Android assets、iOS App Bundle 或 HarmonyOS rawfile 直接读取，不复制到
-OTA Store。远程 Bundle 才写入上面的私有目录；Manifest 始终是完整版本快照，客户端只下载 CAS
-中缺失的 SHA 对象，因此 100 个 Bundle 只有 1 个变更时只产生 1 个二进制下载和 1 个新对象。
-`current/previous` 由原子 state 提交，同一个 Native Page Stack 通过 NavigationSnapshot + Release
-lease 防止版本漂移或正在使用的对象被清理。Android/iOS 可以按需开启 candidate/trial，
-HarmonyOS 按本项目约定不创建 candidate 文件、字段或 API。
-
-三端默认模式统一称为 **Native Page Stack**：统一的是 `open(bundle, params)`、
-`replace/pop/popTo/closeAll`、页面身份、生命周期和消息语义，不复制 Android 的
-Activity/ViewStack/Fragment 实现。具体协议见 [ROUTER_CONTRACT_V1.md](ROUTER_CONTRACT_V1.md)。
-
-三端均包含：
-
-- 本地 App 资源与远程 HTTPS `.lynx.bundle`；
-- `initData`、`globalProps`、标题、全屏、导航栏、状态栏、方向、背景色与尺寸；
-- 错误态与重试；普通本地/HTTPS Bundle 首帧前使用容器背景兜底，Activity-first OTA
-  在下载与校验阶段显示原生 Loading，避免空 LynxView 闪白/闪黑；
-- Provider 生命周期与请求取消；
-- `LynxShellModule`：页面打开、关闭、隔离存储、App 信息、页面消息与生命周期事件；
-- Android/iOS 高级导航：launch mode、delta、popTo、清栈、主页、重定向、栈查询、
-  页面结果、防重复与恢复；
-- Android/iOS Skyline 风格原生容器转场：七种 preset route、多 share-element、
-  Open Container 双内容裁剪、Bundle 预取、`onRouteDone`、首帧门禁和跟手返回；
-- Explorer、Sparkling 与统一壳路由格式；
-- 远程 Bundle HTTPS、20 MB 上限与 HTTP 默认关闭；
-- 平台原生代码风格和中文职责注释。
-
-## 三端对齐 API 文档（v1）
-
-这一节是业务方真正需要依赖的公共契约。三端统一的是调用语义、参数字段、返回码、页面
-身份、生命周期和消息方向；底层容器仍保持平台习惯：Android 用 Activity-first，iOS 用
-`UINavigationController + UIViewController`，HarmonyOS 用 ArkUI Page/Router。业务不需要
-注册 `routeId`、维护 route-to-bundle 映射，也不需要知道 current Bundle 的绝对磁盘路径。
-
-### 1. 模块边界和一次性安装
-
-| 平台 | 业务只引入 | 默认容器 | 初始化入口 |
-| --- | --- | --- | --- |
-| Android | `android/lynx-shell` | 一个 Bundle 一个 `LynxShellActivity` | `LynxRouter.install(application, otaConfig)` |
-| iOS | `LynxShellKit` CocoaPods | `LynxContainerViewController` | `LynxRouter.install(to:otaConfiguration:)` |
-| HarmonyOS | `@lynx/lynx-shell-kit` HAR | `LynxContainer` ArkUI Page | `LynxRouter.install(context, otaConfig)` |
-
-Android：
-
-```kotlin
-// Application.onCreate()，只安装一次。令牌从业务的安全配置注入，不要写死进源码。
-class App : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        val ota = LynxOtaConfig(
-            apiBaseUri = URI.create("https://ota.example.com"),
-            hostApp = "capp",
-            defaultLynxAppId = "10000001",
-            environment = "PROD",
-            platform = "android",
-            clientToken = BuildConfig.LYNX_OTA_CLIENT_TOKEN,
-        )
-        LynxRouter.install(this, ota)
-    }
-}
-
-// 在 Application/进程前台回调中调用；每次触发全量 latest-bundle-list 同步。
-fun onApplicationForeground() {
-    LynxRouter.onApplicationForeground()
-}
-```
-
-```gradle
-// 业务方只需要 Router Module；OTA 实现已经编译在同一个 Module 内。
-implementation(project(":lynx-shell"))
-```
-
-iOS：
-
-```swift
-// Scene/Root NavigationController 建立后安装一次。
-let ota = LynxOtaConfiguration(
-    apiBaseURL: URL(string: "https://ota.example.com")!,
-    hostApp: "capp",
-    defaultLynxAppId: "10000001",
-    environment: "PROD",
-    clientToken: secureRuntimeToken
-)
-try LynxRouter.install(to: navigationController, otaConfiguration: ota)
-
-// Scene 回到前台时调用。
-LynxRouter.onApplicationForeground()
-```
-
-```ruby
-# Podfile：不再单独引入 OtaIOSSDK。
-pod 'LynxShellKit', :path => '../lynx-navigation-to-ota/ios'
-```
-
-HarmonyOS：
-
-```ts
-// EntryAbility.onCreate()，只安装一次。
-const ota = new LynxOtaConfig('https://ota.example.com')
-ota.hostApp = 'capp'
-ota.environment = 'PROD'
-ota.platform = 'harmony'
-ota.clientToken = secureRuntimeToken
-// 服务端暂不接受 harmony 时，可临时设置 ota.serverPlatform = 'android'；
-// 这只影响服务端查询，不改变页面的 HarmonyOS 身份。
-LynxRouter.install(this.context, ota)
-
-// Ability 回到前台时调用。
-LynxRouter.onApplicationForeground()
-```
-
-如果只使用本地/直连 Bundle，也可以不传 OTA 配置安装 Router；这时调用 OTA API 会得到
-`1004`（runtime 未安装），而普通页面导航不受影响。令牌只允许从宿主安全配置、构建注入或
-运行时密钥服务读取，不能放在 `params`、Lynx 页面代码、README、日志或 Git 历史中。
-
-### 2. Bundle 打开契约：直连和 OTA 必须明确区分
-
-路由只有两种来源模式，调用方不要让 SDK 猜测：
-
-| 模式 | 业务输入 | SDK 行为 | 是否进入 OTA |
-| --- | --- | --- | --- |
-| Direct Bundle | `bundle`/完整 HTTPS URL + `params` | 直接交给 Provider 加载；本地资源从 App 包读取 | 否 |
-| OTA Bundle | `lynxAppId` + Manifest 中精确的 `bundleName` + `params` | 按 appId 查 current；缺包时 Loading，下载、size/SHA 校验、staging、原子激活后再创建容器 | 是 |
-
-`bundleName` 是逻辑文件名，不是 URL、不是本地绝对路径。例如 `pay.lynx.bundle`；同一个
-文件名在一个 appId 的 Manifest 中只能精确匹配一个 Bundle。业务不需要在原生注册它，也不
-需要把 `.bundle` 再拼接一次。
-
-#### Android 调用
-
-```kotlin
-// 1) 本地 App 资源：不进入 OTA。
-LynxRouter.open(
-    this,
-    "assets://bundles/home.lynx.bundle",
-    params = mapOf("from" to "native", "tab" to "home"),
-)
-
-// 2) 远程直连：URL 本身就是资源身份，不查询 Manifest，不写 OTA current。
-LynxRouter.open(
-    this,
-    "https://cdn.example.com/lynx/pay.lynx.bundle",
-    params = mapOf("orderId" to "A-100"),
-)
-
-// 3) OTA：只传逻辑 appId + bundleName，Router 内部解析本地 current。
-LynxRouter.open(
-    this,
-    "10000001",
-    "pay.lynx.bundle",
-    params = mapOf("orderId" to "A-100"),
-)
-```
-
-#### iOS 调用
-
-```swift
-// Direct Bundle。
-try LynxRouter.open(
-    bundle: "assets://bundles/home.lynx.bundle",
-    params: ["from": "native"]
-)
-
-// Direct HTTPS Bundle：不会反查 appId，也不参加 OTA 版本门控。
-try LynxRouter.open(
-    bundle: "https://cdn.example.com/lynx/pay.lynx.bundle",
-    params: ["orderId": "A-100"]
-)
-
-// OTA Bundle。
-try LynxRouter.open(
-    lynxAppId: "10000001",
-    bundleName: "pay.lynx.bundle",
-    params: ["orderId": "A-100"]
-)
-```
-
-#### HarmonyOS 调用
-
-ArkTS 不使用运行时重载，因此 OTA 入口明确命名为 `openOta`：
-
-```ts
-// Direct Bundle 或 Direct HTTPS Bundle。
-await LynxRouter.open('assets://bundles/home.lynx.bundle', { from: 'native' })
-await LynxRouter.open('https://cdn.example.com/lynx/pay.lynx.bundle', { orderId: 'A-100' })
-
-// OTA Bundle。
-await LynxRouter.openOta('10000001', 'pay.lynx.bundle', { orderId: 'A-100' })
-```
-
-Direct HTTPS 的共同边界是：URL 不参与 Manifest/current/previous、appId 30 分钟检查、OTA
-磁盘缓存或回滚；仍必须通过 HTTPS、2xx、非空响应和 20 MB 上限校验。OTA 的 `bundleUrl` 由
-Manifest 提供，业务永远不直接传该下载 URL。
-
-### 3. `params`、`options` 和宿主保留字段
-
-所有平台的 `params` 和 `options` 都必须是可 JSON 序列化的 Object，不能传数组、函数、
-原生对象或绝对文件路径。
-
-| 字段 | 所属 | 语义 |
-| --- | --- | --- |
-| `params` | `open` 的第三个/第二个参数 | 页面业务参数；同时注入 `initData` 和 `globalProps.queryItems` |
-| `routeKey` | `options` | 栈操作的稳定页面类型标识；默认使用 `bundleName` 或 Bundle URL |
-| `launchMode` | `options` | `push`、`singleTop`、`clearTop`、`singleTask` |
-| `title` | `options` | 容器标题/页面上下文；默认 `Lynx` |
-| `initData` | `options` | 显式覆盖传给页面的初始化 Object |
-| `globalProps` | `options` | 业务 GlobalProps；宿主保留字段会在最后覆盖 |
-| `fullscreen` | `options` | 是否 edge-to-edge；不等价于隐藏系统状态栏 |
-| `showNavigationBar` / `showToolbar` | `options` | 是否显示宿主导航栏；Lynx 页面默认自绘导航 |
-| `hideStatusBar` | `options` | 是否真正隐藏状态栏，需显式传 `true` |
-| `backGestureEnabled` | `options` | 是否允许系统返回手势 |
-| `orientation` / `screenOrientation` | `options` | `system`/`auto`、`portrait`、`landscape` |
-| `backgroundColor` | `options` | `#RRGGBB` 或 `#RRGGBBAA` |
-| `width`/`widthPx`、`height`/`heightPx` | `options` | 容器尺寸，必须大于 0 |
-| `allowHttpInDebug` / `allowHttp` | `options` | 仅 Debug 明确开启 HTTP；Release 永远拒绝 |
-| `animated`、`deduplicate`、`deduplicateWindowMs` | 导航 options | 动画和重复导航控制；默认防重复窗口 350 ms |
-| `result` | 导航 options | `closeWithResult` 返回给下一个页面的 JSON Object |
-
-宿主始终覆盖以下 GlobalProps，页面不能通过同名字段伪造页面身份：
-
-```text
-containerID                         当前 pageId 的兼容别名
-__lynxRouterContainerId             原生容器标识
-__lynxRouterPageId                  页面实例唯一标识
-__lynxRouterPageKey                 Bundle 默认页面类型
-__lynxRouterSessionId               当前 Lynx session
-__lynxRouterNavigationModel         固定为 native_page_stack
-__lynxRouterPlatformContainer      android_activity / uikit_view_controller / arkui_page
-__lynxRouterParams                  当前页面参数对象
-```
-
-Android beta2 的 `__lynxBundleRouter*` 字段仍作为兼容别名保留。页面侧只读取这些字段，
-不要把它们作为下一次跳转的业务参数继续透传。
-
-### 4. 导航 API 对齐表
-
-#### Native 宿主 API
-
-| 统一语义 | Android | iOS | HarmonyOS | 返回 |
-| --- | --- | --- | --- | --- |
-| 安装 | `LynxRouter.install(Application, ...)` | `LynxRouter.install(to: ..., otaConfiguration: ...)` | `LynxRouter.install(context, otaConfig?)` | runtime/void；iOS 可能抛错 |
-| 打开直连 Bundle | `open(context, bundle, params, options)` | `open(bundle:params:options:)` | `open(bundle, params, options)` | `code/message/data` |
-| 打开 OTA Bundle | `open(context, appId, bundleName, params, options)` | `open(lynxAppId:bundleName:params:options:)` | `openOta(appId, bundleName, params, options)` | `code/message/data` |
-| Scheme | `openScheme(context, scheme, ...)` | `openScheme(_:, ...)` | `openScheme(scheme, ...)` | 同上 |
-| 原位替换 | `replace(context, bundle, ...)` | `replace(bundle:...)` | `replace(bundle, ...)` | 同上 |
-| 关闭当前页 | `pop(context)` | `pop()` | `pop()` | 同上 |
-| 回到目标页 | `popTo(context, pageKey)` | `popTo(pageKey)` | `popTo(pageKey)` | 同上 |
-| 关闭当前 Lynx session | `closeAll(context)` | `closeAll()` | `closeAll()` | 同上 |
-| 清栈后打开 | `reLaunch(context, bundle, ...)` | `reLaunch(bundle:...)` | `reLaunch(bundle, ...)` | 同上 |
-| 查询活体页面 | `activePages()` | `activePages()` | `activePages()` | 页面身份列表 |
-| 全局通知 | `broadcast(name, payload)` | `broadcast(name, payload:)` | `broadcast(name, payload)` | 受影响页面数 |
-| 定向通知 | `sendToPage(pageId, name, payload)` | `sendToPage(pageId, eventName:, payload:)` | `sendToPage(pageId, name, payload)` | 是否发送成功 |
-| 删除指定 OTA | `deleteOtaBundles(appId, callback)` | `deleteOtaBundles(lynxAppId:)` | `deleteOtaBundles(appId)` | 直接删除结果 |
-| 删除全部 OTA | `deleteAllOtaBundles(callback)` | `deleteAllOtaBundles()` | `deleteAllOtaBundles()` | 直接删除结果 |
-
-Android/iOS 的底层导航调用通常在主线程执行；Harmony 的 `open`/`replace`/`reLaunch` 返回
-`Promise`，`pop`/`popTo`/`closeAll` 返回同步结果。三端的结果字段保持一致，不应依赖某个平台
-的具体异常类型或 Activity/UIViewController/ArkUI Page 实例。
-
-#### Lynx 页面 `NativeModules.LynxShellModule`
-
-ReactLynx 页面建议使用仓内 `playground/src/lib/navigation.ts` 封装；直接调用时，原始
-Module 的方法名和参数如下：
-
-| 方法 | 参数 | 说明 |
-| --- | --- | --- |
-| `open` | `(route, optionsJSON, callback)` | 打开直连或 Scheme 页面；OTA Scheme 可在 options 中带 `lynxAppId + bundleName` |
-| `close` | `(callback)` | 关闭当前页 |
-| `back` | `(delta, optionsJSON, callback)` | 在当前 session 回退，最多回到 session 首页 |
-| `popTo` / `popToWithOptions` | `(routeKey, [optionsJSON], callback)` | 回到最近目标页面 |
-| `closeAll` / `closeAllWithOptions` | `([optionsJSON], callback)` | 关闭当前 Lynx session |
-| `reLaunch` | `(optionsJSON, callback)` | 清栈并由宿主 Home Handler 回主页 |
-| `redirect` | `(route, optionsJSON, callback)` | 原位替换当前 entry |
-| `getNavigationState` | `(callback)` | 读取栈、depth、canGoBack、宿主锚点 |
-| `closeWithResult` | `(resultJSON, callback)` | 关闭当前页并给下一个页面返回 Object |
-| `consumeNavigationResult` | `(callback)` | 一次性读取页面结果 |
-| `prepareRoute` | `(route, optionsJSON, callback)` | 只预取 Bundle 字节，不创建容器；返回一次性 token |
-| `cancelPreparedRoute` | `(token, callback)` | 释放尚未消费的预取 token |
-| `emitToNative` | `(eventName, payload, callback)` | 页面到宿主的同步请求/回复 |
-| `broadcast` | `(eventName, payload, callback)` | 向所有活体页面发消息 |
-| `sendToPage` | `(pageId, eventName, payload, callback)` | 向单个页面发消息 |
-| `setStorageItem` / `getStorageItem` / `removeStorageItem` / `clearStorage` | 见 TypeScript 声明 | 壳隔离存储，不影响业务其它存储 |
-| `getAppInfo` | `(callback)` | 平台、App 版本、Build、系统版本 |
-
-原始 Native Module 约定 `code === 0` 表示成功。仓内 ReactLynx wrapper 为兼容旧页面会把
-成功归一化为 `code === 1`，同时保留 `nativeCode`；业务统一使用 wrapper 时不要再次反转。
-
-页面调用示例：
-
-```ts
-import { open, back, closeWithResult } from './lib/navigation'
-
-// 直接打开 OTA Scheme；bundleName 是精确文件名，params 是业务对象。
-open({
-  scheme: 'hybrid://lynxview_page?bundle=pay.lynx.bundle',
-  options: {
-    lynxAppId: '10000001',
-    params: { orderId: 'A-100' },
-    launchMode: 'singleTop',
-  },
-})
-
-back(1)
-closeWithResult({ paid: true, orderId: 'A-100' })
-```
-
-### 5. Scheme 兼容入口
-
-三端都支持：
-
-```text
-hybrid://lynxview_page?bundle=detail.lynx.bundle&title=Detail
-lynxshell://open?bundle=detail.lynx.bundle&title=Detail
-lynx://open?bundle=detail.lynx.bundle
-```
-
-带业务参数时必须 URL 编码；带 OTA 身份时，非 HTTPS Scheme 可以额外提供 `lynxAppId` 和
-`bundleName`：
-
-```text
-hybrid://lynxview_page?bundle=pay.lynx.bundle&lynxAppId=10000001&orderId=A-100
-```
-
-完整 HTTPS URL 不能作为 `bundleName`。如果目标是直连远程 Bundle，应把完整 URL 放在
-`url`/`bundle` 参数中，并保持 OTA 字段为空：
-
-```text
-hybrid://lynxview_page?url=https%3A%2F%2Fcdn.example.com%2Fpay.lynx.bundle&title=Pay
-```
-
-### 6. 页面生命周期、通知和双向通信
-
-原生容器生命周期映射为同一个 Lynx 事件 `lynxRouterLifecycle`：
-
-```json
-{
-  "pageId": "entry-...",
-  "containerId": "entry-...",
-  "pageKey": "pay.lynx.bundle",
-  "state": "active",
-  "reason": "native_container_did_appear",
-  "timestampMillis": 1730000000000
-}
-```
-
-状态固定为 `entering`、`active`、`covered`、`detached`、`destroyed`。页面被覆盖时不是销毁；
-只有容器真正移除并释放 LynxView 后才发 `destroyed`。页面销毁后消息中心立即注销，广播不
-保存离线消息。
-
-通知方向如下：
-
-```text
-Native -> Lynx：broadcast(eventName, payload) / sendToPage(pageId, eventName, payload)
-Lynx -> Native：NativeModules.LynxShellModule.emitToNative(eventName, payload, callback)
-```
-
-宿主通过 `setMessageHandler` 接收页面消息，回复统一为：
-
-```json
-{
-  "code": 0,
-  "message": "accepted",
-  "data": { "requestId": "..." },
-  "affectedCount": 1
-}
-```
-
-`pageId` 只能取 `activePages()` 或 GlobalProps 中的宿主字段，不能由业务自行拼接。
-
-### 7. OTA 更新时序和删除 API
-
-三端 OTA 的调用语义完全一致：
-
-```text
-Application 启动 / 回到前台
+业务路由 / 原生 Tab
         ↓
-全量 latest-bundle-list（重叠请求合并）
+LynxRouter + Native Page Stack
         ↓
-页面打开
+Direct Bundle 或 OTA Bundle
         ↓
-current 存在且 size/SHA 有效：立即加载；当前 appId 30 分钟内检查过则后台跳过
-current 缺失/损坏：忽略 30 分钟门控，进入原生 Loading
+Provider / Store v3 / NavigationSnapshot
         ↓
-完整 Manifest → 查询 App ID 作用域 CAS → 只下载缺失 Object → 校验大小 → 校验 SHA-256
-        ↓
-写入 `.part` → 原子 rename Object → 原子提交 Manifest/State，旧版本保留为 previous
-        ↓
-创建 LynxView；首屏失败最多回滚一次
+LynxView + GlobalProps + NativeModules + XElement
 ```
 
-`latest-bundle-list` 是全量 appId 信息，只在启动和回前台请求；页面打开时只针对当前
-`lynxAppId` 做 30 分钟门控的后台检查，不会每次切页都请求全量清单。缺包或损坏时必须等待
-准备完成，不能先把不存在的绝对路径交给 LynxView。
+当前主线直接使用 Lynx 4.0。项目借鉴 Sparkling Playground 的页面组织方式，但不依赖 Sparkling 原生 SDK，不使用 autolink 或 codegen 注册宿主能力。
 
-Native Tab 的规则更严格：首次进入和普通切换只执行 cache-only `resolveCurrent`，不 repair、不
-发起页面级网络检查；主动 OTA 同步成功后，宿主显式重建 Tab 以读取新 `current`。因此 Tab 不会
-因为每次打开而重复请求服务端，也不会在后台检查期间替换正在显示的实例。
+## 现在包含什么
 
-| API | 行为 |
-| --- | --- |
-| `deleteOtaBundles(appId)` | 永久删除该 appId 的下载 Manifest/Object/transaction 内容并恢复 embedded；不生成 `.delete-*` 备份目录 |
-| `deleteAllOtaBundles()` | 永久删除所有 appId 的 OTA Manifest/Object/transaction 内容；HAP rawfile、App Bundle 内置资源不受影响 |
+- Android Activity-first、iOS `UINavigationController`、HarmonyOS ArkUI Router 三套真实原生页面栈。
+- 本地资源、直接 HTTPS Bundle 和 OTA Bundle 三种明确加载路径。
+- Store v3：完整 Manifest、App ID 作用域 SHA-256 CAS、原子 State、回滚、lease 和 Mark-and-Sweep GC。
+- 原生 Tab 承载：Android Fragment、iOS UIViewController、HarmonyOS ArkUI Tabs。
+- Android/iOS 原生转场：基础转场、Skyline routeType、共享元素、Open Container、BottomSheet、heroSheet 和跟手返回。
+- `LynxShellModule`：导航、页面结果、消息、隔离存储、AppInfo、媒体和 OTA 诊断。
+- Lynx 4.0 XElement 全量接入和统一 Runtime 初始化。
+- 本地 OTA Server、100 Bundle Golden Fixture、故障注入、三端测试报告和磁盘 Inspector。
+- 三端 `LynxCapacitorModule` 源码，覆盖 40 个能力域、146 个方法的统一调用契约。
 
-删除完成后再次打开 OTA 页面会重新走下载和校验。删除 API 是诊断/验收能力，生产 App 是否
-向用户暴露按钮由业务决定。
+## 平台矩阵
 
-### 8. 统一结果和错误码
+| 平台 | Shell Module | 默认页面模型 | Native Tab Demo | OTA Store | LynxCapacitor 当前状态 |
+|---|---|---|---|---|---|
+| Android | `android/lynx-shell` AAR | 一页一个 `LynxShellActivity` | Fragment + BottomNavigation | v3，Android/iOS 可选 candidate | `android/lynx-capacitor` 源码已合入，尚未加入默认 `settings.gradle.kts` 和 Sample |
+| iOS | `LynxShellKit` CocoaPods Module | `UINavigationController + LynxContainerViewController` | UITabBarController + UIViewController | v3，Android/iOS 可选 candidate | `ios/LynxCapacitorKit` 源码已合入，尚未加入默认 Podspec/Xcode Target |
+| HarmonyOS | `@lynx/lynx-shell-kit` HAR | ArkUI `LynxContainer` Page | ArkUI Tabs | v3，仅 current/previous | `@lynx/lynx-capacitor-kit` 源码已合入，尚未加入默认 build profile 和 Entry Demo |
 
-原生 Router 与 `LynxShellModule` 都返回结构化结果；跨端公共字段为：
+`LynxCapacitorModule` 目前是独立原生能力交付，不是默认 Shell 已注册能力。业务接入前必须显式把对应 Module 加入构建图、注册到 LynxView，并补宿主权限和生命周期接线。README 不把“源码存在”写成“默认 Sample 已可用”。
 
-```json
-{
-  "code": 0,
-  "message": "导航已提交",
-  "data": {},
-  "affectedCount": 1
-}
-```
-
-公共错误范围：
-
-| code | 含义 | 典型原因 |
-| ---: | --- | --- |
-| `0` | 成功 | 导航事务或 OTA 删除已提交 |
-| `1` | 业务失败/目标不存在 | 目标 page 不存在，或 wrapper 的失败归一化 |
-| `1001` | 参数/路由不合法 | 空 Bundle、非法 JSON、不安全 bundleName、HTTP 被拒绝 |
-| `1002` | 当前页面/容器不可用 | 页面已经销毁、Context 无法关联宿主 |
-| `1003` | 预取句柄无效 | token 不存在、过期或已消费 |
-| `1004` | 能力未安装 | OTA runtime、Home Handler 或平台桥尚未配置 |
-| `1006` | 导航事务冲突 | 上一笔原生转场仍在进行 |
-| `1500` | 原生/IO/运行时失败 | 下载、校验、文件事务或 Lynx 首帧失败 |
-
-成功只代表原生导航事务已提交，不代表目标 Lynx Bundle 已经完成首帧。页面需要通过
-`lynxRouterLifecycle` 或 `onRouteDone`/`onTransitionSettled` 判断最终状态。
-
-### 9. 不允许的调用方式
-
-- 不在业务侧维护 `routeId -> bundle` 注册表；Bundle 名称直接来自调用参数/Manifest。
-- 不把 `https://...` 当作 `bundleName`，也不把手机绝对路径放入 `params`、Intent 或 ArkUI
-  路由参数。
-- 不把 `clientToken` 放入 Lynx 页面、业务 `params` 或 Git 仓库。
-- 不覆盖 `__lynxRouter*`、`containerID` 等宿主保留 GlobalProps。
-- 不把 Android 的 Fragment、ViewStack、Activity extra 当作跨端公共 API；跨端只依赖
-  Native Page Stack 契约。
-- 不把 Direct HTTPS Bundle 当成 OTA：直连 URL 不会自动参与 Manifest、缓存、30 分钟检查或
-  回滚。
-
-详细的字段、状态机、转场和安全约束继续以以下文档为准：
-
-- [ROUTER_CONTRACT_V1.md](ROUTER_CONTRACT_V1.md)
-- [MODULE_INTEGRATION.md](MODULE_INTEGRATION.md)
-- [BRIDGE_CONTRACT.md](BRIDGE_CONTRACT.md)
-- [NAVIGATION_README.md](NAVIGATION_README.md)
-- [ROUTING.md](ROUTING.md)
-
-服务端开发者请阅读 [OTA_SERVER_API_CONTRACT.md](OTA_SERVER_API_CONTRACT.md)。该文档按当前
-三端实际代码列出了客户端对接的 5 个 OTA API、OSS/CDN Bundle 下载契约、请求头、请求/响应
-JSON、错误状态、CI/CD 发布边界和 HarmonyOS 平台兼容要求。
-
-服务端最小返回模型可以概括为：
-
-```json
-{
-  "env": "TEST",
-  "hostApp": "capp",
-  "lynxAppId": "10000001",
-  "releaseId": "r20260629_001",
-  "platform": "android",
-  "status": "ACTIVE",
-  "changedBundles": [
-    {
-      "pageId": 10000001,
-      "bundlePath": "pages/10000001/home.lynx.bundle",
-      "bundleUrl": "https://cdn.example.com/home.lynx.bundle",
-      "bundleSha256": "sha256:<64位小写十六进制>",
-      "size": 524288,
-      "required": true,
-      "prefetch": true
-    }
-  ]
-}
-```
-
-其中 `bundlePath` 是服务端必须保留的精确 Bundle 身份，不能只返回 `bundleName`；
-`bundleUrl` 是客户端随后直接读取的 OSS/CDN 地址，不携带 OTA API token。当前服务端正式
-平台枚举仍为 `android/ios`，HarmonyOS 的临时 `serverPlatform=android` 兼容方式及正式放开
-`harmony` 所需的服务端改动，均已在契约文档中标明。
-
-### 三端 OTA 边界
-
-三端现在都保留同一条明确的 OTA 调用边界：
+## 项目结构
 
 ```text
-open(bundleUrl, params)                         -> 直接 HTTPS Bundle，不进入 OTA
-open(lynxAppId, bundleName, params)             -> OTA Bundle，按 appId + bundleName 查找
+lynx-navigation-to-ota/
+├── android/
+│   ├── lynx-shell/                 Router、Activity 容器、Bridge、转场、OTA AAR
+│   ├── lynx-capacitor/             独立原生能力 Module 源码
+│   └── app/                        Android Sample
+├── ios/
+│   ├── LynxShellKit/               Router、UIViewController、Bridge、转场
+│   ├── OtaIOSSDK/                  编进 LynxShellKit 的内部 OTA 源码与 Swift Tests
+│   ├── LynxCapacitorKit/           独立原生能力 Module 源码
+│   └── LynxShellSample/            iOS Sample
+├── harmony/
+│   ├── lynx_shell_kit/             可复用 Shell HAR
+│   ├── lynx_capacitor_kit/         独立原生能力 HAR 源码
+│   └── lynx_shell/                 HarmonyOS Entry Demo
+├── playground/                     ReactLynx 多 Bundle Playground
+├── examples/                       页面侧 NativeModules 类型声明与接入示例
+├── scripts/                        静态门禁、Bundle 同步、OTA Fixture 与故障脚本
+├── docs/                           API 页面、测试用例、截图和三端报告
+├── PROJECT_MAP.md                  代码与数据流索引
+├── MODULE_INTEGRATION.md           三端 Shell Module 接入
+├── ROUTER_CONTRACT_V1.md           Native Page Stack 语义
+├── BRIDGE_CONTRACT.md              LynxShellModule 协议
+├── TRANSITIONS_README.md           Android/iOS 原生转场协议
+├── OTA_SERVER_API_CONTRACT.md      OTA 服务端接口契约
+└── VALIDATION.md                   分层验证入口
 ```
 
-启动和每次回到前台由宿主触发全量 `latest-bundle-list`；页面命中本地有效 Bundle 时立即
-渲染，并按当前 `lynxAppId` 做 30 分钟后台检查；缺包或 SHA/size 校验失败时跳过门控，先
-显示原生 Loading，等待定向下载、校验和原子激活。首屏失败最多回滚一次，不会无限重试。
+三端 Shell 与 Capacitor Module 都有面向 AI 编程代理的局部规则。Shell 规则负责 Router、Container、OTA 和转场，Capacitor 规则负责原生能力协议、生命周期与宿主接线边界：
 
-- Android：`android/lynx-shell` 内置 `LynxOtaRuntime`，作为 Activity-first 基线。
-- iOS：OTA 源码已随 `LynxShellKit.podspec` 编译进同一个 `LynxShellKit` Module；业务方只需
-  引入 `LynxShellKit`，公开 `LynxOtaConfiguration` 与
-  `LynxRouter.open(lynxAppId:bundleName:)`。仓内 `ios/OtaIOSSDK/Sources` 只是内部实现与
-  独立单测目录，不是业务方的第二个依赖。
-- HarmonyOS：`lynx_shell_kit` 已实现同等客户端事务和 `LynxOtaConfig`；当前服务端
-  `LynxOtaServer` 的 `platform` 枚举仍只有 `android/ios`，Demo 通过可撤销的
-  `serverPlatform=android` 临时复用 Android Release，宿主 `platform` 仍保持 `harmony`。
-  服务端正式放开 `harmony` 后删除该兼容配置即可。
+- Android：[Shell AGENTS.md](android/lynx-shell/AGENTS.md) / [Capacitor AGENTS.md](android/lynx-capacitor/AGENTS.md)
+- iOS：[Shell AGENTS.md](ios/LynxShellKit/AGENTS.md) / [Capacitor AGENTS.md](ios/LynxCapacitorKit/AGENTS.md)
+- HarmonyOS：[Shell AGENTS.md](harmony/lynx_shell_kit/AGENTS.md) / [Capacitor AGENTS.md](harmony/lynx_capacitor_kit/AGENTS.md)
 
-令牌只由业务宿主从安全配置注入，不写进 Module、Demo 源码、日志或文档。OTA 删除 API
-直接删除本地下载内容，不生成隐藏备份目录；App 内置 Bundle 不受影响。
+## 快速开始
 
-## XElement 全量边界
+### 环境
 
-“全量”严格以 Lynx `release/4.0` 各平台源码为准，不机械追求三端包名相同：
+| 任务 | 建议环境 |
+|---|---|
+| Playground | Node.js 22/24、pnpm 10.26 |
+| Android Shell | Android Studio、JDK 17、minSdk 24、compileSdk 35 |
+| Android LynxCapacitor | JDK 21、minSdk 26、compileSdk 36，接入方需自行加入构建图 |
+| iOS | Xcode、CocoaPods、iOS 13+ |
+| HarmonyOS | DevEco Studio、HarmonyOS SDK 6.1.1(24)、OHPM/Hvigor |
 
-- Android：10/10 Maven 产物，包含聚合行为和九类组件；
-- iOS：10/10 CocoaPods subspec，包含 `Behavior` 与九类组件；
-- HarmonyOS：9/9 能力。BlurView、Input/TextArea、Overlay、Refresh、ScrollCoordinator、ViewPager 由 `@lynx/lynx` 原生 Registry 提供；Markdown、SVG、WebView 按官方 Harmony 接入方式补齐。
+### 1. 构建 Playground
 
-完整映射见 [XELEMENT_INTEGRATION.md](XELEMENT_INTEGRATION.md)。
+```bash
+cd playground
+pnpm install
+pnpm build
+```
 
-## 版本矩阵
-
-| 项目 | Android | iOS | HarmonyOS |
-|---|---:|---:|---:|
-| Lynx 主版本 | `4.0.0` | `4.0.0` | `release/4.0` |
-| PrimJS | `4.0.0` | `4.0.0` | `4.0.0` |
-| 平台包版本 | Maven `4.0.0` | CocoaPods `4.0.0` | OHPM `1.4.0` |
-| 平台语言 | Kotlin | Swift / Objective-C | ArkTS |
-
-HarmonyOS 的 `@lynx/*` 发布编号是 `1.4.0`，由 `harmony/parameter.json` 统一管理；这不是把 Lynx 主版本降到 1.4。
-
-## 同步业务 Bundle
+`pnpm build` 生成 `playground/dist/*.lynx.bundle`，并通过当前 Rspeedy 插件同步到 Android 和 iOS Sample。需要把单个主 Bundle 同步到三端时，可以使用：
 
 ```bash
 ./scripts/sync_bundle.sh /absolute/path/to/main.lynx.bundle
-```
-
-会同步到：
-
-```text
-android/app/src/main/assets/bundles/main.lynx.bundle
-ios/LynxShellSample/Resources/Bundles/main.lynx.bundle
-harmony/lynx_shell/src/main/resources/rawfile/bundles/main.lynx.bundle
 ```
 
 三端统一逻辑地址：
@@ -642,81 +108,413 @@ harmony/lynx_shell/src/main/resources/rawfile/bundles/main.lynx.bundle
 assets://bundles/main.lynx.bundle
 ```
 
-## Android / iOS Module
+### 2. Android
 
-Android Sample 通过：
+仓库没有提交 Gradle Wrapper。推荐用 Android Studio 打开 `android/`，或使用本机 Gradle：
+
+```bash
+cd android
+gradle :lynx-shell:testDebugUnitTest --no-daemon
+gradle :app:assembleDebug --no-daemon
+```
+
+Sample 只依赖 Shell Module：
 
 ```kotlin
-implementation(project(":lynx-shell"))
+dependencies {
+    implementation(project(":lynx-shell"))
+}
 ```
 
-iOS Sample 通过：
+### 3. iOS
+
+```bash
+cd ios
+pod install
+open LynxShell.xcworkspace
+```
+
+Sample 只声明一个业务 Pod：
 
 ```ruby
-pod 'LynxShellKit', :path => '.'
+target 'LynxShell' do
+  pod 'LynxShellKit', :path => '.'
+end
 ```
 
-显式引用可复用模块。其他项目的发布/路径依赖、Application/Scene 初始化、主页 Tab
-Handler 与原生打开 Bundle 示例见 [MODULE_INTEGRATION.md](MODULE_INTEGRATION.md)。
+`LynxShellKit.podspec` 会把 Lynx 4.0、Service、XElement 和 `OtaIOSSDK/Sources` 一起编进同一个 Module。业务方不需要再引入独立 OTA Pod。
 
-## 常用路由
+### 4. HarmonyOS
+
+用 DevEco Studio 打开 `harmony/`，或执行：
+
+```bash
+cd harmony
+DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+NODE_HOME=/Applications/DevEco-Studio.app/Contents/tools/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw \
+  assembleHar --mode module -p module=lynx_shell_kit@default --no-daemon
+
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw \
+  assembleApp --no-daemon
+```
+
+Entry Demo 当前只依赖：
+
+```json5
+"@lynx/lynx-shell-kit": "file:../lynx_shell_kit"
+```
+
+不要只安装旧 HAP。涉及 rawfile Bundle 或 Module 更新时，应重新构建完整 App。
+
+## 在业务 App 中安装 Shell
+
+### Android
+
+```kotlin
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+
+        LynxRouter.install(
+            this,
+            LynxOtaConfig(
+                apiBaseUri = URI.create("https://ota.example.com"),
+                hostApp = "capp",
+                environment = "PROD",
+                platform = "android",
+                clientToken = secureRuntimeToken,
+            ),
+        )
+    }
+}
+```
+
+### iOS
+
+```swift
+let ota = LynxOtaConfiguration(
+    apiBaseURL: URL(string: "https://ota.example.com")!,
+    hostApp: "capp",
+    environment: "PROD",
+    clientToken: secureRuntimeToken
+)
+
+try LynxRouter.install(
+    to: navigationController,
+    otaConfiguration: ota
+)
+```
+
+### HarmonyOS
+
+```ts
+const ota = new LynxOtaConfig('https://ota.example.com')
+ota.hostApp = 'capp'
+ota.environment = 'PROD'
+ota.platform = 'harmony'
+ota.clientToken = secureRuntimeToken
+
+LynxRouter.install(this.context, ota)
+```
+
+如果业务不需要 OTA，可以不传 OTA 配置，只使用本地或直接 HTTPS Bundle。没有 client token 时，Runtime 保持 embedded-only，不会偷偷请求 OTA。
+
+## Bundle 的两种业务身份
+
+Router 不猜 App ID，也不把 HTTPS URL 自动改造成 OTA Bundle。
+
+| 模式 | 调用输入 | 加载方式 | 进入 OTA Store |
+|---|---|---|---|
+| Direct Bundle | App 内资源或完整 HTTPS URL | Provider 直接读取 | 否 |
+| OTA Bundle | `lynxAppId + bundleName` | Store v3 解析已提交 current | 是 |
+
+Android：
+
+```kotlin
+LynxRouter.open(
+    context = activity,
+    bundle = "assets://bundles/main.lynx.bundle",
+    params = mapOf("from" to "native"),
+)
+
+LynxRouter.open(
+    context = activity,
+    lynxAppId = "10000001",
+    bundleName = "main.lynx.bundle",
+    params = mapOf("from" to "ota"),
+)
+```
+
+iOS：
+
+```swift
+try LynxRouter.open(
+    bundle: "main.lynx.bundle",
+    params: ["from": "native"]
+)
+
+try LynxRouter.open(
+    lynxAppId: "10000001",
+    bundleName: "main.lynx.bundle",
+    params: ["from": "ota"]
+)
+```
+
+HarmonyOS：
+
+```ts
+await LynxRouter.open('assets://bundles/main.lynx.bundle', { from: 'native' })
+await LynxRouter.openOta('10000001', 'main.lynx.bundle', { from: 'ota' })
+```
+
+完整 HTTPS URL 属于 Direct Bundle，不参与 Manifest、current/previous、页面 30 分钟检查或 OTA 回滚。
+
+## OTA Store v3
+
+### 更新时序
 
 ```text
-lynxshell://open?bundle=main.lynx.bundle&title=订单详情
-lynx://open?bundle=main.lynx.bundle
-hybrid://lynxview_page?bundle=main.lynx.bundle&hide_nav_bar=1&screen_orientation=portrait
-file://lynx?local://main.lynx.bundle?fullscreen=true&orientation=portrait
+App 启动 / 回到前台
+        ↓
+全量 latest-bundle-list
+        ↓
+完整 Release Manifest
+        ↓
+按 App ID 查询 SHA-256 CAS
+        ↓
+只下载缺失对象，校验 size 与 SHA
+        ↓
+原子发布 Object 和 Manifest
+        ↓
+最后提交 State.current，旧版本成为 previous
 ```
 
-远程地址需要编码后作为参数传入：
+页面打开时：
+
+- 本地 current 或 embedded baseline 有效，立即创建 LynxView。
+- 命中远程 current 后，当前 App ID 按默认 30 分钟间隔做后台检查，不阻塞当前页面。
+- 本地缺包、文件损坏或 SHA/size 不匹配时，跳过门控，显示原生 Loading 并定向修复。
+- 首屏失败最多回滚一次，不做无限循环。
+- Native Tab 普通切换不联网，只有主动刷新或下一次冷启动消费新 current。
+
+### 磁盘结构
 
 ```text
-lynxshell://open?url=https%3A%2F%2Fcdn.example.com%2Flynx%2Fmain.lynx.bundle
+<private-app-storage>/lynx-ota-store/apps/<lynxAppId>/
+├── state.json
+├── embedded.json                  # 逻辑身份，不含 Bundle bytes
+├── manifests/<manifestId>.json    # 完整 Manifest
+├── objects/<sha前两位>/<sha>.lynx.bundle
+└── transactions/<transactionId>/  # .part 与事务日志
 ```
 
-三端页面侧 API、直接 `NativeModules.LynxShellModule` 调用、业务 Home
-Handler 和完整场景矩阵见
-[NAVIGATION_README.md](NAVIGATION_README.md)。
+关键规则：
 
-Android/iOS Bundle 默认
-`fullscreen=true / showToolbar(showNavigationBar)=false / hideStatusBar=false`：
-`LynxView` 延伸到透明状态栏后方，时间、信号和电量仍然可见，页面不叠加原生导航栏。
-只有显式 `hide_status_bar=1` 才会真正隐藏状态栏。对象型
-NativeModule callback 统一编码为 Lynx `JavaOnlyMap`，不能直接把 Kotlin `HashMap`
-传给 `Callback.invoke`。
+- CAS 按 App ID 物理隔离，不跨 App ID 共享对象。
+- Manifest 是完整快照，不让客户端维护长期 patch 链。
+- embedded Bundle 直接读取 APK assets、iOS App Bundle 或 HarmonyOS rawfile，不复制进 Store。
+- State 是唯一激活点，页面永远不读取未完成 transaction。
+- `current + previous + candidate + active lease + transaction` 组成 GC roots。
+- Android/iOS 可以选择 candidate/trial；HarmonyOS 明确不启用 candidate。
 
-跨真实 Activity / UIViewController 的多共享元素、Open Container 九项属性、七种
-Skyline routeType、系统动画抑制、原生手势与降级规则见
-[TRANSITIONS_README.md](TRANSITIONS_README.md)。
+100 个 Bundle 只有一个变化时，V2 Manifest 仍有 100 条，但网络只下载 1 个新对象，磁盘只新增 1 个 CAS Object。测试脚本和三端报告位于 [OTA Store v3 测试用例](docs/lynx-ota-store-v3-test-cases.md)。
 
-## 验收
+## Native Tab
+
+Module 提供容器能力，不接管业务 TabBar 设计：
+
+| 平台 | Demo 承载 |
+|---|---|
+| Android | `Fragment + BottomNavigation` |
+| iOS | `UITabBarController + UIViewController` |
+| HarmonyOS | `ArkUI Tabs + LynxTabContainer` |
+
+共同规则：
+
+- Tab 实例第一次创建时只读已提交 current 或 embedded baseline。
+- Home/Settings 普通切换不触发 latest、Manifest 或 Bundle 请求。
+- 后台发现新版本时，当前实例继续使用旧 Snapshot。
+- 主动刷新成功后，宿主 reset Snapshot、递增 generation，再重建 Tab 内容。
+- 页面和 Snapshot 分别持有 lease，GC 不会删除仍在显示的对象。
+
+## Router 与页面通信
+
+三端统一的是语义，不是平台对象：
+
+```text
+Android    Activity Task
+iOS        UINavigationController
+HarmonyOS  ArkUI Router
+```
+
+公共能力包括：
+
+- `open`、`replace/redirect`、`pop/back`、`popTo`、`closeAll`、`reLaunch`
+- `push`、`singleTop`、`clearTop`、`singleTask`
+- `activePages`、`getNavigationState`
+- `closeWithResult`、`consumeNavigationResult`
+- `broadcast`、`sendToPage`、`emitToNative`
+- `prepareRoute`、`cancelPreparedRoute`
+- `markTransitionReady`、`getTransitionState`
+- `deleteOtaBundles`、`deleteAllOtaBundles`、磁盘 Inspector
+
+ReactLynx 页面优先使用 [playground/src/lib/navigation.ts](playground/src/lib/navigation.ts) 的 typed wrapper。原始 NativeModule 以 `code=0` 表示成功，Playground wrapper 会归一化为 `code=1` 并保留 `nativeCode`，不要混用两套判断。
+
+完整协议：
+
+- [Router Contract](ROUTER_CONTRACT_V1.md)
+- [高级导航](NAVIGATION_README.md)
+- [Bridge Contract](BRIDGE_CONTRACT.md)
+- [Scheme 与参数](ROUTING.md)
+
+## 原生转场
+
+Android/iOS 保持一页一个真实 Activity/UIViewController，并由原生协调器统一管理：
+
+- `fade`、`slide`、`slideUp`、`zoom`、`none`
+- `wx://upwards`、`wx://zoom`
+- `wx://bottom-sheet`、`wx://hero-sheet`
+- `wx://cupertino-modal`、`wx://cupertino-modal-inside`
+- `wx://modal-navigation`、`wx://modal`
+- 最多 8 个共享元素、shuttle、内置 rect tween
+- Open Container 的矩形、圆角、颜色、阴影和双内容裁剪
+- Android Predictive Back、兼容 edge 手势、iOS interactive pop
+
+显式自定义转场只有一个动画所有者。目标 selector、快照、几何和进度都由原生主线程处理，不让普通 NativeModules 每帧往返 JS。
+
+`heroSheet` 使用透明全屏 Activity/UIViewController，Lynx 页面自己控制底部入场、连续上滑到全屏、顶部导航渐变和下拉关闭。它不是把普通 BottomSheet 拉高。
+
+HarmonyOS 当前保留 Router/PageTransition 行为，尚未接入 Android/iOS 同级的原生共享元素/Open Container 协调器。详细边界见 [TRANSITIONS_README.md](TRANSITIONS_README.md)。
+
+## LynxCapacitor 原生能力 Module
+
+仓库提供三个独立源码目录：
+
+```text
+android/lynx-capacitor
+ios/LynxCapacitorKit
+harmony/lynx_capacitor_kit
+```
+
+它们实现自有 `LynxCapacitorModule` transport，不链接上游 Capacitor Runtime。三端统一入口：
+
+```text
+getPlatform()
+getPluginHeaders()
+getCapabilityStatus()
+handleCall(payloadJSON, callback)
+```
+
+能力目录以 Android 契约为基准，覆盖 40 个域、146 个方法，包括 Device、App、Preferences、Filesystem、Camera、Audio、Geolocation、Haptics、Notifications、StatusBar、SQLite 等。平台没有等价实现时返回结构化 `UNSUPPORTED` 或 `UNAVAILABLE`，不返回假成功。
+
+当前边界：
+
+- 三端源码、能力目录和诊断 Bundle 已进入仓库。
+- Android 默认 Gradle graph、iOS Podspec/Xcode Target、Harmony root build profile 尚未接入这些 Module。
+- 默认 Shell Sample 尚未注册 `LynxCapacitorModule`，也没有完成权限与宿主生命周期接线。
+- `capacitor-module.lynx.bundle` 和 `capacitor-bridge-diagnostic.lynx.bundle` 已放入三端 Sample 资源，但只有宿主完成 Module 注册后才能得到真实原生结果。
+
+这是一条独立接入工作，不属于 OTA Store v3 或 `LynxShellModule` 的隐式能力。
+
+## XElement 与版本
+
+| 项目 | Android | iOS | HarmonyOS |
+|---|---|---|---|
+| Lynx | 4.0.0 | 4.0.0 | 4.0.0 |
+| PrimJS | 4.0.0 | 4.0.0 | 4.0.0 |
+| 最低系统 | Android 24 | iOS 13 | compatibleSdk 13 |
+| XElement | 10/10 Maven 产物 | 10/10 CocoaPods subspec | 9/9 平台能力 |
+
+HarmonyOS 的 Markdown、SVG、WebView 按官方 Harmony 接入方式独立注册，其余能力由核心 Registry 提供。完整列表见 [XELEMENT_INTEGRATION.md](XELEMENT_INTEGRATION.md)。
+
+## 验证
+
+先运行静态门禁：
 
 ```bash
 python3 scripts/static_check.py
+python3 scripts/static_check_android_ios.py --quiet
+python3 harmony/scripts/check_harmony_shell.py --quiet
 ```
 
-当前静态结果以实际执行脚本输出为准：
+再按改动范围运行：
 
-```text
-python3 scripts/static_check_android_ios.py
-python3 scripts/static_check.py
+```bash
+# Playground
+cd playground
+pnpm exec tsc --noEmit
+pnpm build
+
+# OTA Golden Fixture
+pnpm ota:v3:fixture
+pnpm ota:v3:fixture:verify
+
+# Android
+cd ../android
+gradle :lynx-shell:testDebugUnitTest --no-daemon
+gradle :app:assembleDebug --no-daemon
+
+# iOS OTA
+cd ../ios/OtaIOSSDK
+swift test --no-parallel
+
+# HarmonyOS HAR
+cd ../../harmony
+DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+NODE_HOME=/Applications/DevEco-Studio.app/Contents/tools/node \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw \
+  assembleHar --mode module -p module=lynx_shell_kit@default --no-daemon
 ```
 
-当前 Playground 还新增了 `go-bundles.lynx.bundle`：内置 565 个
-`go.lynxjs.org/lynx-examples` URL，支持搜索、分类、分批加载和 NativeModules 跳转。
-Android/iOS 不限制远程 Host；官方 Bundle URL 仍按 HTTPS、后缀、响应码、重定向协议和体积策略校验。
+静态、单测、构建、模拟器和真机是不同证据层。某一层通过不能替代另一层。最新 OTA 运行结果见：
 
-本轮 iOS 使用 iPhone 16 Pro / iOS 18.1 Simulator 完成 CocoaPods/Xcode 编译、安装和
-本地 Golden OTA Bundle 加载；本轮 iOS 的 Store v3 本地 Golden 证据另见独立 HTML 报告。Android
-使用 `emulator-5554` / API 35 完成 Store v3 的 100 → 1 增量、CAS、ETag、Activity 路由快照、
-Fragment + BottomNavigation、Tab 刷新、candidate 和坏 SHA 运行态验收，详见 Android HTML 报告。
-HarmonyOS 使用 Pura 90 / HarmonyOS 6.1.1(24) 模拟器完成 Store v3 的真实本地 OTA Server 验收：
-100 → 1 增量、CAS、ETag、ArkUI Tabs cache-only、主动刷新、current/previous 回滚和坏 SHA 保留旧版，
-详见 HarmonyOS HTML 报告。旧 Store v2/Mock Source 报告仍保留为历史基线，不与当前 v3 结果混用。
-最终契约审计还在当前 `android/lynx-shell` 补充了远程 HTTPS 与 OTA 字段隔离 guard。
+- [iOS Store v3 报告](docs/ios-ota-store-v3-test-report.html)
+- [Android Store v3 报告](docs/android-ota-store-v3-test-report.html)
+- [HarmonyOS Store v3 报告](docs/harmony-ota-store-v3-test-report.html)
 
-Store v3 的本地 Golden Fixture、100 Bundle 真实编译、loopback OTA Server、三端按 iOS → Android →
-HarmonyOS 顺序执行的测试用例见 [lynx-ota-store-v3-test-cases.md](docs/lynx-ota-store-v3-test-cases.md)。
-三个平台的报告分别为 `docs/ios-ota-store-v3-test-report.html`、
-`docs/android-ota-store-v3-test-report.html` 和 `docs/harmony-ota-store-v3-test-report.html`；
-报告没有覆盖的物理设备、生产 CDN/TLS、低磁盘及独立进程崩溃场景仍不视为已通过。
+## 文档入口
+
+### 先读
+
+- [PROJECT_MAP.md](PROJECT_MAP.md)，代码入口与数据流。
+- [ARCHITECTURE.md](ARCHITECTURE.md)，三端分层和平台 owner。
+- [MODULE_INTEGRATION.md](MODULE_INTEGRATION.md)，Shell Module 接入步骤。
+- [VALIDATION.md](VALIDATION.md)，验证层级和命令。
+
+### 协议
+
+- [ROUTER_CONTRACT_V1.md](ROUTER_CONTRACT_V1.md)
+- [BRIDGE_CONTRACT.md](BRIDGE_CONTRACT.md)
+- [NAVIGATION_README.md](NAVIGATION_README.md)
+- [TRANSITIONS_README.md](TRANSITIONS_README.md)
+- [OTA_SERVER_API_CONTRACT.md](OTA_SERVER_API_CONTRACT.md)
+
+### 平台与依赖
+
+- [Android README](android/README.md)
+- [iOS README](ios/README.md)
+- [HarmonyOS README](harmony/README.md)
+- [XElement 集成](XELEMENT_INTEGRATION.md)
+- [兼容性](COMPATIBILITY.md)
+- [安全边界](SECURITY.md)
+- [官方源码映射](SOURCE_MAPPING.md)
+
+### 可视化与测试报告
+
+- [GitHub Pages API 文档](docs/index.html)
+- [Bundle 路径说明](docs/lynx-bundle-paths.html)
+- [OTA Candidate 指南](docs/lynx-ota-candidate-version-guide.html)
+- [OTA Store v3 测试用例](docs/lynx-ota-store-v3-test-cases.md)
+- 在线文档：<https://fulisadawang.github.io/lynx-navigation-to-ota/>
+
+## 当前边界
+
+- OTA 本地 Fixture 和 TEST 环境通过，不等于生产 CDN/TLS、签名发布包和所有物理设备已经认证。
+- HarmonyOS Store v3 已实现，但 Harmony 原生共享元素/Open Container 仍是明确缺口。
+- Demo 以新 Store v3 schema 为主，不负责线上 Store v2 沙盒的自动迁移。
+- LynxCapacitor 三端源码尚未接入默认 Shell Sample，不能只看到 Bundle 按钮就认为原生能力已经注册。
+- `worklet:onframe` 当前映射为原生声明式曲线，不执行任意 Skyline Worklet closure。
+- 构建产物、本机 OTA token、OSS 凭证、签名配置和生成 Fixture 二进制不进入仓库。
+
+要接入业务 App，先读 [MODULE_INTEGRATION.md](MODULE_INTEGRATION.md)。要改 OTA，先跑 Store v3 测试用例。要接入 LynxCapacitor，先完成三端构建图、Module 注册、权限和生命周期接线，再谈页面验收。

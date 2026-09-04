@@ -14,6 +14,8 @@
 
 `android/app/` 是验收 Sample，不属于本目录。不要为了修改 Library 而把 Sample 代码复制进 Module，也不要把 Module 实现下沉到 Sample。
 
+`android/lynx-capacitor/` 是 sibling 原生能力 Module，当前尚未加入默认 `settings.gradle.kts` 和 Sample。它不属于 `lynx-shell`，不得把能力实现直接塞进 Router、Container 或 `LynxShellModule`；任务明确涉及该模块时先读 `android/lynx-capacitor/AGENTS.md` 并单独完成构建图、注册、权限与生命周期接线。
+
 ## 开工前必须读取
 
 按任务相关性读取，不要凭经验猜协议：
@@ -24,6 +26,7 @@
 4. 转场：`TRANSITIONS_README.md`。
 5. OTA：本目录 `OTA_RUNTIME.md` 和根目录 OTA 测试报告。
 6. 依赖：本目录 `build.gradle.kts`、`consumer-rules.pro`、根目录 `XELEMENT_INTEGRATION.md`。
+7. 跨到原生能力层时：`android/lynx-capacitor/AGENTS.md` 和它的 `NativeCapabilityCatalog.kt`。
 
 文档、代码和运行结果冲突时，以当前代码、构建配置和最新运行证据为准，并修正文档。
 
@@ -114,6 +117,7 @@ files/lynx-ota-store/apps/<lynxAppId>/
 - 不提交 APK、Gradle cache、构建目录和生成的 Fixture 二进制。
 - 工作树可能包含用户改动；禁止 reset、checkout 或格式化无关文件。
 - 不修改 `android/app/`，除非任务明确要求同步 Sample 或运行验收。
+- 不隐式依赖或注册 `android/lynx-capacitor`；默认工程尚未把它加入 Gradle graph。
 
 ## 修改后的最低验证
 

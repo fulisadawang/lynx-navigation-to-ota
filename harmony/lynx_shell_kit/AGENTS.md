@@ -14,6 +14,8 @@
 
 `harmony/lynx_shell/` 是 Entry Demo，只依赖 HAR，不属于本目录。不要把 Demo 页面、按钮或测试配置放进 HAR 公共实现。
 
+`harmony/lynx_capacitor_kit/` 是 sibling 原生能力 HAR 源码，当前尚未加入根 `build-profile.json5` 和 Entry Demo 依赖。它不属于 Shell/OTA；任务明确涉及该模块时先读 `harmony/lynx_capacitor_kit/AGENTS.md`，再显式处理 Module 注册、权限、UIAbilityContext 和生命周期转发。
+
 ## 开工前必须读取
 
 按任务相关性读取：
@@ -25,6 +27,7 @@
 5. Bridge：`BRIDGE_CONTRACT.md`。
 6. OTA：最新 Store v3 测试用例、Harmony HTML 报告和 `scripts/ota-store-v3/`。
 7. 静态门禁：`harmony/scripts/check_harmony_shell.py`。
+8. 跨到原生能力层时：`harmony/lynx_capacitor_kit/AGENTS.md` 和 `LynxCapacitorCatalog.ets`。
 
 文档、代码和运行结果冲突时，以当前 ArkTS/ArkUI 源码、OHPM/Hvigor 配置和最新 HDC 证据为准。
 
@@ -116,6 +119,7 @@ src/main/ets/
 - 本地 HTTP 和 fault/pause/capacity 注入只允许在 TEST/显式调试配置下启用。
 - 保留用户已有修改，尤其是 `BuildProfile.ets`；禁止 reset/checkout 覆盖。
 - 不修改 `harmony/lynx_shell`，除非任务明确要求 Demo UI 或 HDC 运行态验收。
+- 不隐式依赖或注册 `harmony/lynx_capacitor_kit`；默认 build profile/Entry 尚未包含它。
 
 ## 修改后的最低验证
 

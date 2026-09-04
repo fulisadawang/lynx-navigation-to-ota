@@ -2,16 +2,17 @@
 
 ## 项目定位
 
-`lynx-navigation-to-ota` 是独立的 Lynx 4.0 三端原生 Router + OTA 源码工程。
-三端业务方分别引入一个平台模块：Android AAR、iOS CocoaPods Module、HarmonyOS HAR。
+`lynx-navigation-to-ota` 是独立的 Lynx 4.0 三端原生 Router + OTA 源码工程，并包含尚未接入
+默认 Sample 的三端 `LynxCapacitorModule` 原生能力源码。
+三端 Shell 业务方分别引入一个平台模块：Android AAR、iOS CocoaPods Module、HarmonyOS HAR。
 本仓库不包含旧的 `LynxScreens-Android` 工程，也不依赖 Sparkling 原生 SDK。
 
 ## 顶层结构
 
 ```text
-android/                  Android Library Module + 可运行 Sample
-ios/                      CocoaPods LynxShellKit Module + 可运行 Sample
-harmony/                  ArkTS/ArkUI Shell + lynx_shell_kit HAR Module
+android/                  lynx-shell AAR、lynx-capacitor 源码 + 可运行 Sample
+ios/                      LynxShellKit Pod、LynxCapacitorKit 源码 + 可运行 Sample
+harmony/                  lynx_shell_kit、lynx_capacitor_kit 源码 + Entry Demo
 playground/               ReactLynx 多 Bundle 示例与 typed NativeModules wrapper
 examples/                 页面侧 NativeModules 类型声明
 scripts/                  三端 Bundle 同步与静态验收
@@ -44,6 +45,7 @@ android/lynx-shell/
 ```
 
 业务方只依赖 `:lynx-shell` 或发布后的 AAR，不需要另外接 OTA SDK。
+`android/lynx-capacitor` 尚未加入默认 `settings.gradle.kts` 和 Sample，必须由宿主显式接入。
 
 ### iOS
 
@@ -56,6 +58,7 @@ ios/
 
 业务方只声明 `pod 'LynxShellKit'`。`OtaIOSSDK/Sources` 保留 Swift 单测边界，
 不是业务方的第二个 Pod。
+`ios/LynxCapacitorKit` 尚未加入默认 Podspec/Xcode Target，当前只交付原生能力源码。
 
 ### HarmonyOS
 
@@ -73,6 +76,13 @@ harmony/
 
 `lynx_shell/oh-package.json5` 只声明 `@lynx/lynx-shell-kit`；底层 Lynx、Service、
 XElement 和 OTA 依赖由 HAR 管理。
+`harmony/lynx_capacitor_kit` 尚未加入根 build profile 和 Entry Demo 依赖，当前只交付独立 HAR 源码。
+
+## LynxCapacitor 当前边界
+
+三端 `LynxCapacitorModule` 统一描述 40 个能力域、146 个方法，平台无等价实现时返回结构化
+`UNSUPPORTED` 或 `UNAVAILABLE`，不返回假成功。当前 main 已包含三端源码与诊断 Bundle，但默认
+Shell Sample 尚未完成构建图、Module 注册、权限和生命周期接线；不能把源码存在视为默认可用。
 
 ## 统一调用边界
 
