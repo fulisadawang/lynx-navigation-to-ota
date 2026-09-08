@@ -1,0 +1,8 @@
+{
+  "name": "实际 EmbeddedBundleRegistry：缺少 Manifest 时按源码承诺提供空 registry",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

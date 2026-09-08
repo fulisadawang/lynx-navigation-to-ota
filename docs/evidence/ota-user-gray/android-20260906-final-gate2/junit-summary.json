@@ -1,0 +1,723 @@
+{
+  "directory": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest",
+  "xmlFileCount": 13,
+  "suiteCount": 13,
+  "total": 87,
+  "passed": 87,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "suites": [
+    {
+      "name": "com.example.lynxshell.ota.OtaPageRefreshGateTest",
+      "file": "TEST-com.example.lynxshell.ota.OtaPageRefreshGateTest.xml",
+      "sha256": "2617674481913892bcbbaa8c0dd9cbcec1be352655cb8e5e5b1f0fbf18ddb885",
+      "seconds": 0.004,
+      "total": 5,
+      "passed": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "oldSuccessCannotPostponeNewUserRefresh",
+          "className": "com.example.lynxshell.ota.OtaPageRefreshGateTest",
+          "status": "PASS",
+          "seconds": 0.003
+        },
+        {
+          "name": "switchClearsSuccessWhileSameEpochClearAppAllowsExplicitRepair",
+          "className": "com.example.lynxshell.ota.OtaPageRefreshGateTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "oldCapturedEpochCannotReserveAfterUserSwitch",
+          "className": "com.example.lynxshell.ota.OtaPageRefreshGateTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "oldCompletionCannotRemoveNewUserReservation",
+          "className": "com.example.lynxshell.ota.OtaPageRefreshGateTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "thirtyMinuteBoundaryAndAppIsolationArePreserved",
+          "className": "com.example.lynxshell.ota.OtaPageRefreshGateTest",
+          "status": "PASS",
+          "seconds": 0
+        }
+      ]
+    },
+    {
+      "name": "com.example.lynxshell.ota.OtaRealServerSelectionTest",
+      "file": "TEST-com.example.lynxshell.ota.OtaRealServerSelectionTest.xml",
+      "sha256": "827542957cdf72125f20c0192d0724c0fd9aa36a02f1cf49fa9b0f13f916d0ba",
+      "seconds": 1.557,
+      "total": 3,
+      "passed": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "real HTTP selects full gray newer full promotion rollback and forced embedded cold state",
+          "className": "com.example.lynxshell.ota.OtaRealServerSelectionTest",
+          "status": "PASS",
+          "seconds": 0.793
+        },
+        {
+          "name": "candidate stays staged until explicit SDK health confirmation then logout and incompatibility reject it",
+          "className": "com.example.lynxshell.ota.OtaRealServerSelectionTest",
+          "status": "PASS",
+          "seconds": 0.471
+        },
+        {
+          "name": "held A response fails after B sync and cannot change B state",
+          "className": "com.example.lynxshell.ota.OtaRealServerSelectionTest",
+          "status": "PASS",
+          "seconds": 0.293
+        }
+      ]
+    },
+    {
+      "name": "com.example.lynxshell.transition.LynxBottomSheetMotionTest",
+      "file": "TEST-com.example.lynxshell.transition.LynxBottomSheetMotionTest.xml",
+      "sha256": "233a823fd51721e111485f5dc9f552be03f65a2d07c0e05b58a74390da5cee15",
+      "seconds": 0.003,
+      "total": 7,
+      "passed": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "defaultBottomSheetIsNonOpaqueDismissibleAndVerticallyDraggable",
+          "className": "com.example.lynxshell.transition.LynxBottomSheetMotionTest",
+          "status": "PASS",
+          "seconds": 0.001
+        },
+        {
+          "name": "heroSheetProjectsVelocityAndDismissesOnlyPastTheLowestDetent",
+          "className": "com.example.lynxshell.transition.LynxBottomSheetMotionTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "customDetentsRequireTheInitialDetentToBeOneOfTheDeclaredHeights",
+          "className": "com.example.lynxshell.transition.LynxBottomSheetMotionTest",
+          "status": "PASS",
+          "seconds": 0.001
+        },
+        {
+          "name": "halfProgressKeepsSheetBackdropAndBarrierOnOneTimeline",
+          "className": "com.example.lynxshell.transition.LynxBottomSheetMotionTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "heroSheetUsesThreeDetentsAndStartsAtTheMiddleDetent",
+          "className": "com.example.lynxshell.transition.LynxBottomSheetMotionTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "endpointsAreExactSoCancellationCanRestoreTheOpenedSheet",
+          "className": "com.example.lynxshell.transition.LynxBottomSheetMotionTest",
+          "status": "PASS",
+          "seconds": 0.001
+        },
+        {
+          "name": "dragProgressUsesSheetHeightAndClampsAtBothEnds",
+          "className": "com.example.lynxshell.transition.LynxBottomSheetMotionTest",
+          "status": "PASS",
+          "seconds": 0
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.BundleValidationCacheTest",
+      "file": "TEST-com.ota.android.sdk.BundleValidationCacheTest.xml",
+      "sha256": "7953b3984a1910cb8da32cb3c7a551888fac9eb66a721366df048cb730d90bb0",
+      "seconds": 0.001,
+      "total": 4,
+      "passed": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "same file fingerprint from a different release scope misses",
+          "className": "com.ota.android.sdk.BundleValidationCacheTest",
+          "status": "PASS",
+          "seconds": 0.001
+        },
+        {
+          "name": "least recently used entries are evicted",
+          "className": "com.ota.android.sdk.BundleValidationCacheTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "release and file fingerprint changes miss",
+          "className": "com.ota.android.sdk.BundleValidationCacheTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "same fingerprint is a cache hit",
+          "className": "com.ota.android.sdk.BundleValidationCacheTest",
+          "status": "PASS",
+          "seconds": 0
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaCandidateActivationTest",
+      "file": "TEST-com.ota.android.sdk.OtaCandidateActivationTest.xml",
+      "sha256": "fdba2ff48792eb3b9da3bb95299f467a412403a8aaab677926d391c6eb10176f",
+      "seconds": 0.035,
+      "total": 3,
+      "passed": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "rollback commit remains readable after a post-commit process fault",
+          "className": "com.ota.android.sdk.OtaCandidateActivationTest",
+          "status": "PASS",
+          "seconds": 0.016
+        },
+        {
+          "name": "candidate stays out of current until healthy confirmation",
+          "className": "com.ota.android.sdk.OtaCandidateActivationTest",
+          "status": "PASS",
+          "seconds": 0.011
+        },
+        {
+          "name": "unfinished trial is discarded after a new transaction is created",
+          "className": "com.ota.android.sdk.OtaCandidateActivationTest",
+          "status": "PASS",
+          "seconds": 0.008
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaFallbackRegressionTest",
+      "file": "TEST-com.ota.android.sdk.OtaFallbackRegressionTest.xml",
+      "sha256": "c77e1562cc5e3940278d3e9542d16853e0b5e7e4dec9cbd68fa3377b5db7cec9",
+      "seconds": 0.012,
+      "total": 1,
+      "passed": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "rollback skips a corrupted predecessor and restores the verified embedded baseline",
+          "className": "com.ota.android.sdk.OtaFallbackRegressionTest",
+          "status": "PASS",
+          "seconds": 0.012
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaReleaseLeaseTest",
+      "file": "TEST-com.ota.android.sdk.OtaReleaseLeaseTest.xml",
+      "sha256": "2f79d0767f7fd184e6ec3875757744f026eae1a3039ce77f0f970cacad9707cb",
+      "seconds": 0.027,
+      "total": 3,
+      "passed": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "discarded candidate is retained only while its trial page is alive",
+          "className": "com.ota.android.sdk.OtaReleaseLeaseTest",
+          "status": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "name": "active page lease retains old release until page closes",
+          "className": "com.ota.android.sdk.OtaReleaseLeaseTest",
+          "status": "PASS",
+          "seconds": 0.011
+        },
+        {
+          "name": "explicit delete defers leased release deletion until final close",
+          "className": "com.ota.android.sdk.OtaReleaseLeaseTest",
+          "status": "PASS",
+          "seconds": 0.006
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaReleaseRecoveryTest",
+      "file": "TEST-com.ota.android.sdk.OtaReleaseRecoveryTest.xml",
+      "sha256": "dbfe36087ae3cb594ecb67dc676df48fec5094a8287aea9b9f98566899f1905b",
+      "seconds": 0.023,
+      "total": 3,
+      "passed": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "published releases roll back to their direct predecessor",
+          "className": "com.ota.android.sdk.OtaReleaseRecoveryTest",
+          "status": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "name": "changed current bundle fingerprint cannot be resolved from cached verification",
+          "className": "com.ota.android.sdk.OtaReleaseRecoveryTest",
+          "status": "PASS",
+          "seconds": 0.007
+        },
+        {
+          "name": "corrupted downloaded current rolls back to the verified embedded baseline",
+          "className": "com.ota.android.sdk.OtaReleaseRecoveryTest",
+          "status": "PASS",
+          "seconds": 0.006
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+      "file": "TEST-com.ota.android.sdk.OtaReleaseSecurityGateTest.xml",
+      "sha256": "714ef9944fb35ec446ed5fd15d15acd2ef8d0bf51ab5f1a3141e4f2d7a0914ce",
+      "seconds": 0.07,
+      "total": 8,
+      "passed": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "transactionRejectsMissingInvalidAndOversizedDeclaredSize",
+          "className": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+          "status": "PASS",
+          "seconds": 0.018
+        },
+        {
+          "name": "activeLatestReleaseIsAcceptedViaVerifiedLocalReuse",
+          "className": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+          "status": "PASS",
+          "seconds": 0.006
+        },
+        {
+          "name": "transactionRejectsHttpBundleUrlBeforeOpeningTheLocalFixtureServer",
+          "className": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+          "status": "PASS",
+          "seconds": 0.003
+        },
+        {
+          "name": "localReuseCopiesTheVerifiedFileWithoutTreatingItsFileUriAsARemoteDownload",
+          "className": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+          "status": "PASS",
+          "seconds": 0.006
+        },
+        {
+          "name": "transactionRejectsNonActiveManifestAndPreservesCurrent",
+          "className": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+          "status": "PASS",
+          "seconds": 0.003
+        },
+        {
+          "name": "streamingAcceptsExactly20MiBAndRejects20MiBPlusOne",
+          "className": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+          "status": "PASS",
+          "seconds": 0.025
+        },
+        {
+          "name": "disabledAndRolledBackLatestReleasesAreSkippedWithoutChangingCurrent",
+          "className": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+          "status": "PASS",
+          "seconds": 0.008
+        },
+        {
+          "name": "configurationRejectsHttpApiBaseUrl",
+          "className": "com.ota.android.sdk.OtaReleaseSecurityGateTest",
+          "status": "PASS",
+          "seconds": 0.001
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaStorageDiagnosticsTest",
+      "file": "TEST-com.ota.android.sdk.OtaStorageDiagnosticsTest.xml",
+      "sha256": "951f826b80d5d2d120d87561264a5f2dd7ed459a72df17d925c12bc8d19e8581",
+      "seconds": 0.026,
+      "total": 3,
+      "passed": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "snapshot reports state candidate leases orphan and staging from one consistent store view",
+          "className": "com.ota.android.sdk.OtaStorageDiagnosticsTest",
+          "status": "PASS",
+          "seconds": 0.014
+        },
+        {
+          "name": "empty snapshot exposes the real root without creating store files",
+          "className": "com.ota.android.sdk.OtaStorageDiagnosticsTest",
+          "status": "PASS",
+          "seconds": 0.001
+        },
+        {
+          "name": "same release id remains visible under both app cards",
+          "className": "com.ota.android.sdk.OtaStorageDiagnosticsTest",
+          "status": "PASS",
+          "seconds": 0.011
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+      "file": "TEST-com.ota.android.sdk.OtaStoreV2RetentionTest.xml",
+      "sha256": "62b46810cadeac238470f7beb5655078b8ade1f432516d0e7440682c88a87fb5",
+      "seconds": 0.124,
+      "total": 11,
+      "passed": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "cold maintenance never guesses when state is malformed",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.005
+        },
+        {
+          "name": "staging recovery only touches the app currently installing",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.006
+        },
+        {
+          "name": "insufficient storage keeps embedded current and publishes no partial release",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.004
+        },
+        {
+          "name": "orphan pruning happens before capacity preflight",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.005
+        },
+        {
+          "name": "same release id is physically isolated by app id",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.008
+        },
+        {
+          "name": "candidate mode retains current previous and one candidate then prunes after confirmation",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.036
+        },
+        {
+          "name": "embedded registration never copies bundle bytes into ota store",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.002
+        },
+        {
+          "name": "cold start maintenance removes v2 orphan and staging but preserves current",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.005
+        },
+        {
+          "name": "deleting one app leaves another app with the same release untouched",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "name": "state commit faults remain durable on both sides of the commit boundary",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "name": "ten normal activations retain only current and previous",
+          "className": "com.ota.android.sdk.OtaStoreV2RetentionTest",
+          "status": "PASS",
+          "seconds": 0.031
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaStoreV3Golden100Test",
+      "file": "TEST-com.ota.android.sdk.OtaStoreV3Golden100Test.xml",
+      "sha256": "9b8d03633ce7d79ad23f80da1723c43d2470653cb4cfbf0498eb520690829a66",
+      "seconds": 0.681,
+      "total": 4,
+      "passed": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "rollback reuses previous CAS objects and app ids stay isolated",
+          "className": "com.ota.android.sdk.OtaStoreV3Golden100Test",
+          "status": "PASS",
+          "seconds": 0.171
+        },
+        {
+          "name": "v1 to v2 downloads one changed bundle and stores one new CAS object",
+          "className": "com.ota.android.sdk.OtaStoreV3Golden100Test",
+          "status": "PASS",
+          "seconds": 0.159
+        },
+        {
+          "name": "v1 active lease survives explicit v2 delete until the lease closes",
+          "className": "com.ota.android.sdk.OtaStoreV3Golden100Test",
+          "status": "PASS",
+          "seconds": 0.158
+        },
+        {
+          "name": "candidate is durable and a manifest fault does not change current",
+          "className": "com.ota.android.sdk.OtaStoreV3Golden100Test",
+          "status": "PASS",
+          "seconds": 0.193
+        }
+      ]
+    },
+    {
+      "name": "com.ota.android.sdk.OtaUserSelectionTest",
+      "file": "TEST-com.ota.android.sdk.OtaUserSelectionTest.xml",
+      "sha256": "0d3d15571c911e5e51c9534ff7150577b8170948fb639d8d86e3da53605dcab4",
+      "seconds": 0.543,
+      "total": 32,
+      "passed": 32,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "batch commits all decisions before any bytes and retains every failed and completed App",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.021
+        },
+        {
+          "name": "same user registration is a no-op and raw unicode identifiers remain distinct",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.003
+        },
+        {
+          "name": "C09 live lease stays readable across account switch until close",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.023
+        },
+        {
+          "name": "same candidate resync preserves active trial and avoids another download",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.012
+        },
+        {
+          "name": "C16 directives survive restart reject old revision and allow server rollback lower sequence",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.016
+        },
+        {
+          "name": "C08 gray to full same release changes metadata with zero more GETs and survives restart",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.011
+        },
+        {
+          "name": "old v3 unknown metadata waits for new confirmation and reuses all CAS objects",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.101
+        },
+        {
+          "name": "Executor operation snapshots explicitly capture and restore ThreadLocal identity",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.002
+        },
+        {
+          "name": "wire rejects missing selection bad ranges and accepts Harmony in platform arrays",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.004
+        },
+        {
+          "name": "download A can wait while B sync and current lease make progress",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.016
+        },
+        {
+          "name": "malformed later selection prevents any batch State change or byte download",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.003
+        },
+        {
+          "name": "query failure and candidate check reports use captured identity with sanitized diagnostics",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.008
+        },
+        {
+          "name": "new context refuses V2 reads and malformed directive containers while legacy remains available",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.001
+        },
+        {
+          "name": "normalizers match Server trim controls and integer precision",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.002
+        },
+        {
+          "name": "C06 delayed response A cannot commit after B completed a newer release",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.009
+        },
+        {
+          "name": "outer identity context cannot be replaced by B after probe and rejected leases close",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.014
+        },
+        {
+          "name": "C05 installed gray then offline B uses embedded or nil without a full release",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.013
+        },
+        {
+          "name": "C21 native or SDK context change rechecks cold State compatibility",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.008
+        },
+        {
+          "name": "C10 previous exactly A gray cannot be restored by B rollback",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.012
+        },
+        {
+          "name": "candidate trial final identity failure closes its registered lease",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.009
+        },
+        {
+          "name": "rollback expected current check prevents old page from rolling back new full in same epoch",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.014
+        },
+        {
+          "name": "code and SDK range endpoints are inclusive and missing context fails closed",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0
+        },
+        {
+          "name": "same identity old revision download cannot overwrite newer decision",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.009
+        },
+        {
+          "name": "rollback missing unreadable or corrupt previous atomically falls back to embedded or sentinel",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.048
+        },
+        {
+          "name": "C07 candidate trial acquire is atomic against another candidate replacement",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.016
+        },
+        {
+          "name": "C11 anonymous cold SDK cannot use disk current directly pointing to A gray",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.008
+        },
+        {
+          "name": "C14 and C15 one changed object out of 100 with independent B authorization and zero copies",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.12
+        },
+        {
+          "name": "real HTTP query carries exact context decodes directives and keeps context ETags separate",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.002
+        },
+        {
+          "name": "invalidatePendingOperations always advances anonymous epoch and rejects old SDK writes",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.007
+        },
+        {
+          "name": "final State rename and registration share one guard after file preparation",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.007
+        },
+        {
+          "name": "C04 gray A is immediately ineligible for B before reconcile with full previous fallback",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "name": "B reuses bytes from an unpromoted A candidate only after its own selection",
+          "className": "com.ota.android.sdk.OtaUserSelectionTest",
+          "status": "PASS",
+          "seconds": 0.012
+        }
+      ]
+    }
+  ],
+  "realServerCases": [
+    {
+      "name": "real HTTP selects full gray newer full promotion rollback and forced embedded cold state",
+      "className": "com.example.lynxshell.ota.OtaRealServerSelectionTest",
+      "status": "PASS",
+      "seconds": 0.793
+    },
+    {
+      "name": "candidate stays staged until explicit SDK health confirmation then logout and incompatibility reject it",
+      "className": "com.example.lynxshell.ota.OtaRealServerSelectionTest",
+      "status": "PASS",
+      "seconds": 0.471
+    },
+    {
+      "name": "held A response fails after B sync and cannot change B state",
+      "className": "com.example.lynxshell.ota.OtaRealServerSelectionTest",
+      "status": "PASS",
+      "seconds": 0.293
+    }
+  ]
+}

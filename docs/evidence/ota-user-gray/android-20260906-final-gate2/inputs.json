@@ -1,0 +1,142 @@
+[
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.example.lynxshell.ota.OtaPageRefreshGateTest.xml",
+    "bytes": 1036,
+    "sha256": "2617674481913892bcbbaa8c0dd9cbcec1be352655cb8e5e5b1f0fbf18ddb885",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.example.lynxshell.ota.OtaRealServerSelectionTest.xml",
+    "bytes": 1546,
+    "sha256": "827542957cdf72125f20c0192d0724c0fd9aa36a02f1cf49fa9b0f13f916d0ba",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.example.lynxshell.transition.LynxBottomSheetMotionTest.xml",
+    "bytes": 1465,
+    "sha256": "233a823fd51721e111485f5dc9f552be03f65a2d07c0e05b58a74390da5cee15",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.BundleValidationCacheTest.xml",
+    "bytes": 864,
+    "sha256": "7953b3984a1910cb8da32cb3c7a551888fac9eb66a721366df048cb730d90bb0",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaCandidateActivationTest.xml",
+    "bytes": 798,
+    "sha256": "fdba2ff48792eb3b9da3bb95299f467a412403a8aaab677926d391c6eb10176f",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaFallbackRegressionTest.xml",
+    "bytes": 503,
+    "sha256": "c77e1562cc5e3940278d3e9542d16853e0b5e7e4dec9cbd68fa3377b5db7cec9",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaReleaseLeaseTest.xml",
+    "bytes": 767,
+    "sha256": "2f79d0767f7fd184e6ec3875757744f026eae1a3039ce77f0f970cacad9707cb",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaReleaseRecoveryTest.xml",
+    "bytes": 801,
+    "sha256": "dbfe36087ae3cb594ecb67dc676df48fec5094a8287aea9b9f98566899f1905b",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaReleaseSecurityGateTest.xml",
+    "bytes": 1529,
+    "sha256": "714ef9944fb35ec446ed5fd15d15acd2ef8d0bf51ab5f1a3141e4f2d7a0914ce",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaStorageDiagnosticsTest.xml",
+    "bytes": 813,
+    "sha256": "951f826b80d5d2d120d87561264a5f2dd7ed459a72df17d925c12bc8d19e8581",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaStoreV2RetentionTest.xml",
+    "bytes": 2027,
+    "sha256": "62b46810cadeac238470f7beb5655078b8ade1f432516d0e7440682c88a87fb5",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaStoreV3Golden100Test.xml",
+    "bytes": 950,
+    "sha256": "9b8d03633ce7d79ad23f80da1723c43d2470653cb4cfbf0498eb520690829a66",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "junit-xml",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/test-results/testDebugUnitTest/TEST-com.ota.android.sdk.OtaUserSelectionTest.xml",
+    "bytes": 5629,
+    "sha256": "0d3d15571c911e5e51c9534ff7150577b8170948fb639d8d86e3da53605dcab4",
+    "modifiedAt": "2026-09-06T06:19:21.631Z"
+  },
+  {
+    "kind": "desktop-sdk-real-server-json",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/scripts/ota-user-gray/.generated/android-jvm-final2/01-real-selection-flow.json",
+    "bytes": 4292,
+    "sha256": "4f0bb49e7554a7c6920b456456d659e4c4f86499f3f92979dc0a028e84c0f807",
+    "modifiedAt": "2026-09-06T06:19:19.150Z"
+  },
+  {
+    "kind": "desktop-sdk-real-server-json",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/scripts/ota-user-gray/.generated/android-jvm-final2/02-held-identity-flow.json",
+    "bytes": 914,
+    "sha256": "36e664f5663fdd41b50c6f572ee3dcd11c9d91d3538febad8ef0ff33143d032b",
+    "modifiedAt": "2026-09-06T06:19:19.916Z"
+  },
+  {
+    "kind": "desktop-sdk-real-server-json",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/scripts/ota-user-gray/.generated/android-jvm-final2/03-candidate-protocol-flow.json",
+    "bytes": 3006,
+    "sha256": "c657696ff2ee94f70f93184903b5504ce0482105e2efcf1742a35000300f96a9",
+    "modifiedAt": "2026-09-06T06:19:19.623Z"
+  },
+  {
+    "kind": "build-log",
+    "path": "/tmp/lynx-ota-user-gray-android-final-gate2.log",
+    "bytes": 5051,
+    "sha256": "86895da4c88f92161029e8a57e0e8d4500593278e5734c9ed17d4c2a58664c14",
+    "modifiedAt": "2026-09-06T06:19:21.674Z"
+  },
+  {
+    "kind": "generated-sdk-buildconfig",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/generated/source/buildConfig/debug/com/example/lynxshell/BuildConfig.java",
+    "bytes": 550,
+    "sha256": "785f40934d5ee2fb0b6af0df244e31985e3f4ea60c94cfa1eccf3dfe8365f2fc",
+    "modifiedAt": "2026-09-06T05:27:04.913Z"
+  },
+  {
+    "kind": "apk",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/app/build/outputs/apk/debug/app-debug.apk",
+    "bytes": 65731406,
+    "sha256": "adb00b8ce010e62702d94398d017c460523647def3a6d3034ae48047bf0aa38d",
+    "modifiedAt": "2026-09-06T06:19:17.275Z"
+  },
+  {
+    "kind": "generated-app-buildconfig",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/app/build/generated/source/buildConfig/debug/com/example/lynxshell/sample/BuildConfig.java",
+    "bytes": 952,
+    "sha256": "34f544174b026cb33beaae32dbca571cb463403bbee5a6c192f5f835cf3662d3",
+    "modifiedAt": "2026-09-06T05:42:17.361Z"
+  }
+]

@@ -121,7 +121,8 @@ class OtaModels private constructor() {
 
   enum class Platform(@JvmField val wireValue: String) {
     ANDROID("android"),
-    IOS("ios");
+    IOS("ios"),
+    HARMONY("harmony");
 
     companion object {
       @JvmStatic
@@ -229,16 +230,17 @@ class OtaModels private constructor() {
     CANDIDATE,
   }
 
-  class ReleaseVersionRange(
+  data class ReleaseVersionRange(
     @JvmField val min: String?,
     @JvmField val max: String?,
   ) {
     companion object {
       @JvmStatic
       fun fromJsonMap(map: Map<String, Any?>): ReleaseVersionRange {
+        OtaSelectionJson.validateRangeKeys(map)
         return ReleaseVersionRange(
-          optionalString(map["min"], null),
-          optionalString(map["max"], null),
+          OtaSelectionJson.optionalString(map, "min"),
+          OtaSelectionJson.optionalString(map, "max"),
         )
       }
     }
@@ -475,10 +477,12 @@ class OtaModels private constructor() {
     }
   }
 
-  class InstalledRelease(
+  class InstalledRelease @JvmOverloads constructor(
     @JvmField val context: CurrentReleaseContext,
     @JvmField val installedAt: Instant,
     bundles: List<InstalledBundle>?,
+    @JvmField val selection: OtaStoredSelection? = null,
+    @JvmField val identityEpoch: Long? = null,
   ) {
     @JvmField val bundles: List<InstalledBundle> = immutableList(bundles)
 
@@ -486,6 +490,8 @@ class OtaModels private constructor() {
       val map = LinkedHashMap<String, Any?>()
       map["context"] = context.toJsonMap()
       map["installedAt"] = installedAt.toString()
+      map["selection"] = selection?.toJsonMap()
+      map["identityEpoch"] = identityEpoch
       val bundleMaps = ArrayList<Map<String, Any?>>()
       for (bundle in bundles) {
         bundleMaps.add(bundle.toJsonMap())
@@ -505,6 +511,8 @@ class OtaModels private constructor() {
           CurrentReleaseContext.fromJsonMap(OtaJson.asObject(map["context"], "context")),
           Instant.parse(stringValue(map["installedAt"])),
           bundles,
+          map["selection"]?.let { OtaStoredSelection.fromJsonMap(OtaJson.asObject(it, "selection")) },
+          (map["identityEpoch"] as? Number)?.toLong(),
         )
       }
     }
@@ -524,15 +532,16 @@ class OtaModels private constructor() {
     }
   }
 
-  class CandidateSnapshot(
+  class CandidateSnapshot @JvmOverloads constructor(
     @JvmField val release: InstalledRelease,
     @JvmField val status: CandidateStatus,
     @JvmField val failureCount: Int,
     @JvmField val createdAt: Instant,
     @JvmField val trialStartedAt: Instant?,
+    @JvmField val identityEpoch: Long? = release.identityEpoch,
   )
 
-  class ReportPayload(
+  data class ReportPayload @JvmOverloads constructor(
     @JvmField val env: Environment,
     @JvmField val hostApp: HostApp,
     @JvmField val lynxAppId: String?,
@@ -561,6 +570,7 @@ class OtaModels private constructor() {
     @JvmField val toReleaseId: String?,
     @JvmField val latencyMs: Int?,
     @JvmField val message: String?,
+    @JvmField val versioncode: String? = null,
   ) {
     fun toJsonMap(): Map<String, Any?> {
       val map = LinkedHashMap<String, Any?>()
@@ -578,6 +588,7 @@ class OtaModels private constructor() {
       map["deviceModel"] = deviceModel
       map["appVersion"] = appVersion
       map["buildNumber"] = buildNumber
+      map["versioncode"] = versioncode
       map["osVersion"] = osVersion
       map["channel"] = channel
       map["region"] = region
@@ -623,7 +634,7 @@ class OtaModels private constructor() {
     }
   }
 
-  class LatestBundleList(
+  class LatestBundleList @JvmOverloads constructor(
     @JvmField val env: Environment,
     @JvmField val hostApp: HostApp,
     lynxAppId: String?,
@@ -637,6 +648,10 @@ class OtaModels private constructor() {
     @JvmField val lynxSdkRange: ReleaseVersionRange?,
     @JvmField val nativeProtocolVersionRange: ReleaseVersionRange?,
     changedBundles: List<BundleArtifact>?,
+    @JvmField val selectionSchemaVersion: Int? = null,
+    @JvmField val releaseSequence: String? = null,
+    @JvmField val selection: OtaSelectionMetadata? = null,
+    @JvmField val versionCodeRange: OtaVersionCodeRange? = null,
   ) {
     @JvmField val lynxAppId: String = lynxAppId ?: DEFAULT_LYNX_APP_ID
     @JvmField val platforms: List<Platform> = immutableList(if (platforms.isNullOrEmpty()) singletonList(platform) else platforms)
@@ -649,6 +664,7 @@ class OtaModels private constructor() {
     companion object {
       @JvmStatic
       fun fromJsonMap(map: Map<String, Any?>): LatestBundleList {
+        if (map["selectionSchemaVersion"] != null) OtaSelectionJson.string(map, "lynxAppId")
         val parsedPlatforms = ArrayList<Platform>()
         val rawPlatforms = map["platforms"]
         if (rawPlatforms is List<*>) {
@@ -677,18 +693,25 @@ class OtaModels private constructor() {
             ReleaseVersionRange.fromJsonMap(OtaJson.asObject(it, "nativeProtocolVersionRange"))
           },
           bundles,
+          OtaSelectionJson.schema(map),
+          OtaSelectionJson.optionalString(map, "releaseSequence"),
+          map["selection"]?.let { OtaSelectionMetadata.fromJsonMap(OtaJson.asObject(it, "selection")) },
+          map["versionCodeRange"]?.let { OtaVersionCodeRange.fromJsonMap(OtaJson.asObject(it, "versionCodeRange")) },
         )
       }
     }
   }
 
-  class HostLatestBundleLists(
+  class HostLatestBundleLists @JvmOverloads constructor(
     @JvmField val env: Environment,
     @JvmField val hostApp: HostApp,
     @JvmField val platform: Platform?,
     bundleLists: List<LatestBundleList>?,
+    @JvmField val selectionSchemaVersion: Int? = null,
+    directives: List<OtaSelectionDirective> = emptyList(),
   ) {
     @JvmField val bundleLists: List<LatestBundleList> = immutableList(bundleLists)
+    @JvmField val directives: List<OtaSelectionDirective> = immutableList(directives)
 
     companion object {
       @JvmStatic
@@ -703,6 +726,8 @@ class OtaModels private constructor() {
           HostApp.fromWire(stringValue(firstPresent(map, "hostApp", "app"))),
           if (platform == null) null else Platform.fromWire(stringValue(platform)),
           bundleLists,
+          OtaSelectionJson.schema(map),
+          map["directives"]?.let { OtaJson.asArray(it, "directives").map { value -> OtaSelectionDirective.fromJsonMap(OtaJson.asObject(value, "directive")) } } ?: emptyList(),
         )
       }
     }
@@ -805,8 +830,9 @@ class OtaModels private constructor() {
     @JvmField val storeVersion: StoreVersion
     /** 仅 TEST + loopback 调试地址允许 HTTP；生产配置仍强制 HTTPS。 */
     @JvmField val allowLocalHTTPForTest: Boolean
+    @JvmField val versionCode: String?
 
-    constructor(
+    @JvmOverloads constructor(
       apiBaseUri: URI,
       hostApp: HostApp,
       lynxAppId: String?,
@@ -823,6 +849,7 @@ class OtaModels private constructor() {
       nativeProtocolVersion: String?,
       lynxSdkVersion: String?,
       storageDirectory: File,
+      versionCode: String? = null,
     ) : this(
       apiBaseUri,
       hostApp,
@@ -844,9 +871,10 @@ class OtaModels private constructor() {
       false,
       StoreVersion.V2,
       false,
+      versionCode,
     )
 
-    constructor(
+    @JvmOverloads constructor(
       apiBaseUri: URI,
       hostApp: HostApp,
       lynxAppId: String?,
@@ -867,6 +895,7 @@ class OtaModels private constructor() {
       candidateActivationEnabled: Boolean = false,
       storeVersion: StoreVersion = StoreVersion.V2,
       allowLocalHTTPForTest: Boolean = false,
+      versionCode: String? = null,
     ) {
       this.apiBaseUri = apiBaseUri
       this.hostApp = hostApp
@@ -888,6 +917,7 @@ class OtaModels private constructor() {
       this.candidateActivationEnabled = candidateActivationEnabled
       this.storeVersion = storeVersion
       this.allowLocalHTTPForTest = allowLocalHTTPForTest
+      this.versionCode = versionCode
       require(
         apiBaseUri.host?.isNotBlank() == true &&
           (apiBaseUri.scheme.equals("https", ignoreCase = true) ||

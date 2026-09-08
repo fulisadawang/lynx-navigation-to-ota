@@ -32,6 +32,15 @@ protocol OtaReleaseStoreBackend: Sendable {
     func pruneAllUnreferencedReleases() async throws
     func rollback(app: OtaAppID, lynxAppId: String) async throws -> OtaInstalledRelease?
     func storageSnapshot(maxFilesPerTree: Int) async throws -> OtaStorageSnapshot
+    func recordDecision(app: OtaAppID, lynxAppId: String, decision: OtaLastDecision, selection: OtaStoredSelection?) async throws
+    func reconcileUserContext(app: OtaAppID) async throws
+}
+
+extension OtaReleaseStoreBackend {
+    func recordDecision(app: OtaAppID, lynxAppId: String, decision: OtaLastDecision, selection: OtaStoredSelection?) async throws {
+        throw OtaSelectionError.requiresStoreV3
+    }
+    func reconcileUserContext(app: OtaAppID) async throws {}
 }
 
 /** 将历史同步 actor 包装到 v3 统一边界；默认直接调用仍可保持旧测试和迁移兼容。 */

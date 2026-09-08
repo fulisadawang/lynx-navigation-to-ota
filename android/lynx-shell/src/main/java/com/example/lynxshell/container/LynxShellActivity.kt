@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -79,6 +80,15 @@ class LynxShellActivity : AppCompatActivity() {
     /** 当前 generation 交付给 Lynx 的 Bundle 元数据；首屏健康确认只消费一次。 */
     private var bundleRuntimeMetadata: Map<String, Any>? = null
     private var firstScreenReadyGeneration: Long? = null
+    private var preparedUserEpoch: Long? = null
+    private var preparedRuntime: ActivityBundleRuntime? = null
+    private var debugOtaLabel: TextView? = null
+    private val otaUserListener: (Long) -> Unit = {
+        if (::request.isInitialized && request.isOtaRequest() && preparedRuntime != null &&
+            firstScreenReadyGeneration != contentGeneration && !isPreparedUserCurrent()) {
+            handleTemplateLoadFailure(contentGeneration, "OTA 用户已切换，请重新打开页面")
+        }
+    }
     /** 当前页面的键盘布局策略；默认保持 Android 系统行为。 */
     private var keyboardBehavior = KeyboardBehavior.SYSTEM
     private var baseContainerPaddingLeft = 0
@@ -97,6 +107,7 @@ class LynxShellActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LynxRouter.addOtaUserContextListener(otaUserListener)
         configureTransitionWindowAnimations()
         setContentView(R.layout.activity_lynx_shell)
         transitionRoot = findViewById(R.id.transition_root)
@@ -104,6 +115,16 @@ class LynxShellActivity : AppCompatActivity() {
         liveContent = findViewById(R.id.live_content)
         transitionOverlay = findViewById(R.id.transition_overlay)
         container = findViewById(R.id.lynx_container)
+        if (LynxRouter.exposeOtaDebugState) {
+            debugOtaLabel = TextView(this).apply {
+                textSize = 10f
+                setTextColor(Color.DKGRAY)
+                setBackgroundColor(0xEFFFFFFF.toInt())
+                setPadding(8, 4, 8, 4)
+            }.also { label ->
+                container.addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, android.view.Gravity.BOTTOM))
+            }
+        }
         baseContainerPaddingLeft = container.paddingLeft
         baseContainerPaddingTop = container.paddingTop
         baseContainerPaddingRight = container.paddingRight
@@ -333,6 +354,8 @@ class LynxShellActivity : AppCompatActivity() {
         releaseCurrentLease()
         bundleRuntimeMetadata = null
         firstScreenReadyGeneration = null
+        preparedUserEpoch = null
+        preparedRuntime = null
         contentGeneration += 1L
         val generation = contentGeneration
 
@@ -408,9 +431,10 @@ class LynxShellActivity : AppCompatActivity() {
                  * onLoadSuccess 可能成为宿主 client 更稳定收到的同批次信号。
                  * Coordinator 内部按 generation 幂等，因此双信号不会启动两次动画。
                  */
-                private fun notifyTargetVisualReady() {
+                private fun notifyTargetVisualReady(actualFirstScreen: Boolean) {
                     runOnUiThread {
                         if (!isCurrentGeneration(generation)) return@runOnUiThread
+                        if (request.isOtaRequest() && !isPreparedUserCurrent()) return@runOnUiThread
                         if (LynxRouter.consumeDebugFirstScreenFailure()) {
                             handleTemplateLoadFailure(generation, "Debug 注入：OTA 首屏失败")
                             return@runOnUiThread
@@ -420,19 +444,20 @@ class LynxShellActivity : AppCompatActivity() {
                             lynxView = lynxView ?: return@runOnUiThread,
                             generation = generation,
                         )
-                        if (firstScreenReadyGeneration != generation) {
+                        if (actualFirstScreen && firstScreenReadyGeneration != generation) {
                             firstScreenReadyGeneration = generation
+                            updateDebugOtaState("ready")
                             confirmCandidateHealthyIfNeeded(generation)
                         }
                     }
                 }
 
                 override fun onFirstScreen() {
-                    notifyTargetVisualReady()
+                    notifyTargetVisualReady(actualFirstScreen = true)
                 }
 
                 override fun onLoadSuccess() {
-                    notifyTargetVisualReady()
+                    notifyTargetVisualReady(actualFirstScreen = false)
                 }
 
                 override fun onReceivedError(error: LynxError) {
@@ -484,17 +509,23 @@ class LynxShellActivity : AppCompatActivity() {
             handleTemplateLoadFailure(generation, "OTA 页面未配置 ActivityBundleRuntime")
             return
         }
+        preparedRuntime = runtime
+        preparedUserEpoch = runtime.userIdentityEpoch
+        val expectedEpoch = preparedUserEpoch
 
         bundleFuture = otaExecutor.submit {
             // 本地 current/baseline 命中时，转场不应该先露出 OTA Loading。
             // resolveCurrent 只读已经提交的本地状态，不检查 Manifest、不联网；启动/回前台
             // 的全量同步负责把新的 current 提前准备好。
-            val cached = runCatching {
+            if (runtime !== LynxShell.activityBundleRuntime() || expectedEpoch != runtime.userIdentityEpoch) return@submit
+            val cachedResult = runCatching {
                 runtime.resolvePage(appId, bundleName, navigationSnapshotID)
-            }.getOrNull()
+            }
+            val cached = cachedResult.getOrNull()
             if (cached != null) {
                 runOnUiThread {
-                    if (!isCurrentGeneration(generation)) {
+                    if (!isCurrentGeneration(generation) || !isPreparedUserCurrent() ||
+                        (cached.userIdentityEpoch != null && cached.userIdentityEpoch != expectedEpoch)) {
                         runCatching { cached.releaseLease?.close() }
                         return@runOnUiThread
                     }
@@ -509,9 +540,11 @@ class LynxShellActivity : AppCompatActivity() {
                 return@submit
             }
 
+            if (!isPreparedUserCurrent()) return@submit
+
             // 只有本地没有可用 Bundle 时才展示 Loading，并进入缺包 repair/下载路径。
             runOnUiThread {
-                if (isCurrentGeneration(generation)) {
+                if (isCurrentGeneration(generation) && isPreparedUserCurrent()) {
                     loadingView.show("正在检查 $appId/$bundleName…")
                 }
             }
@@ -519,7 +552,7 @@ class LynxShellActivity : AppCompatActivity() {
                 runtime.prepare(appId, bundleName, navigationSnapshotID)
             }
             runOnUiThread {
-                if (!isCurrentGeneration(generation)) {
+                if (!isCurrentGeneration(generation) || !isPreparedUserCurrent()) {
                     result.getOrNull()?.let { runCatching { it.releaseLease?.close() } }
                     return@runOnUiThread
                 }
@@ -545,6 +578,9 @@ class LynxShellActivity : AppCompatActivity() {
         prepared: PreparedActivityBundle,
     ) {
         val checked = runCatching {
+            require(isPreparedUserCurrent() && (prepared.userIdentityEpoch == null || prepared.userIdentityEpoch == preparedUserEpoch)) {
+                "OTA 用户已切换，旧页面准备结果已丢弃"
+            }
             require(prepared.lynxAppId == appId) {
                 "OTA prepare 返回了错误的 lynxAppId"
             }
@@ -568,7 +604,11 @@ class LynxShellActivity : AppCompatActivity() {
                     },
                     "bundleName" to value.bundleName,
                     "sha256" to (value.sha256 ?: ""),
+                    "selectionKind" to (value.selectionKind ?: "embedded"),
+                    "releaseSequence" to (value.releaseSequence ?: ""),
+                    "userIdentityEpoch" to (value.userIdentityEpoch ?: 0L),
                 )
+                updateDebugOtaState("prepared")
                 renderPreparedPage(
                     generation = generation,
                     preparedBytes = value.bytes,
@@ -603,22 +643,32 @@ class LynxShellActivity : AppCompatActivity() {
         loadingView.hide()
         if (
             request.isOtaRequest() &&
+            isPreparedUserCurrent() &&
             firstScreenReadyGeneration != generation &&
             attemptOtaRecovery(generation, message)
         ) return
         if (::transitionCoordinator.isInitialized) transitionCoordinator.onLoadError()
         errorView.show(message)
+        updateDebugOtaState("error")
     }
 
     /** candidate 页面首屏成功后才 promote；Native Tab 永远不调用此路径。 */
     private fun confirmCandidateHealthyIfNeeded(generation: Long) {
-        if (!isCurrentGeneration(generation)) return
+        if (!isCurrentGeneration(generation) || !isPreparedUserCurrent()) return
         val metadata = bundleRuntimeMetadata ?: return
         if (metadata["source"] != "candidate_trial") return
         val appId = request.lynxAppId ?: return
         val runtime = LynxShell.activityBundleRuntime() ?: return
+        val epoch = preparedUserEpoch
+        val releaseId = metadata["releaseId"] as? String
         otaExecutor.execute {
-            val confirmed = runCatching { runtime.confirmCandidateHealthy(appId) }.getOrDefault(false)
+            val confirmed = runCatching { runtime.confirmCandidateHealthy(appId, releaseId, epoch) }.getOrDefault(false)
+            if (confirmed) runOnUiThread {
+                if (isCurrentGeneration(generation) && isPreparedUserCurrent()) {
+                    bundleRuntimeMetadata = metadata + mapOf("source" to "ota_current", "promoted" to true)
+                    updateDebugOtaState("ready")
+                }
+            }
             if (!confirmed) {
                 android.util.Log.w(TAG, "candidate 首屏已显示，但健康确认失败：$appId")
             }
@@ -626,15 +676,17 @@ class LynxShellActivity : AppCompatActivity() {
     }
 
     private fun attemptOtaRecovery(generation: Long, reason: String): Boolean {
-        if (otaRecoveryUsed) return false
+        if (otaRecoveryUsed || !isPreparedUserCurrent()) return false
         val appId = request.lynxAppId ?: return false
         val runtime = LynxShell.activityBundleRuntime() ?: return false
+        val epoch = preparedUserEpoch
+        val releaseId = bundleRuntimeMetadata?.get("releaseId") as? String
         otaRecoveryUsed = true
         loadingView.show("页面加载失败，正在回滚…")
         bundleFuture = otaExecutor.submit {
-            val result = runCatching { runtime.rollback(appId, reason) }
+            val result = runCatching { runtime.rollback(appId, reason, releaseId, epoch) }
             runOnUiThread {
-                if (!isCurrentGeneration(generation)) return@runOnUiThread
+                if (!isCurrentGeneration(generation) || !isPreparedUserCurrent()) return@runOnUiThread
                 bundleFuture = null
                 if (result.getOrNull() == true) {
                     // 保留 otaRecoveryUsed=true，禁止坏版本再次失败后形成无限回滚循环。
@@ -653,6 +705,16 @@ class LynxShellActivity : AppCompatActivity() {
 
     private fun isCurrentGeneration(generation: Long): Boolean =
         generation == contentGeneration && !isFinishing && !isDestroyed
+
+    private fun isPreparedUserCurrent(): Boolean =
+        preparedRuntime === LynxShell.activityBundleRuntime() && preparedUserEpoch == preparedRuntime?.userIdentityEpoch
+
+    private fun updateDebugOtaState(state: String) {
+        val metadata = bundleRuntimeMetadata.orEmpty()
+        val value = "state=$state;release=${metadata["releaseId"] ?: "none"};source=${metadata["source"] ?: "none"};kind=${metadata["selectionKind"] ?: "none"};sequence=${metadata["releaseSequence"] ?: "none"};epoch=${preparedUserEpoch ?: 0};promoted=${metadata["promoted"] ?: false}"
+        debugOtaLabel?.text = value
+        debugOtaLabel?.contentDescription = "lynx-debug-ota-state:$value"
+    }
 
     /** Navigator/转场层只读当前 generation 的 LynxView，不持有跨 Activity 强引用。 */
     fun currentLynxView(): LynxView? = lynxView
@@ -748,6 +810,7 @@ class LynxShellActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        LynxRouter.removeOtaUserContextListener(otaUserListener)
         bundleFuture?.cancel(true)
         bundleFuture = null
         otaExecutor.shutdownNow()

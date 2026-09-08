@@ -11,6 +11,8 @@ import LynxRouteParser from './LynxRouteParser';
 import LynxNavigator from './LynxNavigator';
 import LynxOtaRuntime from '../ota/LynxOtaRuntime';
 import PageBundleRuntimeRegistry, { LynxOtaConfig, OtaStorageSnapshot } from '../ota/OtaModels';
+import { OtaUserContext } from '../ota/OtaUserContext';
+import OtaUserContextEvents from '../ota/OtaUserContextEvents';
 import EmbeddedBundleRegistry, {
   EmbeddedBundleIdentity,
   EmbeddedOnlyRuntime
@@ -24,17 +26,46 @@ import EmbeddedBundleRegistry, {
  */
 export default class LynxRouter {
   private static embeddedBundleRegistry: EmbeddedBundleRegistry | null = null;
+  private static hasPendingUser: boolean = false;
+  private static pendingUserId: string | undefined = undefined;
+
+  /** 安装前可注册；返回时身份代际已同步切换，网络在后台检查。 */
+  static registerOtaUserId(userId?: string): boolean {
+    let normalized: string | undefined;
+    try { normalized = OtaUserContext.normalizeUserId(userId); } catch (error) { return false; }
+    const runtime = PageBundleRuntimeRegistry.current();
+    const changed = runtime instanceof LynxOtaRuntime ? runtime.registerUserId(normalized) :
+      !LynxRouter.hasPendingUser || normalized !== LynxRouter.pendingUserId;
+    LynxRouter.hasPendingUser = true;
+    LynxRouter.pendingUserId = normalized;
+    if (changed && runtime instanceof LynxOtaRuntime) {
+      const epoch = runtime.userIdentityEpoch;
+      OtaUserContextEvents.emit(epoch);
+      runtime.synchronizeRegisteredUser(epoch);
+    }
+    return changed;
+  }
+
+  static clearOtaUserId(): boolean { return LynxRouter.registerOtaUserId(undefined); }
+
+  static getOtaUserIdentityEpoch(): number { return PageBundleRuntimeRegistry.current()?.userIdentityEpoch ?? 0; }
 
   /** Application/Ability 创建第一个 Lynx Page 前调用一次。 */
   static install(context: common.UIAbilityContext, otaConfig?: LynxOtaConfig): LynxOtaRuntime | null {
     LynxRuntimeInitializer.initialize(context);
     LynxRouter.embeddedBundleRegistry = new EmbeddedBundleRegistry(context);
+    const previous = PageBundleRuntimeRegistry.current();
     if (otaConfig === undefined) {
+      if (previous instanceof LynxOtaRuntime) previous.close();
       PageBundleRuntimeRegistry.install(new EmbeddedOnlyRuntime(context));
+      if (previous !== null) OtaUserContextEvents.emit(0);
       return null;
     }
+    if (LynxRouter.hasPendingUser) otaConfig.userId = LynxRouter.pendingUserId ?? '';
     const runtime = new LynxOtaRuntime(context, otaConfig);
+    if (previous instanceof LynxOtaRuntime) previous.close();
     PageBundleRuntimeRegistry.install(runtime);
+    if (previous !== null) OtaUserContextEvents.emit(runtime.userIdentityEpoch);
     runtime.onApplicationStarted();
     return runtime;
   }
@@ -44,7 +75,7 @@ export default class LynxRouter {
     PageBundleRuntimeRegistry.current()?.onApplicationForeground();
   }
 
-  /** 用户主动刷新全量 OTA；成功后 Tab Host 才重新读取已经提交的 current。 */
+  /** 用户主动刷新全量 OTA；完成后重读已提交 current，false 不等于所有 App 都未提交。 */
   static refreshAllOtaBundles(): Promise<boolean> {
     const runtime = PageBundleRuntimeRegistry.current();
     if (!(runtime instanceof LynxOtaRuntime)) {

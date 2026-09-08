@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Android 用户灰度 OTA · 非设备验证报告</title><style>
+:root{--ink:#142d2a;--muted:#506964;--line:#cddad3;--paper:#f3f3e9;--accent:#b9ed68;--warn:#ffe1ab;--bad:#f4b4a6}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.7 'PingFang SC','Helvetica Neue',sans-serif}main{max-width:1300px;margin:auto;padding:40px 36px 80px}header{border-top:7px solid var(--ink);padding:26px 0 34px;border-bottom:1px solid var(--ink)}.eyebrow{letter-spacing:.12em;font:12px Menlo,monospace}h1{font:600 clamp(30px,4.7vw,60px)/1.2 'Songti SC',serif;margin:24px 0;max-width:1000px}h2{font-size:27px;margin:0 0 18px}h3{font-size:19px;line-height:1.5;margin:8px 0}a{color:#176751}.badge{display:inline-block;background:var(--accent);padding:5px 14px;border-radius:3px;font-weight:700}.warning{background:var(--warn)}.intro{max-width:950px;color:var(--muted)}.stats{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)}.stat{padding:24px 15px;border-right:1px solid var(--line)}.stat b{display:block;font:32px/1.4 Menlo,monospace}.stat span{font-size:13px;color:var(--muted)}section{padding:32px 0;border-bottom:1px solid var(--line)}.callout{background:#e3ebdd;border-left:4px solid #2e6650;padding:16px 20px}.device-stop{background:#fff0d5;border-left-color:#95610e}.columns{display:grid;grid-template-columns:1fr 1fr;gap:28px}.checks{padding-left:0;list-style:none}.checks li{margin:10px 0}.check{display:inline-block;min-width:62px;font-weight:600;margin-right:7px}.ok{color:#286341}.bad{color:#a12c20}.table{overflow:auto}table{width:100%;border-collapse:collapse;min-width:650px}th,td{padding:12px 9px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th,small{font-size:12px;color:var(--muted)}code,pre{font:12px/1.6 Menlo,monospace}code{overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#e5ebe1;padding:14px}.evidence-item{border:1px solid var(--line);background:#fafbf5;margin:16px 0;min-width:0}.caption{padding:18px 20px}.tag{display:inline-block;font-size:11px;letter-spacing:.05em;border:1px solid var(--line);padding:2px 7px;margin-right:8px}details{padding:14px 20px}summary{cursor:pointer;font-weight:600;overflow-wrap:anywhere}summary small{display:block;margin-top:6px}.real-card>details{border-top:1px solid var(--line)}.real-card>.callout{margin:0 20px 18px}.filters{display:grid;grid-template-columns:1fr 250px;gap:18px;margin-bottom:18px}input,select{width:100%;padding:11px;font:inherit;border:1px solid var(--line);background:#fff}label{display:block;font-size:13px;margin-bottom:6px}.sources dd{margin:4px 0 15px;overflow-wrap:anywhere}.sources dt{font-weight:600}button{font:inherit;background:transparent;border:1px solid var(--line);padding:7px 14px;cursor:pointer}footer{padding-top:25px;color:var(--muted);font-size:12px}[hidden]{display:none!important}@media(max-width:850px){main{padding:24px 18px}.columns{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.filters{grid-template-columns:1fr}}@media print{.filters,.tools{display:none}article{break-inside:avoid}main{padding:15px}}
+</style></head><body><main>
+<header><div class="eyebrow">LYNX / OTA USER SELECTION / ANDROID / NON-DEVICE</div><h1>Android OTA 用户灰度<br>把证据边界写清楚。</h1><span class="badge">Android 非设备门禁通过</span> <span class="badge warning">设备验收未完成 · 按用户要求停止</span><p class="intro">本报告统计显式输入的 SDK/JVM JUnit、桌面 OtaSdk + loopback 真实 Server 证据、构建日志与 APK。设备业务场景仍为 0 通过、19 未验收；没有设备截图，也不将离线解析器修复或 APK 构建视为设备重跑。</p><p><a href="#evidence">筛选证据</a> · <a href="#apk">APK 与实际 Runtime 来源</a> · <a href="#device">历史设备失败与取消</a> · <a href="evidence/ota-user-gray/android-20260906-final-gate2/summary.json">机器可读汇总</a></p></header>
+<div class="stats"><div class="stat"><b>87/87</b><span>全部 SDK/JVM 用例通过；失败 0 / 错误 0 / 跳过 0</span></div><div class="stat"><b>3/3</b><span>其中真实 Server 集成；有效 JSON 3/3 · 14 phases</span></div><div class="stat"><b>4.0.0</b><span>实际生成 LYNX_RUNTIME_VERSION</span></div><div class="stat"><b>0/19</b><span>设备业务场景通过 / 尚未验收总数；当前已停止</span></div></div>
+<section><h2>非设备门禁</h2><div class="columns"><ul class="checks"><li><span class="check ok">通过</span> 全部传入 JUnit 无失败、错误或跳过</li><li><span class="check ok">通过</span> OtaRealServerSelectionTest 精确三项通过</li><li><span class="check ok">通过</span> 三份非设备 JSON 存在、合法且与 JUnit 对应</li><li><span class="check ok">通过</span> 构建日志包含 BUILD SUCCESSFUL 且没有 BUILD FAILED</li><li><span class="check ok">通过</span> 日志未发现 --tests 筛选</li><li><span class="check ok">通过</span> 生成的实际 Lynx Runtime 版本为 4.0.0</li><li><span class="check ok">通过</span> APK SHA/元数据可读且来源一致</li></ul><div><p>JUnit 来源：13 个 XML、13 个 suite。全部计数来自本次实际 XML，没有硬编码预估总数。</p><p>真实 Server JSON 必须与对应的三项通过测试关联，且保持 <code>evidenceKind=desktop-sdk-real-server</code>、<code>deviceTested=false</code>、<code>screenshots=[]</code>。</p><p class="callout">绿色状态只表示本轮非设备门禁；设备栏仍保持未完成。</p></div></div></section>
+<section id="evidence"><h2>可筛选、可展开的验证证据</h2><div class="filters"><div><label for="filter">关键词</label><input id="filter" type="search" placeholder="例如：灰度、candidate、回滚、具体 testcase"></div><div><label for="kind">证据层</label><select id="kind"><option value="all">全部证据</option><option value="jvm">SDK / JVM JUnit</option><option value="server">桌面 SDK + 真实 Server</option></select></div></div><p class="tools"><button id="expand" type="button">展开当前结果</button> <button id="collapse" type="button">收起当前结果</button> <span id="matches" aria-live="polite"></span></p><p class="callout">HTTP 计数是 JSON 采集时刻的区间值，可能覆盖多个动作。候选确认来自桌面 SDK 的显式方法调用，不是 Android UI 首屏证明。</p><article class="evidence-item real-card" data-kind="server"><div class="caption"><span class="tag">桌面 SDK + 真实 Server</span><h3>真实 HTTP 选择、增量下载、全量化、回滚与冷状态</h3><p><code>real HTTP selects full gray newer full promotion rollback and forced embedded cold state</code></p><p>8 个实际 phase · platform=android · Store v3 · deviceTested=false</p></div><div class="table"><table><thead><tr><th>采集阶段</th><th>合成身份 / 选择</th><th>current / candidate</th><th>CAS</th><th>该采集区间 HTTP</th></tr></thead><tbody><tr><td>匿名正式 full5：首次下载<br><small>anonymous-full5</small></td><td>anonymous / full<br>revision 9</td><td><code>r20260421_002</code><br><code>无候选</code><br></td><td>100 对象</td><td>latest 完成 1<br>Bundle 请求 100<br>Bundle 成功 100</td></tr><tr><td>A 命中 gray6：复用 99 个对象<br><small>A-gray6</small></td><td>A / gray<br>revision 10</td><td><code>r20260421_003</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 1<br>Bundle 请求 1<br>Bundle 成功 1</td></tr><tr><td>B 使用正式 full5<br><small>B-full5</small></td><td>B / full<br>revision 10</td><td><code>r20260421_002</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 1<br>Bundle 请求 0<br>Bundle 成功 0</td></tr><tr><td>更高全量 full7 覆盖旧灰度<br><small>A-full7-wins</small></td><td>A / full<br>revision 11</td><td><code>r20260421_004</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 1<br>Bundle 请求 1<br>Bundle 成功 1</td></tr><tr><td>A 命中新的 gray8<br><small>A-gray8</small></td><td>A / gray<br>revision 12</td><td><code>r20260421_005</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 1<br>Bundle 请求 1<br>Bundle 成功 1</td></tr><tr><td>同版本全量化后 B 复用字节<br><small>B-gray8-promoted-full</small></td><td>B / full<br>revision 13</td><td><code>r20260421_005</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 1<br>Bundle 请求 0<br>Bundle 成功 0</td></tr><tr><td>服务端回滚 full5：按实际 CAS 保留情况补下载<br><small>server-rollback-full5</small></td><td>B / full<br>revision 14</td><td><code>r20260421_002</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 1<br>Bundle 请求 1<br>Bundle 成功 1</td></tr><tr><td>持久化回退指令：冷 SDK 屏蔽远程<br><small>forced-embedded-cold-state</small></td><td>B / 无远程选择<br>revision 15</td><td><code>无</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 1<br>Bundle 请求 0<br>Bundle 成功 0</td></tr></tbody></table></div><details><summary>展开测试自产的断言与完整 JSON</summary><p><a href="evidence/ota-user-gray/android-20260906-final-gate2/real-server/01-real-selection-flow.json">下载该 JVM 证据 JSON</a></p><pre>{
+  &quot;schemaVersion&quot;: 1,
+  &quot;evidenceKind&quot;: &quot;desktop-sdk-real-server&quot;,
+  &quot;deviceTested&quot;: false,
+  &quot;screenshots&quot;: [],
+  &quot;platform&quot;: &quot;android&quot;,
+  &quot;storeVersion&quot;: &quot;v3&quot;,
+  &quot;serverOrigin&quot;: &quot;http://127.0.0.1:18770&quot;,
+  &quot;testName&quot;: &quot;real HTTP selects full gray newer full promotion rollback and forced embedded cold state&quot;,
+  &quot;assertions&quot;: [
+    &quot;real-http&quot;,
+    &quot;store-v3&quot;,
+    &quot;no-device&quot;
+  ],
+  &quot;phases&quot;: [
+    {
+      &quot;phase&quot;: &quot;anonymous-full5&quot;,
+      &quot;audience&quot;: &quot;anonymous&quot;,
+      &quot;assertions&quot;: [
+        &quot;downloaded-100&quot;,
+        &quot;cas-100&quot;
+      ],
+      &quot;serverStage&quot;: &quot;full5&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_002&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;9&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 100,
+      &quot;latestCompletedCount&quot;: 1,
+      &quot;bundleRequestCount&quot;: 100,
+      &quot;bundleSuccessCount&quot;: 100
+    },
+    {
+      &quot;phase&quot;: &quot;A-gray6&quot;,
+      &quot;audience&quot;: &quot;A&quot;,
+      &quot;assertions&quot;: [
+        &quot;downloaded-1&quot;,
+        &quot;reused-99&quot;,
+        &quot;cas-101&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray6&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_003&quot;,
+      &quot;selectionKind&quot;: &quot;gray&quot;,
+      &quot;policyRevision&quot;: &quot;10&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 1,
+      &quot;bundleRequestCount&quot;: 1,
+      &quot;bundleSuccessCount&quot;: 1
+    },
+    {
+      &quot;phase&quot;: &quot;B-full5&quot;,
+      &quot;audience&quot;: &quot;B&quot;,
+      &quot;assertions&quot;: [
+        &quot;gray-not-authorized&quot;,
+        &quot;bundle-get-0&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray6&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_002&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;10&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 1,
+      &quot;bundleRequestCount&quot;: 0,
+      &quot;bundleSuccessCount&quot;: 0
+    },
+    {
+      &quot;phase&quot;: &quot;A-full7-wins&quot;,
+      &quot;audience&quot;: &quot;A&quot;,
+      &quot;assertions&quot;: [
+        &quot;newer-full-over-gray&quot;,
+        &quot;downloaded-1&quot;
+      ],
+      &quot;serverStage&quot;: &quot;full7&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_004&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;11&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 1,
+      &quot;bundleRequestCount&quot;: 1,
+      &quot;bundleSuccessCount&quot;: 1
+    },
+    {
+      &quot;phase&quot;: &quot;A-gray8&quot;,
+      &quot;audience&quot;: &quot;A&quot;,
+      &quot;assertions&quot;: [
+        &quot;gray-selected&quot;,
+        &quot;downloaded-1&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray8&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_005&quot;,
+      &quot;selectionKind&quot;: &quot;gray&quot;,
+      &quot;policyRevision&quot;: &quot;12&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 1,
+      &quot;bundleRequestCount&quot;: 1,
+      &quot;bundleSuccessCount&quot;: 1
+    },
+    {
+      &quot;phase&quot;: &quot;B-gray8-promoted-full&quot;,
+      &quot;audience&quot;: &quot;B&quot;,
+      &quot;assertions&quot;: [
+        &quot;same-release-kind-full&quot;,
+        &quot;bundle-get-0&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray8&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_005&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;13&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 1,
+      &quot;bundleRequestCount&quot;: 0,
+      &quot;bundleSuccessCount&quot;: 0
+    },
+    {
+      &quot;phase&quot;: &quot;server-rollback-full5&quot;,
+      &quot;audience&quot;: &quot;B&quot;,
+      &quot;assertions&quot;: [
+        &quot;server-rollback-reason&quot;,
+        &quot;downloaded-1&quot;,
+        &quot;reused-99&quot;,
+        &quot;copied-0&quot;,
+        &quot;cas-bounded-101&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray8&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_002&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;14&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 1,
+      &quot;bundleRequestCount&quot;: 1,
+      &quot;bundleSuccessCount&quot;: 1
+    },
+    {
+      &quot;phase&quot;: &quot;forced-embedded-cold-state&quot;,
+      &quot;audience&quot;: &quot;B&quot;,
+      &quot;assertions&quot;: [
+        &quot;effective-current-null&quot;,
+        &quot;decision-persisted&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray8&quot;,
+      &quot;currentReleaseId&quot;: null,
+      &quot;selectionKind&quot;: null,
+      &quot;policyRevision&quot;: &quot;15&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 1,
+      &quot;bundleRequestCount&quot;: 0,
+      &quot;bundleSuccessCount&quot;: 0
+    }
+  ]
+}</pre></details></article>
+<article class="evidence-item real-card" data-kind="server"><div class="caption"><span class="tag">桌面 SDK + 真实 Server</span><h3>A 响应晚于 B：拒绝旧身份写入</h3><p><code>held A response fails after B sync and cannot change B state</code></p><p>1 个实际 phase · platform=android · Store v3 · deviceTested=false</p></div><div class="table"><table><thead><tr><th>采集阶段</th><th>合成身份 / 选择</th><th>current / candidate</th><th>CAS</th><th>该采集区间 HTTP</th></tr></thead><tbody><tr><td>B 已完成，迟到 A 不得改写 State<br><small>held-A-released-after-B</small></td><td>B / full<br>revision 10</td><td><code>r20260421_002</code><br><code>无候选</code><br></td><td>100 对象</td><td>latest 完成 3<br>Bundle 请求 100<br>Bundle 成功 100</td></tr></tbody></table></div><details><summary>展开测试自产的断言与完整 JSON</summary><p><a href="evidence/ota-user-gray/android-20260906-final-gate2/real-server/02-held-identity-flow.json">下载该 JVM 证据 JSON</a></p><pre>{
+  &quot;schemaVersion&quot;: 1,
+  &quot;evidenceKind&quot;: &quot;desktop-sdk-real-server&quot;,
+  &quot;deviceTested&quot;: false,
+  &quot;screenshots&quot;: [],
+  &quot;platform&quot;: &quot;android&quot;,
+  &quot;storeVersion&quot;: &quot;v3&quot;,
+  &quot;serverOrigin&quot;: &quot;http://127.0.0.1:18770&quot;,
+  &quot;testName&quot;: &quot;held A response fails after B sync and cannot change B state&quot;,
+  &quot;assertions&quot;: [
+    &quot;captured-A-response&quot;,
+    &quot;B-completed-first&quot;,
+    &quot;old-write-rejected&quot;,
+    &quot;no-device&quot;
+  ],
+  &quot;phases&quot;: [
+    {
+      &quot;phase&quot;: &quot;held-A-released-after-B&quot;,
+      &quot;audience&quot;: &quot;B&quot;,
+      &quot;assertions&quot;: [
+        &quot;A-stale-identity-rejected&quot;,
+        &quot;B-state-byte-identical&quot;,
+        &quot;B-current-unchanged&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray6&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_002&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;10&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 100,
+      &quot;latestCompletedCount&quot;: 3,
+      &quot;bundleRequestCount&quot;: 100,
+      &quot;bundleSuccessCount&quot;: 100
+    }
+  ]
+}</pre></details></article>
+<article class="evidence-item real-card" data-kind="server"><div class="caption"><span class="tag">桌面 SDK + 真实 Server</span><h3>JVM 候选协议、显式健康确认、退出与兼容边界</h3><p><code>candidate stays staged until explicit SDK health confirmation then logout and incompatibility reject it</code></p><p>5 个实际 phase · platform=android · Store v3 · deviceTested=false</p></div><p class="callout">此项由 JVM 显式调用 SDK 健康确认；没有验证 Android View、onFirstScreen 或设备候选首屏。</p><div class="table"><table><thead><tr><th>采集阶段</th><th>合成身份 / 选择</th><th>current / candidate</th><th>CAS</th><th>该采集区间 HTTP</th></tr></thead><tbody><tr><td>候选 pending，current 尚未切换<br><small>candidate-staged</small></td><td>A / full<br>revision 9</td><td><code>r20260421_002</code><br><code>r20260421_003</code><br>pending</td><td>101 对象</td><td>latest 完成 2<br>Bundle 请求 101<br>Bundle 成功 101</td></tr><tr><td>候选 trial 与租约<br><small>candidate-trial-lease</small></td><td>A / full<br>revision 9</td><td><code>r20260421_002</code><br><code>r20260421_003</code><br>trial</td><td>101 对象</td><td>latest 完成 2<br>Bundle 请求 101<br>Bundle 成功 101</td></tr><tr><td>JVM 显式 SDK health-confirm（非 UI 首屏）<br><small>candidate-sdk-health-confirmed</small></td><td>A / gray<br>revision 10</td><td><code>r20260421_003</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 2<br>Bundle 请求 101<br>Bundle 成功 101</td></tr><tr><td>退出灰度身份<br><small>logout-full5</small></td><td>anonymous / full<br>revision 10</td><td><code>r20260421_002</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 3<br>Bundle 请求 101<br>Bundle 成功 101</td></tr><tr><td>构建号 1000 不兼容，拒绝远程入口<br><small>incompatible-version-code</small></td><td>A / 无远程选择<br>revision 10</td><td><code>无</code><br><code>无候选</code><br></td><td>101 对象</td><td>latest 完成 4<br>Bundle 请求 101<br>Bundle 成功 101</td></tr></tbody></table></div><details><summary>展开测试自产的断言与完整 JSON</summary><p><a href="evidence/ota-user-gray/android-20260906-final-gate2/real-server/03-candidate-protocol-flow.json">下载该 JVM 证据 JSON</a></p><pre>{
+  &quot;schemaVersion&quot;: 1,
+  &quot;evidenceKind&quot;: &quot;desktop-sdk-real-server&quot;,
+  &quot;deviceTested&quot;: false,
+  &quot;screenshots&quot;: [],
+  &quot;platform&quot;: &quot;android&quot;,
+  &quot;storeVersion&quot;: &quot;v3&quot;,
+  &quot;serverOrigin&quot;: &quot;http://127.0.0.1:18770&quot;,
+  &quot;testName&quot;: &quot;candidate stays staged until explicit SDK health confirmation then logout and incompatibility reject it&quot;,
+  &quot;assertions&quot;: [
+    &quot;candidate-not-current-before-confirm&quot;,
+    &quot;explicit-sdk-health-confirm-only&quot;,
+    &quot;logout-isolated&quot;,
+    &quot;compatibility-fail-closed&quot;,
+    &quot;no-device&quot;
+  ],
+  &quot;phases&quot;: [
+    {
+      &quot;phase&quot;: &quot;candidate-staged&quot;,
+      &quot;audience&quot;: &quot;A&quot;,
+      &quot;assertions&quot;: [
+        &quot;current-full5&quot;,
+        &quot;candidate-gray6-pending&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray6&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_002&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;9&quot;,
+      &quot;candidateReleaseId&quot;: &quot;r20260421_003&quot;,
+      &quot;candidateStatus&quot;: &quot;pending&quot;,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 2,
+      &quot;bundleRequestCount&quot;: 101,
+      &quot;bundleSuccessCount&quot;: 101
+    },
+    {
+      &quot;phase&quot;: &quot;candidate-trial-lease&quot;,
+      &quot;audience&quot;: &quot;A&quot;,
+      &quot;assertions&quot;: [
+        &quot;lease-readable&quot;,
+        &quot;candidate-trial&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray6&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_002&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;9&quot;,
+      &quot;candidateReleaseId&quot;: &quot;r20260421_003&quot;,
+      &quot;candidateStatus&quot;: &quot;trial&quot;,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 2,
+      &quot;bundleRequestCount&quot;: 101,
+      &quot;bundleSuccessCount&quot;: 101
+    },
+    {
+      &quot;phase&quot;: &quot;candidate-sdk-health-confirmed&quot;,
+      &quot;audience&quot;: &quot;A&quot;,
+      &quot;assertions&quot;: [
+        &quot;explicit-sdk-confirm&quot;,
+        &quot;current-gray6&quot;,
+        &quot;not-ui-first-screen&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray6&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_003&quot;,
+      &quot;selectionKind&quot;: &quot;gray&quot;,
+      &quot;policyRevision&quot;: &quot;10&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 2,
+      &quot;bundleRequestCount&quot;: 101,
+      &quot;bundleSuccessCount&quot;: 101
+    },
+    {
+      &quot;phase&quot;: &quot;logout-full5&quot;,
+      &quot;audience&quot;: &quot;anonymous&quot;,
+      &quot;assertions&quot;: [
+        &quot;gray-not-reused-after-logout&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray6&quot;,
+      &quot;currentReleaseId&quot;: &quot;r20260421_002&quot;,
+      &quot;selectionKind&quot;: &quot;full&quot;,
+      &quot;policyRevision&quot;: &quot;10&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 3,
+      &quot;bundleRequestCount&quot;: 101,
+      &quot;bundleSuccessCount&quot;: 101
+    },
+    {
+      &quot;phase&quot;: &quot;incompatible-version-code&quot;,
+      &quot;audience&quot;: &quot;A&quot;,
+      &quot;assertions&quot;: [
+        &quot;version-code-1000-rejected&quot;,
+        &quot;effective-current-null&quot;
+      ],
+      &quot;serverStage&quot;: &quot;gray6&quot;,
+      &quot;currentReleaseId&quot;: null,
+      &quot;selectionKind&quot;: null,
+      &quot;policyRevision&quot;: &quot;10&quot;,
+      &quot;candidateReleaseId&quot;: null,
+      &quot;candidateStatus&quot;: null,
+      &quot;casObjectCount&quot;: 101,
+      &quot;latestCompletedCount&quot;: 4,
+      &quot;bundleRequestCount&quot;: 101,
+      &quot;bundleSuccessCount&quot;: 101
+    }
+  ]
+}</pre></details></article><article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.example.lynxshell.ota.OtaPageRefreshGateTest <small>5/5 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>2617674481913892bcbbaa8c0dd9cbcec1be352655cb8e5e5b1f0fbf18ddb885</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>oldSuccessCannotPostponeNewUserRefresh</td><td>通过</td><td>0.003 s</td></tr><tr><td>switchClearsSuccessWhileSameEpochClearAppAllowsExplicitRepair</td><td>通过</td><td>0.000 s</td></tr><tr><td>oldCapturedEpochCannotReserveAfterUserSwitch</td><td>通过</td><td>0.000 s</td></tr><tr><td>oldCompletionCannotRemoveNewUserReservation</td><td>通过</td><td>0.000 s</td></tr><tr><td>thirtyMinuteBoundaryAndAppIsolationArePreserved</td><td>通过</td><td>0.000 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.example.lynxshell.ota.OtaRealServerSelectionTest <small>3/3 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>827542957cdf72125f20c0192d0724c0fd9aa36a02f1cf49fa9b0f13f916d0ba</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>real HTTP selects full gray newer full promotion rollback and forced embedded cold state</td><td>通过</td><td>0.793 s</td></tr><tr><td>candidate stays staged until explicit SDK health confirmation then logout and incompatibility reject it</td><td>通过</td><td>0.471 s</td></tr><tr><td>held A response fails after B sync and cannot change B state</td><td>通过</td><td>0.293 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.example.lynxshell.transition.LynxBottomSheetMotionTest <small>7/7 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>233a823fd51721e111485f5dc9f552be03f65a2d07c0e05b58a74390da5cee15</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>defaultBottomSheetIsNonOpaqueDismissibleAndVerticallyDraggable</td><td>通过</td><td>0.001 s</td></tr><tr><td>heroSheetProjectsVelocityAndDismissesOnlyPastTheLowestDetent</td><td>通过</td><td>0.000 s</td></tr><tr><td>customDetentsRequireTheInitialDetentToBeOneOfTheDeclaredHeights</td><td>通过</td><td>0.001 s</td></tr><tr><td>halfProgressKeepsSheetBackdropAndBarrierOnOneTimeline</td><td>通过</td><td>0.000 s</td></tr><tr><td>heroSheetUsesThreeDetentsAndStartsAtTheMiddleDetent</td><td>通过</td><td>0.000 s</td></tr><tr><td>endpointsAreExactSoCancellationCanRestoreTheOpenedSheet</td><td>通过</td><td>0.001 s</td></tr><tr><td>dragProgressUsesSheetHeightAndClampsAtBothEnds</td><td>通过</td><td>0.000 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.BundleValidationCacheTest <small>4/4 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>7953b3984a1910cb8da32cb3c7a551888fac9eb66a721366df048cb730d90bb0</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>same file fingerprint from a different release scope misses</td><td>通过</td><td>0.001 s</td></tr><tr><td>least recently used entries are evicted</td><td>通过</td><td>0.000 s</td></tr><tr><td>release and file fingerprint changes miss</td><td>通过</td><td>0.000 s</td></tr><tr><td>same fingerprint is a cache hit</td><td>通过</td><td>0.000 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaCandidateActivationTest <small>3/3 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>fdba2ff48792eb3b9da3bb95299f467a412403a8aaab677926d391c6eb10176f</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>rollback commit remains readable after a post-commit process fault</td><td>通过</td><td>0.016 s</td></tr><tr><td>candidate stays out of current until healthy confirmation</td><td>通过</td><td>0.011 s</td></tr><tr><td>unfinished trial is discarded after a new transaction is created</td><td>通过</td><td>0.008 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaFallbackRegressionTest <small>1/1 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>c77e1562cc5e3940278d3e9542d16853e0b5e7e4dec9cbd68fa3377b5db7cec9</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>rollback skips a corrupted predecessor and restores the verified embedded baseline</td><td>通过</td><td>0.012 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaReleaseLeaseTest <small>3/3 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>2f79d0767f7fd184e6ec3875757744f026eae1a3039ce77f0f970cacad9707cb</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>discarded candidate is retained only while its trial page is alive</td><td>通过</td><td>0.010 s</td></tr><tr><td>active page lease retains old release until page closes</td><td>通过</td><td>0.011 s</td></tr><tr><td>explicit delete defers leased release deletion until final close</td><td>通过</td><td>0.006 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaReleaseRecoveryTest <small>3/3 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>dbfe36087ae3cb594ecb67dc676df48fec5094a8287aea9b9f98566899f1905b</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>published releases roll back to their direct predecessor</td><td>通过</td><td>0.010 s</td></tr><tr><td>changed current bundle fingerprint cannot be resolved from cached verification</td><td>通过</td><td>0.007 s</td></tr><tr><td>corrupted downloaded current rolls back to the verified embedded baseline</td><td>通过</td><td>0.006 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaReleaseSecurityGateTest <small>8/8 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>714ef9944fb35ec446ed5fd15d15acd2ef8d0bf51ab5f1a3141e4f2d7a0914ce</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>transactionRejectsMissingInvalidAndOversizedDeclaredSize</td><td>通过</td><td>0.018 s</td></tr><tr><td>activeLatestReleaseIsAcceptedViaVerifiedLocalReuse</td><td>通过</td><td>0.006 s</td></tr><tr><td>transactionRejectsHttpBundleUrlBeforeOpeningTheLocalFixtureServer</td><td>通过</td><td>0.003 s</td></tr><tr><td>localReuseCopiesTheVerifiedFileWithoutTreatingItsFileUriAsARemoteDownload</td><td>通过</td><td>0.006 s</td></tr><tr><td>transactionRejectsNonActiveManifestAndPreservesCurrent</td><td>通过</td><td>0.003 s</td></tr><tr><td>streamingAcceptsExactly20MiBAndRejects20MiBPlusOne</td><td>通过</td><td>0.025 s</td></tr><tr><td>disabledAndRolledBackLatestReleasesAreSkippedWithoutChangingCurrent</td><td>通过</td><td>0.008 s</td></tr><tr><td>configurationRejectsHttpApiBaseUrl</td><td>通过</td><td>0.001 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaStorageDiagnosticsTest <small>3/3 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>951f826b80d5d2d120d87561264a5f2dd7ed459a72df17d925c12bc8d19e8581</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>snapshot reports state candidate leases orphan and staging from one consistent store view</td><td>通过</td><td>0.014 s</td></tr><tr><td>empty snapshot exposes the real root without creating store files</td><td>通过</td><td>0.001 s</td></tr><tr><td>same release id remains visible under both app cards</td><td>通过</td><td>0.011 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaStoreV2RetentionTest <small>11/11 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>62b46810cadeac238470f7beb5655078b8ade1f432516d0e7440682c88a87fb5</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>cold maintenance never guesses when state is malformed</td><td>通过</td><td>0.005 s</td></tr><tr><td>staging recovery only touches the app currently installing</td><td>通过</td><td>0.006 s</td></tr><tr><td>insufficient storage keeps embedded current and publishes no partial release</td><td>通过</td><td>0.004 s</td></tr><tr><td>orphan pruning happens before capacity preflight</td><td>通过</td><td>0.005 s</td></tr><tr><td>same release id is physically isolated by app id</td><td>通过</td><td>0.008 s</td></tr><tr><td>candidate mode retains current previous and one candidate then prunes after confirmation</td><td>通过</td><td>0.036 s</td></tr><tr><td>embedded registration never copies bundle bytes into ota store</td><td>通过</td><td>0.002 s</td></tr><tr><td>cold start maintenance removes v2 orphan and staging but preserves current</td><td>通过</td><td>0.005 s</td></tr><tr><td>deleting one app leaves another app with the same release untouched</td><td>通过</td><td>0.010 s</td></tr><tr><td>state commit faults remain durable on both sides of the commit boundary</td><td>通过</td><td>0.010 s</td></tr><tr><td>ten normal activations retain only current and previous</td><td>通过</td><td>0.031 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaStoreV3Golden100Test <small>4/4 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>9b8d03633ce7d79ad23f80da1723c43d2470653cb4cfbf0498eb520690829a66</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>rollback reuses previous CAS objects and app ids stay isolated</td><td>通过</td><td>0.171 s</td></tr><tr><td>v1 to v2 downloads one changed bundle and stores one new CAS object</td><td>通过</td><td>0.159 s</td></tr><tr><td>v1 active lease survives explicit v2 delete until the lease closes</td><td>通过</td><td>0.158 s</td></tr><tr><td>candidate is durable and a manifest fault does not change current</td><td>通过</td><td>0.193 s</td></tr></tbody></table></div></details></article>
+<article class="evidence-item" data-kind="jvm"><details><summary><span class="tag">SDK / JVM</span> com.ota.android.sdk.OtaUserSelectionTest <small>32/32 · 失败 0 / 错误 0 / 跳过 0</small></summary><p>原始 XML SHA-256：<code>0d3d15571c911e5e51c9534ff7150577b8170948fb639d8d86e3da53605dcab4</code></p><div class="table"><table><thead><tr><th>实际 testcase</th><th>结果</th><th>耗时</th></tr></thead><tbody><tr><td>batch commits all decisions before any bytes and retains every failed and completed App</td><td>通过</td><td>0.021 s</td></tr><tr><td>same user registration is a no-op and raw unicode identifiers remain distinct</td><td>通过</td><td>0.003 s</td></tr><tr><td>C09 live lease stays readable across account switch until close</td><td>通过</td><td>0.023 s</td></tr><tr><td>same candidate resync preserves active trial and avoids another download</td><td>通过</td><td>0.012 s</td></tr><tr><td>C16 directives survive restart reject old revision and allow server rollback lower sequence</td><td>通过</td><td>0.016 s</td></tr><tr><td>C08 gray to full same release changes metadata with zero more GETs and survives restart</td><td>通过</td><td>0.011 s</td></tr><tr><td>old v3 unknown metadata waits for new confirmation and reuses all CAS objects</td><td>通过</td><td>0.101 s</td></tr><tr><td>Executor operation snapshots explicitly capture and restore ThreadLocal identity</td><td>通过</td><td>0.002 s</td></tr><tr><td>wire rejects missing selection bad ranges and accepts Harmony in platform arrays</td><td>通过</td><td>0.004 s</td></tr><tr><td>download A can wait while B sync and current lease make progress</td><td>通过</td><td>0.016 s</td></tr><tr><td>malformed later selection prevents any batch State change or byte download</td><td>通过</td><td>0.003 s</td></tr><tr><td>query failure and candidate check reports use captured identity with sanitized diagnostics</td><td>通过</td><td>0.008 s</td></tr><tr><td>new context refuses V2 reads and malformed directive containers while legacy remains available</td><td>通过</td><td>0.001 s</td></tr><tr><td>normalizers match Server trim controls and integer precision</td><td>通过</td><td>0.002 s</td></tr><tr><td>C06 delayed response A cannot commit after B completed a newer release</td><td>通过</td><td>0.009 s</td></tr><tr><td>outer identity context cannot be replaced by B after probe and rejected leases close</td><td>通过</td><td>0.014 s</td></tr><tr><td>C05 installed gray then offline B uses embedded or nil without a full release</td><td>通过</td><td>0.013 s</td></tr><tr><td>C21 native or SDK context change rechecks cold State compatibility</td><td>通过</td><td>0.008 s</td></tr><tr><td>C10 previous exactly A gray cannot be restored by B rollback</td><td>通过</td><td>0.012 s</td></tr><tr><td>candidate trial final identity failure closes its registered lease</td><td>通过</td><td>0.009 s</td></tr><tr><td>rollback expected current check prevents old page from rolling back new full in same epoch</td><td>通过</td><td>0.014 s</td></tr><tr><td>code and SDK range endpoints are inclusive and missing context fails closed</td><td>通过</td><td>0.000 s</td></tr><tr><td>same identity old revision download cannot overwrite newer decision</td><td>通过</td><td>0.009 s</td></tr><tr><td>rollback missing unreadable or corrupt previous atomically falls back to embedded or sentinel</td><td>通过</td><td>0.048 s</td></tr><tr><td>C07 candidate trial acquire is atomic against another candidate replacement</td><td>通过</td><td>0.016 s</td></tr><tr><td>C11 anonymous cold SDK cannot use disk current directly pointing to A gray</td><td>通过</td><td>0.008 s</td></tr><tr><td>C14 and C15 one changed object out of 100 with independent B authorization and zero copies</td><td>通过</td><td>0.120 s</td></tr><tr><td>real HTTP query carries exact context decodes directives and keeps context ETags separate</td><td>通过</td><td>0.002 s</td></tr><tr><td>invalidatePendingOperations always advances anonymous epoch and rejects old SDK writes</td><td>通过</td><td>0.007 s</td></tr><tr><td>final State rename and registration share one guard after file preparation</td><td>通过</td><td>0.007 s</td></tr><tr><td>C04 gray A is immediately ineligible for B before reconcile with full previous fallback</td><td>通过</td><td>0.010 s</td></tr><tr><td>B reuses bytes from an unpromoted A candidate only after its own selection</td><td>通过</td><td>0.012 s</td></tr></tbody></table></div></details></article></section>
+<section id="apk"><h2>APK、构建与实际 SDK 版本</h2><div class="columns"><article><h3>APK 指纹</h3><dl class="sources"><dt>文件</dt><dd><code>/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/app/build/outputs/apk/debug/app-debug.apk</code></dd><dt>大小</dt><dd>65,731,406 字节 / 62.69 MiB</dd><dt>SHA-256</dt><dd><code>adb00b8ce010e62702d94398d017c460523647def3a6d3034ae48047bf0aa38d</code></dd><dt>applicationId / versionCode / versionName</dt><dd><code>com.example.lynxshell.debug</code><br>1 / 1.0.0-debug</dd></dl><p>applicationId / versionCode / versionName 由 APK Analyzer 从该 APK manifest 读取。</p><p>只读取原 APK，没有将 APK 复制进 docs。</p></article><article><h3>生成配置来源</h3><dl class="sources"><dt>Runtime 版本</dt><dd><code>LYNX_RUNTIME_VERSION=4.0.0</code></dd><dt>实际生成文件</dt><dd><code>/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/generated/source/buildConfig/debug/com/example/lynxshell/BuildConfig.java</code></dd><dt>源文件 SHA-256</dt><dd><code>785f40934d5ee2fb0b6af0df244e31985e3f4ea60c94cfa1eccf3dfe8365f2fc</code></dd></dl><p>用户指定的实际生成 BuildConfig；不是 LynxEnv.getLynxVersion() 或手写请求覆盖</p><p>构建日志：BUILD SUCCESSFUL 1 次，BUILD FAILED 0 次。</p><p><a href="evidence/ota-user-gray/android-20260906-final-gate2/build.log">经过脱敏的构建日志</a> · <a href="evidence/ota-user-gray/android-20260906-final-gate2/artifact-metadata.json">APK / BuildConfig 元数据与来源</a></p></article></div></section>
+<section id="device"><h2>设备边界：未完成，按用户要求停止</h2><div class="callout device-stop"><p><strong>历史事实保持不变：</strong>首次 driver 在 metadata XML 解析处失败退出，0 passed / 19 planned / 1 failure。</p><p>随后修复单引号 XML 属性解析，23 项宿主 self-test 通过；没有设备重跑。</p><p>用户取消 Android/Harmony 模拟器门禁；设备栏保持未完成/按用户要求停止。</p><p>0 个业务场景通过，19 个未验收，保留 1 次失败。该历史来自本任务首次 driver 输出及原始 failure UI XML 记录，不从 JVM 推导；本次采集不运行、重写或补造设备结果。</p></div><p>本报告没有截图画廊。JVM 真实 HTTP 与文件 Store 验证不证明 Native Tab、Android View 首屏、设备候选激活或模拟器磁盘行为。</p></section>
+<section><h2>来源与复现边界</h2><ul><li>SDK/JVM 用例、桌面 OtaSdk + 真实 Server、APK 编译和设备是不同证据层。</li><li>候选 health-confirm 为 JVM 显式 SDK 方法调用，不证明 Android onFirstScreen 或真实 UI 首屏。</li><li>phase 请求计数为采集时刻/区间累计值，不擅自相加或拆分成单动作计数。</li><li>没有导入设备截图；没有把 19 个未验收业务场景标记通过。</li><li>APK 只计算 SHA 与读取元数据，不复制 APK 到 docs。</li><li>当前 Git：<code>fdcdc5320cc48a50bea42247d6e2d52d304f61f2</code> / codex/ota-user-gray-versioncode；记录采集时源码状态，不把未提交工作树等同于某个已发布版本。</li><li>输入原文件的大小、SHA 与 mtime 见 <a href="evidence/ota-user-gray/android-20260906-final-gate2/inputs.json">inputs.json</a>；JUnit 结构化计数见 <a href="evidence/ota-user-gray/android-20260906-final-gate2/junit-summary.json">junit-summary.json</a>。</li><li>BuildConfig 只提取允许的版本字段，不复制可能含 token 的完整生成文件。APK 不复制，设备截图不读取。</li></ul><details><summary>展开门禁及采集元数据</summary><pre>{
+  &quot;runId&quot;: &quot;android-20260906-final-gate2&quot;,
+  &quot;nonDeviceGate&quot;: {
+    &quot;passed&quot;: true,
+    &quot;checks&quot;: [
+      {
+        &quot;id&quot;: &quot;junit&quot;,
+        &quot;label&quot;: &quot;全部传入 JUnit 无失败、错误或跳过&quot;,
+        &quot;pass&quot;: true
+      },
+      {
+        &quot;id&quot;: &quot;real-server-tests&quot;,
+        &quot;label&quot;: &quot;OtaRealServerSelectionTest 精确三项通过&quot;,
+        &quot;pass&quot;: true
+      },
+      {
+        &quot;id&quot;: &quot;real-server-json&quot;,
+        &quot;label&quot;: &quot;三份非设备 JSON 存在、合法且与 JUnit 对应&quot;,
+        &quot;pass&quot;: true
+      },
+      {
+        &quot;id&quot;: &quot;build&quot;,
+        &quot;label&quot;: &quot;构建日志包含 BUILD SUCCESSFUL 且没有 BUILD FAILED&quot;,
+        &quot;pass&quot;: true
+      },
+      {
+        &quot;id&quot;: &quot;full-suite&quot;,
+        &quot;label&quot;: &quot;日志未发现 --tests 筛选&quot;,
+        &quot;pass&quot;: true
+      },
+      {
+        &quot;id&quot;: &quot;sdk-version&quot;,
+        &quot;label&quot;: &quot;生成的实际 Lynx Runtime 版本为 4.0.0&quot;,
+        &quot;pass&quot;: true
+      },
+      {
+        &quot;id&quot;: &quot;apk&quot;,
+        &quot;label&quot;: &quot;APK SHA/元数据可读且来源一致&quot;,
+        &quot;pass&quot;: true
+      }
+    ],
+    &quot;problems&quot;: []
+  },
+  &quot;sourceState&quot;: {
+    &quot;commit&quot;: &quot;fdcdc5320cc48a50bea42247d6e2d52d304f61f2&quot;,
+    &quot;branch&quot;: &quot;codex/ota-user-gray-versioncode&quot;,
+    &quot;androidChanges&quot;: &quot;M android/app/build.gradle.kts\n M android/app/scripts/sync_ota_bundles_to_assets.mjs\n M android/app/src/main/java/com/example/lynxshell/sample/LynxShellSampleApplication.kt\n M android/app/src/main/java/com/example/lynxshell/sample/MainActivity.kt\n M android/app/src/main/java/com/example/lynxshell/sample/NativeTabDemoActivity.kt\n M android/lynx-shell/build.gradle.kts\n M android/lynx-shell/src/main/java/com/example/lynxshell/LynxRouter.kt\n M android/lynx-shell/src/main/java/com/example/lynxshell/container/LynxShellActivity.kt\n M android/lynx-shell/src/main/java/com/example/lynxshell/ota/ActivityBundleRuntime.kt\n M android/lynx-shell/src/main/java/com/example/lynxshell/tab/LynxTabFragment.kt\n M android/lynx-shell/src/main/kotlin/com/example/lynxshell/ota/LynxOtaConfig.kt\n M android/lynx-shell/src/main/kotlin/com/example/lynxshell/ota/LynxOtaRuntime.kt\n M android/lynx-shell/src/main/kotlin/com/ota/android/sdk/ContentAddressedOtaStore.kt\n M android/lynx-shell/src/main/kotlin/com/ota/android/sdk/OtaApiClient.kt\n M android/lynx-shell/src/main/kotlin/com/ota/android/sdk/OtaModels.kt\n M android/lynx-shell/src/main/kotlin/com/ota/android/sdk/OtaReleaseStore.kt\n M android/lynx-shell/src/main/kotlin/com/ota/android/sdk/OtaSdk.kt\n M android/lynx-shell/src/main/kotlin/com/ota/android/sdk/OtaSdkException.kt\n M android/lynx-shell/src/main/kotlin/com/ota/android/sdk/ReleaseTransaction.kt\n?? android/app/scripts/sync_ota_bundles_to_assets.test.mjs\n?? android/app/src/main/java/com/example/lynxshell/sample/OtaUserSelectionDebug.kt\n?? android/lynx-shell/src/main/kotlin/com/example/lynxshell/ota/OtaPageRefreshGate.kt\n?? android/lynx-shell/src/main/kotlin/com/ota/android/sdk/OtaSelection.kt\n?? android/lynx-shell/src/test/kotlin/com/example/lynxshell/ota/\n?? android/lynx-shell/src/test/kotlin/com/ota/android/sdk/OtaUserSelectionTest.kt\n?? scripts/collect-android-user-gray-report.mjs&quot;,
+    &quot;note&quot;: &quot;记录采集时源码状态，不把未提交工作树等同于某个已发布版本&quot;
+  },
+  &quot;device&quot;: {
+    &quot;status&quot;: &quot;STOPPED_BY_USER_NOT_ACCEPTED&quot;,
+    &quot;deviceTestedInThisGate&quot;: false,
+    &quot;scenariosPassed&quot;: 0,
+    &quot;scenariosUnverified&quot;: 19,
+    &quot;historicalFailureCount&quot;: 1,
+    &quot;screenshotsIncluded&quot;: 0,
+    &quot;historyProvenance&quot;: &quot;本任务首次driver输出及原始failure UI XML记录的历史；不从JVM推导&quot;,
+    &quot;historicalFailure&quot;: &quot;首次 driver 在 metadata XML 解析处失败退出，0 passed / 19 planned / 1 failure。&quot;,
+    &quot;offlineFix&quot;: &quot;随后修复单引号 XML 属性解析，23 项宿主 self-test 通过；没有设备重跑。&quot;,
+    &quot;cancellation&quot;: &quot;用户取消 Android/Harmony 模拟器门禁；设备栏保持未完成/按用户要求停止。&quot;
+  }
+}</pre></details></section>
+<footer>生成于 2026-09-06T06:47:54.929Z · 运行标识 android-20260906-final-gate2 · scripts/collect-android-user-gray-report.mjs · 本脚本不执行 Gradle/ADB/设备测试。</footer></main><script>
+const items=[...document.querySelectorAll('.evidence-item')];function applyFilter(){const text=document.querySelector('#filter').value.trim().toLowerCase(),kind=document.querySelector('#kind').value;for(const item of items)item.hidden=(kind!=='all'&&item.dataset.kind!==kind)||!item.textContent.toLowerCase().includes(text);document.querySelector('#matches').textContent='显示 '+items.filter(item=>!item.hidden).length+' / '+items.length+' 项'}document.querySelector('#filter').addEventListener('input',applyFilter);document.querySelector('#kind').addEventListener('change',applyFilter);document.querySelector('#expand').addEventListener('click',()=>items.filter(item=>!item.hidden).forEach(item=>item.querySelectorAll('details').forEach(detail=>detail.open=true)));document.querySelector('#collapse').addEventListener('click',()=>items.forEach(item=>item.querySelectorAll('details').forEach(detail=>detail.open=false)));applyFilter();
+</script></body></html>

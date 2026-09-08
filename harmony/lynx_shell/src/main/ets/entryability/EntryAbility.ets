@@ -22,9 +22,8 @@ export default class EntryAbility extends UIAbility {
     const otaConfig = new LynxOtaConfig(launchBaseUrl);
     otaConfig.environment = 'TEST';
     otaConfig.hostApp = 'capp';
-    // 临时复用现有服务端的 Android release 数据；后端开放 harmony 后改为 'harmony' 或清空。
+    // 服务端已支持 Harmony；不再通过 serverPlatform 覆盖为 Android。
     otaConfig.platform = 'harmony';
-    otaConfig.serverPlatform = 'android';
     otaConfig.allowLocalHTTPForTest = launchBaseUrl.trim().toLowerCase().startsWith('http://') &&
       otaConfig.environment === 'TEST';
     AppStorage.setOrCreate(
@@ -64,6 +63,17 @@ export default class EntryAbility extends UIAbility {
     }
     const launchPauseToken = (want.parameters?.lynx_ota_pause_token as string) ?? '';
     otaConfig.testPauseToken = otaConfig.environment === 'TEST' ? launchPauseToken.trim() : '';
+    // Demo 只接受合成身份枚举；原生宿主业务接入仍通过 Router 注册实际身份。
+    const demoAudience = ((want.parameters?.lynx_ota_demo_user as string) ?? 'anonymous').trim();
+    if (demoAudience !== 'A' && demoAudience !== 'B' && demoAudience !== 'anonymous') {
+      throw new Error('lynx_ota_demo_user 仅允许 A/B/anonymous');
+    }
+    AppStorage.setOrCreate('lynx_ota_demo_user', demoAudience);
+    if (demoAudience === 'anonymous') {
+      LynxRouter.clearOtaUserId();
+    } else {
+      LynxRouter.registerOtaUserId(demoAudience === 'A' ? 'user_demo_A' : 'user_demo_B');
+    }
     LynxRouter.install(this.context, otaConfig);
     console.info(`[${ShellConstants.TAG}] OTA base=${launchBaseUrl}, localHttp=${otaConfig.allowLocalHTTPForTest}, testFault=${otaConfig.testFaultPoint || 'none'}, capacityOverride=${otaConfig.testAvailableCapacityBytes}, testPause=${otaConfig.testPausePoint || 'none'}:${otaConfig.testPauseMillis}:${otaConfig.testPauseToken || 'none'}, wantKeys=${launchParameterKeys}`);
     AppStorage.setOrCreate(ShellConstants.STORAGE_COLOR_MODE, this.context.config.colorMode);

@@ -29,6 +29,7 @@ final class LynxContainerViewController: UIViewController {
     private var releaseLease: OtaBundleLease?
     private var preparedBundleData: Data?
     private var bundleRuntimeMetadata: [String: Any]?
+    private var preparedUserIdentityEpoch: UInt64?
     private var loadGeneration = UUID()
     private var firstScreenObserver: LynxFirstScreenObserver?
     private var firstScreenReady = false
@@ -486,6 +487,7 @@ final class LynxContainerViewController: UIViewController {
         firstScreenReady = false
         firstScreenFailed = false
         bundleRuntimeMetadata = nil
+        preparedUserIdentityEpoch = nil
         loadingView.hide()
         errorView.hide()
         templateProvider?.cancel()
@@ -508,6 +510,7 @@ final class LynxContainerViewController: UIViewController {
 
     /** OTA 页面先等待 current/下载/SHA/激活完成；等待期间不会创建空 LynxView。 */
     private func prepareOtaBundle(generation: UUID) {
+        preparedUserIdentityEpoch = LynxRouter.otaUserIdentityEpoch
         guard let appId = request.lynxAppId,
               let bundleName = request.bundleName else {
             handleTemplateLoadFailure(generation: generation, message: "OTA 路由缺少 lynxAppId 或 bundleName")
@@ -575,6 +578,12 @@ final class LynxContainerViewController: UIViewController {
                 let accepted: Bool = await MainActor.run { [weak self] in
                     guard let self, generation == self.loadGeneration else { return false }
                     self.otaPrepareTask = nil
+                    if let epoch = prepared.userIdentityEpoch, epoch != LynxRouter.otaUserIdentityEpoch {
+                        self.loadingView.hide()
+                        self.errorView.show(message: "用户身份已变化，请重新打开页面")
+                        return false
+                    }
+                    self.preparedUserIdentityEpoch = prepared.userIdentityEpoch
                     guard prepared.lynxAppId == appId,
                           prepared.bundleName == bundleName,
                           !data.isEmpty else {
@@ -600,6 +609,8 @@ final class LynxContainerViewController: UIViewController {
                     if let snapshotID = prepared.navigationSnapshotID {
                         metadata["navigationSnapshotId"] = snapshotID
                     }
+                    metadata["selectionKind"] = prepared.selectionKind
+                    metadata["releaseSequence"] = prepared.releaseSequence
                     self.bundleRuntimeMetadata = metadata
 #if DEBUG
                     self.updateDebugRuntimeState(
@@ -722,6 +733,7 @@ final class LynxContainerViewController: UIViewController {
     }
 
     private func attemptOtaRecovery(generation: UUID, reason: String) -> Bool {
+        if let epoch = preparedUserIdentityEpoch, epoch != LynxRouter.otaUserIdentityEpoch { return false }
         if otaRecoveryInFlight { return true }
         guard !otaRecoveryUsed,
               let appId = request.lynxAppId,
@@ -734,10 +746,13 @@ final class LynxContainerViewController: UIViewController {
         updateDebugRuntimeState("rollback_started")
 #endif
         loadingView.show(message: "页面加载失败，正在回滚…", canCancel: false)
+        let expectedEpoch = preparedUserIdentityEpoch
+        let expectedReleaseId = bundleRuntimeMetadata?["releaseId"] as? String
         otaPrepareTask?.cancel()
         otaPrepareTask = Task { [weak self] in
             do {
-                let rolledBack = try await runtime.rollback(lynxAppId: appId, reason: reason)
+                let rolledBack = try await runtime.rollback(lynxAppId: appId, reason: reason,
+                                                           expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedEpoch)
                 await MainActor.run { [weak self] in
                     guard let self, generation == self.loadGeneration else { return }
                     self.otaPrepareTask = nil
@@ -815,10 +830,22 @@ final class LynxContainerViewController: UIViewController {
             if let appId = self.request.lynxAppId,
                let bundleName = self.request.bundleName,
                let runtime = LynxShell.otaRuntime() {
-                Task { await runtime.reportPageOpen(lynxAppId: appId, bundleName: bundleName) }
+                let expectedEpoch = self.preparedUserIdentityEpoch
+                let expectedReleaseId = self.bundleRuntimeMetadata?["releaseId"] as? String
+                guard expectedEpoch == nil || expectedEpoch == LynxRouter.otaUserIdentityEpoch else { return }
+                Task { await runtime.reportPageOpen(lynxAppId: appId, bundleName: bundleName, expectedIdentityEpoch: expectedEpoch) }
                 if self.bundleRuntimeMetadata?["source"] as? String == "candidate_trial" {
-                    Task {
-                        _ = try? await runtime.confirmCandidateHealthy(lynxAppId: appId)
+                    Task { [weak self] in
+                        let confirmed = try? await runtime.confirmCandidateHealthy(lynxAppId: appId,
+                                                                                  expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedEpoch)
+                        await MainActor.run {
+                            guard confirmed == true, let self, generation == self.loadGeneration,
+                                  expectedEpoch == nil || expectedEpoch == LynxRouter.otaUserIdentityEpoch else { return }
+                            self.bundleRuntimeMetadata?["source"] = "ota_current"
+#if DEBUG
+                            self.updateDebugRuntimeState("ready:\(expectedReleaseId ?? "unknown"):ota_current:promoted")
+#endif
+                        }
                     }
                 }
             }

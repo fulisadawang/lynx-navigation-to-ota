@@ -1,5 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import systemDateTime from '@ohos.systemDateTime';
+import bundleManager from '@ohos.bundle.bundleManager';
+import { LynxEnv } from '@lynx/lynx';
 import OtaApiClient, { OtaMockSource } from './OtaApiClient';
 import {
   OtaBundleArtifact,
@@ -14,6 +16,12 @@ import {
 } from './OtaModels';
 import ContentAddressedOtaStore from './ContentAddressedOtaStore';
 import EmbeddedBundleRegistry from './EmbeddedBundleRegistry';
+import PageBundleRuntimeRegistry from './OtaModels';
+import { OtaUserContext, OtaUserContextBox } from './OtaUserContext';
+import { OtaSelectionSyncError, OtaSelectionSyncResult } from './OtaSelection';
+import OtaSelectionSync from './OtaSelectionSync';
+import OtaPageRefreshGate from './OtaPageRefreshGate';
+import OtaUserContextEvents from './OtaUserContextEvents';
 
 /** 把所有会修改 current/state 的事务串行化；网络等待期间不会阻塞 ArkUI 线程。 */
 class OtaOperationQueue {
@@ -49,6 +57,8 @@ class EmbeddedMockOtaSource implements OtaMockSource {
       env: this.config.environment,
       hostApp: this.config.hostApp,
       platform: this.config.requestPlatform(),
+      selectionSchemaVersion: 1,
+      directives: [],
       bundleLists: [
         await this.makeSnapshot('10000001', ['home.lynx.bundle', 'main.lynx.bundle']),
         await this.makeSnapshot('10000002', ['home.lynx.bundle'])
@@ -99,6 +109,9 @@ class EmbeddedMockOtaSource implements OtaMockSource {
       releaseId: releaseId,
       platform: this.config.requestPlatform(),
       status: 'ACTIVE',
+      selectionSchemaVersion: 1,
+      releaseSequence: this.generation <= 1 ? '1' : '2',
+      selection: { kind: 'full', policyRevision: Math.max(1, this.generation).toString(), reason: 'latest_full' },
       changedBundles: artifacts
     };
   }
@@ -112,7 +125,11 @@ interface NavigationSnapshotRecord {
   manifestId?: string;
   embedded: boolean;
   lease: OtaBundleLease | null;
+  identityEpoch: number;
 }
+
+/** 生命周期票据使用对象身份，reset 后无需永久保存每个已结束 session 的计数墓碑。 */
+class NavigationSnapshotToken { active: boolean = true; }
 
 /**
  * HarmonyOS Router 内置 OTA Runtime。
@@ -125,9 +142,15 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
   private readonly api: OtaApiClient;
   private readonly transaction: ContentAddressedOtaStore;
   private readonly embeddedBundleRegistry: EmbeddedBundleRegistry;
-  private readonly queue: OtaOperationQueue = new OtaOperationQueue();
-  private readonly lastPageRefreshAt: Map<string, number> = new Map();
-  private readonly pageRefreshInFlight: Set<string> = new Set();
+  private queue: OtaOperationQueue = new OtaOperationQueue();
+  private readonly identity: OtaUserContextBox;
+  private readonly selectionSync: OtaSelectionSync;
+  private readonly refreshGate: OtaPageRefreshGate = new OtaPageRefreshGate(0);
+  private readonly activeSignals: Set<OtaPrepareSignal> = new Set();
+  private readonly snapshotTokens: Map<string, NavigationSnapshotToken> = new Map();
+  private reconciledEpoch: number = -1;
+  private closed: boolean = false;
+  private fullSyncTaskId: number = 0;
   private readonly navigationSnapshots: Map<string, NavigationSnapshotRecord> = new Map();
   private navigationSnapshotSequence: number = 0;
   private fullSyncInFlight: boolean = false;
@@ -137,20 +160,90 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
   private skipNextForegroundSync: boolean = false;
 
   constructor(context: common.UIAbilityContext, config: LynxOtaConfig) {
+    config.environment = config.environment.trim().toUpperCase();
+    config.hostApp = config.hostApp.trim().toLowerCase();
+    config.platform = config.platform.trim().toLowerCase();
+    config.apiBaseUrl = config.apiBaseUrl.trim();
+    if (config.platform !== 'harmony' || (config.serverPlatform.trim().length > 0 && config.serverPlatform.trim().toLowerCase() !== 'harmony')) {
+      throw new Error('Harmony OTA 必须使用 platform=harmony，不再支持 Android 兼容请求');
+    }
+    const nativeInfo = bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
+    config.versionCode = OtaUserContext.normalizeVersionCode(config.versionCode ?? nativeInfo.versionCode.toString());
+    const actualSDK = OtaUserContext.normalizeLynxSdkVersion(LynxEnv.getLynxVersion());
+    config.lynxSdkVersion = OtaUserContext.normalizeLynxSdkVersion(config.lynxSdkVersion ?? actualSDK);
+    if (config.lynxSdkVersion !== actualSDK) throw new Error('lynxSdkVersion 必须等于实际 Lynx HAR 版本');
+    if (config.appVersion === undefined) config.appVersion = nativeInfo.versionName;
     config.validate(context);
     this.config = config;
+    this.identity = new OtaUserContextBox(config);
     this.embeddedBundleRegistry = new EmbeddedBundleRegistry(context);
     const mockSource: OtaMockSource | null = config.debugMockEnabled ?
       new EmbeddedMockOtaSource(config, this.embeddedBundleRegistry) : null;
-    this.api = new OtaApiClient(config, mockSource);
-    this.transaction = new ContentAddressedOtaStore(config, this.api);
+    this.api = new OtaApiClient(config, mockSource, this.identity);
+    this.transaction = new ContentAddressedOtaStore(config, this.api, this.identity);
+    this.selectionSync = new OtaSelectionSync(this.api, this.transaction, this.identity);
     this.transaction.setLeaseReleaseScheduler(() => {
+      if (this.closed) return;
+      const context = this.identity.capture();
       this.queue.run(async () => {
-        this.transaction.pruneAllUnreferencedReleases();
-      }).catch((error: Error) => {
-        console.warn(`LynxShellOTA lease 释放后清理失败：${error.message}`);
+        this.guard(context);
+        this.transaction.pruneAllUnreferencedReleases(context);
+      }).catch(() => {
+        console.warn('LynxShellOTA lease 释放后清理未完成');
       });
     });
+  }
+
+  get userIdentityEpoch(): number { return this.identity.identityEpoch; }
+
+  registerUserId(userId?: string): boolean {
+    if (this.closed) throw new Error('ota_runtime_closed');
+    const changed = this.identity.register(userId);
+    if (!changed) return false;
+    this.api.cancelAll();
+    this.activeSignals.forEach((signal) => signal.cancel());
+    this.activeSignals.clear();
+    this.queue = new OtaOperationQueue();
+    this.reconciledEpoch = -1;
+    this.refreshGate.reset(this.userIdentityEpoch);
+    this.fullSyncTaskId += 1;
+    this.fullSyncInFlight = false;
+    this.fullSyncPending = false;
+    this.fullSyncWaiters.splice(0).forEach((waiter) => waiter(false));
+    return true;
+  }
+
+  synchronizeRegisteredUser(epoch: number): void {
+    if (epoch !== this.userIdentityEpoch || this.closed) return;
+    this.refreshAllBundles().then(() => {
+      if (PageBundleRuntimeRegistry.current() === this && epoch === this.userIdentityEpoch && !this.closed) OtaUserContextEvents.emit(epoch);
+    });
+  }
+
+  close(): void {
+    this.closed = true;
+    this.identity.invalidate();
+    this.api.cancelAll();
+    this.activeSignals.forEach((signal) => signal.cancel());
+    this.activeSignals.clear();
+    this.fullSyncWaiters.splice(0).forEach((waiter) => waiter(false));
+    this.navigationSnapshots.forEach((snapshot) => snapshot.lease?.close());
+    this.navigationSnapshots.clear();
+    this.snapshotTokens.clear();
+  }
+
+  private guard(context: OtaUserContext, signal?: OtaPrepareSignal): void {
+    if (this.closed) throw new Error('ota_runtime_closed');
+    this.identity.validate(context);
+    signal?.throwIfCancelled();
+  }
+
+  private reconcile(context: OtaUserContext): void {
+    this.guard(context);
+    if (this.reconciledEpoch === context.identityEpoch) return;
+    this.transaction.reconcileUserContext(context);
+    this.guard(context);
+    this.reconciledEpoch = context.identityEpoch;
   }
 
   onApplicationStarted(): void {
@@ -172,34 +265,39 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     signal: OtaPrepareSignal,
     navigationSessionID: string = ''
   ): Promise<PreparedPageBundle> {
+    const context = this.identity.capture();
     this.validateLogicalAddress(lynxAppId, bundleName);
-    signal.throwIfCancelled();
+    this.guard(context, signal);
     const sessionID = navigationSessionID.trim();
-    const snapshot = this.snapshotFor(sessionID, lynxAppId);
+    const snapshotGeneration = this.snapshotToken(sessionID, lynxAppId);
+    const snapshot = this.snapshotFor(sessionID, lynxAppId, context);
     if (snapshot !== null) {
-      const pinned = await this.prepareFromSnapshot(snapshot, bundleName);
+      const pinned = await this.prepareFromSnapshot(snapshot, bundleName, context);
       if (pinned === null) {
         throw new Error(`NavigationSnapshot 已失效：${snapshot.id}/${lynxAppId}/${bundleName}`);
       }
-      return this.attachSnapshot(snapshot, pinned);
+      return this.attachSnapshot(snapshot, this.preparedForContext(context, pinned, signal));
     }
-    const local = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName);
+    const local = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName, context);
     if (local !== null) {
       this.syncAppBundleAsync(lynxAppId);
-      return this.createOrAttachSnapshot(sessionID, local);
+      return this.createOrAttachSnapshot(sessionID, local, context, snapshotGeneration);
     }
     const embedded = await this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
+    this.guard(context, signal);
     if (embedded !== null) {
-      return this.createOrAttachSnapshot(sessionID, embedded);
+      return this.createOrAttachSnapshot(sessionID, embedded, context, snapshotGeneration);
     }
     // 缺包/损坏不走 30 分钟门控，必须在创建 LynxView 前完成定向 repair。
-    await this.queue.run(() => this.transaction.ensureBundleReady(lynxAppId, bundleName, signal));
-    signal.throwIfCancelled();
-    const repaired = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName);
-    if (repaired === null) {
-      throw new Error(`Release 已激活但 Bundle 无法建立 lease：${lynxAppId}/${bundleName}`);
-    }
-    return this.createOrAttachSnapshot(sessionID, repaired);
+    this.activeSignals.add(signal);
+    const repaired = await this.queue.run(() => {
+      this.guard(context, signal);
+      return this.transaction.ensureBundleReady(lynxAppId, bundleName, signal, context);
+    }).finally(() => this.activeSignals.delete(signal));
+    // ensureBundleReady 已交付带 lease 的结果，不能丢弃后再次租用造成永久额外引用。
+    this.preparedForContext(context, repaired, signal);
+    this.refreshGate.markSuccess(lynxAppId, context.identityEpoch, this.uptimeMillis());
+    return this.createOrAttachSnapshot(sessionID, repaired, context, snapshotGeneration);
   }
 
   /**
@@ -212,23 +310,31 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     bundleName: string,
     navigationSessionID: string = ''
   ): Promise<PreparedPageBundle | null> {
+    const context = this.identity.capture();
+    this.guard(context);
     this.validateLogicalAddress(lynxAppId, bundleName);
     const sessionID = navigationSessionID.trim();
-    const snapshot = this.snapshotFor(sessionID, lynxAppId);
+    const snapshotGeneration = this.snapshotToken(sessionID, lynxAppId);
+    const snapshot = this.snapshotFor(sessionID, lynxAppId, context);
     if (snapshot !== null) {
-      const pinned = await this.prepareFromSnapshot(snapshot, bundleName);
+      const pinned = await this.prepareFromSnapshot(snapshot, bundleName, context);
+      if (pinned !== null) this.preparedForContext(context, pinned); else this.guard(context);
       return pinned === null ? null : this.attachSnapshot(snapshot, pinned);
     }
-    const current = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName);
+    const current = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName, context);
     if (current !== null) {
-      return this.createOrAttachSnapshot(sessionID, current);
+      return this.createOrAttachSnapshot(sessionID, current, context, snapshotGeneration);
     }
     const embedded = await this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
-    return embedded === null ? null : this.createOrAttachSnapshot(sessionID, embedded);
+    this.guard(context);
+    return embedded === null ? null : this.createOrAttachSnapshot(sessionID, embedded, context, snapshotGeneration);
   }
 
   releaseNavigationSnapshot(navigationSessionID: string, lynxAppId: string): void {
     const key = this.snapshotKey(navigationSessionID, lynxAppId);
+    const token = this.snapshotTokens.get(key);
+    if (token !== undefined) token.active = false;
+    this.snapshotTokens.delete(key);
     const snapshot = this.navigationSnapshots.get(key);
     if (snapshot === undefined) return;
     this.navigationSnapshots.delete(key);
@@ -246,51 +352,46 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
 
   /** 用户主动刷新使用；等待最后一轮合并后的全量同步完成，再由 Tab Host 重读 current。 */
   refreshAllBundles(): Promise<boolean> {
+    if (this.closed) return Promise.resolve(false);
+    const epoch = this.userIdentityEpoch;
     return new Promise<boolean>((resolve) => {
-      this.fullSyncWaiters.push(resolve);
-      this.syncAllBundlesAsync();
+      this.fullSyncWaiters.push((success) => resolve(success && epoch === this.userIdentityEpoch && !this.closed));
+      this.syncAllBundlesAsync(true);
     });
   }
 
-  rollback(lynxAppId: string, reason: string): Promise<boolean> {
+  async rollback(lynxAppId: string, reason: string, expectedReleaseId?: string, expectedIdentityEpoch?: number): Promise<boolean> {
+    const context = this.identity.capture(expectedIdentityEpoch);
     return this.queue.run(async () => {
-      const restoredRemote = this.transaction.rollback(lynxAppId);
+      this.guard(context);
+      const restoredRemote = this.transaction.rollback(lynxAppId, expectedReleaseId, context);
       if (restoredRemote) {
-        console.info(`LynxShellOTA rollback appId=${lynxAppId}, restored=previous, reason=${reason}`);
+        this.refreshGate.clearApp(lynxAppId, context.identityEpoch);
         return true;
       }
-      if (!await this.embeddedBundleRegistry.containsApp(lynxAppId)) {
-        console.info(`LynxShellOTA rollback appId=${lynxAppId}, restored=false, reason=${reason}`);
-        return false;
-      }
-      try {
-        // 没有 previous remote 时删除坏的 downloaded current；下一次 prepare 直接读取 rawfile
-        // baseline，不把内置 Bundle 复制到 filesDir。
-        this.transaction.deleteBundles(lynxAppId);
-        this.lastPageRefreshAt.delete(lynxAppId);
-        this.pageRefreshInFlight.delete(lynxAppId);
-        console.info(`LynxShellOTA rollback appId=${lynxAppId}, restored=embedded, reason=${reason}`);
-        return true;
-      } catch (error) {
-        console.error(`LynxShellOTA embedded fallback 失败：${lynxAppId}, ${error}`);
-        return false;
-      }
+      // 回滚/内置回退由 Store 一次提交，不能在探测后再删除可能新提交的 current。
+      const embedded = await this.embeddedBundleRegistry.containsApp(lynxAppId);
+      this.guard(context);
+      this.refreshGate.clearApp(lynxAppId, context.identityEpoch);
+      return embedded;
     });
   }
 
-  deleteBundles(lynxAppId: string): Promise<void> {
+  async deleteBundles(lynxAppId: string): Promise<void> {
+    const context = this.identity.capture();
     return this.queue.run(async () => {
-      this.transaction.deleteBundles(lynxAppId);
-      this.lastPageRefreshAt.delete(lynxAppId);
-      this.pageRefreshInFlight.delete(lynxAppId);
+      this.guard(context);
+      this.transaction.deleteBundles(lynxAppId, context);
+      this.refreshGate.clearApp(lynxAppId, context.identityEpoch);
     });
   }
 
-  deleteAllBundles(): Promise<void> {
+  async deleteAllBundles(): Promise<void> {
+    const context = this.identity.capture();
     return this.queue.run(async () => {
-      this.transaction.deleteAllBundles();
-      this.lastPageRefreshAt.clear();
-      this.pageRefreshInFlight.clear();
+      this.guard(context);
+      this.transaction.deleteAllBundles(context);
+      this.refreshGate.clearAll(context.identityEpoch);
     });
   }
 
@@ -306,13 +407,37 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     return `${sessionID}::${lynxAppId}`;
   }
 
-  private snapshotFor(sessionID: string, lynxAppId: string): NavigationSnapshotRecord | null {
-    if (sessionID.length === 0) return null;
-    return this.navigationSnapshots.get(this.snapshotKey(sessionID, lynxAppId)) ?? null;
+  private snapshotToken(sessionID: string, lynxAppId: string): NavigationSnapshotToken {
+    if (sessionID.length === 0) return new NavigationSnapshotToken();
+    const key = this.snapshotKey(sessionID, lynxAppId);
+    let token = this.snapshotTokens.get(key);
+    if (token === undefined) { token = new NavigationSnapshotToken(); this.snapshotTokens.set(key, token); }
+    return token;
   }
 
-  private createOrAttachSnapshot(sessionID: string, prepared: PreparedPageBundle): PreparedPageBundle {
+  private snapshotFor(sessionID: string, lynxAppId: string, context: OtaUserContext): NavigationSnapshotRecord | null {
+    if (sessionID.length === 0) return null;
+    const snapshot = this.navigationSnapshots.get(this.snapshotKey(sessionID, lynxAppId)) ?? null;
+    if (snapshot !== null && snapshot.identityEpoch !== context.identityEpoch) throw new Error('旧用户导航会话不能打开新页面');
+    return snapshot;
+  }
+
+  private preparedForContext(context: OtaUserContext, prepared: PreparedPageBundle, signal?: OtaPrepareSignal): PreparedPageBundle {
+    try {
+      this.guard(context, signal);
+      if (prepared.userIdentityEpoch !== undefined && prepared.userIdentityEpoch !== context.identityEpoch) throw new Error('stale_identity');
+      prepared.userIdentityEpoch = context.identityEpoch;
+      return prepared;
+    } catch (error) { prepared.lease?.close(); throw (error as Error); }
+  }
+
+  private createOrAttachSnapshot(sessionID: string, prepared: PreparedPageBundle, context: OtaUserContext, generation: NavigationSnapshotToken): PreparedPageBundle {
+    this.preparedForContext(context, prepared);
     if (sessionID.length === 0) return prepared;
+    if (!generation.active || generation !== this.snapshotTokens.get(this.snapshotKey(sessionID, prepared.lynxAppId))) {
+      prepared.lease?.close();
+      throw new Error('navigation_snapshot_reset');
+    }
     const key = this.snapshotKey(sessionID, prepared.lynxAppId);
     const existing = this.navigationSnapshots.get(key);
     if (existing !== undefined) return this.attachSnapshot(existing, prepared);
@@ -320,12 +445,14 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     const lease = embedded ? null : this.transaction.acquireReleaseLease(
       prepared.lynxAppId,
       prepared.releaseId,
-      prepared.manifestId ?? ''
+      prepared.manifestId ?? '',
+      context
     );
     if (!embedded && lease === null) {
       prepared.lease?.close();
       throw new Error(`NavigationSnapshot lease 建立失败：${prepared.lynxAppId}/${prepared.releaseId}`);
     }
+    try { this.guard(context); } catch (error) { lease?.close(); prepared.lease?.close(); throw (error as Error); }
     this.navigationSnapshotSequence += 1;
     const snapshot: NavigationSnapshotRecord = {
       id: `lynx-snapshot-${new Date().getTime()}-${this.navigationSnapshotSequence}`,
@@ -334,52 +461,70 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       releaseId: prepared.releaseId,
       manifestId: prepared.manifestId,
       embedded: embedded,
-      lease: lease
+      lease: lease,
+      identityEpoch: context.identityEpoch
     };
     this.navigationSnapshots.set(key, snapshot);
     return this.attachSnapshot(snapshot, prepared);
   }
 
   private attachSnapshot(snapshot: NavigationSnapshotRecord, prepared: PreparedPageBundle): PreparedPageBundle {
+    if (this.navigationSnapshots.get(this.snapshotKey(snapshot.sessionID, snapshot.lynxAppId)) !== snapshot ||
+      snapshot.identityEpoch !== this.userIdentityEpoch || snapshot.releaseId !== prepared.releaseId ||
+      snapshot.manifestId !== prepared.manifestId) {
+      prepared.lease?.close();
+      throw new Error('stale_navigation_snapshot');
+    }
     prepared.navigationSnapshotID = snapshot.id;
     return prepared;
   }
 
   private async prepareFromSnapshot(
     snapshot: NavigationSnapshotRecord,
-    bundleName: string
+    bundleName: string,
+    context: OtaUserContext
   ): Promise<PreparedPageBundle | null> {
     if (snapshot.embedded) {
-      return this.embeddedBundleRegistry.resolve(snapshot.lynxAppId, bundleName);
+      const value = await this.embeddedBundleRegistry.resolve(snapshot.lynxAppId, bundleName);
+      return value === null ? null : this.preparedForContext(context, value);
     }
     return this.transaction.acquireBundleLeaseForRelease(
       snapshot.lynxAppId,
       snapshot.releaseId,
       bundleName,
-      snapshot.manifestId ?? ''
+      snapshot.manifestId ?? '',
+      context
     );
   }
 
   /** 生命周期全量请求不限次数；重叠事件合并为当前请求结束后的补发。 */
-  private syncAllBundlesAsync(): void {
+  private syncAllBundlesAsync(coalesce: boolean = false): void {
+    if (this.closed) return;
     if (this.fullSyncInFlight) {
-      this.fullSyncPending = true;
+      if (!coalesce) this.fullSyncPending = true;
       return;
     }
+    const context = this.identity.capture();
+    const taskId = ++this.fullSyncTaskId;
+    const signal = new OtaPrepareSignal();
+    this.activeSignals.add(signal);
     this.fullSyncInFlight = true;
     let succeeded = true;
     this.queue.run(async () => {
-      const signal = new OtaPrepareSignal();
-      const latest = await this.api.fetchLatestBundleLists(signal);
-      for (const snapshot of latest.bundleLists) {
-        await this.transaction.install(snapshot, signal);
-        this.lastPageRefreshAt.set(snapshot.lynxAppId, this.uptimeMillis());
-      }
+      this.reconcile(context);
+      const result = await this.selectionSync.syncAll(signal, context);
+      this.guard(context, signal);
+      this.markChecked(result, context);
     }).catch((error: Error) => {
       // 生命周期刷新失败不能影响已提交 current，后续页面仍可定向 repair。
       succeeded = false;
-      console.error(`LynxShellOTA 全量同步失败：${error.message}`);
+      if (context.identityEpoch === this.userIdentityEpoch && !this.closed) {
+        if (error instanceof OtaSelectionSyncError) this.markChecked(error.partialResult, context);
+        console.warn('LynxShellOTA 全量同步未全部完成');
+      }
     }).finally(() => {
+      this.activeSignals.delete(signal);
+      if (taskId !== this.fullSyncTaskId || context.identityEpoch !== this.userIdentityEpoch || this.closed) return;
       this.fullSyncInFlight = false;
       if (this.fullSyncPending) {
         this.fullSyncPending = false;
@@ -391,7 +536,7 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
         try {
           waiter(succeeded);
         } catch (error) {
-          console.error(`LynxShellOTA 主动刷新回调失败：${error}`);
+          console.warn('LynxShellOTA 主动刷新回调失败');
         }
       });
     });
@@ -399,25 +544,29 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
 
   /** 页面已有合法 current 时才进入 appId 级时间门控，后台失败不阻塞旧版本。 */
   private syncAppBundleAsync(lynxAppId: string): void {
+    if (this.closed) return;
+    const context = this.identity.capture();
     const now = this.uptimeMillis();
-    const last = this.lastPageRefreshAt.get(lynxAppId);
-    if (this.fullSyncInFlight || this.pageRefreshInFlight.has(lynxAppId) ||
-      (last !== undefined && this.config.pageRefreshIntervalMillis > 0 &&
-        now - last < this.config.pageRefreshIntervalMillis)) {
-      return;
-    }
-    this.pageRefreshInFlight.add(lynxAppId);
+    if (this.fullSyncInFlight || !this.refreshGate.reserve(lynxAppId, context.identityEpoch, now, this.config.pageRefreshIntervalMillis)) return;
+    const signal = new OtaPrepareSignal();
+    this.activeSignals.add(signal);
     this.queue.run(async () => {
-      const signal = new OtaPrepareSignal();
-      const latest = await this.api.fetchLatestBundleList(lynxAppId, signal);
-      await this.transaction.install(latest, signal);
+      this.guard(context, signal);
+      if (this.fullSyncInFlight) return;
+      const result = await this.selectionSync.syncApp(lynxAppId, signal, context);
+      this.guard(context, signal);
       // 只有清单和事务都成功后才刷新时间戳。
-      this.lastPageRefreshAt.set(lynxAppId, this.uptimeMillis());
-    }).catch((error: Error) => {
-      console.error(`LynxShellOTA appId 后台刷新失败：${lynxAppId}, ${error.message}`);
+      this.markChecked(result, context);
+    }).catch(() => {
+      if (context.identityEpoch === this.userIdentityEpoch && !this.closed) console.warn(`LynxShellOTA appId 后台刷新未完成：${lynxAppId}`);
     }).finally(() => {
-      this.pageRefreshInFlight.delete(lynxAppId);
+      this.activeSignals.delete(signal);
+      this.refreshGate.complete(lynxAppId, context.identityEpoch);
     });
+  }
+
+  private markChecked(result: OtaSelectionSyncResult, context: OtaUserContext): void {
+    result.completedAppIds.forEach((appId) => this.refreshGate.markSuccess(appId, context.identityEpoch, this.uptimeMillis()));
   }
 
   private validateLogicalAddress(lynxAppId: string, bundleName: string): void {

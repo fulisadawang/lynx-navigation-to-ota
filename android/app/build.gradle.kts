@@ -32,9 +32,18 @@ val localOtaServerEnabled = providers.environmentVariable("LYNX_OTA_LOCAL_SERVER
     ?.lowercase()
     ?.let { it == "1" || it == "true" || it == "yes" || it == "on" }
     ?: false
+val otaUserSelectionTestEnabled = providers.environmentVariable("LYNX_TEST_OTA_USER_SELECTION").orNull
+    ?.trim()?.lowercase()?.let { it in setOf("1", "true", "yes", "on") } ?: false
+val otaDebugVersionCode = providers.environmentVariable("LYNX_OTA_DEBUG_VERSION_CODE").orNull?.let {
+    it.toIntOrNull()?.takeIf { value -> value > 0 }
+        ?: error("LYNX_OTA_DEBUG_VERSION_CODE 必须为正整数，例如 1000")
+}
+require(!otaUserSelectionTestEnabled || localOtaServerEnabled) {
+    "用户灰度验收必须同时设置 LYNX_OTA_LOCAL_SERVER=1"
+}
 val localOtaBaseUrl = providers.environmentVariable("LYNX_OTA_LOCAL_BASE_URL").orNull
     ?.takeIf { it.isNotBlank() }
-    ?: "http://127.0.0.1:18765"
+    ?: if (otaUserSelectionTestEnabled) "http://127.0.0.1:18770" else "http://127.0.0.1:18765"
 val escapedLocalOtaBaseUrl = localOtaBaseUrl.replace("\"", "\\\"")
 
 android {
@@ -51,12 +60,17 @@ android {
         buildConfigField("boolean", "LYNX_OTA_CANDIDATE_MODE", candidateActivationEnabled.toString())
         buildConfigField("boolean", "LYNX_OTA_LOCAL_SERVER", localOtaServerEnabled.toString())
         buildConfigField("String", "LYNX_OTA_LOCAL_BASE_URL", "\"$escapedLocalOtaBaseUrl\"")
+        buildConfigField("boolean", "LYNX_TEST_OTA_USER_SELECTION", "false")
     }
 
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            buildConfigField("boolean", "LYNX_TEST_OTA_USER_SELECTION", otaUserSelectionTestEnabled.toString())
+            if (otaUserSelectionTestEnabled) {
+                buildConfigField("String", "LYNX_OTA_CLIENT_TOKEN", "\"ota-user-gray-local-client-token\"")
+            }
             // Debug 可由 LynxShell 的页面参数进一步决定是否允许 HTTP。
             manifestPlaceholders["usesCleartextTraffic"] = "true"
         }
@@ -79,6 +93,13 @@ android {
     }
     buildFeatures {
         buildConfig = true
+    }
+}
+
+// 只改变验收 Debug APK 的真实 PackageInfo 构建号，Release 仍保持 defaultConfig。
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        otaDebugVersionCode?.let { code -> variant.outputs.forEach { it.versionCode.set(code) } }
     }
 }
 

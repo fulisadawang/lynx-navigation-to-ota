@@ -1,0 +1,214 @@
+{
+  "metrics": {
+    "bundleBytes": 0,
+    "bundleRequestCount": 0,
+    "bundleSuccessCount": 0,
+    "delayedLatestCount": 1,
+    "latestCompletedCount": 3,
+    "latestRequestCount": 4,
+    "manifestRequestCount": 0,
+    "pendingLatestCount": 0,
+    "reportRequestCount": 3,
+    "requestCount": 7,
+    "requests": [
+      {
+        "audience": "A",
+        "completed": false,
+        "kind": "latest",
+        "lynxSdkVersion": "4.0.0",
+        "method": "GET",
+        "platform": "ios",
+        "requestId": 218,
+        "scope": "all",
+        "versioncode": "150"
+      },
+      {
+        "audience": "B",
+        "completed": true,
+        "kind": "latest",
+        "lynxSdkVersion": "4.0.0",
+        "method": "GET",
+        "platform": "ios",
+        "requestId": 219,
+        "scope": "all",
+        "statusCode": 200,
+        "versioncode": "150"
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 220,
+        "statusCode": 200
+      },
+      {
+        "audience": "anonymous",
+        "completed": true,
+        "kind": "latest",
+        "lynxSdkVersion": "4.0.0",
+        "method": "GET",
+        "platform": "ios",
+        "requestId": 221,
+        "scope": "all",
+        "statusCode": 200,
+        "versioncode": "150"
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 222,
+        "statusCode": 200
+      },
+      {
+        "audience": "anonymous",
+        "completed": true,
+        "kind": "latest",
+        "lynxSdkVersion": "4.0.0",
+        "method": "GET",
+        "platform": "ios",
+        "requestId": 223,
+        "scope": "all",
+        "statusCode": 200,
+        "versioncode": "150"
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 224,
+        "statusCode": 200
+      }
+    ]
+  },
+  "nativeState": "home=instance=D87B1D02;load=15;resolve=15;render=15;error=ready;release=r20260421_002;source=ota_current;kind=full;sequence=2 | settings=instance=531D68D6;load=13;resolve=13;render=13;error=ready;release=r20260421_002;source=ota_current;kind=full;sequence=2 | http=123",
+  "server": {
+    "actualReleaseIds": {
+      "full5": "r20260421_002",
+      "full7": "r20260421_004",
+      "gray6": "r20260421_003",
+      "gray8": "r20260421_005"
+    },
+    "actualReleaseSequences": {
+      "full5": "2",
+      "full7": "4",
+      "gray6": "3",
+      "gray8": "5"
+    },
+    "aliases": {
+      "full5": {
+        "bundleCount": 100,
+        "marker": "FULL5-050",
+        "markerSha256": "sha256:72a767fb7d43d25e3fdc91bd8e92f745cdd7a4231c7c0457268b1b2a50f392c7",
+        "publishType": "FULL",
+        "releaseId": "r20260421_002",
+        "releaseSequence": "2",
+        "status": "ACTIVE"
+      },
+      "full7": {
+        "bundleCount": 100,
+        "marker": "FULL7-050",
+        "markerSha256": "sha256:157b707feb72a644aec1306eee57141f0d296314cdeb7ce2565c87e0c8db44a5",
+        "publishType": "FULL",
+        "releaseId": "r20260421_004",
+        "releaseSequence": "4",
+        "status": "ROLLED_BACK"
+      },
+      "gray6": {
+        "bundleCount": 100,
+        "marker": "GRAY6-050",
+        "markerSha256": "sha256:f5633643d0bcb0044c7b15e463b67e7b3476f72d97cd466d8a2bd61aa89b6e7a",
+        "publishType": "GRAY",
+        "releaseId": "r20260421_003",
+        "releaseSequence": "3",
+        "ruleId": "fixture-gray6-rule",
+        "status": "DISABLED"
+      },
+      "gray8": {
+        "bundleCount": 100,
+        "marker": "GRAY8-050",
+        "markerSha256": "sha256:d1b07f6cc2295a455e31f48cc084bc767c82bac9ab921e29d05c52962a618dae",
+        "publishType": "GRAY",
+        "releaseId": "r20260421_005",
+        "releaseSequence": "5",
+        "ruleId": "fixture-gray8-rule",
+        "status": "DISABLED"
+      }
+    },
+    "bundleName": "pages/10000001/bundle-050.lynx.bundle",
+    "bundleOrigin": "http://127.0.0.1:18770",
+    "clientConfig": {
+      "env": "TEST",
+      "hostApp": "capp",
+      "lynxAppId": "10000001",
+      "lynxSdkRange": {
+        "max": "4.0.0",
+        "min": "4.0.0"
+      },
+      "lynxSdkVersion": "4.0.0",
+      "platforms": [
+        "ios",
+        "android",
+        "harmony"
+      ],
+      "versioncode": "150",
+      "versionCodeRange": {
+        "max": "999",
+        "min": "1"
+      }
+    },
+    "delay": {
+      "audience": "A",
+      "count": 0,
+      "milliseconds": 0,
+      "pending": []
+    },
+    "env": "TEST",
+    "expectedReleaseId": "r20260421_002",
+    "expectedReleaseIds": {
+      "A": "r20260421_002",
+      "anonymous": "r20260421_002",
+      "B": "r20260421_002"
+    },
+    "expectedSelections": {
+      "A": {
+        "releaseId": "r20260421_002",
+        "releaseSequence": "2",
+        "selection": {
+          "kind": "full",
+          "policyRevision": "13",
+          "reason": "server_rollback"
+        }
+      },
+      "anonymous": {
+        "releaseId": "r20260421_002",
+        "releaseSequence": "2",
+        "selection": {
+          "kind": "full",
+          "policyRevision": "13",
+          "reason": "server_rollback"
+        }
+      },
+      "B": {
+        "releaseId": "r20260421_002",
+        "releaseSequence": "2",
+        "selection": {
+          "kind": "full",
+          "policyRevision": "13",
+          "reason": "server_rollback"
+        }
+      }
+    },
+    "fixtureId": "ota-user-gray-real-server-100",
+    "generation": 17,
+    "hostApp": "capp",
+    "lynxAppId": "10000001",
+    "origin": "http://127.0.0.1:18770",
+    "ready": true,
+    "realServerModule": "/var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/lynx-ota-user-gray-server-4R8RqT/dist/app.js",
+    "stage": "gray8",
+    "uniqueObjects": 103
+  },
+  "storeId": "user-selection-563CEF3E-B12D-410E-A3E6-CB38F113A34D",
+  "versioncode": "150"
+}

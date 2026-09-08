@@ -411,8 +411,9 @@ def comments_and_structure() -> None:
         "HarmonyOS 默认精确进入 10000001/home，Launcher 保留 main 与原生 Tabs 入口",
     )
     require(
-        all(marker in index for marker in ["原生壳", "OTA 验收入口", "删除全部 OTA Bundle", "platform=android", "后端开放 harmony"]),
-        "HarmonyOS 原生壳首页调用真实 OTA API 并标明临时 Android 服务端兼容",
+        all(marker in index for marker in ["原生壳", "OTA 验收入口", "删除全部 OTA Bundle", "platform=harmony"])
+        and "serverPlatform = 'android'" not in index,
+        "HarmonyOS 原生壳首页固定 Harmony 请求，不再设置 Android 服务端兼容",
     )
     entryability = read("lynx_shell/src/main/ets/entryability/EntryAbility.ets")
     require(
@@ -447,10 +448,14 @@ def comments_and_structure() -> None:
     ]), "HarmonyOS OTA Runtime 对齐启动/主动全量、页面 30 分钟、repair 与 previous/embedded rollback")
     ota_models = shell_read("src/main/ets/ota/OtaModels.ets")
     require("platform: string = 'harmony'" in ota_models and "serverPlatform: string = ''" in ota_models,
-            "HarmonyOS OTA 保留宿主平台，并支持可撤销的服务端 platform 兼容值")
-    require("requestPlatform()" in ota_models and "config.requestPlatform()" in shell_read("src/main/ets/ota/OtaApiClient.ets") and
-            "config.requestPlatform()" in transaction,
-            "HarmonyOS OTA 请求、Manifest 与 Release 校验统一使用服务端 platform")
+            "HarmonyOS OTA 固定宿主平台，旧 serverPlatform 字段仅为源码兼容")
+    ota_api = shell_read("src/main/ets/ota/OtaApiClient.ets")
+    require("return 'harmony';" in ota_models and "&platform=harmony" in ota_api and
+            "config.requestPlatform()" in transaction and "不再支持 Android 兼容请求" in runtime,
+            "HarmonyOS OTA 请求、Manifest 与 State 统一 Harmony，并拒绝错误原生平台配置")
+    require(all(marker in ota_api for marker in ["&versioncode=", "&lynxSdkVersion=", "&userId=", "validateContext(context)"]) and
+            all(marker in runtime for marker in ["getBundleInfoForSelfSync", "nativeInfo.versionCode", "LynxEnv.getLynxVersion()"]),
+            "HarmonyOS OTA 三参数来自捕获身份与真实原生/SDK版本来源")
 
 
 def native_tab_ota_parity() -> None:
@@ -478,9 +483,9 @@ def native_tab_ota_parity() -> None:
             "LynxRouter.refreshAllOtaBundles()",
             "this.tabReloadGeneration += 1",
             "refreshGeneration: this.tabReloadGeneration",
-            "OTA 同步失败，保留当前 Tab 版本",
+            "OTA 同步未全成功/部分失败",
         ]),
-        "HarmonyOS 主动 OTA 成功后才重载 Tab，失败保留当前实例",
+        "HarmonyOS 主动刷新后重读已提交 Tab，部分失败保持明确状态",
     )
     require(
         "runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName, this.request.sessionID)" in tab and "runtime.prepare(" not in tab and
@@ -518,9 +523,10 @@ def native_tab_ota_parity() -> None:
     require(
         all(marker in runtime for marker in [
             "refreshAllBundles(): Promise<boolean>", "fullSyncWaiters", "fullSyncPending",
-            "embeddedBundleRegistry.containsApp", "restored=embedded",
-        ]) and "resetNavigationSnapshot('native-tab-host'" in index,
-        "HarmonyOS 全量同步合并并通知等待者，无 previous 时回 rawfile baseline",
+            "embeddedBundleRegistry.containsApp", "selectionSync.syncAll", "context.identityEpoch",
+        ]) and "resetNavigationSnapshot('native-tab-host'" in index
+        and "state.current = previous ?? this.embeddedRef()" in transaction,
+        "HarmonyOS 全量同步按身份合并；Store 在一次事务内回 previous/rawfile baseline",
     )
     require(
         all(marker in transaction for marker in [

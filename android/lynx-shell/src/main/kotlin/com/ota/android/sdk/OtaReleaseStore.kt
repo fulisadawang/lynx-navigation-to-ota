@@ -10,6 +10,15 @@ import java.io.IOException
  * ContentAddressedOtaStore 接管。路由只依赖这组语义，不依赖磁盘布局。
  */
 interface OtaReleaseStore {
+  fun recordDecision(scope: ReleaseTransaction.ReleaseScope, decision: OtaLastDecision, selection: OtaStoredSelection?) {
+    throw OtaSelectionException("requires_store_v3")
+  }
+  fun reconcileUserContext() {}
+  fun acquireCandidateTrialBundleLease(scope: ReleaseTransaction.ReleaseScope, bundleName: String): ReleaseTransaction.BundleLease? {
+    if (candidate(scope) == null) return null
+    beginCandidateTrial(scope)
+    return acquireCandidateBundleLease(scope, bundleName)
+  }
   @Throws(IOException::class, OtaSdkException::class)
   fun registerEmbeddedRelease(release: OtaModels.InstalledRelease)
 

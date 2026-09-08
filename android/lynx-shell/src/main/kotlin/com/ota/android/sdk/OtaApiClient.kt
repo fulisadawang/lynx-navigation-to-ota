@@ -8,6 +8,14 @@ import java.net.URI
 import java.net.URLEncoder
 
 interface OtaApiClient {
+  fun fetchLatestBundleList(
+    env: OtaModels.Environment, hostApp: OtaModels.HostApp, lynxAppId: String,
+    platform: OtaModels.Platform, context: OtaUserContext,
+  ): OtaLatestSelection = OtaLatestSelection.Release(fetchLatestBundleList(env, hostApp, lynxAppId, platform))
+
+  fun fetchLatestBundleLists(
+    env: OtaModels.Environment, hostApp: OtaModels.HostApp, platform: OtaModels.Platform, context: OtaUserContext,
+  ): OtaModels.HostLatestBundleLists = fetchLatestBundleLists(env, hostApp, platform)
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   fun checkForUpdate(request: OtaModels.PolicyMatchRequest): OtaModels.PolicyMatchResponse
 
@@ -95,6 +103,40 @@ private class ServerOtaApiClient(
 
   private val otaClientToken: String =
     if (otaClientToken.isNullOrBlank()) OtaModels.DEFAULT_OTA_CLIENT_TOKEN else otaClientToken
+
+  override fun fetchLatestBundleList(
+    env: OtaModels.Environment, hostApp: OtaModels.HostApp, lynxAppId: String,
+    platform: OtaModels.Platform, context: OtaUserContext,
+  ): OtaLatestSelection {
+    val body = fetchSelection(env, hostApp, lynxAppId, platform, context)
+    return if (body.containsKey("decision")) {
+      OtaLatestSelection.Directive(OtaSelectionDirective.fromJsonMap(OtaJson.asObject(body["decision"], "decision")))
+    } else OtaLatestSelection.Release(OtaModels.LatestBundleList.fromJsonMap(body))
+  }
+
+  override fun fetchLatestBundleLists(
+    env: OtaModels.Environment, hostApp: OtaModels.HostApp, platform: OtaModels.Platform, context: OtaUserContext,
+  ): OtaModels.HostLatestBundleLists = OtaModels.HostLatestBundleLists.fromJsonMap(fetchSelection(env, hostApp, null, platform, context))
+
+  private fun fetchSelection(
+    env: OtaModels.Environment, hostApp: OtaModels.HostApp, lynxAppId: String?, platform: OtaModels.Platform, context: OtaUserContext,
+  ): Map<String, Any?> {
+    val code = context.versionCode ?: throw OtaSelectionException("invalid_version_code")
+    val sdk = context.lynxSdkVersion ?: throw OtaSelectionException("invalid_sdk_version")
+    val uri = resolve("/api/ota/v1/releases/latest-bundle-list?env=${encode(env.wireValue)}" +
+      "&hostApp=${encode(hostApp.wireValue)}&platform=${encode(platform.wireValue)}" +
+      (lynxAppId?.let { "&lynxAppId=${encode(it)}" } ?: "") +
+      "&versioncode=${encode(code)}&lynxSdkVersion=${encode(sdk)}" +
+      (context.userId?.let { "&userId=${encode(it)}" } ?: ""))
+    val key = OtaSelectionValidation.digest(listOf(uri.toString(), context.clientContextKey, context.identityEpoch.toString()))
+    val response = send("GET", uri, null, key)
+    ensureSuccess(response)
+    val body = OtaJson.asObject(OtaJson.parse(response.body), "selection response")
+    if (OtaSelectionJson.schema(body) != 1 || body["env"] != env.wireValue || body["hostApp"] != hostApp.wireValue || body["platform"] != platform.wireValue) {
+      throw OtaSelectionException("missing_selection_metadata")
+    }
+    return body
+  }
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   override fun checkForUpdate(request: OtaModels.PolicyMatchRequest): OtaModels.PolicyMatchResponse {
@@ -197,8 +239,8 @@ private class ServerOtaApiClient(
   }
 
   @Throws(IOException::class)
-  private fun send(method: String, uri: URI, body: String?): HttpResult {
-    val cacheKey = if (method == "GET") uri.toString() else null
+  private fun send(method: String, uri: URI, body: String?, contextCacheKey: String? = null): HttpResult {
+    val cacheKey = if (method == "GET") contextCacheKey ?: uri.toString() else null
     val cached = cacheKey?.let { responseCache[it] }
     val requestHeaders = if (cached?.etag != null) {
       mapOf("If-None-Match" to cached.etag)
@@ -253,7 +295,7 @@ private class ServerOtaApiClient(
     val etag: String,
   )
 
-  private val responseCache = LinkedHashMap<String, CachedResponse>()
+  private val responseCache = java.util.concurrent.ConcurrentHashMap<String, CachedResponse>()
 
   @Throws(IOException::class)
   private fun readAll(inputStream: InputStream): ByteArray {

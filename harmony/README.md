@@ -8,7 +8,7 @@
 |---|---:|
 | Lynx 前端/PrimJS 主版本 | `4.0.0` |
 | HarmonyOS `@lynx/*` OHPM 包 | `4.0.0` |
-| HarmonyOS SDK | `5.0.1(13)` |
+| HarmonyOS SDK | compatible `5.0.1(13)`，target `6.1.1(24)` |
 | DevEco Studio | 建议 `5.0.13.200+` |
 | ImageKnifePro | `1.0.9` |
 
@@ -73,16 +73,15 @@ HarmonyOS `release/4.0` 官方源码包含 9 类 XElement：
 
 目录模式会将其中全部 `*.lynx.bundle` 和 `static/` 同步到 rawfile；单文件路径仍可用。
 
-构建并安装 Demo：
+构建 Demo（本次 user-gray 不执行设备安装）：
 
 ```bash
 DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
   /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw assembleApp --no-daemon
-hdc install -r build/outputs/default/harmony-default-unsigned.app
 ```
 
-在 DevEco Studio 中配置签名后可生成发布包；当前已执行 HAR/HAP 构建，并在
-`127.0.0.1:5555` HarmonyOS 模拟器验证本地 Bundle 渲染。
+在 DevEco Studio 中配置签名后可生成发布包。2026-09-06 本轮 release HAR/App 构建已通过；旧模拟器渲染记录在下方历史证据中，不能作为本轮设备通过。
+保留用户已有 `lynx_shell_kit/BuildProfile.ets`，禁止为了改变构建模式而手改、格式化或覆盖。
 
 ## 本地 Bundle
 
@@ -224,16 +223,37 @@ hdc shell aa start -a EntryAbility -b com.example.lynxshell \
 
 该参数只用于启动时建立本次进程的 OTA 配置，不会写入仓库、HAR 或日志。
 
-如果当前服务端还只接受 `android/ios`，可以只在过渡期设置请求平台，不改变 HarmonyOS 宿主身份：
+### 原生用户注册与版本来源
 
 ```ts
-ota.platform = 'harmony';
-ota.serverPlatform = 'android'; // 临时复用 Android release；后端支持 harmony 后删除这一行
+// 登录态恢复后可在 install 前注册；运行期间也可更新。
+LynxRouter.registerOtaUserId(restoredUserId);
+// 退出事件中调用，与上面的登录事件二选一。
+LynxRouter.clearOtaUserId();
 ```
 
-`platform` 用于宿主的 AppInfo/GlobalProps；`serverPlatform` 只用于
-`latest-bundle-list` 查询、Release Manifest 和本地 state 校验。后端开放 `harmony` 后清空
-`serverPlatform` 即恢复三端正式契约，不能长期把 Harmony 发布物伪装成 Android 发布物。
+Server/Contracts 已支持 harmony；requestPlatform 固定 harmony，serverPlatform 旧字段不再允许降级为 Android。
+Runtime 默认从宿主自身 `bundleManager.getBundleInfoForSelfSync(...).versionCode` 读取构建码，SDK 使用实际 HAR 的 `LynxEnv.getLynxVersion()`（当前依赖4.0.0）。
+显式 versionCode 优先但须是合法正整数；显式 SDK 必须与真实 getter 一致，不能用 ShellConstants 固定 BUILD_NUMBER/版本名称冒充。
+
+全量/定向/repair/主动刷新带精确 query `versioncode`、`lynxSdkVersion` 和可选 userId，匿名省略 userId。
+构建码独立于 versionName/buildNumber。同步注册变化后递增 epoch；同身份不重复同步，旧异步响应/导航 callback 无权修改新 State。
+每个操作显式传只读 context 到 HTTP/Store/commit，不使用跨 await 全局 operationContext；最终同步 rename 前再校验 epoch/revision。
+
+Server 在用户资格及兼容过滤后按 releaseSequence 选择，full7 胜 gray6；较高 policyRevision 可以授权回滚低序号。
+两者均以十进制字符串精确比较，不转 Number。新模式缺 selection metadata 拒绝，不默认为 full；unknown 旧 v3 ref 等新确认后复用 CAS。
+
+从仓库根匿名下载本次目标构建可用的 full baseline：
+
+```bash
+node android/app/scripts/sync_ota_bundles_to_assets.mjs \
+  --base-url https://ota.example.com --env TEST --host-app capp \
+  --target harmony --platform harmony --versioncode 25 --lynx-sdk-version 4.0.0
+```
+
+令牌仅由 `LYNX_OTA_CLIENT_TOKEN` 安全环境注入。25/4.0.0 是示例，必须匹配目标原生包与 Runtime；两个版本参数必填。
+脚本拒绝 userId、gray、directive、target/platform 不一致及校验失败，不覆盖既有内置目录；可加 `--dry-run` 只下载校验。
+普通 `scripts/sync_bundle.sh` 是本地 dist 复制，不请求 Server，不接受上述版本参数。
 
 OTA 与直连边界：
 
@@ -255,13 +275,13 @@ OTA 与直连边界：
   用户主动刷新或下一次冷启动再消费已提交的新 current。
 - 普通 Page/Native Tab 首次读取时按 `sessionID + App ID` 建立进程内 NavigationSnapshot，固定
   `releaseId + manifestId`；同一 session 的后续页面按固定 Release 读取，不会随 current 漂移。
-  主动刷新成功后先 reset Tab Snapshot，再由新 Tab generation 建立新 Snapshot；页面 lease 与
+  身份变化或主动刷新完成后按有效 epoch reset Tab Snapshot，再由新 Tab generation 重读已提交 State（含 partial failure）；页面 lease 与
   Snapshot lease 分开释放。
 - `ContentAddressedOtaStore` 的 Bundle SHA 校验结果只保存在进程内有界 Map，Key 包含 App ID、
   release、bundlePath、期望 SHA、文件大小、mtime、ctime 和 inode；不缓存 bytes、不落盘，
   Release/文件指纹变化自动失效。
-- 首屏失败时先尝试 previous；没有 previous 但 Manifest 存在 rawfile baseline 时删除坏的
-  downloaded current，下一次 `prepare` 直接读 rawfile，不复制 baseline 到应用私有目录。
+- 首屏失败先原子检查 expected current，再回适用 previous；无合法 previous 时在同一次 Store 提交中回 embedded 哨兵，Registry 读取 rawfile。
+  Runtime 不再用探测后另一次 delete 兜底，避免删除新提交的 current；没有 baseline 则明确失败。
 
 ### HarmonyOS Store v3（不含候选版本）
 
@@ -287,6 +307,13 @@ HarmonyOS 与 Android/iOS 使用同一份远程存储契约，但本端只保留
   最后一个 lease 释放或新进程启动后再完成清理并移除标记。
 - 下载前先 prune，再用 Harmony 官方 `statfs.getFreeSizeSync` 做容量预检；空间不足不提交新 current。
 - 不创建 `candidate.json`，也不改变 `current/previous` 的回滚语义。
+
+State v3 还保存 selectionSchemaVersion、ref selection 与 lastDecision（audience/context 摘要、revision/action/target）。
+lastDecision 不是 bytes root，不保存 raw userId、不创建用户副本目录。current/previous/Snapshot 新读取都检查当前 audience 与 native/SDK 范围；
+明确 embedded/no-compatible 指令在冷读仍生效。无远程 full 时退出灰度先回 rawfile，无 rawfile 返回明确不可用。
+
+整批 selection/directives 先协议校验，各 App 决定先独立落盘，再逐 App 下载；一个失败不能遮蔽另一 App 的成功/撤销，整批仍标记 partial failure。
+GC 有界：正常只有 current/previous，lease 与未完成事务临时保留额外对象。回滚旧050已GC时允许补下载1、复用99、复制0，不永久存全部历史。
 
 `ContentAddressedOtaStore` 的校验缓存只保存 Bundle 指纹，不缓存 bytes；指纹包含 App ID、Object、
 Bundle 路径、期望 SHA、文件大小、mtime、ctime 和 inode。
@@ -316,19 +343,31 @@ ArkUI Tabs Home / Settings
 
 用户点击“刷新 OTA”
   -> 等待全量 latest-bundle-list 和原子提交完成
-  -> 成功才递增 refreshGeneration，重建两个 LynxView
-  -> 失败保留当前 Tab 实例和版本
+  -> 在有效 epoch 下从已提交 State 重读，reset Snapshot/generation 后消费决定
+  -> partial failure 仍重读其他 App 已提交的成功/撤销，但不伪报整批成功
 ```
 
 Tab 普通切换不会递增 `refreshGeneration`，因此保留 LynxView、滚动和页面状态，也不会触发网络。
 Manifest 身份缺失时直接显示错误，不静默降级成 `assets://` 直读。
 
-当前 checkout 已执行 `ohpm install`、`assembleHar` 和 `assembleApp`，HAR 与完整 App 均构建成功；
-`python3 scripts/check_harmony_shell.py --quiet` 为 `87 PASS / 0 WARN / 0 FAIL`。本轮使用
+身份变化立即失效旧页面/Snapshot epoch，完成身份同步后再按已提交 State 重读；普通后台更新仍不重建活体 Tab。
+旧页面和 Snapshot lease 保持文件直到 close，旧身份失效不能阻止 close 本身。
+
+### 当前 user-gray/versioncode 验证（2026-09-06）
+
+- 最终release HAR构建3.981s、App构建6.565s成功；BuildProfile原SHA保持不变，未手改受保护值。
+- host-final3 mode=all **18/18**（5真实HTTP＋13pure），独立 [Core测试](../scripts/ota-user-gray/harmony-core-tests.cjs) **25/25**，均0失败/跳过；静态门禁90 PASS/0 WARN/0 FAIL。
+- [当前user-gray报告](../docs/harmony-ota-user-gray-test-report.html) 汇总本轮产物；HTML展示验收与自动/构建门禁分开记录。
+- 用户取消本次 Harmony 模拟器验收，真机本轮未验收；不使用历史模拟器截图/网络计数证明本次身份、Page/Tab 或首屏行为。
+
+### 历史 Store v3 基础验收（不是本次灰度设备证明）
+
+以下是此前 Store v3 阶段记录，当时执行 `ohpm install`、`assembleHar` 和 `assembleApp`，HAR 与完整 App 均构建成功；
+`python3 scripts/check_harmony_shell.py --quiet` 为 `87 PASS / 0 WARN / 0 FAIL`。当时使用
 Pura 90（HarmonyOS 6.1.1(24)，HDC `127.0.0.1:5557`）重新安装 unsigned App，并通过本地
 OTA Server 的真实 HTTP 请求验证 Store v3；本地服务只用于 TEST，生产仍要求 HTTPS。
 
-模拟器运行态已证明：
+该历史模拟器运行记录包括：
 
 - 干净安装 V1：latest=1，下载 100 个 Bundle，共 8,775,400 bytes；
 - V2 冷启动：只下载 `pages/10000001/bundle-050.lynx.bundle` 1 次，共 87,754 bytes；下一次冷启动

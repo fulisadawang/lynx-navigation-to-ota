@@ -1,6 +1,9 @@
 package com.example.lynxshell.sample
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.widget.TextView
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -12,6 +15,7 @@ import com.example.lynxshell.tab.LynxTabFragment
 import com.example.lynxshell.tab.LynxTabSpec
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
+import org.json.JSONObject
 
 /**
  * Android 原生 Tab Host Demo。
@@ -25,11 +29,22 @@ class NativeTabDemoActivity : AppCompatActivity() {
     private lateinit var refreshButton: MaterialButton
     private lateinit var tabSpecs: List<LynxTabSpec>
     private var refreshing = false
+    private var syncGeneration = 0L
+    private var syncStatus = "idle"
+    private var activeTabId = "home"
+    private var debugStateView: TextView? = null
+    private val debugHandler = Handler(Looper.getMainLooper())
+    private val debugTick = object : Runnable {
+        override fun run() {
+            updateDebugState()
+            debugHandler.postDelayed(this, 250L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "原生 Tab 承载 Demo"
-        val appId = EmbeddedBundleRegistry(this).uniqueAppIdForBundles(
+        val appId = if (OtaUserSelectionDebug.enabled) OtaUserSelectionDebug.APP_ID else EmbeddedBundleRegistry(this).uniqueAppIdForBundles(
             setOf(PLAYGROUND_OTA_BUNDLE_NAME),
         ) ?: error("内置 Manifest 中没有唯一的 Tab Demo appId")
         tabSpecs = listOf(
@@ -60,11 +75,12 @@ class NativeTabDemoActivity : AppCompatActivity() {
             setBackgroundColor(android.graphics.Color.WHITE)
         }
         container = FragmentContainerView(this).apply {
-            id = ViewGroup.generateViewId()
+            id = if (OtaUserSelectionDebug.enabled) DEBUG_CONTAINER_ID else ViewGroup.generateViewId()
             setBackgroundColor(android.graphics.Color.WHITE)
         }
         refreshButton = MaterialButton(this).apply {
-            text = "刷新 OTA 后重载 Tab"
+            text = if (OtaUserSelectionDebug.enabled) "刷新 OTA" else "刷新 OTA 后重载 Tab"
+            if (OtaUserSelectionDebug.enabled) contentDescription = "ota-refresh"
             setOnClickListener { refreshTabsFromOta() }
         }
         bottomNavigation = BottomNavigationView(this).apply {
@@ -74,13 +90,9 @@ class NativeTabDemoActivity : AppCompatActivity() {
             )
             labelVisibilityMode = BottomNavigationView.LABEL_VISIBILITY_LABELED
         }
-        root.addView(
-            refreshButton,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ),
-        )
+        if (OtaUserSelectionDebug.enabled) addDebugControls(root) else {
+            root.addView(refreshButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
         root.addView(
             container,
             LinearLayout.LayoutParams(
@@ -121,33 +133,46 @@ class NativeTabDemoActivity : AppCompatActivity() {
             }
         }
         bottomNavigation.selectedItemId = menuId(0)
+        if (OtaUserSelectionDebug.enabled) bottomNavigation.post {
+            tabSpecs.forEachIndexed { index, spec ->
+                bottomNavigation.findViewById<android.view.View>(menuId(index))?.contentDescription = "ota-tab-${spec.tabId}"
+            }
+        }
     }
 
-    /** 先显式同步全量 OTA，再让所有 Tab 重新读取本地已提交 current。 */
-    private fun refreshTabsFromOta() {
-        if (refreshing) return
+    /** 显式刷新结束后重读本地决定；部分 App 失败不遮住其他 App 已提交或撤销的结果。 */
+    private fun refreshTabsFromOta(identityChanged: Boolean = false) {
+        if (refreshing && !identityChanged) return
+        val generation = ++syncGeneration
+        val epoch = if (OtaUserSelectionDebug.enabled) LynxRouter.otaUserIdentityEpoch else 0L
         refreshing = true
+        syncStatus = "syncing"
         refreshButton.isEnabled = false
         refreshButton.text = "正在同步 OTA…"
         LynxRouter.refreshAllOtaBundles { success ->
             runOnUiThread {
+                if (isFinishing || isDestroyed || generation != syncGeneration ||
+                    (OtaUserSelectionDebug.enabled && epoch != LynxRouter.otaUserIdentityEpoch)) return@runOnUiThread
                 refreshing = false
                 refreshButton.isEnabled = true
-                refreshButton.text = "刷新 OTA 后重载 Tab"
-                if (success) {
-                    tabSpecs.forEach { spec ->
-                        (supportFragmentManager.findFragmentByTag(fragmentTag(spec.tabId)) as? LynxTabFragment)
-                            ?.refreshFromCurrent()
-                    }
-                    Toast.makeText(this, "OTA 同步完成，Tab 已重新加载", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(this, "OTA 同步失败，保留当前 Tab 版本", Toast.LENGTH_LONG).show()
+                refreshButton.text = if (OtaUserSelectionDebug.enabled) "刷新 OTA" else "刷新 OTA 后重载 Tab"
+                syncStatus = if (success) "complete" else "failed"
+                tabSpecs.forEach { spec ->
+                    (supportFragmentManager.findFragmentByTag(fragmentTag(spec.tabId)) as? LynxTabFragment)
+                        ?.refreshFromCurrent()
                 }
+                if (!OtaUserSelectionDebug.enabled) {
+                    val message = if (success) "OTA 同步完成，Tab 已重新加载"
+                        else "OTA 同步未全成功/部分失败，Tab 已按本地最新决定重新加载"
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                }
+                updateDebugState()
             }
         }
     }
 
     private fun showTab(index: Int) {
+        activeTabId = tabSpecs[index].tabId
         val transaction = supportFragmentManager.beginTransaction()
         tabSpecs.forEachIndexed { tabIndex, spec ->
             val fragment = supportFragmentManager.findFragmentByTag(fragmentTag(spec.tabId))
@@ -165,14 +190,116 @@ class NativeTabDemoActivity : AppCompatActivity() {
     private fun fragmentTag(tabId: String): String = "native-lynx-tab-$tabId"
 
     private fun demoTabBundleName(): String =
-        if (BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER) {
+        if (OtaUserSelectionDebug.enabled || (BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER)) {
             OTA_STORE_V3_FIXTURE_BUNDLE_NAME
         } else {
             PLAYGROUND_OTA_BUNDLE_NAME
         }
 
+    private fun addDebugControls(root: LinearLayout) {
+        val users = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun userButton(label: String, id: String, audience: OtaUserSelectionDebug.Audience) = MaterialButton(this).apply {
+            text = label
+            contentDescription = id
+            textSize = 12f
+            minWidth = 0
+            setOnClickListener {
+                val changed = OtaUserSelectionDebug.select(this@NativeTabDemoActivity, audience)
+                if (changed) {
+                    // 立即重新读取当前身份允许的本地版本；随后合并身份切换触发的同步。
+                    tabSpecs.forEach { spec ->
+                        (supportFragmentManager.findFragmentByTag(fragmentTag(spec.tabId)) as? LynxTabFragment)?.refreshFromCurrent()
+                    }
+                    refreshTabsFromOta(identityChanged = true)
+                } else syncStatus = "unchanged"
+                updateDebugState()
+            }
+        }
+        for (button in listOf(
+            userButton("用户 A", "ota-user-a", OtaUserSelectionDebug.Audience.A),
+            userButton("用户 B", "ota-user-b", OtaUserSelectionDebug.Audience.B),
+            userButton("退出", "ota-user-anonymous", OtaUserSelectionDebug.Audience.ANONYMOUS),
+        )) users.addView(button, LinearLayout.LayoutParams(0, dp(44), 1f))
+        root.addView(users)
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        actions.addView(refreshButton, LinearLayout.LayoutParams(0, dp(44), 1f))
+        actions.addView(MaterialButton(this).apply {
+            text = "独立打开 050"
+            textSize = 12f
+            minWidth = 0
+            contentDescription = "ota-open-050"
+            setOnClickListener {
+                LynxRouter.open(
+                    this@NativeTabDemoActivity,
+                    OtaUserSelectionDebug.APP_ID,
+                    OtaUserSelectionDebug.BUNDLE_NAME,
+                    params = mapOf("source" to "android-user-gray-standalone"),
+                    options = mapOf("title" to "灰度独立页面", "fullscreen" to false, "showToolbar" to true),
+                )
+            }
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        root.addView(actions)
+        debugStateView = TextView(this).apply {
+            textSize = 11f
+            maxLines = 5
+            setTextColor(android.graphics.Color.DKGRAY)
+            setPadding(dp(8), dp(2), dp(8), dp(2))
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+        root.addView(debugStateView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(78)))
+    }
+
+    private fun updateDebugState() {
+        if (!OtaUserSelectionDebug.enabled || !::tabSpecs.isInitialized) return
+        val state = OtaUserSelectionDebug.state(this)
+        val tabs = JSONObject()
+        val visibleLines = mutableListOf<String>()
+        for (spec in tabSpecs) {
+            val fragment = supportFragmentManager.findFragmentByTag(fragmentTag(spec.tabId)) as? LynxTabFragment
+            val raw = fragment?.debugStateDescription() ?: "ready=false release=none source=not_created"
+            tabs.put(spec.tabId, JSONObject().put("fragmentInstanceId", fragment?.let(System::identityHashCode) ?: 0).put("state", raw))
+            val release = Regex("(?:^|[; |])release=([^; |]+)").find(raw)?.groupValues?.get(1) ?: "none"
+            val kind = Regex("(?:^|[; |])kind=([^; |]+)").find(raw)?.groupValues?.get(1) ?: "unknown"
+            val ready = Regex("(?:^|;)error=ready(?:;|$)").containsMatchIn(raw)
+            visibleLines += "${spec.title}: $release · $kind · ${if (ready) "ready" else "等待/无可用版本"}"
+        }
+        state.put("tabs", tabs).put("activeTab", activeTabId).put("syncStatus", syncStatus).put("syncGeneration", syncGeneration)
+        val syncMessage = when (syncStatus) {
+            "complete" -> "同步完成"
+            "failed" -> "同步未全成功/部分失败"
+            "syncing" -> "同步中"
+            "unchanged" -> "身份未变化"
+            else -> "等待操作"
+        }
+        val visibleText = "用户=${state.getString("audience")} · APK=${state.getString("versioncode")} · epoch=${state.getLong("epoch")} · 候选=${state.getBoolean("candidateMode")}\n" +
+            visibleLines.joinToString("\n") + "\n$syncMessage · Store=${state.getString("nativeStoreId").takeLast(18)}"
+        val accessibilityState = OtaUserSelectionDebug.STATE_PREFIX + state.toString()
+        debugStateView?.let { view ->
+            if (view.text?.toString() != visibleText) view.text = visibleText
+            if (view.contentDescription?.toString() != accessibilityState) view.contentDescription = accessibilityState
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (OtaUserSelectionDebug.enabled) { debugHandler.removeCallbacks(debugTick); debugHandler.post(debugTick) }
+    }
+
+    override fun onPause() {
+        debugHandler.removeCallbacks(debugTick)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        debugHandler.removeCallbacks(debugTick)
+        super.onDestroy()
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
     companion object {
         private const val MENU_ID_BASE = 0x4C5958
+        private const val DEBUG_CONTAINER_ID = 0x4C5960
         private const val PLAYGROUND_OTA_BUNDLE_NAME = "main.lynx.bundle"
         private const val OTA_STORE_V3_FIXTURE_BUNDLE_NAME = "pages/10000001/bundle-050.lynx.bundle"
     }

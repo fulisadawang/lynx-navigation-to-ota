@@ -29,6 +29,9 @@ final class NativeTabBarDemoViewController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "原生 Tab 承载 Demo"
+        navigationItem.largeTitleDisplayMode = .never
+        // Demo 的 Lynx 内容在导航栏下方起始，避免 iOS 26 透明导航遮住版本标记。
+        edgesForExtendedLayout = []
         view.backgroundColor = .systemBackground
 
         let refreshItem = UIBarButtonItem(
@@ -46,15 +49,22 @@ final class NativeTabBarDemoViewController: UITabBarController {
         storageItem.accessibilityIdentifier = "native-tab-storage-inspector"
         navigationItem.rightBarButtonItems = [refreshItem, storageItem]
         self.refreshItem = refreshItem
+        if ProcessInfo.processInfo.environment["LYNX_TEST_OTA_USER_SELECTION"] == "1" {
+            let userItem = UIBarButtonItem(title: "用户", style: .plain, target: self, action: #selector(selectOtaUser))
+            userItem.accessibilityIdentifier = "ota-select-user"
+            // iOS 26 会把过多按钮收进 More；验收入口固定为两个可见按钮。
+            navigationItem.rightBarButtonItems = [refreshItem, userItem]
+        }
 #if DEBUG
-        if ProcessInfo.processInfo.environment["LYNX_UI_TEST_EXPOSE_RUNTIME_STATE"] == "1" {
+        if ProcessInfo.processInfo.environment["LYNX_UI_TEST_EXPOSE_RUNTIME_STATE"] == "1",
+           ProcessInfo.processInfo.environment["LYNX_TEST_OTA_USER_SELECTION"] != "1" {
             let rebuildItem = UIBarButtonItem(
                 title: "重建 Tab",
                 style: .plain,
                 target: self,
                 action: #selector(debugRebuildSelectedTab)
             )
-            navigationItem.rightBarButtonItems = [refreshItem, storageItem, rebuildItem]
+            navigationItem.rightBarButtonItems = (navigationItem.rightBarButtonItems ?? []) + [rebuildItem]
         }
 #endif
 
@@ -118,6 +128,34 @@ final class NativeTabBarDemoViewController: UITabBarController {
 #if DEBUG
         installDebugStateIfNeeded()
 #endif
+    }
+
+    /** Demo 合成身份入口，业务宿主应由登录系统调用同一个 Router API。 */
+    @objc private func selectOtaUser() {
+        let sheet = UIAlertController(title: "OTA 测试用户", message: "注册后自动检查，Tab 只读取已提交版本", preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "用户 A（灰度）", style: .default) { _ in
+            _ = LynxRouter.registerOtaUserId("user_demo_A")
+        })
+        sheet.addAction(UIAlertAction(title: "用户 B（普通）", style: .default) { _ in
+            _ = LynxRouter.registerOtaUserId("user_demo_B")
+        })
+        sheet.addAction(UIAlertAction(title: "退出登录（匿名）", style: .default) { _ in
+            _ = LynxRouter.clearOtaUserId()
+        })
+        sheet.addAction(UIAlertAction(title: "独立打开测试 Bundle", style: .default) { [weak self] _ in
+            do {
+                _ = try LynxRouter.open(lynxAppId: "10000001", bundleName: "pages/10000001/bundle-050.lynx.bundle",
+                                       options: ["title": "灰度独立页面", "fullscreen": false, "showNavigationBar": true])
+            } catch {
+                self?.presentShellAlert(title: "打开失败", message: error.localizedDescription)
+            }
+        })
+        sheet.addAction(UIAlertAction(title: "查看 Bundle 磁盘", style: .default) { [weak self] _ in
+            self?.openStorageInspector()
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let popover = sheet.popoverPresentationController { popover.sourceView = view; popover.sourceRect = CGRect(x: view.bounds.midX, y: 0, width: 1, height: 1) }
+        present(sheet, animated: true)
     }
 
 #if DEBUG
@@ -189,15 +227,14 @@ final class NativeTabBarDemoViewController: UITabBarController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let success = await LynxRouter.refreshAllOtaBundles()
-            if success {
-                tabControllers.forEach { $0.refreshFromCurrent() }
-            }
+            // 主动刷新即重新读取已提交状态；部分下载失败不应遮住其他 App 的成功决定。
+            tabControllers.forEach { $0.refreshFromCurrent() }
             refreshItem?.isEnabled = true
             presentShellAlert(
                 title: success ? "OTA 同步完成" : "OTA 同步失败",
                 message: success
                     ? "Tab 已重新读取当前已提交 Bundle"
-                    : "保留当前 Tab 版本，请检查 OTA 配置和网络"
+                    : "已重读本地已提交版本，部分 App 同步失败，请检查 OTA 配置和网络"
             )
         }
     }

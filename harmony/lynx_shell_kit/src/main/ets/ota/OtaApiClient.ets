@@ -1,6 +1,8 @@
 import http from '@ohos.net.http';
 import OtaJson from './OtaJson';
 import { LynxOtaConfig, OtaLatestBundleLists, OtaPrepareSignal, OtaReleaseSnapshot } from './OtaModels';
+import { OtaUserContext, OtaUserContextBox } from './OtaUserContext';
+import { OtaLatestSelection, OtaSelection, OtaSelectionDirective } from './OtaSelection';
 
 /** 仅供 TEST 模式注入的本地快照源；不进入默认网络请求链。 */
 export interface OtaMockSource {
@@ -21,8 +23,9 @@ export default class OtaApiClient {
   private readonly activeRequests: Set<http.HttpRequest> = new Set();
   /** 进程内 latest JSON + ETag 缓存；进程重启后仍由服务端返回完整快照。 */
   private readonly responseCache: Map<string, OtaHttpCacheEntry> = new Map();
+  private identityBox?: OtaUserContextBox;
 
-  constructor(config: LynxOtaConfig, mockSource: OtaMockSource | null = null) {
+  constructor(config: LynxOtaConfig, mockSource: OtaMockSource | null = null, identityBox?: OtaUserContextBox) {
     const normalized = config.apiBaseUrl.trim().toLowerCase();
     const localHttp = this.isTestHttpUrl(normalized);
     if (!normalized.startsWith('https://') &&
@@ -31,39 +34,62 @@ export default class OtaApiClient {
     }
     this.config = config;
     this.mockSource = mockSource;
+    this.identityBox = identityBox;
   }
 
-  async fetchLatestBundleLists(signal?: OtaPrepareSignal): Promise<OtaLatestBundleLists> {
+  bindUserContext(identityBox: OtaUserContextBox): void { this.identityBox = identityBox; }
+
+  async fetchLatestBundleLists(signal?: OtaPrepareSignal, context?: OtaUserContext): Promise<OtaLatestBundleLists> {
+    this.validateContext(context);
     if (this.config.debugMockEnabled && this.mockSource !== null) {
       signal?.throwIfCancelled();
-      return this.mockSource.fetchLatestBundleLists();
+      const mock = await this.mockSource.fetchLatestBundleLists();
+      this.validateResponse(mock, context);
+      return mock;
     }
     const query = `env=${encodeURIComponent(this.config.environment)}` +
       `&hostApp=${encodeURIComponent(this.config.hostApp)}` +
-      `&platform=${encodeURIComponent(this.config.requestPlatform())}`;
-    const raw = await this.getText(`${this.baseUrl()}/api/ota/v1/releases/latest-bundle-list?${query}`, signal);
-    return OtaJson.parseLatestLists(raw);
+      `&platform=harmony${this.contextQuery(context)}`;
+    const raw = await this.getText(`${this.baseUrl()}/api/ota/v1/releases/latest-bundle-list?${query}`, signal, context);
+    const parsed = OtaJson.parseLatestLists(raw);
+    this.validateResponse(parsed, context);
+    return parsed;
   }
 
-  async fetchLatestBundleList(lynxAppId: string, signal?: OtaPrepareSignal): Promise<OtaReleaseSnapshot> {
+  async fetchLatestBundleList(lynxAppId: string, signal?: OtaPrepareSignal, context?: OtaUserContext): Promise<OtaReleaseSnapshot> {
+    const selected = await this.fetchLatestSelection(lynxAppId, signal, context);
+    if (selected.release === undefined) throw new Error('no_compatible_release');
+    return selected.release;
+  }
+
+  async fetchLatestSelection(lynxAppId: string, signal?: OtaPrepareSignal, context?: OtaUserContext): Promise<OtaLatestSelection> {
+    this.validateContext(context);
     if (this.config.debugMockEnabled && this.mockSource !== null) {
       signal?.throwIfCancelled();
-      return this.mockSource.fetchLatestBundleList(lynxAppId);
+      const release = await this.mockSource.fetchLatestBundleList(lynxAppId);
+      this.validateContext(context);
+      if (context?.selectionEnabled) OtaSelection.fromRelease(release, context);
+      return { release: release };
     }
     const query = `env=${encodeURIComponent(this.config.environment)}` +
       `&hostApp=${encodeURIComponent(this.config.hostApp)}` +
       `&lynxAppId=${encodeURIComponent(lynxAppId)}` +
-      `&platform=${encodeURIComponent(this.config.requestPlatform())}`;
-    const raw = await this.getText(`${this.baseUrl()}/api/ota/v1/releases/latest-bundle-list?${query}`, signal);
+      `&platform=harmony${this.contextQuery(context)}`;
+    const raw = await this.getText(`${this.baseUrl()}/api/ota/v1/releases/latest-bundle-list?${query}`, signal, context);
     const parsed = OtaJson.parseLatestLists(raw);
+    this.validateResponse(parsed, context);
+    if (context?.selectionEnabled && (parsed.bundleLists.length + (parsed.directives?.length ?? 0) !== 1)) throw new Error('invalid_single_selection');
+    const directive = parsed.directives?.find((item: OtaSelectionDirective) => item.lynxAppId === lynxAppId);
+    if (directive !== undefined) return { directive: directive };
     const matched = parsed.bundleLists.find((item: OtaReleaseSnapshot) => item.lynxAppId === lynxAppId);
     if (matched === undefined) {
       throw new Error(`最新 bundle-list 中不存在 lynxAppId：${lynxAppId}`);
     }
-    return matched;
+    return { release: matched };
   }
 
-  async downloadBundle(bundleUrl: string, signal?: OtaPrepareSignal): Promise<ArrayBuffer> {
+  async downloadBundle(bundleUrl: string, signal?: OtaPrepareSignal, context?: OtaUserContext): Promise<ArrayBuffer> {
+    this.validateContext(context);
     const normalized = bundleUrl.trim().toLowerCase();
     const localHttp = this.isTestHttpUrl(normalized);
     if (!normalized.startsWith('https://') &&
@@ -74,6 +100,7 @@ export default class OtaApiClient {
     if (this.config.debugMockEnabled && this.mockSource !== null) {
       const binary = await this.mockSource.downloadBundle(bundleUrl);
       signal?.throwIfCancelled();
+      this.validateContext(context);
       return binary.slice(0);
     }
     const request = http.createHttp();
@@ -87,7 +114,8 @@ export default class OtaApiClient {
         readTimeout: 30_000
       });
       signal?.throwIfCancelled();
-      this.ensureSuccess(response.responseCode, `下载 Bundle 失败：${bundleUrl}`);
+      this.validateContext(context);
+      this.ensureSuccess(response.responseCode, '下载 Bundle 失败');
       const binary = response.result as ArrayBuffer;
       if (binary === undefined || binary.byteLength === 0) {
         throw new Error('OTA Bundle 内容为空');
@@ -107,8 +135,10 @@ export default class OtaApiClient {
     this.activeRequests.clear();
   }
 
-  private async getText(requestUrl: string, signal?: OtaPrepareSignal): Promise<string> {
+  private async getText(requestUrl: string, signal?: OtaPrepareSignal, context?: OtaUserContext): Promise<string> {
     signal?.throwIfCancelled();
+    this.validateContext(context);
+    const cacheKey = OtaUserContext.hash(requestUrl) + `|${context?.clientContextKey ?? 'legacy'}|${context?.identityEpoch ?? 0}`;
     const request = http.createHttp();
     this.activeRequests.add(request);
     try {
@@ -116,7 +146,7 @@ export default class OtaApiClient {
       if (this.config.clientToken.trim().length > 0) {
         headers['x-ota-client-token'] = this.config.clientToken;
       }
-      const cached = this.responseCache.get(requestUrl);
+      const cached = this.responseCache.get(cacheKey);
       if (cached !== undefined) headers['If-None-Match'] = cached.etag;
       const response = await request.request(requestUrl, {
         method: http.RequestMethod.GET,
@@ -127,6 +157,7 @@ export default class OtaApiClient {
         readTimeout: 30_000
       });
       signal?.throwIfCancelled();
+      this.validateContext(context);
       if (response.responseCode === 304 && cached !== undefined) {
         return cached.body;
       }
@@ -135,6 +166,7 @@ export default class OtaApiClient {
       if (raw.trim().length === 0) {
         throw new Error('OTA 清单响应为空');
       }
+      this.validateResponse(OtaJson.parseLatestLists(raw), context);
       const responseHeaders = response.header as Record<string, Object>;
       let etag: string = '';
       Object.keys(responseHeaders).forEach((key: string) => {
@@ -142,7 +174,7 @@ export default class OtaApiClient {
       });
       if (etag.length > 0) {
         const cacheEntry: OtaHttpCacheEntry = { body: raw, etag: etag };
-        this.responseCache.set(requestUrl, cacheEntry);
+        this.responseCache.set(cacheKey, cacheEntry);
       }
       return raw;
     } finally {
@@ -155,6 +187,38 @@ export default class OtaApiClient {
     if (statusCode < 200 || statusCode >= 300) {
       throw new Error(`${prefix}，HTTP ${statusCode}`);
     }
+  }
+
+  private validateContext(context: OtaUserContext | undefined): void {
+    if (this.config.versionCode !== undefined && context === undefined) throw new Error('missing_captured_context');
+    if (context !== undefined) {
+      if (this.identityBox === undefined) throw new Error('missing_identity_box');
+      this.identityBox.validate(context);
+    }
+  }
+
+  private contextQuery(context: OtaUserContext | undefined): string {
+    if (context === undefined || !context.selectionEnabled) return '';
+    return `&versioncode=${encodeURIComponent(context.versionCode!)}` +
+      `&lynxSdkVersion=${encodeURIComponent(context.lynxSdkVersion!)}` +
+      (context.userId === undefined ? '' : `&userId=${encodeURIComponent(context.userId)}`);
+  }
+
+  private validateResponse(response: OtaLatestBundleLists, context: OtaUserContext | undefined): void {
+    this.validateContext(context);
+    if (context === undefined || !context.selectionEnabled) return;
+    if (response.selectionSchemaVersion !== 1 || response.env !== context.env || response.hostApp !== context.hostApp || response.platform !== 'harmony') throw new Error('invalid_selection_scope');
+    const apps = new Set<string>();
+    response.bundleLists.forEach((release: OtaReleaseSnapshot) => {
+      OtaSelection.fromRelease(release, context);
+      if (apps.has(release.lynxAppId)) throw new Error('duplicate_selection');
+      apps.add(release.lynxAppId);
+    });
+    response.directives?.forEach((directive: OtaSelectionDirective) => {
+      OtaSelection.validateDirective(directive);
+      if (apps.has(directive.lynxAppId)) throw new Error('duplicate_selection');
+      apps.add(directive.lynxAppId);
+    });
   }
 
   private baseUrl(): string {

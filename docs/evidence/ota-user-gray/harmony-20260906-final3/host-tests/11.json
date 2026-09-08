@@ -1,0 +1,8 @@
+{
+  "name": "实际 PageRefreshGate：多 App 隔离、clearApp/clearAll 与 reset",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "实际 Selection：双兼容门禁、灰度归属与完整 State JSON 往返",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

@@ -1,8 +1,8 @@
-# LynxShell Android / iOS Module 接入
+# LynxShell Android / iOS / HarmonyOS Module 接入
 
 ## 目标
 
-Android 与 iOS 都采用“可复用 Module + Sample App”结构：
+三端采用“可复用 Module + Sample App”结构，分别交付 AAR / Pod / HAR：
 
 ```text
 业务 App
@@ -177,8 +177,8 @@ LynxRouter.deleteAllOtaBundles { success, message -> /* 全部 appId */ }
 ```
 
 Lynx 页面侧对应 `NativeModules.LynxShellModule.deleteOtaBundles` /
-`deleteAllOtaBundles`。两者都是永久删除 `files/lynx-ota-store` 中的下载内容，不生成
-隐藏备份目录；`embedded` 描述和 APK assets 保留，回调必须检查 `code === 0`。
+`deleteAllOtaBundles`。两者永久清除远程引用，不生成隐藏备份目录；活体 lease 保护的对象延后回收，
+选择模式保留必要 State/lastDecision，`embedded` 描述和 APK assets 保留，回调必须检查 `code === 0`。
 
 ## iOS
 
@@ -328,6 +328,77 @@ Sample Bundle 位于 `ios/LynxShellSample/Resources/Bundles`。Provider 从最�
 `Bundle.main` 读取，所以业务工程应把自己的 `.lynx.bundle` 作为 folder reference
 加入 App Target，而不是塞进 `LynxShellKit`。
 
+## OTA 用户注册、版本来源与本地选择
+
+用户只由原生登录系统注册，不新增用户注册 Bridge。install 前注册值（包括显式匿名）优先于配置中的 userId：
+
+```kotlin
+// Android：在原生主线程，登录态恢复后、install 前或运行期间调用。
+LynxRouter.registerOtaUserId(restoredUserId)
+LynxRouter.clearOtaUserId() // 退出时调用，不要在同一次登录初始化中同时调用二者
+```
+
+```swift
+// iOS：MainActor。Router 校验失败返回 false，不改变当前身份。
+LynxRouter.registerOtaUserId(restoredUserId)
+LynxRouter.clearOtaUserId() // 等价于注册 nil
+```
+
+```ts
+// HarmonyOS：UI 线程。
+LynxRouter.registerOtaUserId(restoredUserId)
+LynxRouter.clearOtaUserId() // 等价于注册 undefined
+```
+
+这些示例分别表示登录/退出事件，不是要求紧接着执行。重复注册相同规范化身份不重建 Tab、不重复同步。
+Android/Harmony Router boolean 表示是否变化；iOS Router boolean 表示参数是否被接受，不能统一当作 changed，更不能当作网络完成结果。
+需要等待身份变更触发的同步时复用现有主动刷新入口，同 epoch 在途全量任务会合并。userId raw 输入先拒绝控制字符，再 trim，最多 256 UTF-8 字节；不写原始账号到 State/日志。
+
+所有新版 latest 全量/定向/repair/主动刷新都发送 `versioncode`、`lynxSdkVersion`，有用户才发送 userId。
+`versionCode` 配置可显式覆盖合法原生构建码，但不从版本名称、去掉小数点或固定 BUILD_NUMBER 推导。
+
+| 平台 | 默认构建码 | Lynx SDK 版本及边界 |
+|---|---|---|
+| Android | PackageInfo.longVersionCode（旧 API 用 versionCode） | Library 当前 resolved variant 生成 `BuildConfig.LYNX_RUNTIME_VERSION`；不是误报的 JNI getter。宿主强换预编译 AAR 的 Runtime 未认证，必须重建/验证组合 |
+| iOS | 整数 CFBundleVersion；如 1.2.3 必须显式提供正整数 versionCode | 可信 `org.cocoapods.LynxResources` / `org.cocoapods.Lynx` metadata；多源或显式值不一致则配置失败 |
+| HarmonyOS | 自身 BundleInfo.versionCode | 实际 `@lynx/lynx` HAR 的 `LynxEnv.getLynxVersion()`；显式 SDK 值也须与实际值一致；platform 固定 harmony |
+
+构建码是十进制字符串 `1..9223372036854775807`，SDK 是 1–3 段稳定数字版本，二者与 appVersion/versionName/buildNumber 独立。
+非法配置不能发送伪造的 0 或悄悄省略新参数；Shell 保留独立 embedded 加载能力并报告 OTA 配置错误。
+Android/iOS Core 的 `versionCode=null/nil` 只为旧低层调用保留，不是新版 Router 的默认接线方式。
+
+Server 在用户资格及范围过滤后比较 releaseSequence，因此 full7 胜 gray6；较高 policyRevision 可回滚到较低 releaseSequence。
+State v3 的 current/previous/candidate ref 保存 selection，lastDecision 保存 audience/context 摘要、revision/action/target；CAS 只按 App ID/SHA 保存一份 bytes。
+旧 v3 unknown 引用须重新确认；所有新入口重检用户及 native/SDK 范围，旧用户 gray 不能作为 previous 回退。
+Harmony 没有 candidate/trial。Android/iOS 首屏回调携带捕获的 releaseId/epoch，旧回调不能确认或清除新 candidate。
+
+Native Tab 普通切换 cache-only；普通后台更新保持实例。身份变化或主动刷新完成后，在有效 epoch 下 reset Snapshot、更新 generation 并重读已提交 State。
+即使整批 partial failure，其他 App 已完成的更新或 embedded 指令也必须可见；只给成功 App 更新刷新门控，不把 partialResult 视作全量成功。
+full/gray metadata 或用户变更不复制 CAS。100→1 只下载缺失 1、复制 0；有界 GC 后旧回滚对象不在磁盘时允许补下载，不能无限保留历史。
+
+### 三端匿名内置 baseline 下载
+
+三端共用 `android/app/scripts/sync_ota_bundles_to_assets.mjs`。从仓库根运行，事先由安全环境提供
+`LYNX_OTA_CLIENT_TOKEN`；下面的构建码是示例，必须替换为本次目标原生包的实际值：
+
+```bash
+node android/app/scripts/sync_ota_bundles_to_assets.mjs \
+  --base-url https://ota.example.com --env TEST --host-app capp \
+  --target android --platform android --versioncode 120 --lynx-sdk-version 4.0.0
+
+node android/app/scripts/sync_ota_bundles_to_assets.mjs \
+  --base-url https://ota.example.com --env TEST --host-app capp \
+  --target ios --platform ios --versioncode 800 --lynx-sdk-version 4.0.0
+
+node android/app/scripts/sync_ota_bundles_to_assets.mjs \
+  --base-url https://ota.example.com --env TEST --host-app capp \
+  --target harmony --platform harmony --versioncode 25 --lynx-sdk-version 4.0.0
+```
+
+`--versioncode` 与 `--lynx-sdk-version` 必填，SDK 值也必须对应实际打包依赖。`--platform` 默认等于 target，显式提供也必须一致。
+脚本始终匿名，不接收 userId，只接受兼容 full 完整快照；gray/directive/校验失败不覆盖既有内置目录。
+可加 `--dry-run` 下载校验但不替换资源，或用 `--output-dir` 指向专用测试目录。普通 `sync_bundle.sh` 只复制本地 dist，不能用来代替上述 Server 选择校验。
+
 ## 三端默认承载与页面侧协议
 
 三端均采用 Native Page Stack：
@@ -408,14 +479,13 @@ Playground `dist/` 的 16 个 `.lynx.bundle` 与 `static/` 已全量同步到
 
 ## 本次验证
 
-- Playground：TypeScript `--noEmit` 与 Rspeedy Bundle 构建通过。
-- Android：Library Release AAR 与 Sample Debug APK 构建通过；APK 已安装并启动到
-  OnePlus 8 真机，前台为 Module 内的 `LynxShellActivity`。
-- iOS：单一 `LynxShellKit` Pod 安装（直接依赖 1 个）、内置 OTA SDK `swift test`
-  （16/16）通过；本轮 Pod 结构收口后的 Xcode 编译在 `SWBBuildService` 的 clang 预处理阶段
-  卡住，标记为 `[待确认]`，不能用此前的 Simulator 运行证据替代。
-- Android/iOS 静态检查为 `110 PASS / 0 WARN / 0 FAIL`；HarmonyOS 专项静态检查为
-  `62 PASS / 0 WARN / 0 FAIL`，三端合计 `172 PASS / 0 WARN / 0 FAIL`。
-- HarmonyOS HAR/HAP 构建成功；模拟器 `127.0.0.1:5555` 已安装并验收原生 OTA 首页、
-  Loading/401 错误态和删除入口。Demo 现在可通过 `serverPlatform=android` 临时复用现有
-  Android release；后端开放 `harmony` 后删除该兼容配置即可。
+2026-09-06 user-gray/versioncode：
+
+- [iOS 当前报告](docs/ios-ota-user-gray-test-report.html)：83 Core、最终 4/4 UI、19 图，Pod/宿主链已有当前证据。
+- [Android 当前报告](docs/android-ota-user-gray-test-report.html)：87 tests，0 failure/error/skipped，APK 构建及 HTML 验收通过。
+- [Harmony 当前报告](docs/harmony-ota-user-gray-test-report.html)：host-final3 mode=all 18/18（5真实HTTP）＋Core25/25，0失败/跳过；release HAR 3.981s、App 6.565s 构建成功，静态90/0/0。HTML展示验收独立于这些门禁。
+- Server：实际 npm pack Contracts 本地产物联编125/125、0 skipped；只读 backfill preview 44 scopes/372 local rows。没有npm发布、远程DB操作或部署。
+
+本次 Android/Harmony 设备测试已由用户取消，只采用自动/协议测试、构建与 HTML 层级，不写成设备通过。
+此前 Module 化阶段的 16 项 Swift、OnePlus/旧 HDC、172 项静态等记录属于历史，不再代表当前结果。
+历史基础证据另见 [iOS v3](docs/ios-ota-store-v3-test-report.html)、[Android v3](docs/android-ota-store-v3-test-report.html)、[Harmony v3](docs/harmony-ota-store-v3-test-report.html)。

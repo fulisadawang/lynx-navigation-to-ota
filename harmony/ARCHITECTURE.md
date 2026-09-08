@@ -50,14 +50,36 @@ HAP 发布资产，首次命中时直接读取；远程对象才进入 App ID �
 └── transactions/<transactionId>/*.part
 ```
 
-状态文件使用 schema v3，只包含 `current/previous`；本端不实现候选版本状态机。服务端下发的
+状态文件使用 schema v3，远程引用只有 current/previous，另保存 ref selection、selectionSchemaVersion 与 lastDecision；本端不实现候选版本状态机。服务端下发的
 `changedBundles` 仍是完整 Manifest 快照，但客户端按 SHA 查找 App ID 内的 CAS 对象：命中则复用，
 未命中才下载到 `transactions/` 临时文件。每个对象先完成 size/SHA 校验，再原子发布对象、Manifest，
 最后原子写入 state；state 是唯一激活点。写入后执行 Mark-and-Sweep，只保留 current、previous、
-活跃 Page/Tab lease 引用的 Manifest 和对象。
+活跃 Page/Tab lease 及未完成 transaction 引用的 Manifest 和对象。
 
-`OtaBundleLease` 与 `PreparedPageBundle` 一起返回给容器。Runtime 的操作队列同时串行化下载、
-发布、删除、冷启动清理和 lease 释放后的 prune，避免异步网络事务期间误删尚未提交的 Release。
+`OtaBundleLease` 与 PreparedPageBundle 的 epoch/selection 一起返回。Runtime 使用身份分代队列，B 不等 A 长 HTTP；
+cache-only lease 读取不走网络队列。async 操作显式传只读 OtaUserContext，禁止全局 operationContext 跨 await。
+同步注册增 epoch；最终同步 State rename 前验证 epoch 与 lastDecision，同步段内没有 await；旧 close 不被身份失效阻止。
+
+完整 Manifest 100 包只改050时新增下载/对象1、复制0。有界GC只保留current/previous、lease和事务，旧回滚对象已GC允许补缺1，
+不无限保存历史。正在下载的事务保护其对象和Manifest，成功后退休已结束索引，不能删除另一epoch活跃事务。
+
+## 用户、版本与页面消费
+
+原生 `LynxRouter.registerOtaUserId/clearOtaUserId` 支持 install 前调用，同身份不重复同步。Runtime 使用自身 BundleInfo.versionCode 与
+真实 HAR `LynxEnv.getLynxVersion()`，Models 只校验，不使用固定BUILD_NUMBER；所有请求固定platform=harmony，无Android兼容降级。
+全量/定向/repair/主动刷新使用精确 `versioncode`、`lynxSdkVersion` 与可选 userId，构建码独立于版本名称。
+
+Server 先用户/范围过滤，再比较releaseSequence，full7胜gray6；policyRevision防旧决定，高修订可回滚低序号，均用字符串精确十进制比较。
+State lastDecision只含audience/context摘要、revision、action与target，不保存rawID、不是GC root；CAS不新增用户目录。
+unknown旧v3引用等Server新确认，current/previous/Snapshot都重检audience与native/SDK范围，明确embedded指令冷启仍有效。
+
+全批协议先校验，再独立提交每App决定，最后下载，保留partial失败而不跳过其他App撤销。
+Tab普通切换cache-only、后台更新不重建；身份或主动刷新完成后按有效epoch reset Snapshot/generation并重读State，包含partial failure。
+首屏回滚原子校验expected current；无适用previous时同次提交embedded哨兵，宿主不追加第二次delete。
+
+本次非设备门禁：host-final3 mode=all 18/18（5真实HTTP）＋Core25/25，0失败/跳过；release HAR3.981s/App6.565s构建成功，静态90/0/0。
+当前产物见 [Harmony user-gray报告](../docs/harmony-ota-user-gray-test-report.html)，HTML展示验收独立记录。
+用户取消本次 Harmony 模拟器测试，真机本轮未验收；[历史v3报告](../docs/harmony-ota-store-v3-test-report.html) 不代表本次灰度运行验证。
 
 `LynxOtaRuntime.storageSnapshot()` 只读扫描 Runtime 已绑定的 Store root，提供 Inspector 所需的
 路径、Manifest、current/previous、lease、CAS 对象和字节统计，不接受任意外部路径。旧的

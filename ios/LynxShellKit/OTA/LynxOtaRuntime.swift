@@ -1,4 +1,5 @@
 import Foundation
+import Lynx
 
 /**
  * 宿主只面向 LynxShellKit 的 OTA 配置；OTA 引擎源码已经编译在同一个 Router Module 内。
@@ -14,6 +15,7 @@ public struct LynxOtaConfiguration {
     public let environment: String
     public let appVersion: String?
     public let buildNumber: String?
+    public let versionCode: String?
     public let userId: String?
     public let deviceId: String?
     public let deviceModel: String?
@@ -44,13 +46,14 @@ public struct LynxOtaConfiguration {
         channel: String? = nil,
         region: String? = nil,
         nativeProtocolVersion: String? = nil,
-        lynxSDKVersion: String? = "4.0.0",
+        lynxSDKVersion: String? = nil,
         clientToken: String,
         storageDirectory: URL? = nil,
         pageRefreshInterval: TimeInterval = Self.defaultPageRefreshInterval,
         candidateActivationEnabled: Bool = false,
         storeVersion: OtaStoreVersion = .v3,
-        allowLocalHTTPForTest: Bool = false
+        allowLocalHTTPForTest: Bool = false,
+        versionCode: String? = nil
     ) {
         self.apiBaseURL = apiBaseURL
         self.hostApp = hostApp
@@ -58,6 +61,7 @@ public struct LynxOtaConfiguration {
         self.environment = environment
         self.appVersion = appVersion
         self.buildNumber = buildNumber
+        self.versionCode = versionCode
         self.userId = userId
         self.deviceId = deviceId
         self.deviceModel = deviceModel
@@ -108,6 +112,20 @@ public struct LynxOtaConfiguration {
         let resolvedBuild = buildNumber
             ?? (info["CFBundleVersion"] as? String)
             ?? "0"
+        let resolvedVersionCode: String
+        let resolvedSDKVersion: String
+        do {
+            resolvedVersionCode = try OtaUserContext.normalizeVersionCode(versionCode ?? resolvedBuild)
+        } catch {
+            throw LynxOtaError.invalidConfiguration("versionCode 必须是原生正整数构建号；分段 CFBundleVersion 请由宿主显式提供 versionCode")
+        }
+        do {
+            let actualSDKVersion = try Self.bundledLynxSDKVersion()
+            resolvedSDKVersion = try OtaUserContext.normalizeLynxSdkVersion(lynxSDKVersion ?? actualSDKVersion)
+            guard resolvedSDKVersion == actualSDKVersion else { throw OtaSelectionError.invalidSDKVersion }
+        } catch {
+            throw LynxOtaError.invalidConfiguration("lynxSDKVersion 必须等于随 Lynx 依赖打包的稳定版本，且版本元数据必须可读取")
+        }
         let directory = storageDirectory
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("lynx-ota-store", isDirectory: true)
@@ -119,6 +137,7 @@ public struct LynxOtaConfiguration {
             platform: .ios,
             appVersion: resolvedVersion,
             buildNumber: resolvedBuild,
+            versionCode: resolvedVersionCode,
             userId: userId,
             deviceId: deviceId,
             deviceModel: deviceModel,
@@ -126,13 +145,33 @@ public struct LynxOtaConfiguration {
             channel: channel,
             region: region,
             nativeProtocolVersion: nativeProtocolVersion,
-            lynxSdkVersion: lynxSDKVersion,
+            lynxSdkVersion: resolvedSDKVersion,
             otaClientToken: clientToken,
             storageDirectory: directory,
             candidateActivationEnabled: candidateActivationEnabled,
             storeVersion: storeVersion,
             allowLocalHTTPForTest: allowsLocalHTTP
         )
+    }
+
+    /**
+     * CocoaPods 4.0 源码未定义 Lynx_POD_VERSION 时，LynxVersion 方法会误报 1.4.0；
+     * 链接符号 LynxVersionString 又只是 build number。读取同一 Lynx Pod 自带的资源版本，
+     * 不把业务配置或写死的 4.0.0 当成实际 Runtime。元数据丢失时明确失败。
+     */
+    private static func bundledLynxSDKVersion() throws -> String {
+        let owner = Bundle(for: LynxVersion.self)
+        var metadata: [LynxSDKVersionMetadata] = []
+        for container in [owner, Bundle.main] {
+            if let url = container.url(forResource: "LynxResources", withExtension: "bundle"),
+               let resources = Bundle(url: url) {
+                metadata.append(.init(identifier: resources.bundleIdentifier, version: resources.infoDictionary?["CFBundleShortVersionString"] as? String))
+            }
+        }
+        let framework = owner.bundleURL.pathExtension == "framework"
+            ? LynxSDKVersionMetadata(identifier: owner.bundleIdentifier, version: owner.infoDictionary?["CFBundleShortVersionString"] as? String)
+            : nil
+        return try LynxSDKVersionResolver.resolve(resources: metadata, framework: framework, normalize: OtaUserContext.normalizeLynxSdkVersion)
     }
 
     private static func isLoopbackHost(_ host: String?) -> Bool {
@@ -175,6 +214,9 @@ struct PreparedOtaBundle {
     let releaseLease: OtaBundleLease?
     /** 当前页面继承的导航会话快照；同一 session 不允许混用不同 release。 */
     let navigationSnapshotID: String?
+    let userIdentityEpoch: UInt64?
+    let selectionKind: String?
+    let releaseSequence: String?
 
     init(
         lynxAppId: String,
@@ -183,7 +225,10 @@ struct PreparedOtaBundle {
         releaseId: String?,
         source: String = "ota_current",
         releaseLease: OtaBundleLease? = nil,
-        navigationSnapshotID: String? = nil
+        navigationSnapshotID: String? = nil,
+        userIdentityEpoch: UInt64? = nil,
+        selectionKind: String? = nil,
+        releaseSequence: String? = nil
     ) {
         self.lynxAppId = lynxAppId
         self.bundleName = bundleName
@@ -192,6 +237,9 @@ struct PreparedOtaBundle {
         self.source = source
         self.releaseLease = releaseLease
         self.navigationSnapshotID = navigationSnapshotID
+        self.userIdentityEpoch = userIdentityEpoch
+        self.selectionKind = selectionKind
+        self.releaseSequence = releaseSequence
     }
 }
 
@@ -205,7 +253,10 @@ protocol LynxBundleRuntime {
     func refreshAppBundleIfNeeded(lynxAppId: String) async
     func rollback(lynxAppId: String, reason: String) async throws -> Bool
     func confirmCandidateHealthy(lynxAppId: String) async throws -> Bool
+    func confirmCandidateHealthy(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool
+    func rollback(lynxAppId: String, reason: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool
     func reportPageOpen(lynxAppId: String, bundleName: String) async
+    func reportPageOpen(lynxAppId: String, bundleName: String, expectedIdentityEpoch: UInt64?) async
     func deleteBundles(lynxAppId: String) async throws
     func deleteAllBundles() async throws
     func storageSnapshot() async throws -> OtaStorageSnapshot?
@@ -232,6 +283,15 @@ protocol LynxNavigationSnapshotRuntime: AnyObject {
 
 extension LynxBundleRuntime {
     func storageSnapshot() async throws -> OtaStorageSnapshot? { nil }
+    func confirmCandidateHealthy(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool {
+        try await confirmCandidateHealthy(lynxAppId: lynxAppId)
+    }
+    func rollback(lynxAppId: String, reason: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool {
+        try await rollback(lynxAppId: lynxAppId, reason: reason)
+    }
+    func reportPageOpen(lynxAppId: String, bundleName: String, expectedIdentityEpoch: UInt64?) async {
+        await reportPageOpen(lynxAppId: lynxAppId, bundleName: bundleName)
+    }
 }
 
 /**
@@ -312,9 +372,16 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
     private let pageRefreshInterval: TimeInterval
     private let candidateActivationEnabled: Bool
     private var lastPageRefreshAt: [String: Date] = [:]
+    private var lastPageRefreshEpoch: [String: UInt64] = [:]
     private var pageRefreshTasks: [String: Task<Void, Never>] = [:]
+    private var pageTaskEpoch: [String: UInt64] = [:]
     private var fullSyncTask: Task<OtaHostBundleListSyncResult?, Never>?
     private var fullSyncTaskID: UUID?
+    private var fullSyncEpoch: UInt64?
+    private var reconciliationTask: Task<Void, Error>?
+    private var reconciliationEpoch: UInt64?
+    private var reconciledEpoch: UInt64?
+    private var completedFullSyncEpoch: UInt64?
     private var fullSyncPending = false
 
     private struct NavigationSnapshotEntry {
@@ -324,6 +391,8 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         let release: OtaInstalledRelease?
         let embeddedReleaseId: String?
         let lease: OtaBundleLease?
+        let identityEpoch: UInt64
+        var source: String
     }
 
     /** 进程内 session -> release 引用；持久化 State 不保存短生命周期的 UI session。 */
@@ -353,6 +422,69 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         candidateActivationEnabled = configuration.candidateActivationEnabled
     }
 
+    public nonisolated var userIdentityEpoch: UInt64 { sdk.userIdentityEpoch }
+
+    /** 返回时内存身份已切换；文件整理和网络在后台执行。 */
+    nonisolated func registerUserId(_ userId: String?) throws -> Bool {
+        let changed = try sdk.registerUserId(userId)
+        if changed {
+            let epoch = sdk.userIdentityEpoch
+            Task { await self.synchronizeRegisteredUser(epoch: epoch) }
+        }
+        return changed
+    }
+
+    /** install 前已注册的用户不触发额外同步，由启动路径统一执行。 */
+    nonisolated func registerInitialUserId(_ userId: String?) throws {
+        _ = try sdk.registerUserId(userId)
+    }
+
+    private func synchronizeRegisteredUser(epoch: UInt64) async {
+        guard epoch == sdk.userIdentityEpoch else { return }
+        let success: Bool
+        if completedFullSyncEpoch == epoch { success = true }
+        else { success = await synchronizeAllBundles(coalesce: true) }
+        guard epoch == sdk.userIdentityEpoch else { return }
+        await MainActor.run {
+            NotificationCenter.default.post(name: .lynxOtaUserSyncCompleted, object: self, userInfo: ["epoch": epoch, "success": success])
+        }
+    }
+
+    /** 注册和紧接着的主动刷新共享身份整理屏障，避免取消已经开始的新用户请求。 */
+    private func reconcileIdentityIfNeeded(epoch: UInt64) async throws {
+        guard epoch == sdk.userIdentityEpoch else { throw CancellationError() }
+        if reconciledEpoch == epoch { return }
+        let task: Task<Void, Error>
+        if let existing = reconciliationTask, reconciliationEpoch == epoch {
+            task = existing
+        } else {
+            reconciliationTask?.cancel()
+            fullSyncTask?.cancel()
+            fullSyncTask = nil
+            fullSyncTaskID = nil
+            fullSyncEpoch = nil
+            fullSyncPending = false
+            for old in pageRefreshTasks.values { old.cancel() }
+            pageRefreshTasks.removeAll()
+            pageTaskEpoch.removeAll()
+            lastPageRefreshAt.removeAll()
+            lastPageRefreshEpoch.removeAll()
+            // Snapshot 保留 lease 到页面退出，旧代际不允许继续发起导航。
+            task = Task { try await self.withSDK(expectedIdentityEpoch: epoch) { try await $0.reconcileUserContext() } }
+            reconciliationTask = task
+            reconciliationEpoch = epoch
+        }
+        do {
+            try await task.value
+            guard epoch == sdk.userIdentityEpoch else { throw CancellationError() }
+            reconciledEpoch = epoch
+            if reconciliationEpoch == epoch { reconciliationTask = nil; reconciliationEpoch = nil }
+        } catch {
+            if reconciliationEpoch == epoch { reconciliationTask = nil; reconciliationEpoch = nil }
+            throw error
+        }
+    }
+
     /** 先登记 App Bundle baseline，再启动 host 全量同步。登记只写元数据，不复制字节。 */
     func registerEmbeddedReleases() async {
         do {
@@ -374,22 +506,30 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
     }
 
     /** App 启动和每次回前台都执行；并发触发时合并为当前任务之后再补一次。 */
-    func synchronizeAllBundles() async -> Bool {
-        if let existingTask = fullSyncTask {
-            fullSyncPending = true
-            return await existingTask.value != nil
+    func synchronizeAllBundles(coalesce: Bool = false) async -> Bool {
+        let epoch = sdk.userIdentityEpoch
+        do { try await reconcileIdentityIfNeeded(epoch: epoch) }
+        catch { return false }
+        if let existingTask = fullSyncTask, fullSyncEpoch == epoch {
+            if !coalesce { fullSyncPending = true }
+            let result = await existingTask.value
+            return epoch == sdk.userIdentityEpoch && result != nil
         }
         var succeeded = true
         repeat {
+            guard epoch == sdk.userIdentityEpoch else { return false }
             fullSyncPending = false
             let task = Task<OtaHostBundleListSyncResult?, Never> { [weak self] in
                 guard let self else { return nil }
                 do {
-                    return try await self.withSDK { sdk in
+                    return try await self.withSDK(expectedIdentityEpoch: epoch) { sdk in
                         try await sdk.pruneUnreferencedBundles()
                         return try await sdk.updateToLatestBundleLists()
                     }
                 } catch {
+                    if let partial = error as? OtaHostBundleListSyncError {
+                        await self.recordSyncedApps(partial.partialResult, epoch: epoch)
+                    }
 #if DEBUG
                     NSLog("[LynxShell][OTA] 全量同步失败：%@", error.localizedDescription)
 #endif
@@ -399,18 +539,30 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
             let taskID = UUID()
             fullSyncTask = task
             fullSyncTaskID = taskID
+            fullSyncEpoch = epoch
             if let result = await task.value {
-                let now = Date()
-                for appId in result.results.keys { lastPageRefreshAt[appId] = now }
+                guard epoch == sdk.userIdentityEpoch else { return false }
+                completedFullSyncEpoch = epoch
+                recordSyncedApps(result, epoch: epoch)
             } else {
                 succeeded = false
             }
             if fullSyncTaskID == taskID {
                 fullSyncTask = nil
                 fullSyncTaskID = nil
+                fullSyncEpoch = nil
             }
         } while fullSyncPending
         return succeeded
+    }
+
+    private func recordSyncedApps(_ result: OtaHostBundleListSyncResult, epoch: UInt64) {
+        guard epoch == sdk.userIdentityEpoch else { return }
+        let now = Date()
+        for appId in result.results.keys {
+            lastPageRefreshAt[appId] = now
+            lastPageRefreshEpoch[appId] = epoch
+        }
     }
 
 #if DEBUG
@@ -454,6 +606,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         bundleName: String,
         navigationSessionID: String?
     ) async throws -> PreparedOtaBundle {
+        let epoch = sdk.userIdentityEpoch
         try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
         if let navigationSessionID,
            let pinned = try pinnedBundle(
@@ -463,11 +616,11 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
            ) {
             return pinned
         }
-        if let lease = try await withSDK({ sdk in
+        if let lease = try await withSDKRead(expectedIdentityEpoch: epoch, { sdk in
             try await sdk.acquireCurrentBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
         }) {
             schedulePageRefreshIfNeeded(lynxAppId: lynxAppId)
-            let value = try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: lease)
+            let value = try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: lease, identityEpoch: epoch)
             return try await pinIfNeeded(value, navigationSessionID: navigationSessionID)
         }
 
@@ -481,26 +634,29 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                 bundleName: embedded.bundleName,
                 fileURL: embedded.fileURL,
                 releaseId: embedded.releaseId,
-                source: "embedded_baseline"
+                source: "embedded_baseline",
+                userIdentityEpoch: epoch
             )
             return try await pinIfNeeded(value, navigationSessionID: navigationSessionID)
         }
 
         // 缺包/损坏不受 30 分钟门控影响，等待内置 OTA 引擎完整校验和激活。
-        let repairedURL = try await withSDK { sdk in
+        let repairedURL = try await withSDK(expectedIdentityEpoch: epoch) { sdk in
             try await sdk.ensureBundleReady(
                 lynxAppId: lynxAppId,
                 bundleName: bundleName
             )
         }
+        guard epoch == sdk.userIdentityEpoch else { throw CancellationError() }
         lastPageRefreshAt[lynxAppId] = Date()
-        let repairedLease = try await withSDK { sdk in
+        lastPageRefreshEpoch[lynxAppId] = epoch
+        let repairedLease = try await withSDKRead(expectedIdentityEpoch: epoch) { sdk in
             try await sdk.acquireCurrentBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
         }
         guard let repairedLease else {
             throw LynxOtaError.unreadableBundle(repairedURL.path)
         }
-        let value = try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: repairedLease)
+        let value = try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: repairedLease, identityEpoch: epoch)
         return try await pinIfNeeded(value, navigationSessionID: navigationSessionID)
     }
 
@@ -521,8 +677,9 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
      * Native Tab 容器只能使用这个入口，切换 Tab 不应重新检查每个 Bundle。
      */
     func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
+        let epoch = sdk.userIdentityEpoch
         try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
-        guard let lease = try await withSDK({ sdk in
+        guard let lease = try await withSDKRead(expectedIdentityEpoch: epoch, { sdk in
             try await sdk.acquireCurrentBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
         }) else {
             guard let embedded = try embeddedBundleRegistry.resolve(
@@ -536,10 +693,11 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                 bundleName: embedded.bundleName,
                 fileURL: embedded.fileURL,
                 releaseId: embedded.releaseId,
-                source: "embedded_baseline"
+                source: "embedded_baseline",
+                userIdentityEpoch: epoch
             )
         }
-        return try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: lease)
+        return try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: lease, identityEpoch: epoch)
     }
 
     func resolvePage(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
@@ -555,6 +713,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         bundleName: String,
         navigationSessionID: String?
     ) async throws -> PreparedOtaBundle? {
+        let epoch = sdk.userIdentityEpoch
         try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
         if let navigationSessionID,
            let snapshot = navigationSnapshots[snapshotKey(
@@ -573,29 +732,38 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         }
         let value: PreparedOtaBundle?
         if candidateActivationEnabled,
-           let candidate = try await withSDK({ sdk -> OtaCandidateSnapshot? in
-               guard let candidate = await sdk.candidate(lynxAppId: lynxAppId) else {
+           try await withSDKRead(expectedIdentityEpoch: epoch, { sdk in await sdk.candidate(lynxAppId: lynxAppId) }) != nil,
+           let candidateLease = try await withSDK(expectedIdentityEpoch: epoch, { sdk -> OtaBundleLease? in
+               guard var candidate = await sdk.candidate(lynxAppId: lynxAppId) else {
                    return nil
                }
                if candidate.status == .pending {
-                   return try await sdk.beginCandidateTrial(lynxAppId: lynxAppId)
+                   candidate = try await sdk.beginCandidateTrial(lynxAppId: lynxAppId)
                }
-               return candidate
-           }),
-           let candidateLease = try await withSDK({ sdk in
-               try await sdk.acquireCandidateBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
+               // trial 和 lease 必须在同一短事务内对应同一个 candidate，不能被下一次同步夹断。
+               guard let lease = try await sdk.acquireCandidateBundleLease(lynxAppId: lynxAppId, bundleName: bundleName) else { return nil }
+               guard lease.release.context.releaseId == candidate.release.context.releaseId else {
+                   await lease.close()
+                   throw OtaSelectionError.staleCandidate
+               }
+               return lease
            }) {
             value = try prepared(
                 lynxAppId: lynxAppId,
                 bundleName: bundleName,
                 lease: candidateLease,
-                releaseId: candidate.release.context.releaseId,
-                source: "candidate_trial"
+                releaseId: candidateLease.release.context.releaseId,
+                source: "candidate_trial",
+                identityEpoch: epoch
             )
         } else {
             value = try await resolveCurrent(lynxAppId: lynxAppId, bundleName: bundleName)
         }
         guard let value else { return nil }
+        guard value.userIdentityEpoch == epoch, epoch == sdk.userIdentityEpoch else {
+            if let lease = value.releaseLease { await lease.close() }
+            throw CancellationError()
+        }
         return try await pinIfNeeded(value, navigationSessionID: navigationSessionID)
     }
 
@@ -632,17 +800,24 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
 
     /** 首屏失败最多由容器调用一次；恢复 previous/embedded 后重新走 prepare。 */
     func rollback(lynxAppId: String, reason: String) async throws -> Bool {
+        try await rollback(lynxAppId: lynxAppId, reason: reason, expectedReleaseId: nil, expectedIdentityEpoch: sdk.userIdentityEpoch)
+    }
+
+    func rollback(lynxAppId: String, reason: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool {
+        let epoch = expectedIdentityEpoch ?? sdk.userIdentityEpoch
+        guard epoch == sdk.userIdentityEpoch else { return false }
         try validateAppId(lynxAppId)
         if candidateActivationEnabled,
-           try await withSDK({ sdk in await sdk.candidate(lynxAppId: lynxAppId) }) != nil {
-            try await withSDK { sdk in
-                try await sdk.discardCandidate(lynxAppId: lynxAppId)
+           try await withSDK(expectedIdentityEpoch: epoch, { sdk in await sdk.candidate(lynxAppId: lynxAppId) }) != nil {
+            try await withSDK(expectedIdentityEpoch: epoch) { sdk in
+                try await sdk.discardCandidate(lynxAppId: lynxAppId, expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: epoch)
             }
             lastPageRefreshAt.removeValue(forKey: lynxAppId)
             return true
         }
-        let restoredRemote = try await withSDK { sdk in
-            try await sdk.rollback(lynxAppId: lynxAppId, reason: reason)
+        let restoredRemote = try await withSDK(expectedIdentityEpoch: epoch) { sdk in
+            if let expectedReleaseId, let current = await sdk.getCurrentRelease(lynxAppId: lynxAppId), current.context.releaseId != expectedReleaseId { throw CancellationError() }
+            return try await sdk.rollback(lynxAppId: lynxAppId, reason: reason)
         }
         if restoredRemote != nil { return true }
         guard embeddedBundleRegistry.containsApp(lynxAppId: lynxAppId) else { return false }
@@ -650,7 +825,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         // 没有 previous remote release 时丢弃坏的 downloaded current；下一次 prepare
         // 会直接从 App Bundle 读取 baseline，不需要把 baseline 复制到沙盒磁盘。
         do {
-            try await withSDK { sdk in
+            try await withSDK(expectedIdentityEpoch: epoch) { sdk in
                 try await sdk.deleteDownloadedBundles(lynxAppId: lynxAppId)
             }
             lastPageRefreshAt.removeValue(forKey: lynxAppId)
@@ -661,17 +836,36 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
     }
 
     func confirmCandidateHealthy(lynxAppId: String) async throws -> Bool {
+        try await confirmCandidateHealthy(lynxAppId: lynxAppId, expectedReleaseId: nil, expectedIdentityEpoch: sdk.userIdentityEpoch)
+    }
+
+    func confirmCandidateHealthy(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool {
+        let epoch = expectedIdentityEpoch ?? sdk.userIdentityEpoch
+        guard epoch == sdk.userIdentityEpoch else { return false }
         try validateAppId(lynxAppId)
         guard candidateActivationEnabled else { return false }
-        _ = try await withSDK { sdk in
-            try await sdk.confirmCandidateHealthy(lynxAppId: lynxAppId)
+        let confirmed = try await withSDK(expectedIdentityEpoch: epoch) { sdk in
+            try await sdk.confirmCandidateHealthy(lynxAppId: lynxAppId, expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: epoch)
+        }
+        guard epoch == sdk.userIdentityEpoch else { return false }
+        for key in Array(navigationSnapshots.keys) {
+            guard var snapshot = navigationSnapshots[key], snapshot.lynxAppId == lynxAppId,
+                  snapshot.identityEpoch == epoch, snapshot.release?.context.releaseId == confirmed.context.releaseId else { continue }
+            snapshot.source = "ota_snapshot"
+            navigationSnapshots[key] = snapshot
         }
         lastPageRefreshAt[lynxAppId] = Date()
+        lastPageRefreshEpoch[lynxAppId] = epoch
         return true
     }
 
     func reportPageOpen(lynxAppId: String, bundleName: String) async {
-        try? await withSDK { sdk in
+        await reportPageOpen(lynxAppId: lynxAppId, bundleName: bundleName, expectedIdentityEpoch: sdk.userIdentityEpoch)
+    }
+
+    func reportPageOpen(lynxAppId: String, bundleName: String, expectedIdentityEpoch: UInt64?) async {
+        guard expectedIdentityEpoch == nil || expectedIdentityEpoch == sdk.userIdentityEpoch else { return }
+        try? await withSDK(expectedIdentityEpoch: expectedIdentityEpoch) { sdk in
             await sdk.reportPageOpen(
                 pageId: nil,
                 lynxAppId: lynxAppId,
@@ -715,25 +909,35 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
     }
 
     private func schedulePageRefreshIfNeeded(lynxAppId: String) {
+        let epoch = sdk.userIdentityEpoch
         guard fullSyncTask == nil, pageRefreshTasks[lynxAppId] == nil else { return }
         if let last = lastPageRefreshAt[lynxAppId],
+           lastPageRefreshEpoch[lynxAppId] == epoch,
            pageRefreshInterval > 0,
            Date().timeIntervalSince(last) < pageRefreshInterval {
             return
         }
+        pageTaskEpoch[lynxAppId] = epoch
         pageRefreshTasks[lynxAppId] = Task { [weak self] in
             guard let self else { return }
-            await self.refreshPageApp(lynxAppId)
+            await self.refreshPageApp(lynxAppId, epoch: epoch)
         }
     }
 
-    private func refreshPageApp(_ lynxAppId: String) async {
-        defer { pageRefreshTasks.removeValue(forKey: lynxAppId) }
+    private func refreshPageApp(_ lynxAppId: String, epoch: UInt64) async {
+        defer {
+            if pageTaskEpoch[lynxAppId] == epoch {
+                pageRefreshTasks.removeValue(forKey: lynxAppId)
+                pageTaskEpoch.removeValue(forKey: lynxAppId)
+            }
+        }
+        guard epoch == sdk.userIdentityEpoch else { return }
         guard fullSyncTask == nil else { return }
-        if (try? await withSDK({ sdk in
+        if (try? await withSDK(expectedIdentityEpoch: epoch, { sdk in
             try await sdk.updateToLatestBundleList(lynxAppId: lynxAppId)
-        })) != nil {
+        })) != nil, epoch == sdk.userIdentityEpoch {
             lastPageRefreshAt[lynxAppId] = Date()
+            lastPageRefreshEpoch[lynxAppId] = epoch
         }
     }
 
@@ -742,8 +946,13 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         bundleName: String,
         lease: OtaBundleLease,
         releaseId: String? = nil,
-        source: String = "ota_current"
+        source: String = "ota_current",
+        identityEpoch: UInt64
     ) throws -> PreparedOtaBundle {
+        guard identityEpoch == sdk.userIdentityEpoch else {
+            Task { await lease.close() }
+            throw CancellationError()
+        }
         let url = lease.fileURL
         guard url.isFileURL,
               FileManager.default.fileExists(atPath: url.path),
@@ -764,7 +973,10 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
             fileURL: url,
             releaseId: releaseId ?? lease.release.context.releaseId,
             source: resolvedSource,
-            releaseLease: lease
+            releaseLease: lease,
+            userIdentityEpoch: identityEpoch,
+            selectionKind: lease.release.selection?.kind.rawValue,
+            releaseSequence: lease.release.selection?.releaseSequence
         )
     }
 
@@ -776,6 +988,10 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         _ value: PreparedOtaBundle,
         navigationSessionID: String?
     ) async throws -> PreparedOtaBundle {
+        guard value.userIdentityEpoch == sdk.userIdentityEpoch else {
+            if let lease = value.releaseLease { await lease.close() }
+            throw CancellationError()
+        }
         guard let navigationSessionID, !navigationSessionID.isEmpty else { return value }
         let key = snapshotKey(sessionID: navigationSessionID, lynxAppId: value.lynxAppId)
         if let existing = navigationSnapshots[key] {
@@ -793,7 +1009,9 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
             lynxAppId: value.lynxAppId,
             release: value.releaseLease?.release,
             embeddedReleaseId: value.releaseLease == nil ? value.releaseId : nil,
-            lease: value.releaseLease
+            lease: value.releaseLease,
+            identityEpoch: value.userIdentityEpoch ?? sdk.userIdentityEpoch,
+            source: value.source
         )
         navigationSnapshots[key] = entry
         guard let pinned = try pinnedBundle(from: entry, bundleName: value.bundleName) else {
@@ -822,6 +1040,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         from snapshot: NavigationSnapshotEntry,
         bundleName: String
     ) throws -> PreparedOtaBundle? {
+        guard snapshot.identityEpoch == sdk.userIdentityEpoch else { throw CancellationError() }
         if let release = snapshot.release,
            let bundle = release.bundles.first(where: {
                $0.bundleName == bundleName || $0.bundlePath == bundleName
@@ -836,8 +1055,11 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                 bundleName: bundleName,
                 fileURL: fileURL,
                 releaseId: release.context.releaseId,
-                source: "ota_snapshot",
-                navigationSnapshotID: snapshot.id
+                source: snapshot.source == "candidate_trial" ? "candidate_trial" : "ota_snapshot",
+                navigationSnapshotID: snapshot.id,
+                userIdentityEpoch: snapshot.identityEpoch,
+                selectionKind: release.selection?.kind.rawValue,
+                releaseSequence: release.selection?.releaseSequence
             )
         }
         if let embeddedReleaseId = snapshot.embeddedReleaseId,
@@ -852,25 +1074,44 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                 fileURL: embedded.fileURL,
                 releaseId: embedded.releaseId,
                 source: "embedded_baseline",
-                navigationSnapshotID: snapshot.id
+                navigationSnapshotID: snapshot.id,
+                userIdentityEpoch: snapshot.identityEpoch
             )
         }
         return nil
     }
 
-    /** 所有 SDK 访问都经由这里，避免文件事务在 `await` 期间交叉执行。 */
-    private func withSDK<T>(
-        _ operation: (OtaSDK) async throws -> T
+    /** 写操作串行化；不让网络事务持有的锁阻塞本地 current/lease 读取。 */
+    private func withSDK<T: Sendable>(
+        expectedIdentityEpoch: UInt64? = nil,
+        _ operation: @escaping @Sendable (OtaSDK) async throws -> T
     ) async throws -> T {
+        let epoch = expectedIdentityEpoch ?? sdk.userIdentityEpoch
         await sdkGate.acquire()
         do {
-            let value = try await operation(sdk)
+            let value = try await withSDKRead(expectedIdentityEpoch: epoch, operation)
             await sdkGate.release()
             return value
         } catch {
             await sdkGate.release()
             throw error
         }
+    }
+
+    /** Store actor 原子读取 State 并登记 lease；背景下载期间也可立即安全读取本地版本。 */
+    private func withSDKRead<T: Sendable>(
+        expectedIdentityEpoch: UInt64,
+        _ operation: @escaping @Sendable (OtaSDK) async throws -> T
+    ) async throws -> T {
+        try Task.checkCancellation()
+        guard expectedIdentityEpoch == sdk.userIdentityEpoch else { throw CancellationError() }
+        let sdk = self.sdk
+        let value = try await sdk.withUserIdentity(expectedIdentityEpoch: expectedIdentityEpoch) { try await operation(sdk) }
+        guard expectedIdentityEpoch == sdk.userIdentityEpoch else {
+            if let lease = value as? OtaBundleLease { await lease.close() }
+            throw CancellationError()
+        }
+        return value
     }
 
     private func validateIdentity(lynxAppId: String, bundleName: String) throws {

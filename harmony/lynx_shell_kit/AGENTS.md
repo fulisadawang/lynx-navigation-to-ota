@@ -29,7 +29,7 @@
 7. 静态门禁：`harmony/scripts/check_harmony_shell.py`。
 8. 跨到原生能力层时：`harmony/lynx_capacitor_kit/AGENTS.md` 和 `LynxCapacitorCatalog.ets`。
 
-文档、代码和运行结果冲突时，以当前 ArkTS/ArkUI 源码、OHPM/Hvigor 配置和最新 HDC 证据为准。
+文档、代码和运行结果冲突时，以当前 ArkTS/ArkUI 源码、OHPM/Hvigor 配置和本轮授权范围内的验证为准；旧 HDC 证据不能替代当前非设备门禁。
 
 ## 目录与职责
 
@@ -87,15 +87,23 @@ src/main/ets/
 - 对文件和父目录的 `fsync`、rename、transaction recovery、`.part` 清理和 prune roots 是耐久性契约，不能为了简化删除。
 - 有效 `transaction.json` 在恢复前保护已经发布的 CAS Object；成功提交后才清理事务目录。
 - 启动/前台全量同步、页面 30 分钟后台检查、缺包修复和首屏回滚语义与另外两端一致。
-- `serverPlatform=android` 只允许作为当前 Demo/测试服务兼容值；宿主身份、AppInfo 和 Router platform 仍是 HarmonyOS。
+- Server/Contracts 已支持 harmony；query/Manifest/State 固定 harmony，不再允许 `serverPlatform=android` 降级。
+- 原生注册/清除用 `registerOtaUserId/clearOtaUserId`；同步 box 注册增 epoch，同身份不重复同步。HTTP 精确为 `versioncode`、`lynxSdkVersion`、可选 userId，匿名省略 userId。
+- 构建码来自宿主自身 BundleInfo.versionCode，SDK 来自实际 HAR 的 LynxEnv.getLynxVersion()；不采用固定 BUILD_NUMBER、不伪装 Android。Models 只校验，不猜原生值。
+- Server 用户/兼容过滤后 full7 胜 gray6；releaseSequence/policyRevision 用十进制字符串精确比较，不能转 Number，高修订允许回滚低序号。
+- State v3 ref 保存 selection，State 保存 lastDecision/selectionSchemaVersion；unknown 旧 ref 必须新确认。full/gray 都检查 native/SDK 范围，gray 额外检查 audience，不建用户 bytes 目录。
+- 每次 async 操作显式传只读 captured context 到 HTTP/Store/commit，禁止全局可变 operationContext 跨 await。最后同步 State rename 前校验 epoch/revision，与同步注册之间没有 await。
+- 整批元数据先校验，再逐 App 独立落决定，最后下载；partial failure 不跳过其他 App 的撤销，也不伪报全量成功。
+- 完整100包只变1时下载/新增1、复制0；事务和 lease 为 GC roots，后续成功退休已结束事务。有界历史回滚遇到已GC对象允许补缺，不无限存历史。
 
 ### 4. Page/Tab lease 与生命周期
 
 - Page/Tab 读取 downloaded Bundle 时必须持有 lease；销毁、刷新、错误和过期异步结果都要释放。
 - NavigationSnapshot lease 与页面 lease 分开管理；同一 session 不得在 current 切换后漂移到新 Manifest。
-- Tab 普通切换只读 current，不联网；主动刷新成功后先 reset Snapshot，再递增 generation 重建内容。
+- Tab 普通切换 cache-only，不联网；后台不重建。身份/主动刷新完成后按有效 epoch reset Snapshot/generation 并重读已提交 State，包含 partial failure。
 - delete 只清远程 OTA 内容，不删除 HAP rawfile；活体 lease 保护对象直到最后一个消费者释放。
 - 首屏失败最多回滚一次；第二次失败显示明确错误，不无限重试。
+- 页面与 Snapshot 绑定 epoch/generation，旧回调不能借当前身份新建导航或回滚新 current；旧 lease.close 不受身份失效阻止。
 
 ### 5. Bridge 与平台能力
 
@@ -149,6 +157,10 @@ docs/harmony-ota-store-v3-test-report.html
 ```
 
 受控 capacity/ENOSPC、HDC force-stop、模拟器和本地 Server 证据不能冒充真实断电、真实 OS ENOSPC、签名包或生产 CDN/TLS。
+
+本次 user-gray/versioncode 分包例外：用户取消 Harmony 模拟器测试，真机本轮未验收；仅验证代码、host 自动/真实 HTTP、HAR/App 与 HTML。
+当前host-final3 mode=all 18/18（5真实HTTP）＋Core25/25，0失败/跳过；release HAR/App构建及静态90/0/0通过，见 [当前报告](../../docs/harmony-ota-user-gray-test-report.html)。HTML展示与设备验收须独立记录，历史v3 HDC报告不能充当本次设备证明。
+匿名内置脚本必须传 `--target harmony --platform harmony --versioncode ... --lynx-sdk-version ...`，不传 userId；命令见 [Module 接入](../../MODULE_INTEGRATION.md#三端匿名内置-baseline-下载)。
 
 ## 交付说明
 

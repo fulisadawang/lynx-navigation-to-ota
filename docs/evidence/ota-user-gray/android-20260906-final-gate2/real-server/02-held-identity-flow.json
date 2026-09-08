@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "desktop-sdk-real-server",
+  "deviceTested": false,
+  "screenshots": [],
+  "platform": "android",
+  "storeVersion": "v3",
+  "serverOrigin": "http://127.0.0.1:18770",
+  "testName": "held A response fails after B sync and cannot change B state",
+  "assertions": [
+    "captured-A-response",
+    "B-completed-first",
+    "old-write-rejected",
+    "no-device"
+  ],
+  "phases": [
+    {
+      "phase": "held-A-released-after-B",
+      "audience": "B",
+      "assertions": [
+        "A-stale-identity-rejected",
+        "B-state-byte-identical",
+        "B-current-unchanged"
+      ],
+      "serverStage": "gray6",
+      "currentReleaseId": "r20260421_002",
+      "selectionKind": "full",
+      "policyRevision": "10",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 100,
+      "latestCompletedCount": 3,
+      "bundleRequestCount": 100,
+      "bundleSuccessCount": 100
+    }
+  ]
+}

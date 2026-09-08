@@ -57,10 +57,8 @@ OTA Runtime current/SHA 热路径
 - `EntryAbility` 按 Service → `LynxEnv` → XElement 顺序初始化，并保存 `WindowStage` 与深链；
 - `Index` 是原生 ArkUI 启动页；`LynxContainer` 是单页宿主；
 - ArkUI Router 只传递强类型 `LynxPageRequest`，页面本身不重复解析外部 URL。
-- `lynx_shell_kit` 内置 `LynxOtaRuntime` 与 `ReleaseTransaction`；宿主身份始终使用
-  `platform=harmony`。在服务端尚未开放该枚举的过渡期，Demo 只把查询/Release 校验值设置为
-  `serverPlatform=android`，不改变 AppInfo/GlobalProps；后端开放后删除该兼容值。
-  OTA 主链使用 `ContentAddressedOtaStore`：完整 Manifest、App ID 作用域 CAS、current/previous、
+- OTA 主链是 `LynxOtaRuntime` → `ContentAddressedOtaStore`，旧 `ReleaseTransaction` 仅保留源码兼容物。
+  请求及宿主身份均为 `platform=harmony`，不再使用 Android 兼容覆盖。Store 提供完整 Manifest、App ID 作用域 CAS、current/previous、
   lease 和原子 State；HarmonyOS 不加入 candidate。
 
 ## 3. Runtime 与 XElement
@@ -70,6 +68,36 @@ OTA Runtime current/SHA 热路径
 - HarmonyOS：先注册 Log、DevTool、HTTP、Image Service，再执行 `LynxEnv.initialize`；Markdown 进程级初始化，SVG/WebView 通过 `BehaviorRegistryMap` 注入每个 `LynxView`，其余六类由核心 Registry 提供。
 
 ## 4. 资源层
+
+### OTA 选择与提交边界
+
+原生 Router 的 `registerOtaUserId/clearOtaUserId` 更新身份 epoch；同身份重复注册不产生重复同步。
+新版 latest query 固定为 `versioncode`、`lynxSdkVersion`、可选 userId，scope 仍是 env/hostApp/appId/platform。
+Server 先校验用户资格及范围，再比较 releaseSequence，因此 full7 胜 gray6；policyRevision 则防止旧响应覆盖新决定，允许高修订回滚低序号。
+
+| 平台 | 原生构建码 | Runtime 版本事实源 |
+|---|---|---|
+| Android | PackageInfo.longVersionCode / versionCode，不是 versionName | resolved variant 的 Lynx 组件生成 BuildConfig；预编译 AAR 被宿主强换 Runtime 未认证 |
+| iOS | 纯整数 CFBundleVersion 或显式 versionCode | 可信 LynxResources.bundle / Lynx framework metadata，多源必须一致 |
+| HarmonyOS | 自身 BundleInfo.versionCode | 实际 HAR 的 LynxEnv.getLynxVersion()，不采用固定 BUILD_NUMBER 或 Android 身份 |
+
+State schema 仍为 v3；current/previous/candidate 引用携带 selection，State 保存 selectionSchemaVersion 与 lastDecision。
+lastDecision 的 audienceKey/clientContextKey/revision/action/target 是选择约束，不是 bytes 的 GC root，也不保存 raw userId。
+新模式拒绝 unknown 旧引用，重新确认后可以复用 CAS。full/gray 都重检 code/SDK/宿主范围，gray 额外重检 audience。
+
+批次先校验全部 selection/directives，再逐 App 提交决定，最后独立下载；单 App 失败保留 partial result，不阻止其他 App 撤销落盘。
+最终 State rename 必须再次校验 epoch 与决定。Android 显式传递 Executor 的 ThreadLocal snapshot，iOS 保留外层 TaskLocal；
+Harmony 每次 async 调用显式传只读 context，不使用跨 await 的全局 operationContext。旧 lease.close 不受身份失效阻止。
+
+完整 Manifest 不变成 patch 链；100 包只变 050 时新增下载/对象 1、复制 0。有界 GC 只保留引用、活体 lease 和未完成事务；
+回滚到已 GC 的历史 050 可以补下 1 个，不承诺永久零下载。Harmony 不增加 candidate/trial。
+
+Native Tab 普通切换 cache-only，普通后台更新不重建；身份变化和主动刷新完成后 reset Snapshot/generation 并重读已提交 State，
+包括 partial failure。旧 epoch 的页面、回调及导航 session 不能借新 context 重试写操作。
+
+当前证据及非设备边界见 [README 验证](README.md#验证)；历史 v3 报告不能替代本次 user-gray 验收。
+
+### Provider 资源校验
 
 三端 Provider 均遵守以下原则：
 

@@ -1,0 +1,8 @@
+{
+  "name": "实际 OtaUserContext：构建号规范化、int64 与超过 2^53 比较",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

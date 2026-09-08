@@ -1,0 +1,8 @@
+{
+  "name": "实际 ContextBox：盐在宿主 FS 持久化，同根冷 Context 归属稳定",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

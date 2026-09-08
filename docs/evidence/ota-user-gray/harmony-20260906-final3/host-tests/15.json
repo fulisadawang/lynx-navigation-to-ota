@@ -1,0 +1,2065 @@
+{
+  "name": "实际 Store + 真实 Server：100→1、全量化、回滚、指令冷读与有界 CAS",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "phases": [
+    {
+      "phase": "anonymous-full5",
+      "current": {
+        "releaseId": "r20260421_002",
+        "source": "ota_current",
+        "selectionKind": "full",
+        "userIdentityEpoch": 0
+      },
+      "state": {
+        "schemaVersion": 3,
+        "env": "TEST",
+        "hostApp": "capp",
+        "lynxAppId": "10000001",
+        "platform": "harmony",
+        "generation": 3,
+        "current": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_002",
+          "manifestId": "sha256:e15956cccf1f68d504433596b1b31f728d28c6f57bc622d5ec8ad496a9fbd242",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "9",
+            "releaseSequence": "2",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "previous": {
+          "kind": "embedded",
+          "releaseId": "__embedded__"
+        },
+        "selectionSchemaVersion": 1,
+        "lastDecision": {
+          "audienceKey": "anonymous",
+          "clientContextKey": "sha256:ec2ed1118b9f2fe2336d4f30cdcfb0d4b371e3c1eec6408ab6a15ef8043293b5",
+          "policyRevision": "9",
+          "action": "use_release",
+          "targetReleaseId": "r20260421_002",
+          "reason": "latest_full"
+        }
+      },
+      "objectCount": 100,
+      "bundleRequests": 100,
+      "bundleBytes": 8775757,
+      "latestRequests": 1,
+      "hostBinaryWrites": 100,
+      "hostFileCopies": 0
+    },
+    {
+      "phase": "A-gray6",
+      "current": {
+        "releaseId": "r20260421_003",
+        "source": "ota_current",
+        "selectionKind": "gray",
+        "userIdentityEpoch": 1
+      },
+      "state": {
+        "schemaVersion": 3,
+        "env": "TEST",
+        "hostApp": "capp",
+        "lynxAppId": "10000001",
+        "platform": "harmony",
+        "generation": 6,
+        "current": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_003",
+          "manifestId": "sha256:35ca6dc4c549e6cfd6a870f3f8bb8b7bdf6f2c651cfb74b13bfcfd52bb0f74a7",
+          "selection": {
+            "kind": "gray",
+            "audienceKey": "sha256:00ce10b5fb6b5d7a0b62b5271f5f48cae12b6ede7826ffc0d472ea3d92f8bf76",
+            "ruleId": "fixture-gray6-rule",
+            "policyRevision": "10",
+            "releaseSequence": "3",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "previous": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_002",
+          "manifestId": "sha256:e15956cccf1f68d504433596b1b31f728d28c6f57bc622d5ec8ad496a9fbd242",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "9",
+            "releaseSequence": "2",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "selectionSchemaVersion": 1,
+        "lastDecision": {
+          "audienceKey": "sha256:00ce10b5fb6b5d7a0b62b5271f5f48cae12b6ede7826ffc0d472ea3d92f8bf76",
+          "clientContextKey": "sha256:703e56d304d4277994fdceedd69a76d65b1964376647a7d3e46da22b8f69d777",
+          "policyRevision": "10",
+          "action": "use_release",
+          "targetReleaseId": "r20260421_003",
+          "reason": "matched_gray"
+        }
+      },
+      "objectCount": 101,
+      "bundleRequests": 1,
+      "bundleBytes": 88111,
+      "latestRequests": 1,
+      "hostBinaryWrites": 101,
+      "hostFileCopies": 0
+    },
+    {
+      "phase": "B-full5",
+      "current": {
+        "releaseId": "r20260421_002",
+        "source": "ota_current",
+        "selectionKind": "full",
+        "userIdentityEpoch": 2
+      },
+      "state": {
+        "schemaVersion": 3,
+        "env": "TEST",
+        "hostApp": "capp",
+        "lynxAppId": "10000001",
+        "platform": "harmony",
+        "generation": 9,
+        "current": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_002",
+          "manifestId": "sha256:e15956cccf1f68d504433596b1b31f728d28c6f57bc622d5ec8ad496a9fbd242",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "10",
+            "releaseSequence": "2",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "previous": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_003",
+          "manifestId": "sha256:35ca6dc4c549e6cfd6a870f3f8bb8b7bdf6f2c651cfb74b13bfcfd52bb0f74a7",
+          "selection": {
+            "kind": "gray",
+            "audienceKey": "sha256:00ce10b5fb6b5d7a0b62b5271f5f48cae12b6ede7826ffc0d472ea3d92f8bf76",
+            "ruleId": "fixture-gray6-rule",
+            "policyRevision": "10",
+            "releaseSequence": "3",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "selectionSchemaVersion": 1,
+        "lastDecision": {
+          "audienceKey": "sha256:76329281cbd66e613d169f5a4604e42a0bc2c6e53676154e5f11ae5e69aae88b",
+          "clientContextKey": "sha256:bcc3165c77f87f8894aaa90232436de2001d8dc70c0a9cd6ad5bbb07ded74b9d",
+          "policyRevision": "10",
+          "action": "use_release",
+          "targetReleaseId": "r20260421_002",
+          "reason": "latest_full"
+        }
+      },
+      "objectCount": 101,
+      "bundleRequests": 0,
+      "bundleBytes": 0,
+      "latestRequests": 1,
+      "hostBinaryWrites": 101,
+      "hostFileCopies": 0
+    },
+    {
+      "phase": "A-newer-full7",
+      "current": {
+        "releaseId": "r20260421_004",
+        "source": "ota_current",
+        "selectionKind": "full",
+        "userIdentityEpoch": 3
+      },
+      "state": {
+        "schemaVersion": 3,
+        "env": "TEST",
+        "hostApp": "capp",
+        "lynxAppId": "10000001",
+        "platform": "harmony",
+        "generation": 12,
+        "current": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_004",
+          "manifestId": "sha256:348ac8ed4023f5d167e656497a64b937aa364b12d9d6ff1ce105e4298dbb6f82",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "11",
+            "releaseSequence": "4",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "previous": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_002",
+          "manifestId": "sha256:e15956cccf1f68d504433596b1b31f728d28c6f57bc622d5ec8ad496a9fbd242",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "10",
+            "releaseSequence": "2",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "selectionSchemaVersion": 1,
+        "lastDecision": {
+          "audienceKey": "sha256:00ce10b5fb6b5d7a0b62b5271f5f48cae12b6ede7826ffc0d472ea3d92f8bf76",
+          "clientContextKey": "sha256:703e56d304d4277994fdceedd69a76d65b1964376647a7d3e46da22b8f69d777",
+          "policyRevision": "11",
+          "action": "use_release",
+          "targetReleaseId": "r20260421_004",
+          "reason": "latest_full"
+        }
+      },
+      "objectCount": 101,
+      "bundleRequests": 1,
+      "bundleBytes": 88111,
+      "latestRequests": 1,
+      "hostBinaryWrites": 102,
+      "hostFileCopies": 0
+    },
+    {
+      "phase": "A-gray8",
+      "current": {
+        "releaseId": "r20260421_005",
+        "source": "ota_current",
+        "selectionKind": "gray",
+        "userIdentityEpoch": 3
+      },
+      "state": {
+        "schemaVersion": 3,
+        "env": "TEST",
+        "hostApp": "capp",
+        "lynxAppId": "10000001",
+        "platform": "harmony",
+        "generation": 15,
+        "current": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_005",
+          "manifestId": "sha256:1e18ff2b0dcba4df904da63b3991095ca1c8349c524be0b878c4523f480aa04c",
+          "selection": {
+            "kind": "gray",
+            "audienceKey": "sha256:00ce10b5fb6b5d7a0b62b5271f5f48cae12b6ede7826ffc0d472ea3d92f8bf76",
+            "ruleId": "fixture-gray8-rule",
+            "policyRevision": "12",
+            "releaseSequence": "5",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "previous": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_004",
+          "manifestId": "sha256:348ac8ed4023f5d167e656497a64b937aa364b12d9d6ff1ce105e4298dbb6f82",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "11",
+            "releaseSequence": "4",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "selectionSchemaVersion": 1,
+        "lastDecision": {
+          "audienceKey": "sha256:00ce10b5fb6b5d7a0b62b5271f5f48cae12b6ede7826ffc0d472ea3d92f8bf76",
+          "clientContextKey": "sha256:703e56d304d4277994fdceedd69a76d65b1964376647a7d3e46da22b8f69d777",
+          "policyRevision": "12",
+          "action": "use_release",
+          "targetReleaseId": "r20260421_005",
+          "reason": "matched_gray"
+        }
+      },
+      "objectCount": 101,
+      "bundleRequests": 1,
+      "bundleBytes": 88111,
+      "latestRequests": 1,
+      "hostBinaryWrites": 103,
+      "hostFileCopies": 0
+    },
+    {
+      "phase": "same-release-promoted-full",
+      "current": {
+        "releaseId": "r20260421_005",
+        "source": "ota_current",
+        "selectionKind": "full",
+        "userIdentityEpoch": 3
+      },
+      "state": {
+        "schemaVersion": 3,
+        "env": "TEST",
+        "hostApp": "capp",
+        "lynxAppId": "10000001",
+        "platform": "harmony",
+        "generation": 17,
+        "current": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_005",
+          "manifestId": "sha256:1e18ff2b0dcba4df904da63b3991095ca1c8349c524be0b878c4523f480aa04c",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "13",
+            "releaseSequence": "5",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "previous": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_004",
+          "manifestId": "sha256:348ac8ed4023f5d167e656497a64b937aa364b12d9d6ff1ce105e4298dbb6f82",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "11",
+            "releaseSequence": "4",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "selectionSchemaVersion": 1,
+        "lastDecision": {
+          "audienceKey": "sha256:00ce10b5fb6b5d7a0b62b5271f5f48cae12b6ede7826ffc0d472ea3d92f8bf76",
+          "clientContextKey": "sha256:703e56d304d4277994fdceedd69a76d65b1964376647a7d3e46da22b8f69d777",
+          "policyRevision": "13",
+          "action": "use_release",
+          "targetReleaseId": "r20260421_005",
+          "reason": "latest_full"
+        }
+      },
+      "objectCount": 101,
+      "bundleRequests": 0,
+      "bundleBytes": 0,
+      "latestRequests": 1,
+      "hostBinaryWrites": 103,
+      "hostFileCopies": 0
+    },
+    {
+      "phase": "server-rollback-full5",
+      "current": {
+        "releaseId": "r20260421_002",
+        "source": "ota_current",
+        "selectionKind": "full",
+        "userIdentityEpoch": 4
+      },
+      "state": {
+        "schemaVersion": 3,
+        "env": "TEST",
+        "hostApp": "capp",
+        "lynxAppId": "10000001",
+        "platform": "harmony",
+        "generation": 20,
+        "current": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_002",
+          "manifestId": "sha256:e15956cccf1f68d504433596b1b31f728d28c6f57bc622d5ec8ad496a9fbd242",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "14",
+            "releaseSequence": "2",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "previous": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_005",
+          "manifestId": "sha256:1e18ff2b0dcba4df904da63b3991095ca1c8349c524be0b878c4523f480aa04c",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "13",
+            "releaseSequence": "5",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "selectionSchemaVersion": 1,
+        "lastDecision": {
+          "audienceKey": "sha256:76329281cbd66e613d169f5a4604e42a0bc2c6e53676154e5f11ae5e69aae88b",
+          "clientContextKey": "sha256:bcc3165c77f87f8894aaa90232436de2001d8dc70c0a9cd6ad5bbb07ded74b9d",
+          "policyRevision": "14",
+          "action": "use_release",
+          "targetReleaseId": "r20260421_002",
+          "reason": "server_rollback"
+        }
+      },
+      "objectCount": 101,
+      "bundleRequests": 1,
+      "bundleBytes": 88111,
+      "latestRequests": 1,
+      "hostBinaryWrites": 104,
+      "hostFileCopies": 0
+    },
+    {
+      "phase": "directive-cold-read",
+      "current": null,
+      "state": {
+        "schemaVersion": 3,
+        "env": "TEST",
+        "hostApp": "capp",
+        "lynxAppId": "10000001",
+        "platform": "harmony",
+        "generation": 21,
+        "current": {
+          "kind": "embedded",
+          "releaseId": "__embedded__"
+        },
+        "previous": {
+          "kind": "downloaded",
+          "releaseId": "r20260421_002",
+          "manifestId": "sha256:e15956cccf1f68d504433596b1b31f728d28c6f57bc622d5ec8ad496a9fbd242",
+          "selection": {
+            "kind": "full",
+            "policyRevision": "14",
+            "releaseSequence": "2",
+            "versionCodeRange": {
+              "min": "1",
+              "max": "999"
+            },
+            "lynxSdkRange": {
+              "min": "4.0.0",
+              "max": "4.0.0"
+            }
+          }
+        },
+        "selectionSchemaVersion": 1,
+        "lastDecision": {
+          "audienceKey": "sha256:76329281cbd66e613d169f5a4604e42a0bc2c6e53676154e5f11ae5e69aae88b",
+          "clientContextKey": "sha256:bcc3165c77f87f8894aaa90232436de2001d8dc70c0a9cd6ad5bbb07ded74b9d",
+          "policyRevision": "15",
+          "action": "use_embedded",
+          "reason": "fallback_override_enabled"
+        }
+      },
+      "objectCount": 101,
+      "bundleRequests": 0,
+      "bundleBytes": 0,
+      "latestRequests": 1,
+      "hostBinaryWrites": 104,
+      "hostFileCopies": 0
+    }
+  ],
+  "adapterEvidence": {
+    "evidenceKind": "host-transpiled-arkts-node-adapters",
+    "deviceTested": false,
+    "nativeIOValidated": false,
+    "adapters": [
+      "@ohos.file.fs",
+      "@ohos.security.cryptoFramework",
+      "@ohos.net.http",
+      "@ohos.systemDateTime",
+      "@kit.CoreFileKit",
+      "@kit.AbilityKit",
+      "context.resourceManager"
+    ],
+    "limitations": [
+      "Node FS/rename/fsync/statfs，不证明 Harmony native IO、掉电或 ENOSPC 语义",
+      "Node crypto，不证明 Harmony cryptoFramework 实现",
+      "Node fetch/AbortController，不证明 Harmony 网络线程或系统取消",
+      "resourceManager 只读取显式传入的宿主资源 Map",
+      "不支持 ArkUI struct/真实 View/首屏信号"
+    ],
+    "typescriptVersion": "5.9.3",
+    "sourceRoot": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets",
+    "sources": [
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaUserContext.ets",
+        "sha256": "de2492c49faf1aea7f3e7c6dfd2841acbc95e8672fa40a3d50179cbfb94ab813",
+        "emittedSha256": "cdd98df2ee61686af42fba9e6ddf619d04da12e472545b46540b98316e5579bf"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaModels.ets",
+        "sha256": "3ce75e53e4f505a752891e3b95a76baf7cda550445db77e83aead4b187515eb8",
+        "emittedSha256": "184686ba3413aeabe594a6a87596d266f7b44e4a990ac3d6b251b5dfc253d057"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaApiClient.ets",
+        "sha256": "326797b0eba9c11890095bc9124ece37c47c0a7c45aca1c58324fd060165b803",
+        "emittedSha256": "a490765c1857f5589afc43abd71d7562151f8f6146c1a4b66c521e62890bbd7c"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaJson.ets",
+        "sha256": "5e84050e3e3d2514b4fd30cea835e5cc1787c54e1c00d2e5aaa0d973ceffa364",
+        "emittedSha256": "2b7297b536472b4b10d913fff957a6fab92a805ff65fee390e03cae92c4f23e6"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaSelection.ets",
+        "sha256": "7e0d1386357fff2bd5a72436c2d31d3e34779fa0f7851fd880c050da30dc0268",
+        "emittedSha256": "996ce3a0a1e4c102c96151b7859048d53893de1d9fe9ece9eb5224ce59cef287"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/ContentAddressedOtaStore.ets",
+        "sha256": "e14454c691e649e3e7cd877b9708ed3bd3915fa68bb4d1d34bdffea43e1ef240",
+        "emittedSha256": "760bbbc806a02b343f7b5dedf7e79a5b24aac8fd35b1393a4956349745b16c43"
+      }
+    ],
+    "sourceChangedAfterLoad": [],
+    "suppliedMocks": [],
+    "io": {
+      "fileCalls": {
+        "accessSync": 6904,
+        "mkdirSync": 93,
+        "openSync": 487,
+        "writeSync": 136,
+        "fsyncSync": 383,
+        "closeSync": 487,
+        "renameSync": 105,
+        "lstatSync": 14153,
+        "listFileSync": 4736,
+        "moveFileSync": 31,
+        "readTextSync": 236,
+        "statSync": 4496,
+        "readSync": 104,
+        "unlinkSync": 11,
+        "rmdirSync": 7
+      },
+      "binaryWrites": 104,
+      "copiedFiles": 0,
+      "http": [
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30528
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-000.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-001.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-002.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-003.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-004.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-005.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-006.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-007.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-008.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-009.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-010.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-011.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-012.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-013.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-014.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-015.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-016.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-017.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-018.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-019.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-020.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-021.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-022.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-023.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-024.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-025.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-026.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-027.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-028.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-029.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-030.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-031.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-032.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-033.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-034.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-035.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-036.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-037.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-038.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-039.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-040.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-041.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-042.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-043.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-044.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-045.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-046.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-047.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-048.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-049.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-050.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 88111
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-051.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-052.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-053.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-054.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-055.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-056.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-057.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-058.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-059.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-060.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-061.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-062.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-063.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-064.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-065.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-066.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-067.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-068.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-069.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-070.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-071.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-072.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-073.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-074.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-075.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-076.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-077.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-078.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-079.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-080.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-081.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-082.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-083.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-084.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-085.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-086.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-087.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-088.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-089.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-090.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-091.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-092.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-093.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-094.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-095.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-096.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-097.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-098.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-099.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 87754
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "A",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30560
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/gray6/pages/10000001/bundle-050.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 88111
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "A",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full7/pages/10000001/bundle-050.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 88111
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "A",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": true,
+          "statusCode": 200,
+          "bytes": 30560
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/gray8/pages/10000001/bundle-050.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 88111
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "A",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": true,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30533
+        },
+        {
+          "method": "GET",
+          "path": "/ota/bundles/full5/pages/10000001/bundle-050.lynx.bundle",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": null,
+          "versioncode": null,
+          "lynxSdkVersion": null,
+          "clientTokenPresent": false,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 88111
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": true,
+          "statusCode": 200,
+          "bytes": 198
+        }
+      ],
+      "resources": [],
+      "digestCalls": 281,
+      "randomCalls": 2
+    }
+  },
+  "layer": "host-http"
+}
