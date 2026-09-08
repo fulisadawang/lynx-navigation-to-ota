@@ -1,0 +1,8 @@
+{
+  "name": "实际身份事件：订阅幂等、解除与异常监听隔离，仅传 epoch",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

@@ -1,0 +1,322 @@
+{
+  "name": "实际 OtaApiClient + 真实 Server：Harmony Query、全量优先、ETag 与指令",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "phases": [
+    {
+      "stage": "full5",
+      "audience": "anonymous",
+      "releaseId": "r20260421_002"
+    },
+    {
+      "stage": "full5",
+      "audience": "A",
+      "releaseId": "r20260421_002"
+    },
+    {
+      "stage": "full5",
+      "audience": "B",
+      "releaseId": "r20260421_002"
+    },
+    {
+      "stage": "gray6",
+      "audience": "anonymous",
+      "releaseId": "r20260421_002"
+    },
+    {
+      "stage": "gray6",
+      "audience": "A",
+      "releaseId": "r20260421_003"
+    },
+    {
+      "stage": "gray6",
+      "audience": "B",
+      "releaseId": "r20260421_002"
+    },
+    {
+      "stage": "full7",
+      "audience": "anonymous",
+      "releaseId": "r20260421_004"
+    },
+    {
+      "stage": "full7",
+      "audience": "A",
+      "releaseId": "r20260421_004"
+    },
+    {
+      "stage": "full7",
+      "audience": "B",
+      "releaseId": "r20260421_004"
+    },
+    {
+      "stage": "gray8",
+      "audience": "anonymous",
+      "releaseId": "r20260421_004"
+    },
+    {
+      "stage": "gray8",
+      "audience": "A",
+      "releaseId": "r20260421_005"
+    },
+    {
+      "stage": "gray8",
+      "audience": "B",
+      "releaseId": "r20260421_004"
+    }
+  ],
+  "adapterEvidence": {
+    "evidenceKind": "host-transpiled-arkts-node-adapters",
+    "deviceTested": false,
+    "nativeIOValidated": false,
+    "adapters": [
+      "@ohos.file.fs",
+      "@ohos.security.cryptoFramework",
+      "@ohos.net.http",
+      "@ohos.systemDateTime",
+      "@kit.CoreFileKit",
+      "@kit.AbilityKit",
+      "context.resourceManager"
+    ],
+    "limitations": [
+      "Node FS/rename/fsync/statfs，不证明 Harmony native IO、掉电或 ENOSPC 语义",
+      "Node crypto，不证明 Harmony cryptoFramework 实现",
+      "Node fetch/AbortController，不证明 Harmony 网络线程或系统取消",
+      "resourceManager 只读取显式传入的宿主资源 Map",
+      "不支持 ArkUI struct/真实 View/首屏信号"
+    ],
+    "typescriptVersion": "5.9.3",
+    "sourceRoot": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets",
+    "sources": [
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaUserContext.ets",
+        "sha256": "de2492c49faf1aea7f3e7c6dfd2841acbc95e8672fa40a3d50179cbfb94ab813",
+        "emittedSha256": "cdd98df2ee61686af42fba9e6ddf619d04da12e472545b46540b98316e5579bf"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaApiClient.ets",
+        "sha256": "326797b0eba9c11890095bc9124ece37c47c0a7c45aca1c58324fd060165b803",
+        "emittedSha256": "a490765c1857f5589afc43abd71d7562151f8f6146c1a4b66c521e62890bbd7c"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaJson.ets",
+        "sha256": "5e84050e3e3d2514b4fd30cea835e5cc1787c54e1c00d2e5aaa0d973ceffa364",
+        "emittedSha256": "2b7297b536472b4b10d913fff957a6fab92a805ff65fee390e03cae92c4f23e6"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaSelection.ets",
+        "sha256": "7e0d1386357fff2bd5a72436c2d31d3e34779fa0f7851fd880c050da30dc0268",
+        "emittedSha256": "996ce3a0a1e4c102c96151b7859048d53893de1d9fe9ece9eb5224ce59cef287"
+      },
+      {
+        "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaModels.ets",
+        "sha256": "3ce75e53e4f505a752891e3b95a76baf7cda550445db77e83aead4b187515eb8",
+        "emittedSha256": "184686ba3413aeabe594a6a87596d266f7b44e4a990ac3d6b251b5dfc253d057"
+      }
+    ],
+    "sourceChangedAfterLoad": [],
+    "suppliedMocks": [],
+    "io": {
+      "fileCalls": {
+        "accessSync": 2,
+        "mkdirSync": 1,
+        "openSync": 2,
+        "writeSync": 1,
+        "fsyncSync": 2,
+        "closeSync": 2,
+        "renameSync": 1
+      },
+      "binaryWrites": 0,
+      "copiedFiles": 0,
+      "http": [
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30528
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "A",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30528
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30528
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "A",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30560
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "A",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "anonymous",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "A",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30560
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": false,
+          "statusCode": 200,
+          "bytes": 30529
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": true,
+          "statusCode": 304,
+          "bytes": 0
+        },
+        {
+          "method": "GET",
+          "path": "/api/ota/v1/releases/latest-bundle-list",
+          "completed": true,
+          "audience": "B",
+          "platform": "harmony",
+          "versioncode": "150",
+          "lynxSdkVersion": "4.0.0",
+          "clientTokenPresent": true,
+          "conditional": true,
+          "statusCode": 200,
+          "bytes": 198
+        }
+      ],
+      "resources": [],
+      "digestCalls": 39,
+      "randomCalls": 1
+    }
+  },
+  "layer": "host-http"
+}

@@ -19,6 +19,7 @@ public enum OtaDefaults {
 public enum OtaPlatform: String, Codable, CaseIterable, Sendable {
     case android
     case ios
+    case harmony
 }
 
 public enum OtaReleaseStatus: String, Codable, CaseIterable, Sendable {
@@ -78,6 +79,13 @@ public struct OtaReleaseVersionRange: Codable, Equatable, Sendable {
     public init(min: String? = nil, max: String? = nil) {
         self.min = min
         self.max = max
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: OtaRangeKey.self)
+        try OtaRangeKey.validate(values)
+        min = try values.decodeIfPresent(String.self, forKey: .init("min"))
+        max = try values.decodeIfPresent(String.self, forKey: .init("max"))
     }
 }
 
@@ -503,11 +511,15 @@ public struct OtaInstalledRelease: Codable, Equatable, Sendable {
     public let context: OtaCurrentReleaseContext
     public let installedAt: Date
     public let bundles: [OtaInstalledBundle]
+    public var selection: OtaStoredSelection?
+    public var identityEpoch: UInt64?
 
-    public init(context: OtaCurrentReleaseContext, installedAt: Date, bundles: [OtaInstalledBundle]) {
+    public init(context: OtaCurrentReleaseContext, installedAt: Date, bundles: [OtaInstalledBundle], selection: OtaStoredSelection? = nil, identityEpoch: UInt64? = nil) {
         self.context = context
         self.installedAt = installedAt
         self.bundles = bundles
+        self.selection = selection
+        self.identityEpoch = identityEpoch
     }
 }
 
@@ -557,6 +569,7 @@ public struct OtaReportPayload: Codable, Sendable {
     public let deviceId: String?
     public let deviceModel: String?
     public let appVersion: String?
+    public let versioncode: String?
     public let buildNumber: String?
     public let osVersion: String?
     public let channel: String?
@@ -588,6 +601,7 @@ public struct OtaReportPayload: Codable, Sendable {
         case deviceId
         case deviceModel
         case appVersion
+        case versioncode
         case buildNumber
         case osVersion
         case channel
@@ -620,6 +634,7 @@ public struct OtaReportPayload: Codable, Sendable {
         deviceId: String? = nil,
         deviceModel: String? = nil,
         appVersion: String? = nil,
+        versioncode: String? = nil,
         buildNumber: String? = nil,
         osVersion: String? = nil,
         channel: String? = nil,
@@ -650,6 +665,7 @@ public struct OtaReportPayload: Codable, Sendable {
         self.deviceId = deviceId
         self.deviceModel = deviceModel
         self.appVersion = appVersion
+        self.versioncode = versioncode
         self.buildNumber = buildNumber
         self.osVersion = osVersion
         self.channel = channel
@@ -683,6 +699,7 @@ public struct OtaReportPayload: Codable, Sendable {
         deviceId = try container.decodeIfPresent(String.self, forKey: .deviceId)
         deviceModel = try container.decodeIfPresent(String.self, forKey: .deviceModel)
         appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion)
+        versioncode = try container.decodeIfPresent(String.self, forKey: .versioncode)
         buildNumber = try container.decodeIfPresent(String.self, forKey: .buildNumber)
         osVersion = try container.decodeIfPresent(String.self, forKey: .osVersion)
         channel = try container.decodeIfPresent(String.self, forKey: .channel)
@@ -716,6 +733,7 @@ public struct OtaReportPayload: Codable, Sendable {
         try container.encodeIfPresent(deviceId, forKey: .deviceId)
         try container.encodeIfPresent(deviceModel, forKey: .deviceModel)
         try container.encodeIfPresent(appVersion, forKey: .appVersion)
+        try container.encodeIfPresent(versioncode, forKey: .versioncode)
         try container.encodeIfPresent(buildNumber, forKey: .buildNumber)
         try container.encodeIfPresent(osVersion, forKey: .osVersion)
         try container.encodeIfPresent(channel, forKey: .channel)
@@ -760,6 +778,7 @@ public struct OtaCandidateSnapshot: Equatable, Sendable {
     public let status: OtaCandidateStatus
     public let failureCount: Int
     public let createdAt: Date
+    public let identityEpoch: UInt64?
     public let trialStartedAt: Date?
 
     public init(
@@ -767,13 +786,15 @@ public struct OtaCandidateSnapshot: Equatable, Sendable {
         status: OtaCandidateStatus,
         failureCount: Int = 0,
         createdAt: Date,
-        trialStartedAt: Date? = nil
+        trialStartedAt: Date? = nil,
+        identityEpoch: UInt64? = nil
     ) {
         self.release = release
         self.status = status
         self.failureCount = failureCount
         self.createdAt = createdAt
         self.trialStartedAt = trialStartedAt
+        self.identityEpoch = identityEpoch ?? release.identityEpoch
     }
 }
 
@@ -810,6 +831,8 @@ public struct OtaHostLatestBundleLists: Codable, Equatable, Sendable {
     public let env: OtaEnvironment
     public let app: OtaAppID
     public let platform: OtaPlatform?
+    public let selectionSchemaVersion: Int?
+    public let directives: [OtaSelectionDirective]
     public let bundleLists: [OtaLatestBundleList]
 
     enum CodingKeys: String, CodingKey {
@@ -817,6 +840,8 @@ public struct OtaHostLatestBundleLists: Codable, Equatable, Sendable {
         case app
         case hostApp
         case platform
+        case selectionSchemaVersion
+        case directives
         case bundleLists
     }
 
@@ -824,12 +849,16 @@ public struct OtaHostLatestBundleLists: Codable, Equatable, Sendable {
         env: OtaEnvironment,
         app: OtaAppID,
         platform: OtaPlatform? = nil,
-        bundleLists: [OtaLatestBundleList]
+        bundleLists: [OtaLatestBundleList],
+        selectionSchemaVersion: Int? = nil,
+        directives: [OtaSelectionDirective] = []
     ) {
         self.env = env
         self.app = app
         self.platform = platform
         self.bundleLists = bundleLists
+        self.selectionSchemaVersion = selectionSchemaVersion
+        self.directives = directives
     }
 
     public init(from decoder: Decoder) throws {
@@ -841,6 +870,8 @@ public struct OtaHostLatestBundleLists: Codable, Equatable, Sendable {
             app = try container.decode(OtaAppID.self, forKey: .app)
         }
         platform = try container.decodeIfPresent(OtaPlatform.self, forKey: .platform)
+        selectionSchemaVersion = try container.decodeIfPresent(Int.self, forKey: .selectionSchemaVersion)
+        directives = try container.decodeIfPresent([OtaSelectionDirective].self, forKey: .directives) ?? []
         bundleLists = try container.decode([OtaLatestBundleList].self, forKey: .bundleLists)
     }
 
@@ -849,6 +880,8 @@ public struct OtaHostLatestBundleLists: Codable, Equatable, Sendable {
         try container.encode(env, forKey: .env)
         try container.encode(app, forKey: .hostApp)
         try container.encodeIfPresent(platform, forKey: .platform)
+        try container.encodeIfPresent(selectionSchemaVersion, forKey: .selectionSchemaVersion)
+        try container.encode(directives, forKey: .directives)
         try container.encode(bundleLists, forKey: .bundleLists)
     }
 }
@@ -888,6 +921,22 @@ public struct OtaHostBundleListSyncResult: Equatable, Sendable {
     }
 }
 
+/// A failed App does not prevent other validated App decisions from being persisted.
+public struct OtaAppBundleListSyncFailure: Sendable, CustomStringConvertible {
+    public enum Stage: String, Sendable { case decision, update }
+    public let stage: Stage
+    public let cause: any Error
+    public var description: String { "OTA App sync failed during \(stage.rawValue)" }
+}
+
+/// The batch still throws on any failure; callers may inspect completed App results explicitly.
+public struct OtaHostBundleListSyncError: Error, Sendable, LocalizedError, CustomStringConvertible {
+    public let partialResult: OtaHostBundleListSyncResult
+    public let failures: [String: OtaAppBundleListSyncFailure]
+    public var description: String { "OTA batch sync failed for \(failures.count) App(s)" }
+    public var errorDescription: String? { description }
+}
+
 public struct OtaLatestBundleList: Codable, Equatable, Sendable {
     public let env: OtaEnvironment
     public let app: OtaAppID
@@ -901,6 +950,10 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
     public let maxAppVersion: String?
     public let lynxSdkRange: OtaReleaseVersionRange?
     public let nativeProtocolVersionRange: OtaReleaseVersionRange?
+    public let selectionSchemaVersion: Int?
+    public let releaseSequence: String?
+    public let selection: OtaSelectionMetadata?
+    public let versionCodeRange: OtaVersionCodeRange?
     public let changedBundles: [OtaBundleArtifact]
 
     enum CodingKeys: String, CodingKey {
@@ -917,6 +970,10 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         case maxAppVersion
         case lynxSdkRange
         case nativeProtocolVersionRange
+        case selectionSchemaVersion
+        case releaseSequence
+        case selection
+        case versionCodeRange
         case changedBundles
     }
 
@@ -933,6 +990,10 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         maxAppVersion: String? = nil,
         lynxSdkRange: OtaReleaseVersionRange? = nil,
         nativeProtocolVersionRange: OtaReleaseVersionRange? = nil,
+        selectionSchemaVersion: Int? = nil,
+        releaseSequence: String? = nil,
+        selection: OtaSelectionMetadata? = nil,
+        versionCodeRange: OtaVersionCodeRange? = nil,
         changedBundles: [OtaBundleArtifact]
     ) {
         self.env = env
@@ -947,6 +1008,10 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         self.maxAppVersion = maxAppVersion
         self.lynxSdkRange = lynxSdkRange
         self.nativeProtocolVersionRange = nativeProtocolVersionRange
+        self.selectionSchemaVersion = selectionSchemaVersion
+        self.releaseSequence = releaseSequence
+        self.selection = selection
+        self.versionCodeRange = versionCodeRange
         self.changedBundles = changedBundles
     }
 
@@ -968,6 +1033,10 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         maxAppVersion = try container.decodeIfPresent(String.self, forKey: .maxAppVersion)
         lynxSdkRange = try container.decodeIfPresent(OtaReleaseVersionRange.self, forKey: .lynxSdkRange)
         nativeProtocolVersionRange = try container.decodeIfPresent(OtaReleaseVersionRange.self, forKey: .nativeProtocolVersionRange)
+        selectionSchemaVersion = try container.decodeIfPresent(Int.self, forKey: .selectionSchemaVersion)
+        releaseSequence = try container.decodeIfPresent(String.self, forKey: .releaseSequence)
+        selection = try container.decodeIfPresent(OtaSelectionMetadata.self, forKey: .selection)
+        versionCodeRange = try container.decodeIfPresent(OtaVersionCodeRange.self, forKey: .versionCodeRange)
         changedBundles = try container.decode([OtaBundleArtifact].self, forKey: .changedBundles)
     }
 
@@ -985,6 +1054,10 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         try container.encodeIfPresent(maxAppVersion, forKey: .maxAppVersion)
         try container.encodeIfPresent(lynxSdkRange, forKey: .lynxSdkRange)
         try container.encodeIfPresent(nativeProtocolVersionRange, forKey: .nativeProtocolVersionRange)
+        try container.encodeIfPresent(selectionSchemaVersion, forKey: .selectionSchemaVersion)
+        try container.encodeIfPresent(releaseSequence, forKey: .releaseSequence)
+        try container.encodeIfPresent(selection, forKey: .selection)
+        try container.encodeIfPresent(versionCodeRange, forKey: .versionCodeRange)
         try container.encode(changedBundles, forKey: .changedBundles)
     }
 
@@ -1024,6 +1097,7 @@ public struct OtaSDKConfiguration: Sendable {
     public let platform: OtaPlatform
     public let appVersion: String
     public let buildNumber: String
+    public let versionCode: String?
     public let userId: String?
     public let deviceId: String?
     public let deviceModel: String?
@@ -1049,6 +1123,7 @@ public struct OtaSDKConfiguration: Sendable {
         platform: OtaPlatform = .ios,
         appVersion: String,
         buildNumber: String,
+        versionCode: String? = nil,
         userId: String? = nil,
         deviceId: String? = nil,
         deviceModel: String? = nil,
@@ -1070,6 +1145,7 @@ public struct OtaSDKConfiguration: Sendable {
         self.platform = platform
         self.appVersion = appVersion
         self.buildNumber = buildNumber
+        self.versionCode = versionCode
         self.userId = userId
         self.deviceId = deviceId
         self.deviceModel = deviceModel

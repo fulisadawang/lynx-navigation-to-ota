@@ -13,6 +13,10 @@ export interface ShellBundleMetadata {
   manifestId?: string;
   navigationSnapshotID?: string;
   loadPolicy?: string;
+  userIdentityEpoch?: number;
+  selectionKind?: string;
+  releaseSequence?: string;
+  policyRevision?: string;
 }
 
 /** 构建传给 Lynx 的 globalProps，保留业务字段并补充稳定宿主信息。 */

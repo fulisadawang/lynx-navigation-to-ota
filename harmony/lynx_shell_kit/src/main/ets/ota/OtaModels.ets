@@ -1,4 +1,6 @@
 import { common } from '@kit.AbilityKit';
+import { OtaLastDecision, OtaSelectionDirective, OtaSelectionMetadata, OtaStoredSelection, OtaVersionRange } from './OtaSelection';
+import { OtaUserContext } from './OtaUserContext';
 
 /** HarmonyOS Router 内置 OTA 的宿主配置。敏感令牌只由宿主运行时注入，不写入 HAR。 */
 export class LynxOtaConfig {
@@ -7,14 +9,14 @@ export class LynxOtaConfig {
   environment: string = 'PROD';
   /** 当前宿主平台；页面 AppInfo/GlobalProps 仍然报告 harmony。 */
   platform: string = 'harmony';
-  /**
-   * 临时服务端兼容值。
-   *
-   * 现有 OTA 服务端只接受 android/ios 时，Demo 可以把这里设为 android；
-   * 路由、容器和本地事务仍然运行在 HarmonyOS，后端开放 harmony 后清空即可。
-   * 为空时自动使用 platform，避免把兼容逻辑散落到请求代码里。
-   */
+  /** 已废弃的源码兼容字段；requestPlatform 固定 harmony，绝不退回 Android。 */
   serverPlatform: string = '';
+  /** 原生宿主提供；缺省仅保留无选择上下文的低层兼容调用。 */
+  versionCode?: string;
+  lynxSdkVersion?: string;
+  userId?: string;
+  appVersion?: string;
+  nativeProtocolVersion?: string;
   clientToken: string = '';
   /** 仅 TEST + Want 显式注入时启用；生产默认永远关闭。 */
   debugMockEnabled: boolean = false;
@@ -38,6 +40,11 @@ export class LynxOtaConfig {
   }
 
   validate(context: common.UIAbilityContext): void {
+    this.userId = OtaUserContext.normalizeUserId(this.userId);
+    if (this.versionCode !== undefined) this.versionCode = OtaUserContext.normalizeVersionCode(this.versionCode);
+    if (this.lynxSdkVersion !== undefined) this.lynxSdkVersion = OtaUserContext.normalizeLynxSdkVersion(this.lynxSdkVersion);
+    if ((this.versionCode !== undefined || this.lynxSdkVersion !== undefined || this.userId !== undefined) &&
+      (this.versionCode === undefined || this.lynxSdkVersion === undefined)) throw new Error('missing_selection_context');
     const isTestEnvironment = this.environment.toUpperCase() === 'TEST';
     if (!isTestEnvironment) {
       this.debugMockEnabled = false;
@@ -88,7 +95,7 @@ export class LynxOtaConfig {
 
   /** 所有服务端请求和 Release 校验统一使用这一值。 */
   requestPlatform(): string {
-    return this.serverPlatform.trim().length > 0 ? this.serverPlatform.trim() : this.platform.trim();
+    return 'harmony';
   }
 
   private static isTestHttpUrl(value: string): boolean {
@@ -150,6 +157,15 @@ export interface OtaReleaseSnapshot {
   platform: string;
   status: string;
   changedBundles: OtaBundleArtifact[];
+  platforms?: string[];
+  selectionSchemaVersion?: number;
+  selection?: OtaSelectionMetadata;
+  releaseSequence?: string;
+  versionCodeRange?: OtaVersionRange;
+  lynxSdkRange?: OtaVersionRange;
+  minAppVersion?: string;
+  maxAppVersion?: string;
+  nativeProtocolVersionRange?: OtaVersionRange;
 }
 
 /** 全量 latest-bundle-list 响应。定向接口也可能直接返回单个 Snapshot。 */
@@ -158,6 +174,8 @@ export interface OtaLatestBundleLists {
   hostApp: string;
   platform?: string;
   bundleLists: OtaReleaseSnapshot[];
+  selectionSchemaVersion?: number;
+  directives?: OtaSelectionDirective[];
 }
 
 /** 写入 apps/<lynxAppId>/manifests/<manifestId>.json 的本地 Store v3 Manifest。 */
@@ -184,12 +202,15 @@ export interface OtaReleaseState {
   generation: number;
   current: OtaReleaseRef;
   previous?: OtaReleaseRef;
+  selectionSchemaVersion?: number;
+  lastDecision?: OtaLastDecision;
 }
 
 export interface OtaReleaseRef {
   kind: 'embedded' | 'downloaded';
   releaseId: string;
   manifestId?: string;
+  selection?: OtaStoredSelection;
 }
 
 /** 远程 Release 的进程内生命周期租约；rawfile baseline 不需要租约。 */
@@ -226,6 +247,12 @@ export interface PreparedPageBundle {
   source?: string;
   /** 远程 current 的容器级租约；embedded rawfile 不设置。 */
   lease?: OtaBundleLease;
+  selection?: OtaStoredSelection;
+  identityEpoch?: number;
+  userIdentityEpoch?: number;
+  selectionKind?: 'full' | 'gray';
+  releaseSequence?: string;
+  policyRevision?: string;
 }
 
 export enum OtaStorageReleaseRole {
@@ -310,6 +337,7 @@ export class OtaPrepareSignal {
 
 /** Router 与具体 OTA Runtime 的最小真实接缝。 */
 export interface PageBundleRuntime {
+  readonly userIdentityEpoch?: number;
   onApplicationStarted(): void;
   onApplicationForeground(): void;
   prepare(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal, navigationSessionID?: string): Promise<PreparedPageBundle>;
@@ -317,7 +345,7 @@ export interface PageBundleRuntime {
   resolveCurrent(lynxAppId: string, bundleName: string, navigationSessionID?: string): Promise<PreparedPageBundle | null>;
   /** 普通页面命中 remote current 后的非阻塞 App ID 级 30 分钟后台检查；Tab 不调用。 */
   refreshAppBundleIfNeeded(lynxAppId: string): void;
-  rollback(lynxAppId: string, reason: string): Promise<boolean>;
+  rollback(lynxAppId: string, reason: string, expectedReleaseId?: string, expectedIdentityEpoch?: number): Promise<boolean>;
   deleteBundles(lynxAppId: string): Promise<void>;
   deleteAllBundles(): Promise<void>;
   /** 只读快照；不触发网络、SHA、prune 或目录写入。 */

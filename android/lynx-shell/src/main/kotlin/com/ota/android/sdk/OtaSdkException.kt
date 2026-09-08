@@ -1,6 +1,6 @@
 package com.ota.android.sdk
 
-class OtaSdkException : Exception {
+open class OtaSdkException : Exception {
   /** 可选结构化原因码；旧调用方仍只依赖 message。 */
   @JvmField
   val reasonCode: String?

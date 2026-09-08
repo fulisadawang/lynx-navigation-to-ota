@@ -1,0 +1,8 @@
+{
+  "name": "实际 OtaJson：单个/全量选择、Harmony 与指令结构保持",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

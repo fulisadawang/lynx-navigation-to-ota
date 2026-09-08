@@ -67,10 +67,17 @@ Native/       Objective-C 原生 Runtime 接线
 - embedded Bundle 直接读取 App Bundle URL，不复制到 Application Support。
 - State 不保存下载 Bundle 绝对路径；页面使用 `PreparedOtaBundle + lease`。
 - 同一导航 session 通过 NavigationSnapshot 固定 Manifest；子页不得重新读取 current 造成版本漂移。
-- Native Tab 只读 current，不消费 candidate、不因切换联网；主动刷新成功后再重建 generation。
+- Native Tab cache-only，不消费 candidate、不因普通切换联网；普通后台不重建。身份/主动刷新完成后按有效 epoch 重读已提交 State 并更新 generation，partial failure 也不能遮蔽已提交决定。
 - candidate 只有 pending/trial/healthy promote 流程；首屏失败丢弃 candidate，不回滚稳定 current。
 - 首屏失败最多回滚一次 previous/embedded，禁止无限循环。
 - 修改 OTA 契约时必须同步修改 OtaIOSSDK Tests、README 和三端协议文档。
+- 原生使用 `registerOtaUserId/clearOtaUserId`，支持 install 前注册；相同身份不重复同步。Core register 返回 changed，Router 的 Bool 表示接受参数，不能混用或当作网络完成信号。
+- latest 全量/定向/repair/主动刷新必须携带 `versioncode`、`lynxSdkVersion`、可选 userId；匿名省略 userId。构建码独立于版本名称，CFBundleVersion 只有纯整数可默认使用，分段值必须显式覆盖。
+- 实际 Lynx 版本只从可信 `org.cocoapods.LynxResources` 资源或 `org.cocoapods.Lynx` framework metadata 解析，多源/显式值必须一致；不采用误报的 getter，也不把固定4.0.0当探测。Core 不直接依赖 UIKit/Lynx。
+- full7 胜 gray6；releaseSequence/policyRevision 分开，高修订允许回滚低序号。ref selection 与 lastDecision 原子持久化，unknown 旧 v3 metadata 等新确认，所有本地读取重新校验 audience/native/SDK 范围。
+- 整批协议先校验、逐 App 决定先落盘、最后下载。partialResult 仅更新成功 App 门控；旧 TaskLocal 不得被新身份覆盖，最终 State 写入共享注册锁校验 epoch/revision。
+- candidate 回调持续传 prepared releaseId/epoch；最终 wrapper 拒绝返回 lease 时先关闭。旧 lease 可活到 view 销毁，close 不被身份失效阻止。
+- CAS 只存 App ID/SHA，没有用户 bytes 目录；完整100包只变1时下载/新增1、复制0，有界 GC 后回滚已回收对象可补下载。
 
 ### 3. 原生转场
 
@@ -130,6 +137,9 @@ xcodebuild -workspace ios/LynxShell.xcworkspace \
 ```
 
 涉及 Router、容器、Tab、转场、侧滑、首屏、OTA 回滚或 Scene 恢复时，必须补 Simulator/device 运行态证据。记录设备、系统、Bundle/Release 身份、请求计数、截图或 xcresult；条件跳过必须与失败分开报告。
+
+本次当前证据见 [iOS user-gray 报告](../../docs/ios-ota-user-gray-test-report.html)：83 Core、最终4/4 UI、19图；旧 v3 报告仅作历史基础证据。
+匿名内置脚本必须传 `--target ios --platform ios --versioncode ... --lynx-sdk-version ...`，不传 userId，命令见 [Module 接入](../../MODULE_INTEGRATION.md#三端匿名内置-baseline-下载)。
 
 ## 交付说明
 

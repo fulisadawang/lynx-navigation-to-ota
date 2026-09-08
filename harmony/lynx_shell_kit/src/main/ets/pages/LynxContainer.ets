@@ -14,6 +14,7 @@ import {
 import ShellLynxViewClient from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
 import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
+import OtaUserContextEvents from '../ota/OtaUserContextEvents';
 import { ShellViewAppearPayload } from '../common/ShellTypes';
 import ShellWindowController from '../common/ShellWindowController';
 import XElementRuntime from '../common/XElementRuntime';
@@ -62,10 +63,24 @@ export struct LynxContainer {
   private releaseLease: OtaBundleLease | null = null;
   private rollbackAttempted: boolean = false;
   private rollbackInProgress: boolean = false;
+  private preparedRuntime: PageBundleRuntime | null = null;
+  private preparedEpoch: number | undefined = undefined;
+  private preparedReleaseId: string | undefined = undefined;
+  private firstScreenReached: boolean = false;
+  private contextCreated: (context: LynxContext) => void = () => {};
+  private readonly userListener: (epoch: number) => void = () => {
+    if (this.request.isOtaRequest() && this.preparedRuntime !== null && !this.firstScreenReached && !this.isPreparedUserCurrent()) {
+      this.cancelPendingRequests();
+      this.cancelViewResources();
+      this.isLoading = false;
+      this.errorMessage = 'OTA 用户已切换，请重新打开页面';
+    }
+  };
   private viewWidth: number | string = '100%';
   private viewHeight: number | string = '100%';
 
   aboutToAppear(): void {
+    OtaUserContextEvents.subscribe(this.userListener);
     LynxNavigator.register(this.request);
     // 页面级 keyboardBehavior 在 Window/UIContext 层生效；LynxView 不需要重复计算键盘高度。
     ShellWindowController.apply(this.request);
@@ -81,11 +96,7 @@ export struct LynxContainer {
 
     this.modules.set('LynxShellModule', { moduleClass: LynxShellModule });
     LLog.d(ShellConstants.TAG, 'registered LynxShellModule with full Harmony bridge contract');
-    this.clients = [new ShellLynxViewClient(
-      (url: string) => this.handleLoadSuccess(url),
-      (message: string) => this.handleLoadError(message),
-      () => this.handleFirstScreen()
-    )];
+    this.configureClients(this.prepareGeneration);
 
     const density = display.getDefaultDisplaySync().densityPixels;
     if (this.request.widthPx > 0) {
@@ -106,6 +117,37 @@ export struct LynxContainer {
       this.extraTiming.prepareTemplateEnd = new Date().getTime();
       this.showLynxView = true;
     }
+  }
+
+  aboutToBeDeleted(): void {
+    OtaUserContextEvents.unsubscribe(this.userListener);
+    this.cancelPendingRequests();
+    this.cancelViewResources();
+  }
+
+  private configureClients(generation: number): void {
+    this.contextCreated = (context: LynxContext) => {
+      if (generation !== this.prepareGeneration || (this.request.isOtaRequest() && !this.isPreparedUserCurrent())) {
+        context.onEnterBackground(); return;
+      }
+      this.lynxContext = context;
+      ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
+        pageKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.request.bundleUrl, hostMode: 'arkui_page' }, context);
+      context.onEnterForeground();
+      context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
+      ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_page_appear');
+      if (this.request.widthPx > 0 && this.request.heightPx > 0) context.updateScreenMetrics(this.request.widthPx, this.request.heightPx);
+      context.setExtraTiming(this.extraTiming);
+    };
+    this.clients = [new ShellLynxViewClient(
+      (url: string) => { if (generation === this.prepareGeneration) this.handleLoadSuccess(url); },
+      (message: string) => { if (generation === this.prepareGeneration) this.handleLoadError(message); },
+      () => { if (generation === this.prepareGeneration) this.handleFirstScreen(); }
+    )];
+  }
+
+  private isPreparedUserCurrent(): boolean {
+    return this.preparedRuntime === PageBundleRuntimeRegistry.current() && this.preparedEpoch === this.preparedRuntime?.userIdentityEpoch;
   }
 
   aboutToDisappear(): void {
@@ -163,11 +205,13 @@ export struct LynxContainer {
   }
 
   private handleFirstScreen(): void {
+    if (this.request.isOtaRequest() && !this.isPreparedUserCurrent()) return;
+    this.firstScreenReached = true;
     this.isLoading = false;
   }
 
   private handleLoadError(message: string): void {
-    if (this.request.isOtaRequest() && !this.rollbackAttempted && !this.rollbackInProgress) {
+    if (this.request.isOtaRequest() && this.isPreparedUserCurrent() && !this.firstScreenReached && !this.rollbackAttempted && !this.rollbackInProgress) {
       this.attemptRollback(message.length > 0 ? message : 'Lynx 首屏加载失败');
       return;
     }
@@ -181,6 +225,7 @@ export struct LynxContainer {
     this.isLoading = true;
     this.errorMessage = '';
     this.showLynxView = false;
+    this.configureClients(this.prepareGeneration);
     if (this.request.isOtaRequest()) {
       // 用户主动重试会重新检查 current/repair，但一次页面生命周期内仍不重复自动回滚。
       this.prepareOtaBundle();
@@ -203,6 +248,10 @@ export struct LynxContainer {
       return;
     }
     this.preparing = true;
+    this.preparedRuntime = runtime;
+    this.preparedEpoch = runtime.userIdentityEpoch;
+    this.preparedReleaseId = undefined;
+    this.firstScreenReached = false;
     // 先尝试 cache-only；本地命中时不让 OTA Loading 盖住页面/转场。
     this.isLoading = false;
     this.errorMessage = '';
@@ -211,9 +260,16 @@ export struct LynxContainer {
     this.prepareSignal = new OtaPrepareSignal();
     const signal = this.prepareSignal;
     const generation = ++this.prepareGeneration;
+    const epoch = this.preparedEpoch;
+    this.configureClients(generation);
     let pendingLease: OtaBundleLease | null = null;
     runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName, this.request.sessionID)
       .then((cached: PreparedPageBundle | null) => {
+        if (signal.cancelled || generation !== this.prepareGeneration || !this.isPreparedUserCurrent() ||
+          (cached?.userIdentityEpoch !== undefined && cached.userIdentityEpoch !== epoch)) {
+          cached?.lease?.close();
+          throw new Error('stale_identity');
+        }
         if (cached !== null) {
           if (cached.source !== 'embedded_baseline') {
             runtime.refreshAppBundleIfNeeded(this.request.lynxAppId);
@@ -225,12 +281,14 @@ export struct LynxContainer {
       })
       .then((prepared: PreparedPageBundle) => {
         pendingLease = prepared.lease ?? null;
-        if (signal.cancelled || generation !== this.prepareGeneration ||
+        if (signal.cancelled || generation !== this.prepareGeneration || !this.isPreparedUserCurrent() ||
+          (prepared.userIdentityEpoch !== undefined && prepared.userIdentityEpoch !== epoch) ||
           !LynxNavigator.hasEntry(this.request.entryID)) {
           pendingLease?.close();
           pendingLease = null;
           return;
         }
+        this.preparedReleaseId = prepared.releaseId;
         this.templateFetcher.cancelAll();
         this.templateFetcher = new ShellTemplateResourceFetcher(
           this.request.allowHttpInDebug,
@@ -244,7 +302,11 @@ export struct LynxContainer {
           releaseId: prepared.releaseId,
           manifestId: prepared.manifestId,
           navigationSnapshotID: prepared.navigationSnapshotID,
-          source: this.rollbackAttempted ? 'rollback_fallback' : (prepared.source ?? 'ota_current'),
+          source: this.rollbackAttempted && prepared.source === 'embedded_baseline' ? 'rollback_fallback' : (prepared.source ?? 'ota_current'),
+          userIdentityEpoch: prepared.userIdentityEpoch,
+          selectionKind: prepared.selectionKind,
+          releaseSequence: prepared.releaseSequence,
+          policyRevision: prepared.policyRevision,
           bundleName: prepared.bundleName,
           sha256: prepared.sha256
         };
@@ -279,7 +341,7 @@ export struct LynxContainer {
   /** 首屏失败时按 appId 自动回滚一次；回滚成功后重新 prepare，第二次失败直接进入错误页。 */
   private attemptRollback(reason: string): void {
     const runtime: PageBundleRuntime | null = PageBundleRuntimeRegistry.current();
-    if (runtime === null) {
+    if (runtime === null || !this.isPreparedUserCurrent()) {
       this.isLoading = false;
       this.errorMessage = reason;
       return;
@@ -290,17 +352,22 @@ export struct LynxContainer {
     this.errorMessage = '';
     this.showLynxView = false;
     this.cancelViewResources();
-    runtime.rollback(this.request.lynxAppId, reason)
+    const generation = this.prepareGeneration;
+    const epoch = this.preparedEpoch;
+    runtime.rollback(this.request.lynxAppId, reason, this.preparedReleaseId, epoch)
       .then((restored: boolean) => {
+        if (generation !== this.prepareGeneration || !this.isPreparedUserCurrent()) return;
         this.rollbackInProgress = false;
         if (!restored) {
           this.isLoading = false;
           this.errorMessage = `${reason}；没有可回滚的上一版本`;
           return;
         }
+        runtime.resetNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
         this.prepareOtaBundle();
       })
       .catch((error: Error) => {
+        if (generation !== this.prepareGeneration || !this.isPreparedUserCurrent()) return;
         this.rollbackInProgress = false;
         this.isLoading = false;
         this.errorMessage = `${reason}；回滚失败：${error.message}`;
@@ -348,22 +415,7 @@ export struct LynxContainer {
             sendableModules: this.sendableModules,
             behaviors: this.behaviors,
             metaData: this.metaData,
-            onCreate: (context: LynxContext) => {
-              this.lynxContext = context;
-              ShellMessageHub.register({
-                pageId: this.request.entryID,
-                containerId: this.request.entryID,
-                pageKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.request.bundleUrl,
-                hostMode: 'arkui_page'
-              }, context);
-              context.onEnterForeground();
-              context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
-              ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_page_appear');
-              if (this.request.widthPx > 0 && this.request.heightPx > 0) {
-                context.updateScreenMetrics(this.request.widthPx, this.request.heightPx);
-              }
-              context.setExtraTiming(this.extraTiming);
-            }
+            onCreate: this.contextCreated
           })
             .width(this.viewWidth)
             .height(this.viewHeight)

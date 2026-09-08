@@ -2,6 +2,8 @@ package com.example.lynxshell
 
 import android.app.Application
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.example.lynxshell.bridge.LynxRouterMessageHandler
 import com.example.lynxshell.bridge.ShellMessageHub
 import com.example.lynxshell.ota.ActivityBundleRuntime
@@ -11,6 +13,9 @@ import com.example.lynxshell.routing.LynxNavigationResult
 import com.example.lynxshell.routing.LynxNavigator
 import com.example.lynxshell.routing.LynxRouteParser
 import org.json.JSONObject
+import com.ota.android.sdk.OtaUserContext
+import com.example.lynxshell.ota.LynxOtaRuntime
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * Android 三端统一门面。
@@ -20,6 +25,46 @@ import org.json.JSONObject
  * Activity 的 Intent extra、Registry 或 Provider 细节，也不需要预注册 routeId。
  */
 object LynxRouter {
+    private val otaUserLock = Any()
+    private var hasPendingOtaUser = false
+    private var pendingOtaUser: String? = null
+    private val otaUserListeners = CopyOnWriteArraySet<(Long) -> Unit>()
+    @Volatile internal var exposeOtaDebugState = false
+        private set
+
+    @JvmStatic fun debugExposeOtaState(enabled: Boolean) { exposeOtaDebugState = BuildConfig.DEBUG && enabled }
+
+    @JvmStatic
+    fun registerOtaUserId(userId: String?): Boolean {
+        val normalized = runCatching { OtaUserContext.normalizeUserId(userId) }.getOrElse { return false }
+        val (runtime, changed, epoch) = synchronized(otaUserLock) {
+            val runtime = LynxShell.activityBundleRuntime() as? LynxOtaRuntime
+            val changed = runtime?.registerUserId(normalized)
+                ?: (!hasPendingOtaUser || pendingOtaUser != normalized)
+            pendingOtaUser = normalized
+            hasPendingOtaUser = true
+            Triple(runtime, changed, runtime?.userIdentityEpoch)
+        }
+        if (changed && runtime != null && epoch != null) {
+            notifyOtaUserContext(runtime, epoch)
+            runtime.synchronizeRegisteredUser(epoch)
+        }
+        return changed
+    }
+
+    @JvmStatic fun clearOtaUserId(): Boolean = registerOtaUserId(null)
+    val otaUserIdentityEpoch: Long get() = LynxShell.activityBundleRuntime()?.userIdentityEpoch ?: 0L
+
+    internal fun addOtaUserContextListener(listener: (Long) -> Unit) { otaUserListeners.add(listener) }
+    internal fun removeOtaUserContextListener(listener: (Long) -> Unit) { otaUserListeners.remove(listener) }
+    internal fun notifyOtaUserContext(runtime: LynxOtaRuntime, epoch: Long) {
+        val notify = Runnable {
+            if (LynxShell.activityBundleRuntime() === runtime && runtime.userIdentityEpoch == epoch) {
+                otaUserListeners.forEach { listener -> runCatching { listener(epoch) } }
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) notify.run() else Handler(Looper.getMainLooper()).post(notify)
+    }
     /** Debug Sample 的一次性首屏故障注入；Release 构建不会消费该标记。 */
     @JvmStatic
     fun debugFailNextFirstScreen() {
@@ -38,7 +83,12 @@ object LynxRouter {
     ) {
         LynxShell.initialize(application)
         val runtime = activityBundleRuntime ?: EmbeddedBundleRuntime(application)
-        LynxShell.installActivityBundleRuntime(runtime)
+        synchronized(otaUserLock) {
+            if (runtime is LynxOtaRuntime && hasPendingOtaUser) runtime.registerInitialUserId(pendingOtaUser)
+            val old = LynxShell.activityBundleRuntime()
+            if (old !== runtime) (old as? LynxOtaRuntime)?.close()
+            LynxShell.installActivityBundleRuntime(runtime)
+        }
         runtime.onApplicationStarted()
     }
 
@@ -111,7 +161,12 @@ object LynxRouter {
 
     /** 运行时替换 OTA 适配器；适合宿主完成环境配置后再安装。 */
     fun installActivityBundleRuntime(runtime: ActivityBundleRuntime?) {
-        LynxShell.installActivityBundleRuntime(runtime)
+        synchronized(otaUserLock) {
+            if (runtime is LynxOtaRuntime && hasPendingOtaUser) runtime.registerInitialUserId(pendingOtaUser)
+            val old = LynxShell.activityBundleRuntime()
+            if (old !== runtime) (old as? LynxOtaRuntime)?.close()
+            LynxShell.installActivityBundleRuntime(runtime)
+        }
     }
 
     /** 向宿主注入“回业务主页”的实现。 */

@@ -145,7 +145,8 @@ export default class EmbeddedBundleRegistry {
     } catch (error) {
       // 没有内置 Manifest 的宿主继续使用原有 OTA/Direct Bundle 链路；Manifest 存在但损坏时
       // 仍然抛错，不能悄悄把错误资源当成正常内置版本。
-      const message = `${error}`;
+      // Error 字符串会带 "Error: " 前缀；应读取 message，否则缺少内置清单也会阻断 OTA。
+      const message = error instanceof Error ? error.message : `${error}`;
       if (message.startsWith(`embedded_rawfile_error:${EmbeddedBundleRegistry.MANIFEST_PATH}:`)) {
         return [];
       }

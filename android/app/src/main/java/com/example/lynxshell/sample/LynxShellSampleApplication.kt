@@ -22,6 +22,7 @@ class LynxShellSampleApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val userSelectionDebug = OtaUserSelectionDebug.prepareBeforeInstall(this)
         // 三端统一入口：Android 具体承载仍是 Activity-first；OTA 适配器只在宿主 App 注入。
         // Router 不依赖 OTA SDK，也不需要注册 Bundle route 映射。
         LynxRouter.install(
@@ -38,11 +39,14 @@ class LynxShellSampleApplication : Application() {
                 environment = "TEST",
                 platform = "android",
                 clientToken = BuildConfig.LYNX_OTA_CLIENT_TOKEN,
-                candidateActivationEnabled = BuildConfig.LYNX_OTA_CANDIDATE_MODE,
+                candidateActivationEnabled = userSelectionDebug?.candidateMode ?: BuildConfig.LYNX_OTA_CANDIDATE_MODE,
+                storageDirectory = userSelectionDebug?.let { OtaUserSelectionDebug.storageDirectory(this) },
+                deviceId = if (userSelectionDebug != null) "ota-user-gray-android-device" else null,
                 storeVersion = com.ota.android.sdk.OtaModels.StoreVersion.V3,
                 allowLocalHTTPForTest = BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER,
             ),
         )
+        if (userSelectionDebug != null) OtaUserSelectionDebug.verifyRuntimeStore(this)
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {

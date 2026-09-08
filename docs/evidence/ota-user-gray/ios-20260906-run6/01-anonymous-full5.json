@@ -1,0 +1,2069 @@
+{
+  "metrics": {
+    "bundleBytes": 8775757,
+    "bundleRequestCount": 100,
+    "bundleSuccessCount": 100,
+    "delayedLatestCount": 0,
+    "latestCompletedCount": 1,
+    "latestRequestCount": 1,
+    "manifestRequestCount": 0,
+    "pendingLatestCount": 0,
+    "reportRequestCount": 102,
+    "requestCount": 203,
+    "requests": [
+      {
+        "audience": "anonymous",
+        "completed": true,
+        "kind": "latest",
+        "lynxSdkVersion": "4.0.0",
+        "method": "GET",
+        "platform": "ios",
+        "requestId": 1,
+        "scope": "all",
+        "statusCode": 200,
+        "versioncode": "150"
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-000.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 2,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 3,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-001.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 4,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 5,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-002.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 6,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 7,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-003.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 8,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 9,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-004.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 10,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 11,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-005.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 12,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 13,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-006.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 14,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 15,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-007.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 16,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 17,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-008.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 18,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 19,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-009.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 20,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 21,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-010.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 22,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 23,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-011.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 24,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 25,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-012.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 26,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 27,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-013.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 28,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 29,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-014.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 30,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 31,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-015.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 32,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 33,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-016.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 34,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 35,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-017.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 36,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 37,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-018.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 38,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 39,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-019.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 40,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 41,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-020.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 42,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 43,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-021.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 44,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 45,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-022.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 46,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 47,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-023.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 48,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 49,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-024.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 50,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 51,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-025.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 52,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 53,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-026.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 54,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 55,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-027.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 56,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 57,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-028.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 58,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 59,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-029.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 60,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 61,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-030.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 62,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 63,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-031.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 64,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 65,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-032.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 66,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 67,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-033.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 68,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 69,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-034.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 70,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 71,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-035.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 72,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 73,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-036.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 74,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 75,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-037.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 76,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 77,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-038.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 78,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 79,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-039.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 80,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 81,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-040.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 82,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 83,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-041.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 84,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 85,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-042.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 86,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 87,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-043.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 88,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 89,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-044.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 90,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 91,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-045.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 92,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 93,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-046.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 94,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 95,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-047.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 96,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 97,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-048.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 98,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 99,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-049.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 100,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 101,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-050.lynx.bundle",
+        "bytes": 88111,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 102,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 103,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-051.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 104,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 105,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-052.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 106,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 107,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-053.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 108,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 109,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-054.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 110,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 111,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-055.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 112,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 113,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-056.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 114,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 115,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-057.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 116,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 117,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-058.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 118,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 119,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-059.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 120,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 121,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-060.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 122,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 123,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-061.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 124,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 125,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-062.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 126,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 127,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-063.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 128,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 129,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-064.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 130,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 131,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-065.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 132,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 133,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-066.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 134,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 135,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-067.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 136,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 137,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-068.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 138,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 139,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-069.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 140,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 141,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-070.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 142,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 143,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-071.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 144,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 145,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-072.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 146,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 147,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-073.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 148,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 149,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-074.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 150,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 151,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-075.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 152,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 153,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-076.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 154,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 155,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-077.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 156,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 157,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-078.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 158,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 159,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-079.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 160,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 161,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-080.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 162,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 163,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-081.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 164,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 165,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-082.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 166,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 167,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-083.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 168,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 169,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-084.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 170,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 171,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-085.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 172,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 173,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-086.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 174,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 175,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-087.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 176,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 177,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-088.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 178,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 179,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-089.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 180,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 181,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-090.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 182,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 183,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-091.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 184,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 185,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-092.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 186,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 187,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-093.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 188,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 189,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-094.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 190,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 191,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-095.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 192,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 193,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-096.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 194,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 195,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-097.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 196,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 197,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-098.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 198,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 199,
+        "statusCode": 200
+      },
+      {
+        "alias": "full5",
+        "bundlePath": "pages/10000001/bundle-099.lynx.bundle",
+        "bytes": 87754,
+        "clientTokenPresent": false,
+        "completed": true,
+        "kind": "bundle",
+        "method": "GET",
+        "requestId": 200,
+        "statusCode": 200,
+        "userQueryPresent": false
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 201,
+        "statusCode": 200
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 202,
+        "statusCode": 200
+      },
+      {
+        "completed": true,
+        "kind": "report",
+        "method": "POST",
+        "requestId": 203,
+        "statusCode": 200
+      }
+    ]
+  },
+  "nativeState": "home=instance=D33798A9;load=1;resolve=1;render=1;error=ready;release=r20260421_002;source=ota_current;kind=full;sequence=2 | settings=instance=none;load=0;resolve=0;render=0;error=idle;release=none;source=none | http=103",
+  "server": {
+    "actualReleaseIds": {
+      "full5": "r20260421_002",
+      "full7": "r20260421_004",
+      "gray6": "r20260421_003",
+      "gray8": "r20260421_005"
+    },
+    "actualReleaseSequences": {
+      "full5": "2",
+      "full7": "4",
+      "gray6": "3",
+      "gray8": "5"
+    },
+    "aliases": {
+      "full5": {
+        "bundleCount": 100,
+        "marker": "FULL5-050",
+        "markerSha256": "sha256:72a767fb7d43d25e3fdc91bd8e92f745cdd7a4231c7c0457268b1b2a50f392c7",
+        "publishType": "FULL",
+        "releaseId": "r20260421_002",
+        "releaseSequence": "2",
+        "status": "ACTIVE"
+      },
+      "full7": {
+        "bundleCount": 100,
+        "marker": "FULL7-050",
+        "markerSha256": "sha256:157b707feb72a644aec1306eee57141f0d296314cdeb7ce2565c87e0c8db44a5",
+        "releaseId": "r20260421_004",
+        "releaseSequence": "4",
+        "status": "DRAFT"
+      },
+      "gray6": {
+        "bundleCount": 100,
+        "marker": "GRAY6-050",
+        "markerSha256": "sha256:f5633643d0bcb0044c7b15e463b67e7b3476f72d97cd466d8a2bd61aa89b6e7a",
+        "releaseId": "r20260421_003",
+        "releaseSequence": "3",
+        "ruleId": "fixture-gray6-rule",
+        "status": "DRAFT"
+      },
+      "gray8": {
+        "bundleCount": 100,
+        "marker": "GRAY8-050",
+        "markerSha256": "sha256:d1b07f6cc2295a455e31f48cc084bc767c82bac9ab921e29d05c52962a618dae",
+        "releaseId": "r20260421_005",
+        "releaseSequence": "5",
+        "ruleId": "fixture-gray8-rule",
+        "status": "DRAFT"
+      }
+    },
+    "bundleName": "pages/10000001/bundle-050.lynx.bundle",
+    "bundleOrigin": "http://127.0.0.1:18770",
+    "clientConfig": {
+      "env": "TEST",
+      "hostApp": "capp",
+      "lynxAppId": "10000001",
+      "lynxSdkRange": {
+        "max": "4.0.0",
+        "min": "4.0.0"
+      },
+      "lynxSdkVersion": "4.0.0",
+      "platforms": [
+        "ios",
+        "android",
+        "harmony"
+      ],
+      "versioncode": "150",
+      "versionCodeRange": {
+        "max": "999",
+        "min": "1"
+      }
+    },
+    "delay": {
+      "audience": "A",
+      "count": 0,
+      "milliseconds": 0,
+      "pending": []
+    },
+    "env": "TEST",
+    "expectedReleaseId": "r20260421_002",
+    "expectedReleaseIds": {
+      "A": "r20260421_002",
+      "anonymous": "r20260421_002",
+      "B": "r20260421_002"
+    },
+    "expectedSelections": {
+      "A": {
+        "releaseId": "r20260421_002",
+        "releaseSequence": "2",
+        "selection": {
+          "kind": "full",
+          "policyRevision": "9",
+          "reason": "latest_full"
+        }
+      },
+      "anonymous": {
+        "releaseId": "r20260421_002",
+        "releaseSequence": "2",
+        "selection": {
+          "kind": "full",
+          "policyRevision": "9",
+          "reason": "latest_full"
+        }
+      },
+      "B": {
+        "releaseId": "r20260421_002",
+        "releaseSequence": "2",
+        "selection": {
+          "kind": "full",
+          "policyRevision": "9",
+          "reason": "latest_full"
+        }
+      }
+    },
+    "fixtureId": "ota-user-gray-real-server-100",
+    "generation": 17,
+    "hostApp": "capp",
+    "lynxAppId": "10000001",
+    "origin": "http://127.0.0.1:18770",
+    "ready": true,
+    "realServerModule": "/var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/lynx-ota-user-gray-server-4R8RqT/dist/app.js",
+    "stage": "full5",
+    "uniqueObjects": 103
+  },
+  "storeId": "user-selection-563CEF3E-B12D-410E-A3E6-CB38F113A34D",
+  "versioncode": "150"
+}

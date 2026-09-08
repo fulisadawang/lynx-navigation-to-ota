@@ -65,6 +65,8 @@ public actor OtaSDK {
     }
 
     private let configuration: OtaSDKConfiguration
+    private nonisolated let userContextBox: OtaUserContextBox
+    private let selectionStoreSupported: Bool
     private let apiClient: OtaAPIClientProtocol
     private let releaseTransaction: ReleaseTransaction
     private let bundleRuntime: BundleRuntime
@@ -72,7 +74,10 @@ public actor OtaSDK {
     private let checksumValidator: OtaChecksumValidating
     private var validatedBundleCache = OtaBundleValidationCache<BundleValidationKey>()
 
-    private var lifecycleState: OtaLifecycleState = .idle(current: nil)
+    private var lifecycleIdentityEpoch: UInt64 = 0
+    private var lifecycleState: OtaLifecycleState = .idle(current: nil) {
+        didSet { lifecycleIdentityEpoch = OtaOperationContext.identity?.identityEpoch ?? userContextBox.identityEpoch }
+    }
 
     public init(
         configuration: OtaSDKConfiguration,
@@ -121,6 +126,8 @@ public actor OtaSDK {
         transactionFaultInjectorOptional: (any OtaTransactionFaultInjecting)?
     ) {
         self.configuration = configuration
+        let contextBox = OtaUserContextBox(configuration: configuration)
+        self.userContextBox = contextBox
         self.apiClient = apiClient ?? ServerOtaAPIClient(
             baseURL: configuration.apiBaseURL,
             otaClientToken: configuration.otaClientToken,
@@ -131,13 +138,15 @@ public actor OtaSDK {
             baseDirectory: configuration.storageDirectory,
             version: configuration.storeVersion
         )
+        self.selectionStoreSupported = resolvedStore.version == .v3
         if let transactionFaultInjectorOptional {
             self.releaseTransaction = ReleaseTransaction(
                 store: resolvedStore,
+                userContext: contextBox,
                 faultInjector: transactionFaultInjectorOptional
             )
         } else {
-            self.releaseTransaction = ReleaseTransaction(store: resolvedStore)
+            self.releaseTransaction = ReleaseTransaction(store: resolvedStore, userContext: contextBox)
         }
         self.bundleRuntime = BundleRuntime(transaction: releaseTransaction)
         self.downloader = downloader ?? URLSessionBundleDownloader(
@@ -148,27 +157,79 @@ public actor OtaSDK {
         self.checksumValidator = checksumValidator
     }
 
+    public nonisolated func registerUserId(_ userId: String?) throws -> Bool { try userContextBox.register(userId) }
+    public nonisolated var userIdentityEpoch: UInt64 { userContextBox.identityEpoch }
+
+    /// Bind a host callback's identity across actor hops, probes and all nested SDK operations.
+    public nonisolated func withUserIdentity<T: Sendable>(
+        expectedIdentityEpoch: UInt64,
+        operation: @Sendable () async throws -> T
+    ) async throws -> T {
+        let identity = try operationIdentity()
+        guard identity.identityEpoch == expectedIdentityEpoch else { throw OtaSelectionError.staleIdentity }
+        return try await OtaOperationContext.$identity.withValue(identity) {
+            let result = try await operation()
+            do { try userContextBox.validate(identity) }
+            catch {
+                // The host never receives a result rejected here, so release it before throwing.
+                if let lease = result as? OtaBundleLease { await lease.close() }
+                throw error
+            }
+            return result
+        }
+    }
+
+    private nonisolated func operationIdentity() throws -> OtaUserContext {
+        let identity = try OtaOperationContext.identity ?? userContextBox.capture()
+        try userContextBox.validate(identity)
+        return identity
+    }
+
+    public func reconcileUserContext() async throws {
+        let identity = try operationIdentity()
+        try await OtaOperationContext.$identity.withValue(identity) {
+            try await releaseTransaction.reconcileUserContext(app: configuration.app)
+        }
+        try userContextBox.withCurrent(identity) { lifecycleState = .idle(current: nil) }
+    }
+
     public func initializeEmbeddedRelease(_ release: OtaInstalledRelease) async throws {
+        if OtaOperationContext.identity == nil {
+            return try await withUserIdentity(expectedIdentityEpoch: userIdentityEpoch) { try await self.initializeEmbeddedRelease(release) }
+        }
+        _ = try operationIdentity()
         try await releaseTransaction.registerEmbedded(release)
         lifecycleState = .active(release.context)
     }
 
     /// 直接删除指定 appId 的下载版本；embedded 描述和 App 内置资源保留。
     public func deleteDownloadedBundles(lynxAppId: String) async throws {
-        try await releaseTransaction.deleteDownloadedBundles(app: configuration.app, lynxAppId: lynxAppId)
-        validatedBundleCache.removeAll { $0.lynxAppId == lynxAppId }
-        lifecycleState = .idle(current: nil)
+        let identity = try operationIdentity()
+        try await OtaOperationContext.$identity.withValue(identity) {
+            try await releaseTransaction.deleteDownloadedBundles(app: configuration.app, lynxAppId: lynxAppId)
+            try userContextBox.validate(identity)
+            validatedBundleCache.removeAll { $0.lynxAppId == lynxAppId }
+            lifecycleState = .idle(current: nil)
+        }
     }
 
     /// 直接删除全部 appId 的下载版本；不会建立 `.delete-*` 备份目录。
     public func deleteAllDownloadedBundles() async throws {
-        try await releaseTransaction.deleteAllDownloadedBundles()
-        validatedBundleCache.removeAll()
-        lifecycleState = .idle(current: nil)
+        let identity = try operationIdentity()
+        try await OtaOperationContext.$identity.withValue(identity) {
+            try await releaseTransaction.deleteAllDownloadedBundles()
+            try userContextBox.validate(identity)
+            validatedBundleCache.removeAll()
+            lifecycleState = .idle(current: nil)
+        }
     }
 
     /** 冷启动维护，不联网；清理 Store v2 orphan 与残留 staging。 */
     public func pruneUnreferencedBundles() async throws {
+        if OtaOperationContext.identity == nil {
+            return try await withUserIdentity(expectedIdentityEpoch: userIdentityEpoch) { try await self.pruneUnreferencedBundles() }
+        }
+        _ = try operationIdentity()
         try await releaseTransaction.pruneAllUnreferencedReleases()
         validatedBundleCache.removeAll()
     }
@@ -178,7 +239,7 @@ public actor OtaSDK {
     }
 
     public func state() -> OtaLifecycleState {
-        lifecycleState
+        lifecycleIdentityEpoch == userContextBox.identityEpoch ? lifecycleState : .idle(current: nil)
     }
 
     public func getCurrentRelease() async -> OtaInstalledRelease? {
@@ -186,35 +247,62 @@ public actor OtaSDK {
     }
 
     public func getCurrentRelease(lynxAppId: String) async -> OtaInstalledRelease? {
-        await releaseTransaction.current(app: configuration.app, lynxAppId: lynxAppId)
+        if userContextBox.enabled && !selectionStoreSupported { return nil }
+        guard let identity = try? (OtaOperationContext.identity ?? userContextBox.capture()),
+              (try? userContextBox.validate(identity)) != nil else { return nil }
+        let release = await OtaOperationContext.$identity.withValue(identity) {
+            await releaseTransaction.current(app: configuration.app, lynxAppId: lynxAppId)
+        }
+        guard (try? userContextBox.validate(identity)) != nil else { return nil }
+        return release
     }
 
     /// 返回持久化的 candidate；current 读取入口不会消费 candidate。
     public func candidate(lynxAppId: String? = nil) async -> OtaCandidateSnapshot? {
-        await releaseTransaction.candidate(
+        if userContextBox.enabled && !selectionStoreSupported { return nil }
+        guard let identity = try? (OtaOperationContext.identity ?? userContextBox.capture()),
+              (try? userContextBox.validate(identity)) != nil else { return nil }
+        let candidate = await OtaOperationContext.$identity.withValue(identity) { await releaseTransaction.candidate(
             scope: OtaReleaseScope(
                 app: configuration.app,
                 lynxAppId: lynxAppId ?? configuration.lynxAppId
             )
-        )
+        ) }
+        guard (try? userContextBox.validate(identity)) != nil else { return nil }
+        return candidate
     }
 
     public func candidateBundleURL(lynxAppId: String, bundleName: String) async throws -> URL? {
-        try await releaseTransaction.candidateBundle(
+        let identity = try operationIdentity()
+        let url = try await OtaOperationContext.$identity.withValue(identity) { try await releaseTransaction.candidateBundle(
             scope: OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId),
             bundleName: bundleName
-        )
+        ) }
+        try userContextBox.validate(identity)
+        return url
     }
 
     /// 健康确认成功后，原子地把 candidate promote 为 current，旧 current 进入 previous。
-    public func confirmCandidateHealthy(lynxAppId: String? = nil) async throws -> OtaInstalledRelease {
+    public func confirmCandidateHealthy(lynxAppId: String? = nil, expectedReleaseId: String? = nil, expectedIdentityEpoch: UInt64? = nil) async throws -> OtaInstalledRelease {
+        _ = try operationIdentity()
+        if OtaOperationContext.identity == nil {
+            let identity = try userContextBox.capture()
+            if let expectedIdentityEpoch, expectedIdentityEpoch != identity.identityEpoch { throw OtaSelectionError.staleIdentity }
+            return try await OtaOperationContext.$identity.withValue(identity) {
+                try await OtaOperationContext.$expectedCandidate.withValue(expectedReleaseId) {
+                    try await confirmCandidateHealthy(lynxAppId: lynxAppId, expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedIdentityEpoch)
+                }
+            }
+        }
         let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
         let scope = OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)
         guard let candidate = await releaseTransaction.candidate(scope: scope) else {
             throw OtaSDKError.missingCandidateRelease
         }
+        if let expectedReleaseId, candidate.release.context.releaseId != expectedReleaseId { throw OtaSelectionError.staleCandidate }
         lifecycleState = .activating(releaseId: candidate.release.context.releaseId)
         let confirmed = try await releaseTransaction.confirmCandidate(scope: scope)
+        if let identity = OtaOperationContext.identity { try userContextBox.validate(identity) }
         lifecycleState = .active(confirmed.context)
         try? await report(
             event: .activate,
@@ -230,15 +318,32 @@ public actor OtaSDK {
 
     /// 页面真正打开 candidate 时才进入 trial，避免 host 全量同步让未访问 AppId 悬挂 trial。
     public func beginCandidateTrial(lynxAppId: String? = nil) async throws -> OtaCandidateSnapshot {
+        _ = try operationIdentity()
+        if OtaOperationContext.identity == nil {
+            return try await OtaOperationContext.$identity.withValue(userContextBox.capture()) {
+                try await beginCandidateTrial(lynxAppId: lynxAppId)
+            }
+        }
         let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
         let candidate = try await releaseTransaction.beginCandidateTrial(
             scope: OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)
         )
+        if let identity = OtaOperationContext.identity { try userContextBox.validate(identity) }
         lifecycleState = .trial(releaseId: candidate.release.context.releaseId)
         return candidate
     }
 
-    public func discardCandidate(lynxAppId: String? = nil) async throws {
+    public func discardCandidate(lynxAppId: String? = nil, expectedReleaseId: String? = nil, expectedIdentityEpoch: UInt64? = nil) async throws {
+        _ = try operationIdentity()
+        if OtaOperationContext.identity == nil {
+            let identity = try userContextBox.capture()
+            if let expectedIdentityEpoch, expectedIdentityEpoch != identity.identityEpoch { throw OtaSelectionError.staleIdentity }
+            return try await OtaOperationContext.$identity.withValue(identity) {
+                try await OtaOperationContext.$expectedCandidate.withValue(expectedReleaseId) {
+                    try await discardCandidate(lynxAppId: lynxAppId, expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedIdentityEpoch)
+                }
+            }
+        }
         let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
         try await releaseTransaction.discardCandidate(
             scope: OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)
@@ -247,6 +352,10 @@ public actor OtaSDK {
 
     /// 进程在 trial 阶段退出后的冷启动恢复：丢弃未确认 candidate，current 保持不变。
     public func recoverInterruptedCandidate(lynxAppId: String? = nil) async throws {
+        _ = try operationIdentity()
+        if OtaOperationContext.identity == nil {
+            return try await OtaOperationContext.$identity.withValue(userContextBox.capture()) { try await recoverInterruptedCandidate(lynxAppId: lynxAppId) }
+        }
         let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
         try await releaseTransaction.recoverInterruptedCandidate(
             scope: OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)
@@ -327,6 +436,7 @@ public actor OtaSDK {
     /// 读取时重新校验 SHA，避免 pointer 仍存在但文件已被截断/篡改时把坏包交给
     /// Lynx 容器。旧记录没有 bundleName 时，Models 会从 bundlePath 推导兼容名称。
     public func currentTemplateURL(lynxAppId: String, bundleName: String) async -> URL? {
+        guard let identity = try? operationIdentity() else { return nil }
         guard (try? normalizedBundleName(bundleName)) != nil,
               let release = await getCurrentRelease(lynxAppId: lynxAppId),
               let bundle = resolveBundle(named: bundleName, in: release),
@@ -343,6 +453,7 @@ public actor OtaSDK {
         )) == true else {
             return nil
         }
+        guard (try? userContextBox.validate(identity)) != nil else { return nil }
         return localURL
     }
 
@@ -351,6 +462,7 @@ public actor OtaSDK {
         lynxAppId: String,
         bundleName: String
     ) async throws -> OtaBundleLease? {
+        let identity = try operationIdentity()
         let scope = OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
         guard let lease = try await releaseTransaction.acquireCurrentBundleLease(
             scope: scope,
@@ -368,6 +480,8 @@ public actor OtaSDK {
             await lease.close()
             return nil
         }
+        do { try userContextBox.validate(identity) }
+        catch { await lease.close(); throw error }
         return lease
     }
 
@@ -375,6 +489,7 @@ public actor OtaSDK {
         lynxAppId: String,
         bundleName: String
     ) async throws -> OtaBundleLease? {
+        let identity = try operationIdentity()
         let scope = OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
         guard let lease = try await releaseTransaction.acquireCandidateBundleLease(
             scope: scope,
@@ -392,6 +507,8 @@ public actor OtaSDK {
             await lease.close()
             return nil
         }
+        do { try userContextBox.validate(identity) }
+        catch { await lease.close(); throw error }
         return lease
     }
 
@@ -434,6 +551,10 @@ public actor OtaSDK {
     /// latest/embedded 均没有这个 bundle 时抛出结构化 not-found，路由层可据此进入
     /// 等待、repair 或 not-found 分支，而不会误读 staged 文件。
     public func ensureBundleReady(lynxAppId: String, bundleName: String) async throws -> URL {
+        if OtaOperationContext.identity == nil {
+            return try await withUserIdentity(expectedIdentityEpoch: userIdentityEpoch) { try await self.ensureBundleReady(lynxAppId: lynxAppId, bundleName: bundleName) }
+        }
+        _ = try operationIdentity()
         _ = try normalizedBundleName(bundleName)
         if let url = await currentTemplateURL(lynxAppId: lynxAppId, bundleName: bundleName) {
             return url
@@ -453,6 +574,10 @@ public actor OtaSDK {
     }
 
     public func checkForUpdate(_ request: OtaCheckRequest) async throws -> OtaPolicyMatchResponse {
+        if OtaOperationContext.identity == nil {
+            return try await withUserIdentity(expectedIdentityEpoch: userIdentityEpoch) { try await self.checkForUpdate(request) }
+        }
+        _ = try operationIdentity()
         lifecycleState = .checking(current: await getCurrentRelease()?.context)
         let result = try await apiClient.checkForUpdate(
             OtaPolicyMatchRequest(
@@ -499,6 +624,10 @@ public actor OtaSDK {
     }
 
     public func downloadUpdate(_ result: OtaPolicyMatchResponse) async throws -> OtaInstalledRelease {
+        if OtaOperationContext.identity == nil {
+            return try await withUserIdentity(expectedIdentityEpoch: userIdentityEpoch) { try await self.downloadUpdate(result) }
+        }
+        _ = try operationIdentity()
         guard let releaseId = result.releaseId else {
             throw OtaSDKError.missingReleaseIdentifier
         }
@@ -547,6 +676,10 @@ public actor OtaSDK {
     }
 
     public func activateStagedRelease() async throws -> OtaInstalledRelease {
+        if OtaOperationContext.identity == nil {
+            return try await withUserIdentity(expectedIdentityEpoch: userIdentityEpoch) { try await self.activateStagedRelease() }
+        }
+        _ = try operationIdentity()
         let scope = OtaReleaseScope(app: configuration.app, lynxAppId: configuration.lynxAppId)
         guard let staged = await releaseTransaction.staged(scope: scope) else {
             throw OtaSDKError.missingStagedRelease
@@ -585,6 +718,10 @@ public actor OtaSDK {
     }
 
     public func updateIfNeeded(_ request: OtaCheckRequest) async throws -> OtaUpdateResult {
+        if OtaOperationContext.identity == nil {
+            return try await withUserIdentity(expectedIdentityEpoch: userIdentityEpoch) { try await self.updateIfNeeded(request) }
+        }
+        _ = try operationIdentity()
         let current = await getCurrentRelease()
         let match = try await checkForUpdate(request)
         guard match.matched else {
@@ -631,6 +768,8 @@ public actor OtaSDK {
     public func updateToLatestBundleList(
         lynxAppId: String
     ) async throws -> OtaLatestBundleListUpdateResult {
+        _ = try operationIdentity()
+        if userContextBox.enabled { return try await updateSelectedBundleList(lynxAppId: lynxAppId) }
         let current = await getCurrentRelease(lynxAppId: lynxAppId)
         lifecycleState = .checking(current: current?.context)
         let latest: OtaLatestBundleList
@@ -659,6 +798,8 @@ public actor OtaSDK {
     }
 
     public func updateToLatestBundleLists() async throws -> OtaHostBundleListSyncResult {
+        _ = try operationIdentity()
+        if userContextBox.enabled { return try await updateSelectedBundleLists() }
         let latestGroup: OtaHostLatestBundleLists
         do {
             latestGroup = try await apiClient.fetchLatestBundleLists(
@@ -823,6 +964,190 @@ public actor OtaSDK {
         return .updated(from: current, to: activated, summary: outcome.summary)
     }
 
+    private func updateSelectedBundleList(lynxAppId: String) async throws -> OtaLatestBundleListUpdateResult {
+        guard selectionStoreSupported else { throw OtaSelectionError.requiresStoreV3 }
+        let identity = try operationIdentity()
+        return try await OtaOperationContext.$identity.withValue(identity) {
+            let response: OtaLatestSelection
+            do {
+                response = try await apiClient.fetchLatestBundleList(env: configuration.environment, app: configuration.app,
+                    lynxAppId: lynxAppId, platform: configuration.platform, context: identity)
+            } catch {
+                await reportSelectedQueryFailure(lynxAppId: lynxAppId, error: error)
+                throw error
+            }
+            try userContextBox.validate(identity)
+            do {
+                switch response {
+                case let .release(latest):
+                    guard latest.lynxAppId == lynxAppId else { throw OtaSelectionError.invalidSelectionMetadata }
+                    _ = try selectionMetadata(for: latest, identity: identity)
+                case let .directive(directive):
+                    guard directive.lynxAppId == lynxAppId else { throw OtaSelectionError.invalidSelectionMetadata }
+                    try validateDirective(directive)
+                }
+            } catch {
+                await reportSelectedCheckFailure(lynxAppId: lynxAppId, reason: .latestBundleListDecodeFailed)
+                throw error
+            }
+            switch response {
+            case let .release(latest):
+                do { return try await applySelectedRelease(latest, identity: identity) }
+                catch {
+                    if !isObsoleteSelection(error) {
+                        await reportSelectedCheckFailure(lynxAppId: lynxAppId, releaseId: latest.releaseId, reason: selectionUpdateFailureReason(error))
+                    }
+                    throw error
+                }
+            case let .directive(directive):
+                return try await applyDirective(directive, identity: identity)
+            }
+        }
+    }
+
+    private func updateSelectedBundleLists() async throws -> OtaHostBundleListSyncResult {
+        guard selectionStoreSupported else { throw OtaSelectionError.requiresStoreV3 }
+        let identity = try operationIdentity()
+        return try await OtaOperationContext.$identity.withValue(identity) {
+            let group: OtaHostLatestBundleLists
+            do {
+                group = try await apiClient.fetchLatestBundleLists(env: configuration.environment, app: configuration.app, platform: configuration.platform, context: identity)
+            } catch {
+                await reportSelectedQueryFailure(lynxAppId: configuration.lynxAppId, error: error)
+                throw error
+            }
+            try userContextBox.validate(identity)
+            var selections: [String: OtaStoredSelection] = [:]
+            do {
+                guard group.selectionSchemaVersion == 1, group.env == identity.env, group.app == identity.app,
+                      group.platform == identity.platform else { throw OtaSelectionError.missingSelectionMetadata }
+                let ids = group.bundleLists.map(\.lynxAppId) + group.directives.map(\.lynxAppId)
+                guard Set(ids).count == ids.count else { throw OtaSelectionError.invalidSelectionMetadata }
+                for latest in group.bundleLists { selections[latest.lynxAppId] = try selectionMetadata(for: latest, identity: identity) }
+                for directive in group.directives { try validateDirective(directive) }
+            } catch {
+                await reportSelectedCheckFailure(lynxAppId: configuration.lynxAppId, reason: .latestBundleListDecodeFailed)
+                throw error
+            }
+            var results: [String: OtaLatestBundleListUpdateResult] = [:]
+            var failures: [String: OtaAppBundleListSyncFailure] = [:]
+            // No bytes start until every validated App decision has had an independent commit attempt.
+            for directive in group.directives {
+                do { results[directive.lynxAppId] = try await applyDirective(directive, identity: identity) }
+                catch {
+                    try validateBatchContinuation(error, identity: identity)
+                    failures[directive.lynxAppId] = .init(stage: .decision, cause: error)
+                }
+            }
+            for latest in group.bundleLists {
+                do {
+                    try await recordSelectedDecision(latest, selection: selections[latest.lynxAppId]!, identity: identity)
+                } catch {
+                    try validateBatchContinuation(error, identity: identity)
+                    failures[latest.lynxAppId] = .init(stage: .decision, cause: error)
+                }
+            }
+            for latest in group.bundleLists where failures[latest.lynxAppId] == nil {
+                do {
+                    results[latest.lynxAppId] = try await applySelectedRelease(latest, identity: identity, decisionAlreadyRecorded: true)
+                } catch {
+                    try validateBatchContinuation(error, identity: identity)
+                    failures[latest.lynxAppId] = .init(stage: .update, cause: error)
+                    if !isObsoleteSelection(error) {
+                        await reportSelectedCheckFailure(lynxAppId: latest.lynxAppId, releaseId: latest.releaseId, reason: selectionUpdateFailureReason(error))
+                    }
+                }
+            }
+            try userContextBox.validate(identity)
+            let result = OtaHostBundleListSyncResult(results: results)
+            if !failures.isEmpty { throw OtaHostBundleListSyncError(partialResult: result, failures: failures) }
+            return result
+        }
+    }
+
+    private func selectionMetadata(for latest: OtaLatestBundleList, identity: OtaUserContext) throws -> OtaStoredSelection {
+        guard latest.env == identity.env, latest.app == identity.app, latest.platform == identity.platform,
+              latest.status == .active, latest.lynxAppId.range(of: "^[0-9]{8}$", options: .regularExpression) != nil else {
+            throw OtaSelectionError.invalidSelectionMetadata
+        }
+        return try OtaStoredSelection(validatingProtocol: latest, context: identity)
+    }
+
+    private func validateDirective(_ directive: OtaSelectionDirective) throws {
+        guard directive.action != .useRelease, directive.lynxAppId.range(of: "^[0-9]{8}$", options: .regularExpression) != nil else {
+            throw OtaSelectionError.invalidSelectionMetadata
+        }
+        _ = try OtaSelectionValidation.decimal(directive.policyRevision, allowZero: true)
+    }
+
+    private func recordSelectedDecision(_ latest: OtaLatestBundleList, selection: OtaStoredSelection, identity: OtaUserContext) async throws {
+        let decision = OtaLastDecision(context: identity, policyRevision: selection.policyRevision, action: .useRelease,
+            targetReleaseId: latest.releaseId, reason: latest.selection!.reason)
+        try await releaseTransaction.recordDecision(scope: .init(app: identity.app, lynxAppId: latest.lynxAppId), decision: decision, selection: selection)
+    }
+
+    private func validateBatchContinuation(_ error: Error, identity: OtaUserContext) throws {
+        try userContextBox.validate(identity)
+        if error is CancellationError { throw error }
+        try Task.checkCancellation()
+    }
+
+    private func applyDirective(_ directive: OtaSelectionDirective, identity: OtaUserContext) async throws -> OtaLatestBundleListUpdateResult {
+        guard directive.action != .useRelease else { throw OtaSelectionError.invalidSelectionMetadata }
+        let decision = OtaLastDecision(context: identity, policyRevision: directive.policyRevision, action: directive.action, targetReleaseId: nil, reason: directive.reason)
+        try await releaseTransaction.recordDecision(scope: .init(app: identity.app, lynxAppId: directive.lynxAppId), decision: decision, selection: nil)
+        let current = await getCurrentRelease(lynxAppId: directive.lynxAppId)
+        try userContextBox.withCurrent(identity) { lifecycleState = .idle(current: current?.context) }
+        return .noRelease(current: current)
+    }
+
+    private func applySelectedRelease(_ latest: OtaLatestBundleList, identity: OtaUserContext, decisionAlreadyRecorded: Bool = false) async throws -> OtaLatestBundleListUpdateResult {
+        try userContextBox.validate(identity)
+        let selection = try selectionMetadata(for: latest, identity: identity)
+        if OtaOperationContext.selection != selection {
+            return try await OtaOperationContext.$selection.withValue(selection) {
+                try await applySelectedRelease(latest, identity: identity, decisionAlreadyRecorded: decisionAlreadyRecorded)
+            }
+        }
+        let scope = OtaReleaseScope(app: identity.app, lynxAppId: latest.lynxAppId)
+        let before = await getCurrentRelease(lynxAppId: latest.lynxAppId)
+        if !decisionAlreadyRecorded { try await recordSelectedDecision(latest, selection: selection, identity: identity) }
+        guard selection.isCompatible(with: identity) else { throw OtaSelectionError.incompatibleRelease }
+        let current = await getCurrentRelease(lynxAppId: latest.lynxAppId)
+        if let current, current.context.releaseId == latest.releaseId, hasAllLocalBundles(current, expectedBundles: latest.changedBundles) {
+            try userContextBox.withCurrent(identity) { lifecycleState = .active(current.context) }
+            try? await report(event: .checkResult, releaseId: latest.releaseId, lynxAppId: latest.lynxAppId, pageId: nil,
+                              eventStage: .check, eventResult: .success, message: "already_active")
+            try userContextBox.validate(identity)
+            return .alreadyActive(current)
+        }
+        let manifest = latest.asManifest()
+        try validateRemoteManifest(manifest)
+        let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: before)
+        defer { if let directory = outcome.temporaryDirectory { try? FileManager.default.removeItem(at: directory) } }
+        try userContextBox.validate(identity)
+        var installed = outcome.installed
+        installed.selection = selection; installed.identityEpoch = identity.identityEpoch
+        if configuration.candidateActivationEnabled {
+            try await releaseTransaction.stageCandidate(installed)
+            guard let candidate = await releaseTransaction.candidate(scope: scope) else { throw OtaSDKError.missingCandidateRelease }
+            try userContextBox.withCurrent(identity) { lifecycleState = .candidate(releaseId: installed.context.releaseId) }
+            try? await report(event: .checkResult, releaseId: latest.releaseId, lynxAppId: latest.lynxAppId, pageId: nil,
+                              eventStage: .check, eventResult: .success, message: "candidate_staged")
+            try userContextBox.validate(identity)
+            return .candidate(from: before, candidate: candidate, summary: outcome.summary)
+        }
+        try await releaseTransaction.stage(installed)
+        let activated = try await releaseTransaction.activate(scope: scope)
+        try userContextBox.withCurrent(identity) { lifecycleState = .active(activated.context) }
+        try? await report(event: .activate, releaseId: activated.context.releaseId, lynxAppId: latest.lynxAppId, pageId: nil,
+                          eventStage: .activate, eventResult: .success, message: "release_activated")
+        try? await report(event: .checkResult, releaseId: activated.context.releaseId, lynxAppId: latest.lynxAppId, pageId: nil,
+                          eventStage: .check, eventResult: .success, message: "latest_bundle_list_updated")
+        try userContextBox.validate(identity)
+        return .updated(from: before, to: activated, summary: outcome.summary)
+    }
+
     private func activateStagedRelease(lynxAppId: String) async throws -> OtaInstalledRelease {
         let scope = OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
         guard let staged = await releaseTransaction.staged(scope: scope) else {
@@ -849,11 +1174,18 @@ public actor OtaSDK {
     }
 
     public func rollback(lynxAppId: String, reason: String) async throws -> OtaInstalledRelease? {
+        _ = try operationIdentity()
+        if OtaOperationContext.identity == nil {
+            return try await OtaOperationContext.$identity.withValue(userContextBox.capture()) {
+                try await rollback(lynxAppId: lynxAppId, reason: reason)
+            }
+        }
         let current = await getCurrentRelease(lynxAppId: lynxAppId)
         lifecycleState = .rollingBack(fromReleaseId: current?.context.releaseId, toReleaseId: nil)
         let rollbackOutcome = try await releaseTransaction.rollback(
             scope: OtaReleaseScope(app: configuration.app, lynxAppId: lynxAppId)
         )
+        if let identity = OtaOperationContext.identity { try userContextBox.validate(identity) }
         let restored: OtaInstalledRelease?
         switch rollbackOutcome {
         case let .restored(release):
@@ -899,6 +1231,12 @@ public actor OtaSDK {
         bundleName: String? = nil,
         bundlePath: String? = nil
     ) async {
+        if OtaOperationContext.identity == nil {
+            guard let identity = try? userContextBox.capture() else { return }
+            return await OtaOperationContext.$identity.withValue(identity) {
+                await reportPageOpen(pageId: pageId, lynxAppId: lynxAppId, bundleName: bundleName, bundlePath: bundlePath)
+            }
+        }
         guard let current = await getCurrentRelease(lynxAppId: lynxAppId ?? configuration.lynxAppId) else {
             return
         }
@@ -922,6 +1260,10 @@ public actor OtaSDK {
     }
 
     public func clearUpdates() async throws {
+        _ = try operationIdentity()
+        if OtaOperationContext.identity == nil {
+            return try await OtaOperationContext.$identity.withValue(userContextBox.capture()) { try await clearUpdates() }
+        }
         _ = try await releaseTransaction.rollback(
             scope: OtaReleaseScope(app: configuration.app, lynxAppId: configuration.lynxAppId)
         )
@@ -1413,10 +1755,11 @@ public actor OtaSDK {
                 platform: configuration.platform,
                 event: event,
                 pageId: pageId,
-                userId: userId ?? configuration.userId,
+                userId: userId ?? (OtaOperationContext.identity ?? (try? userContextBox.capture()))?.userId,
                 deviceId: deviceId ?? configuration.deviceId,
                 deviceModel: deviceModel ?? configuration.deviceModel,
                 appVersion: appVersion ?? configuration.appVersion,
+                versioncode: (OtaOperationContext.identity ?? (try? userContextBox.capture()))?.versionCode,
                 buildNumber: buildNumber ?? configuration.buildNumber,
                 osVersion: osVersion ?? configuration.osVersion,
                 channel: channel ?? configuration.channel,
@@ -1437,6 +1780,40 @@ public actor OtaSDK {
                 message: message
             )
         )
+    }
+
+    private func isObsoleteSelection(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        guard let selectionError = error as? OtaSelectionError else { return false }
+        return selectionError == .staleIdentity || selectionError == .staleDecision || selectionError == .staleCandidate
+    }
+
+    private func reportSelectedQueryFailure(lynxAppId: String, error: Error) async {
+        guard !isObsoleteSelection(error) else { return }
+        let reason: OtaReasonCode = error is DecodingError || error is OtaSelectionError
+            ? .latestBundleListDecodeFailed : .latestBundleListFetchFailed
+        await reportSelectedCheckFailure(lynxAppId: lynxAppId, reason: reason)
+    }
+
+    private func reportSelectedCheckFailure(lynxAppId: String, releaseId: String? = nil, reason: OtaReasonCode) async {
+        // Exception bodies and URLSession errors may contain a raw userId or credential-bearing URL.
+        // Only the dedicated userId field carries the captured identity; diagnostics use fixed codes.
+        try? await report(event: .checkResult, releaseId: releaseId, lynxAppId: lynxAppId, pageId: nil,
+                          eventStage: .check, eventResult: .failed, reasonCode: reason.rawValue,
+                          reasonMessage: reason.rawValue, message: reason.rawValue)
+    }
+
+    private func selectionUpdateFailureReason(_ error: Error) -> OtaReasonCode {
+        if (error as? OtaSelectionError) == .incompatibleRelease { return .baselineBlocked }
+        switch error as? OtaSDKError {
+        case .checksumMismatch: return .bundleChecksumFailed
+        case .sizeMismatch: return .bundleSizeFailed
+        case .invalidBundleURL: return .invalidBundleURL
+        case .missingBundleSize: return .missingBundleSize
+        case .bundleTooLarge: return .bundleTooLarge
+        case .invalidResponse, .fileNotFound, .unsupportedDownloadScheme: return .bundleDownloadFailed
+        default: return .releaseActivateFailed
+        }
     }
 
     private func reportLatestBundleListFailure(lynxAppId: String, error: Error) async throws {

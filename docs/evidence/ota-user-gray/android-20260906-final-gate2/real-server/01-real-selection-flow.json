@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "desktop-sdk-real-server",
+  "deviceTested": false,
+  "screenshots": [],
+  "platform": "android",
+  "storeVersion": "v3",
+  "serverOrigin": "http://127.0.0.1:18770",
+  "testName": "real HTTP selects full gray newer full promotion rollback and forced embedded cold state",
+  "assertions": [
+    "real-http",
+    "store-v3",
+    "no-device"
+  ],
+  "phases": [
+    {
+      "phase": "anonymous-full5",
+      "audience": "anonymous",
+      "assertions": [
+        "downloaded-100",
+        "cas-100"
+      ],
+      "serverStage": "full5",
+      "currentReleaseId": "r20260421_002",
+      "selectionKind": "full",
+      "policyRevision": "9",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 100,
+      "latestCompletedCount": 1,
+      "bundleRequestCount": 100,
+      "bundleSuccessCount": 100
+    },
+    {
+      "phase": "A-gray6",
+      "audience": "A",
+      "assertions": [
+        "downloaded-1",
+        "reused-99",
+        "cas-101"
+      ],
+      "serverStage": "gray6",
+      "currentReleaseId": "r20260421_003",
+      "selectionKind": "gray",
+      "policyRevision": "10",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 1,
+      "bundleRequestCount": 1,
+      "bundleSuccessCount": 1
+    },
+    {
+      "phase": "B-full5",
+      "audience": "B",
+      "assertions": [
+        "gray-not-authorized",
+        "bundle-get-0"
+      ],
+      "serverStage": "gray6",
+      "currentReleaseId": "r20260421_002",
+      "selectionKind": "full",
+      "policyRevision": "10",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 1,
+      "bundleRequestCount": 0,
+      "bundleSuccessCount": 0
+    },
+    {
+      "phase": "A-full7-wins",
+      "audience": "A",
+      "assertions": [
+        "newer-full-over-gray",
+        "downloaded-1"
+      ],
+      "serverStage": "full7",
+      "currentReleaseId": "r20260421_004",
+      "selectionKind": "full",
+      "policyRevision": "11",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 1,
+      "bundleRequestCount": 1,
+      "bundleSuccessCount": 1
+    },
+    {
+      "phase": "A-gray8",
+      "audience": "A",
+      "assertions": [
+        "gray-selected",
+        "downloaded-1"
+      ],
+      "serverStage": "gray8",
+      "currentReleaseId": "r20260421_005",
+      "selectionKind": "gray",
+      "policyRevision": "12",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 1,
+      "bundleRequestCount": 1,
+      "bundleSuccessCount": 1
+    },
+    {
+      "phase": "B-gray8-promoted-full",
+      "audience": "B",
+      "assertions": [
+        "same-release-kind-full",
+        "bundle-get-0"
+      ],
+      "serverStage": "gray8",
+      "currentReleaseId": "r20260421_005",
+      "selectionKind": "full",
+      "policyRevision": "13",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 1,
+      "bundleRequestCount": 0,
+      "bundleSuccessCount": 0
+    },
+    {
+      "phase": "server-rollback-full5",
+      "audience": "B",
+      "assertions": [
+        "server-rollback-reason",
+        "downloaded-1",
+        "reused-99",
+        "copied-0",
+        "cas-bounded-101"
+      ],
+      "serverStage": "gray8",
+      "currentReleaseId": "r20260421_002",
+      "selectionKind": "full",
+      "policyRevision": "14",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 1,
+      "bundleRequestCount": 1,
+      "bundleSuccessCount": 1
+    },
+    {
+      "phase": "forced-embedded-cold-state",
+      "audience": "B",
+      "assertions": [
+        "effective-current-null",
+        "decision-persisted"
+      ],
+      "serverStage": "gray8",
+      "currentReleaseId": null,
+      "selectionKind": null,
+      "policyRevision": "15",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 1,
+      "bundleRequestCount": 0,
+      "bundleSuccessCount": 0
+    }
+  ]
+}

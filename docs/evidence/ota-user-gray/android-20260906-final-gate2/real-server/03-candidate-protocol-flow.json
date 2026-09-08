@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "desktop-sdk-real-server",
+  "deviceTested": false,
+  "screenshots": [],
+  "platform": "android",
+  "storeVersion": "v3",
+  "serverOrigin": "http://127.0.0.1:18770",
+  "testName": "candidate stays staged until explicit SDK health confirmation then logout and incompatibility reject it",
+  "assertions": [
+    "candidate-not-current-before-confirm",
+    "explicit-sdk-health-confirm-only",
+    "logout-isolated",
+    "compatibility-fail-closed",
+    "no-device"
+  ],
+  "phases": [
+    {
+      "phase": "candidate-staged",
+      "audience": "A",
+      "assertions": [
+        "current-full5",
+        "candidate-gray6-pending"
+      ],
+      "serverStage": "gray6",
+      "currentReleaseId": "r20260421_002",
+      "selectionKind": "full",
+      "policyRevision": "9",
+      "candidateReleaseId": "r20260421_003",
+      "candidateStatus": "pending",
+      "casObjectCount": 101,
+      "latestCompletedCount": 2,
+      "bundleRequestCount": 101,
+      "bundleSuccessCount": 101
+    },
+    {
+      "phase": "candidate-trial-lease",
+      "audience": "A",
+      "assertions": [
+        "lease-readable",
+        "candidate-trial"
+      ],
+      "serverStage": "gray6",
+      "currentReleaseId": "r20260421_002",
+      "selectionKind": "full",
+      "policyRevision": "9",
+      "candidateReleaseId": "r20260421_003",
+      "candidateStatus": "trial",
+      "casObjectCount": 101,
+      "latestCompletedCount": 2,
+      "bundleRequestCount": 101,
+      "bundleSuccessCount": 101
+    },
+    {
+      "phase": "candidate-sdk-health-confirmed",
+      "audience": "A",
+      "assertions": [
+        "explicit-sdk-confirm",
+        "current-gray6",
+        "not-ui-first-screen"
+      ],
+      "serverStage": "gray6",
+      "currentReleaseId": "r20260421_003",
+      "selectionKind": "gray",
+      "policyRevision": "10",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 2,
+      "bundleRequestCount": 101,
+      "bundleSuccessCount": 101
+    },
+    {
+      "phase": "logout-full5",
+      "audience": "anonymous",
+      "assertions": [
+        "gray-not-reused-after-logout"
+      ],
+      "serverStage": "gray6",
+      "currentReleaseId": "r20260421_002",
+      "selectionKind": "full",
+      "policyRevision": "10",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 3,
+      "bundleRequestCount": 101,
+      "bundleSuccessCount": 101
+    },
+    {
+      "phase": "incompatible-version-code",
+      "audience": "A",
+      "assertions": [
+        "version-code-1000-rejected",
+        "effective-current-null"
+      ],
+      "serverStage": "gray6",
+      "currentReleaseId": null,
+      "selectionKind": null,
+      "policyRevision": "10",
+      "candidateReleaseId": null,
+      "candidateStatus": null,
+      "casObjectCount": 101,
+      "latestCompletedCount": 4,
+      "bundleRequestCount": 101,
+      "bundleSuccessCount": 101
+    }
+  ]
+}

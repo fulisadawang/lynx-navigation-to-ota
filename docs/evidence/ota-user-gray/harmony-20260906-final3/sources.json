@@ -1,0 +1,82 @@
+{
+  "files": [
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/ContentAddressedOtaStore.ets",
+      "testedSha256": "e14454c691e649e3e7cd877b9708ed3bd3915fa68bb4d1d34bdffea43e1ef240",
+      "emittedSha256": "760bbbc806a02b343f7b5dedf7e79a5b24aac8fd35b1393a4956349745b16c43",
+      "currentSha256": "e14454c691e649e3e7cd877b9708ed3bd3915fa68bb4d1d34bdffea43e1ef240",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/EmbeddedBundleRegistry.ets",
+      "testedSha256": "4bb96a5a3ddbecc0c1c09042f435c727cbd6a441db64312d48482d4190db98ee",
+      "emittedSha256": "a8a1a0c73d7ea70f01e3c581070602b9228381b04cc429d73e5e2af7d4fe11a4",
+      "currentSha256": "4bb96a5a3ddbecc0c1c09042f435c727cbd6a441db64312d48482d4190db98ee",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/LynxOtaRuntime.ets",
+      "testedSha256": "d24dbdc25cc7b26eefa4d15fc25dbdc2ba693bb7dda43c90b8236885f6633e97",
+      "emittedSha256": "bb902f332c4c3c5872aef6cae6e42032ff58a172e4973a29288247e8c246b4f5",
+      "currentSha256": "d24dbdc25cc7b26eefa4d15fc25dbdc2ba693bb7dda43c90b8236885f6633e97",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaApiClient.ets",
+      "testedSha256": "326797b0eba9c11890095bc9124ece37c47c0a7c45aca1c58324fd060165b803",
+      "emittedSha256": "a490765c1857f5589afc43abd71d7562151f8f6146c1a4b66c521e62890bbd7c",
+      "currentSha256": "326797b0eba9c11890095bc9124ece37c47c0a7c45aca1c58324fd060165b803",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaJson.ets",
+      "testedSha256": "5e84050e3e3d2514b4fd30cea835e5cc1787c54e1c00d2e5aaa0d973ceffa364",
+      "emittedSha256": "2b7297b536472b4b10d913fff957a6fab92a805ff65fee390e03cae92c4f23e6",
+      "currentSha256": "5e84050e3e3d2514b4fd30cea835e5cc1787c54e1c00d2e5aaa0d973ceffa364",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaModels.ets",
+      "testedSha256": "3ce75e53e4f505a752891e3b95a76baf7cda550445db77e83aead4b187515eb8",
+      "emittedSha256": "184686ba3413aeabe594a6a87596d266f7b44e4a990ac3d6b251b5dfc253d057",
+      "currentSha256": "3ce75e53e4f505a752891e3b95a76baf7cda550445db77e83aead4b187515eb8",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaPageRefreshGate.ets",
+      "testedSha256": "d4b5cf845cde486a6ac6efd4e772546c0e0825fbdad22c8c21e709835c3b1936",
+      "emittedSha256": "bdea184ba8030a6887c2b238ea292af222015bc59955fb4504ff432f50b58929",
+      "currentSha256": "d4b5cf845cde486a6ac6efd4e772546c0e0825fbdad22c8c21e709835c3b1936",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaSelection.ets",
+      "testedSha256": "7e0d1386357fff2bd5a72436c2d31d3e34779fa0f7851fd880c050da30dc0268",
+      "emittedSha256": "996ce3a0a1e4c102c96151b7859048d53893de1d9fe9ece9eb5224ce59cef287",
+      "currentSha256": "7e0d1386357fff2bd5a72436c2d31d3e34779fa0f7851fd880c050da30dc0268",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaSelectionSync.ets",
+      "testedSha256": "0feff3c7dce6bcd13ac6f07f2deeede231af7965f8bcde894791a2c3ced193b7",
+      "emittedSha256": "982553930f795ef89ff54ce40808fc439337b8305a5ba5431476b771806a0e1e",
+      "currentSha256": "0feff3c7dce6bcd13ac6f07f2deeede231af7965f8bcde894791a2c3ced193b7",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaUserContext.ets",
+      "testedSha256": "de2492c49faf1aea7f3e7c6dfd2841acbc95e8672fa40a3d50179cbfb94ab813",
+      "emittedSha256": "cdd98df2ee61686af42fba9e6ddf619d04da12e472545b46540b98316e5579bf",
+      "currentSha256": "de2492c49faf1aea7f3e7c6dfd2841acbc95e8672fa40a3d50179cbfb94ab813",
+      "matchesCurrent": true
+    },
+    {
+      "file": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_shell_kit/src/main/ets/ota/OtaUserContextEvents.ets",
+      "testedSha256": "91e981b55c70f5a215e1e3849bea916ef843d121078f9e81363e3a226b37d681",
+      "emittedSha256": "2cdd77ac4faa9c3209879004f040f48ba2541dc6961ef5ec8d389c01636f611d",
+      "currentSha256": "91e981b55c70f5a215e1e3849bea916ef843d121078f9e81363e3a226b37d681",
+      "matchesCurrent": true
+    }
+  ],
+  "problems": []
+}

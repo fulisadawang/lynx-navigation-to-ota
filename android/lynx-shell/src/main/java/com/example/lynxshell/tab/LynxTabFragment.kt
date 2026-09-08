@@ -9,6 +9,7 @@ import android.widget.TextView
 import androidx.core.view.setPadding
 import androidx.fragment.app.Fragment
 import com.example.lynxshell.LynxShell
+import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.bridge.LynxRouterPageInfo
 import com.example.lynxshell.bridge.ShellMessageHub
 import com.example.lynxshell.container.LynxContainerFactory
@@ -22,6 +23,7 @@ import com.lynx.tasm.LynxView
 import com.lynx.tasm.LynxViewClient
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /**
  * 无 TabBar 的 Android Lynx 内容承载能力。
@@ -37,6 +39,19 @@ class LynxTabFragment : Fragment() {
     private var pageID: String = ""
     @Volatile
     private var loadGeneration: Long = 0L
+    private var loadFuture: Future<*>? = null
+    private var firstScreenReady = false
+    private var debugIdentity = ""
+    private var debugError = "idle"
+    private var loadCount = 0
+    private var renderCount = 0
+    private val userContextListener: (Long) -> Unit = {
+        if (::spec.isInitialized && spec.lynxAppId != null) refreshFromCurrent()
+    }
+
+    /** 原生验收 Host 可展示此只读状态；不联网、不改变加载策略。 */
+    fun debugStateDescription(): String =
+        "instance=${System.identityHashCode(this)};load=$loadCount;render=$renderCount;error=$debugError;$debugIdentity"
     private val loader: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "lynx-tab-loader").apply { isDaemon = true }
     }
@@ -69,6 +84,7 @@ class LynxTabFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        LynxRouter.addOtaUserContextListener(userContextListener)
         loadContent(view as ViewGroup)
     }
 
@@ -88,6 +104,7 @@ class LynxTabFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        LynxRouter.removeOtaUserContextListener(userContextListener)
         releaseContent(view as? ViewGroup)
         super.onDestroyView()
     }
@@ -113,24 +130,33 @@ class LynxTabFragment : Fragment() {
     private fun loadContent(host: ViewGroup) {
         val activity = activity ?: return
         val runtime = LynxShell.activityBundleRuntime()
+        val epoch = runtime?.userIdentityEpoch
         val generation = ++loadGeneration
-        loader.execute {
+        loadCount += 1
+        debugError = "loading"
+        loadFuture = loader.submit {
             val appId = spec.lynxAppId
             val bundleName = spec.bundleName
-            val resolved = if (appId != null && bundleName != null) {
-                runtime?.resolveCurrent(appId, bundleName)
-            } else {
-                null
+            val result = runCatching {
+                if (appId != null && bundleName != null) runtime?.resolveCurrent(appId, bundleName) else null
             }
+            val resolved = result.getOrNull()
             activity.runOnUiThread {
-                if (!isAdded || view !== host || generation != loadGeneration) {
+                if (!isAdded || view !== host || generation != loadGeneration ||
+                    (spec.lynxAppId != null && (runtime !== LynxShell.activityBundleRuntime() || epoch != runtime?.userIdentityEpoch ||
+                        (resolved?.userIdentityEpoch != null && resolved.userIdentityEpoch != runtime?.userIdentityEpoch)))) {
                     runCatching { resolved?.releaseLease?.close() }
                     return@runOnUiThread
                 }
-                if (spec.lynxAppId != null && resolved == null) {
+                loadFuture = null
+                if (result.isFailure) {
+                    showError(host, "Tab 本地读取失败：${result.exceptionOrNull()?.javaClass?.simpleName}")
+                } else if (spec.lynxAppId != null && resolved == null) {
                     showError(host, "Tab ${spec.tabId} 没有可用的 active Bundle；Tab 加载不会联网")
                 } else {
+                    debugIdentity = "release=${resolved?.releaseId ?: "none"};source=${resolved?.source ?: "direct_asset"};kind=${resolved?.selectionKind ?: "embedded"};sequence=${resolved?.releaseSequence ?: "none"};epoch=${resolved?.userIdentityEpoch ?: 0}"
                     render(
+                        generation = generation,
                         host = host,
                         preparedFile = resolved?.file,
                         preparedBytes = resolved?.bytes,
@@ -145,6 +171,9 @@ class LynxTabFragment : Fragment() {
                                 "loadPolicy" to "cache_only",
                                 "bundleName" to it.bundleName,
                                 "sha256" to (it.sha256 ?: ""),
+                                "selectionKind" to (it.selectionKind ?: "embedded"),
+                                "releaseSequence" to (it.releaseSequence ?: ""),
+                                "userIdentityEpoch" to (it.userIdentityEpoch ?: 0L),
                             )
                         },
                     )
@@ -155,6 +184,10 @@ class LynxTabFragment : Fragment() {
 
     private fun releaseContent(host: ViewGroup?) {
         loadGeneration += 1
+        loadFuture?.cancel(true)
+        loadFuture = null
+        firstScreenReady = false
+        debugIdentity = ""
         unregister()
         templateProvider?.close()
         templateProvider = null
@@ -165,6 +198,7 @@ class LynxTabFragment : Fragment() {
     }
 
     private fun render(
+        generation: Long,
         host: ViewGroup,
         preparedFile: java.io.File?,
         preparedBytes: ByteArray?,
@@ -176,6 +210,7 @@ class LynxTabFragment : Fragment() {
             return
         }
         replaceReleaseLease(nextReleaseLease)
+        renderCount += 1
         val request = LynxPageRequest(
             bundleUrl = spec.bundleUrl,
             lynxAppId = spec.lynxAppId,
@@ -200,15 +235,23 @@ class LynxTabFragment : Fragment() {
             preparedBytes = preparedBytes,
             onLoadError = { _, message ->
                 activity.runOnUiThread {
-                    if (isAdded) showError(host, message)
+                    if (isAdded && view === host && generation == loadGeneration && !firstScreenReady) showError(host, message)
                 }
             },
         )
         templateProvider = provider
         val client = object : LynxViewClient() {
+            override fun onFirstScreen() {
+                activity.runOnUiThread {
+                    if (isAdded && view === host && generation == loadGeneration) {
+                        firstScreenReady = true
+                        debugError = "ready"
+                    }
+                }
+            }
             override fun onReceivedError(error: LynxError) {
                 activity.runOnUiThread {
-                    if (isAdded) showError(host, "Lynx Tab 加载失败：$error")
+                    if (isAdded && view === host && generation == loadGeneration && !firstScreenReady) showError(host, "Lynx Tab 加载失败：$error")
                 }
             }
         }
@@ -245,6 +288,8 @@ class LynxTabFragment : Fragment() {
     }
 
     private fun showError(host: ViewGroup, message: String) {
+        debugError = message
+        debugIdentity = ""
         templateProvider?.close()
         templateProvider = null
         lynxView?.destroy()

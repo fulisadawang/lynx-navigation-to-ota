@@ -1,0 +1,8 @@
+{
+  "name": "实际 OtaJson/Selection：错误字段、范围、平台和匿名灰度失败关闭",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

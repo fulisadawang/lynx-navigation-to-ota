@@ -23,6 +23,10 @@ struct Index {
   @State private tabReloadGeneration: number = 0;
   @State private tabLynxAppId: string = '';
   @State private tabBundleName: string = '';
+  @State private otaIdentityEpoch: number = 0;
+
+  @StorageLink('lynx_ota_demo_user')
+  private otaDemoUser: string = 'anonymous';
 
   @StorageLink('lynx_initial_uri')
   private initialUri: string = '';
@@ -33,6 +37,7 @@ struct Index {
 
   private consumedInitialVersion: number = -1;
   private hasRequestedDefaultHome: boolean = false;
+  private otaOperationGeneration: number = 0;
   private readonly otaTestAppId: string = '10000001';
   private readonly embeddedHomeBundleName: string = 'home.lynx.bundle';
   private readonly embeddedPlaygroundBundleName: string = 'main.lynx.bundle';
@@ -42,6 +47,7 @@ struct Index {
   private static readonly LOCAL_FIXTURE_BUNDLE_NAME: string = 'pages/10000001/bundle-050.lynx.bundle';
 
   aboutToAppear(): void {
+    this.otaIdentityEpoch = LynxRouter.getOtaUserIdentityEpoch();
     this.useLocalFixture = AppStorage.get<string>('lynx_ota_local_fixture') === '1';
     if (this.useLocalFixture) {
       this.otaHomeBundleName = Index.LOCAL_FIXTURE_BUNDLE_NAME;
@@ -244,41 +250,75 @@ struct Index {
     });
   }
 
+  /** 身份注册负责触发用户上下文切换；Tab 的身份事件重载由 HAR 容器负责。 */
+  private selectOtaUser(audience: string): void {
+    if (audience !== 'A' && audience !== 'B' && audience !== 'anonymous') return;
+    const changed = audience === 'anonymous' ? LynxRouter.clearOtaUserId() :
+      LynxRouter.registerOtaUserId(audience === 'A' ? 'user_demo_A' : 'user_demo_B');
+    this.otaDemoUser = audience;
+    this.otaIdentityEpoch = LynxRouter.getOtaUserIdentityEpoch();
+    if (changed) {
+      // 旧身份刷新结果迟到时不得重载新身份容器，也不得清除新操作的 loading 状态。
+      this.otaOperationGeneration += 1;
+      this.isRefreshingOta = false;
+    }
+    const message = changed ? `身份已切换为 ${audience}，epoch=${this.otaIdentityEpoch}；可手动刷新最新 OTA 决定` :
+      `身份 ${audience} 未变化（幂等），epoch=${this.otaIdentityEpoch}`;
+    this.otaStatusMessage = message;
+    this.tabStatusMessage = message;
+  }
+
+  private isCurrentOtaOperation(generation: number, epoch: number): boolean {
+    return generation === this.otaOperationGeneration && epoch === LynxRouter.getOtaUserIdentityEpoch();
+  }
+
+  /** 只重读本地已提交/撤销的决定；普通 Tab 切换不调用此方法或网络。 */
+  private reloadTabsFromLocalDecision(): void {
+    if (this.tabLynxAppId.length === 0) return;
+    LynxRouter.resetNavigationSnapshot('native-tab-host', this.tabLynxAppId);
+    this.tabReloadGeneration += 1;
+  }
+
   private refreshNativeTabs(): void {
     if (this.isRefreshingOta) return;
+    const generation = ++this.otaOperationGeneration;
+    const epoch = LynxRouter.getOtaUserIdentityEpoch();
     this.isRefreshingOta = true;
     this.tabStatusMessage = '正在同步全部 OTA Bundle…';
     LynxRouter.refreshAllOtaBundles()
       .then((success: boolean) => {
-        if (success) {
-          LynxRouter.resetNavigationSnapshot('native-tab-host', this.tabLynxAppId);
-          this.tabReloadGeneration += 1;
-          this.tabStatusMessage = 'OTA 同步完成，Home/Settings 已重新读取 current';
-        } else {
-          this.tabStatusMessage = 'OTA 同步失败，保留当前 Tab 版本';
-        }
+        if (!this.isCurrentOtaOperation(generation, epoch)) return;
+        this.reloadTabsFromLocalDecision();
+        this.tabStatusMessage = success ? 'OTA 同步完成，Home/Settings 已重新读取本地决定' :
+          'OTA 同步未全成功/部分失败，Home/Settings 已重新读取本地已提交决定';
       })
       .catch((error: Error) => {
-        this.tabStatusMessage = `OTA 同步失败，保留当前 Tab 版本：${error.message}`;
+        if (!this.isCurrentOtaOperation(generation, epoch)) return;
+        this.reloadTabsFromLocalDecision();
+        this.tabStatusMessage = `OTA 同步失败，已重读本地决定：${error.message}`;
       })
       .finally(() => {
-        this.isRefreshingOta = false;
+        if (generation === this.otaOperationGeneration) this.isRefreshingOta = false;
       });
   }
 
   private syncAllOtaBundles(): void {
     if (this.isRefreshingOta) return;
+    const generation = ++this.otaOperationGeneration;
+    const epoch = LynxRouter.getOtaUserIdentityEpoch();
     this.isRefreshingOta = true;
     this.otaStatusMessage = '正在执行原生全量 OTA 同步…';
     LynxRouter.refreshAllOtaBundles()
       .then((success: boolean) => {
-        this.otaStatusMessage = success ? '全量 OTA 同步完成' : '全量 OTA 同步失败，保留本地版本';
+        if (!this.isCurrentOtaOperation(generation, epoch)) return;
+        this.otaStatusMessage = success ? '全量 OTA 同步完成' : '全量 OTA 同步未全成功/部分失败，本地已提交决定仍生效';
       })
       .catch((error: Error) => {
+        if (!this.isCurrentOtaOperation(generation, epoch)) return;
         this.otaStatusMessage = `全量 OTA 同步失败：${error.message}`;
       })
       .finally(() => {
-        this.isRefreshingOta = false;
+        if (generation === this.otaOperationGeneration) this.isRefreshingOta = false;
       });
   }
 
@@ -303,6 +343,35 @@ struct Index {
       bundleName: this.tabBundleName,
       backgroundColor: '#FFFFFF'
     };
+  }
+
+  @Builder
+  private otaUserControls() {
+    Column({ space: 6 }) {
+      Row({ space: 8 }) {
+        Button('用户 A（白名单）')
+          .layoutWeight(1)
+          .height(40)
+          .fontSize(12)
+          .onClick(() => this.selectOtaUser('A'))
+        Button('用户 B（普通）')
+          .layoutWeight(1)
+          .height(40)
+          .fontSize(12)
+          .onClick(() => this.selectOtaUser('B'))
+        Button('退出（匿名）')
+          .layoutWeight(1)
+          .height(40)
+          .fontSize(12)
+          .onClick(() => this.selectOtaUser('anonymous'))
+      }
+      .width('100%')
+      Text(`平台 harmony · 合成身份 ${this.otaDemoUser} · epoch ${this.otaIdentityEpoch}`)
+        .fontSize(12)
+        .fontColor($r('app.color.shell_text_secondary'))
+        .width('100%')
+    }
+    .width('100%')
   }
 
   build() {
@@ -340,6 +409,12 @@ struct Index {
         }
         .width('100%')
         .padding({ left: 16, right: 16, top: 12, bottom: 8 })
+
+        Column() {
+          this.otaUserControls()
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, bottom: 8 })
 
         if (this.tabStatusMessage.length > 0) {
           Text(this.tabStatusMessage)
@@ -400,11 +475,13 @@ struct Index {
             .fontColor($r('app.color.shell_text_primary'))
             .width('100%')
 
-          Text('全量 latest-bundle-list → 按返回的 App ID 存储 → 本地 SHA 校验\n当前 Demo 临时用 platform=android 请求现有服务端；后端开放 harmony 后再切回正式平台。')
+          Text('全量 latest-bundle-list → 按返回的 App ID 存储 → 本地 SHA 校验\n服务端请求固定 platform=harmony；身份切换与手动刷新演示不代表设备验收通过。')
             .fontSize(14)
             .lineHeight(22)
             .fontColor($r('app.color.shell_text_secondary'))
             .width('100%')
+
+          this.otaUserControls()
 
           Button('打开 Playground 首页（OTA）')
             .width('100%')

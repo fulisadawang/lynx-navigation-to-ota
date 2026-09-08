@@ -182,16 +182,21 @@ public final class LynxTabViewController: UIViewController {
     private let pageID: String
     private var didStartLoad = false
     private var loadGeneration = LynxTabLoadGeneration()
+    private var userContextObserver: NSObjectProtocol?
+    private var userSyncObserver: NSObjectProtocol?
+    private var firstScreenObserver: LynxFirstScreenObserver?
+    private var firstScreenReached = false
 #if DEBUG
     private var debugLoadCount = 0
     private var debugResolveCurrentCount = 0
     private var debugRenderCount = 0
     private var debugInstanceID = "none"
     private var debugLastError = "idle"
+    private var debugBundleIdentity = "release=none;source=none"
 
     /** 仅供 Debug UI Test 读取，不进入 Release API。 */
     public var debugState: String {
-        "instance=\(debugInstanceID);load=\(debugLoadCount);resolve=\(debugResolveCurrentCount);render=\(debugRenderCount);error=\(debugLastError)"
+        "instance=\(debugInstanceID);load=\(debugLoadCount);resolve=\(debugResolveCurrentCount);render=\(debugRenderCount);error=\(debugLastError);\(debugBundleIdentity)"
     }
 #endif
 
@@ -207,6 +212,8 @@ public final class LynxTabViewController: UIViewController {
     }
 
     deinit {
+        if let userContextObserver { NotificationCenter.default.removeObserver(userContextObserver) }
+        if let userSyncObserver { NotificationCenter.default.removeObserver(userSyncObserver) }
         loadTask?.cancel()
         ShellMessageHub.unregister(pageId: pageID)
         templateProvider?.cancel()
@@ -226,6 +233,17 @@ public final class LynxTabViewController: UIViewController {
             contentView.topAnchor.constraint(equalTo: view.topAnchor),
             contentView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        if spec.lynxAppId != nil {
+            userContextObserver = NotificationCenter.default.addObserver(forName: .lynxOtaUserContextDidChange, object: nil, queue: .main) { [weak self] _ in
+                self?.refreshFromCurrent()
+            }
+            userSyncObserver = NotificationCenter.default.addObserver(forName: .lynxOtaUserSyncCompleted, object: nil, queue: .main) { [weak self] notification in
+                // 全量可能部分成功：只从已提交 State 重读，不能因另一个 App 失败漏掉撤销/更新。
+                guard let epoch = notification.userInfo?["epoch"] as? UInt64,
+                      epoch == LynxRouter.otaUserIdentityEpoch else { return }
+                self?.refreshFromCurrent()
+            }
+        }
     }
 
     public override func viewDidLayoutSubviews() {
@@ -258,6 +276,11 @@ public final class LynxTabViewController: UIViewController {
         loadGeneration.invalidate()
         templateProvider?.cancel()
         templateProvider = nil
+        firstScreenObserver = nil
+        firstScreenReached = false
+#if DEBUG
+        debugBundleIdentity = "release=none;source=none"
+#endif
         ShellMessageHub.unregister(pageId: pageID)
         lynxView?.removeFromSuperview()
         lynxView = nil
@@ -327,7 +350,7 @@ public final class LynxTabViewController: UIViewController {
                 }
                 pendingLease = prepared.releaseLease
                 let data = try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
-                let metadata: [String: Any] = [
+                var metadata: [String: Any] = [
                     "lynxAppId": prepared.lynxAppId,
                     "releaseId": prepared.releaseId ?? "unknown",
                     // cache-only 是加载策略；Bundle 的真实来源仍由 Runtime 返回，
@@ -336,8 +359,14 @@ public final class LynxTabViewController: UIViewController {
                     "loadPolicy": "cache_only",
                     "bundleName": prepared.bundleName
                 ]
+                metadata["selectionKind"] = prepared.selectionKind
+                metadata["releaseSequence"] = prepared.releaseSequence
                 let accepted: Bool = await MainActor.run { [weak self] in
                     guard let self, self.loadGeneration.accepts(generation) else { return false }
+                    if let epoch = prepared.userIdentityEpoch, epoch != LynxRouter.otaUserIdentityEpoch { return false }
+#if DEBUG
+                    self.debugBundleIdentity = "release=\(prepared.releaseId ?? "none");source=\(prepared.source);kind=\(prepared.selectionKind ?? "embedded");sequence=\(prepared.releaseSequence ?? "none")"
+#endif
                     self.render(
                         prefetchedData: data,
                         bundleMetadata: metadata,
@@ -420,6 +449,26 @@ public final class LynxTabViewController: UIViewController {
                 screenSize: contentView.bounds.size,
                 globalProps: props
             )
+            let observer = LynxFirstScreenObserver(
+                generation: generation,
+                onFirstScreen: { [weak self] observedGeneration, view in
+                    DispatchQueue.main.async { [weak self, weak view] in
+                        guard let self, let view, self.loadGeneration.accepts(observedGeneration), view === self.lynxView else { return }
+                        self.firstScreenReached = true
+#if DEBUG
+                        self.debugLastError = "ready"
+#endif
+                    }
+                },
+                onFirstScreenError: { [weak self] observedGeneration, _, error in
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.loadGeneration.accepts(observedGeneration), !self.firstScreenReached else { return }
+                        self.showError("Tab 首屏失败：\(error.localizedDescription)")
+                    }
+                }
+            )
+            firstScreenObserver = observer
+            created.addLifecycleClient(observer)
 #if DEBUG
             debugRenderCount += 1
             debugInstanceID = String(UUID().uuidString.prefix(8))
@@ -454,6 +503,7 @@ public final class LynxTabViewController: UIViewController {
         guard isViewLoaded else { return }
         templateProvider?.cancel()
         templateProvider = nil
+        firstScreenObserver = nil
         lynxView?.removeFromSuperview()
         lynxView = nil
         releaseCurrentLease()

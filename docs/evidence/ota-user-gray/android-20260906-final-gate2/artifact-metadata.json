@@ -1,0 +1,58 @@
+{
+  "apk": {
+    "kind": "apk",
+    "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/app/build/outputs/apk/debug/app-debug.apk",
+    "bytes": 65731406,
+    "sha256": "adb00b8ce010e62702d94398d017c460523647def3a6d3034ae48047bf0aa38d",
+    "modifiedAt": "2026-09-06T06:19:17.275Z",
+    "metadata": {
+      "applicationId": "com.example.lynxshell.debug",
+      "versionCode": "1",
+      "versionName": "1.0.0-debug",
+      "sourceKind": "apk-manifest-apkanalyzer",
+      "analyzer": "/Users/nieyutan/Library/Android/sdk/cmdline-tools/latest/bin/apkanalyzer"
+    },
+    "appBuildConfig": {
+      "source": {
+        "kind": "generated-app-buildconfig",
+        "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/app/build/generated/source/buildConfig/debug/com/example/lynxshell/sample/BuildConfig.java",
+        "bytes": 952,
+        "sha256": "34f544174b026cb33beaae32dbca571cb463403bbee5a6c192f5f835cf3662d3",
+        "modifiedAt": "2026-09-06T05:42:17.361Z"
+      },
+      "applicationId": "com.example.lynxshell.debug",
+      "versionCode": "1",
+      "versionName": "1.0.0-debug",
+      "buildType": "debug"
+    },
+    "copiedToEvidence": false,
+    "problems": []
+  },
+  "sdk": {
+    "resolvedVersion": "4.0.0",
+    "expectedFixtureVersion": "4.0.0",
+    "source": {
+      "kind": "generated-sdk-buildconfig",
+      "path": "/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-shell/build/generated/source/buildConfig/debug/com/example/lynxshell/BuildConfig.java",
+      "bytes": 550,
+      "sha256": "785f40934d5ee2fb0b6af0df244e31985e3f4ea60c94cfa1eccf3dfe8365f2fc",
+      "modifiedAt": "2026-09-06T05:27:04.913Z"
+    },
+    "field": "LYNX_RUNTIME_VERSION",
+    "provenance": "用户指定的实际生成 BuildConfig；不是 LynxEnv.getLynxVersion() 或手写请求覆盖"
+  },
+  "build": {
+    "source": {
+      "kind": "build-log",
+      "path": "/tmp/lynx-ota-user-gray-android-final-gate2.log",
+      "bytes": 5051,
+      "sha256": "86895da4c88f92161029e8a57e0e8d4500593278e5734c9ed17d4c2a58664c14",
+      "modifiedAt": "2026-09-06T06:19:21.674Z"
+    },
+    "successfulMarkers": 1,
+    "failedMarkers": 0,
+    "testFilterDetected": false,
+    "logArtifact": "build.log",
+    "scopeNote": "统计显式传入目录中的全部 JUnit；完整无筛选执行范围由调用方提供对应日志与结果目录"
+  }
+}

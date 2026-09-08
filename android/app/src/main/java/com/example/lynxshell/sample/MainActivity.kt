@@ -2,6 +2,12 @@ package com.example.lynxshell.sample
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.widget.CheckBox
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.lynxshell.LynxRouter
@@ -15,6 +21,17 @@ import com.google.android.material.button.MaterialButton
  * 这个 Activity 可以保留为 InHouse 工具，也可以从 Release Manifest 中移除。
  */
 class MainActivity : AppCompatActivity() {
+    private var userSelectionStateView: TextView? = null
+    private val userSelectionHandler = Handler(Looper.getMainLooper())
+    private val userSelectionTick = object : Runnable {
+        override fun run() {
+            val value = OtaUserSelectionDebug.STATE_PREFIX + OtaUserSelectionDebug.state(this@MainActivity)
+            userSelectionStateView?.let { view ->
+                if (view.contentDescription?.toString() != value) view.contentDescription = value
+            }
+            userSelectionHandler.postDelayed(this, 250L)
+        }
+    }
     private companion object {
         const val OTA_TEST_BUNDLE_NAME = "home.lynx.bundle"
         const val PLAYGROUND_OTA_BUNDLE_NAME = "main.lynx.bundle"
@@ -23,6 +40,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (OtaUserSelectionDebug.enabled) {
+            showUserSelectionLauncher()
+            return
+        }
 
         setContentView(R.layout.activity_launcher)
 
@@ -79,6 +101,40 @@ class MainActivity : AppCompatActivity() {
         if (!intent.getBooleanExtra("lynx_shell.show_native_launcher", false) && savedInstanceState == null) {
             openOtaAcceptanceHome()
         }
+    }
+
+    /** 冷启动只展示原生入口；等待 Application 的一次同步，不额外发起 latest。 */
+    private fun showUserSelectionLauncher() {
+        title = "OTA 用户灰度验收"
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 24, 24, 24)
+        }
+        val state = TextView(this).apply {
+            textSize = 14f
+            val snapshot = OtaUserSelectionDebug.state(this@MainActivity)
+            text = "Debug 独立 Store\n用户=${snapshot.getString("audience")} · APK versionCode=${snapshot.getString("versioncode")}\n" +
+                "Store=${snapshot.getString("nativeStoreId")}\n等待启动同步完成后打开原生 Tab"
+            contentDescription = OtaUserSelectionDebug.STATE_PREFIX + snapshot.toString()
+        }
+        userSelectionStateView = state
+        root.addView(state)
+        root.addView(CheckBox(this).apply {
+            text = "候选模式（下次冷启动生效）"
+            contentDescription = "ota-candidate-next"
+            isChecked = OtaUserSelectionDebug.candidateForNextLaunch(this@MainActivity)
+            setOnCheckedChangeListener { _, checked ->
+                OtaUserSelectionDebug.setCandidateForNextLaunch(this@MainActivity, checked)
+                val value = OtaUserSelectionDebug.STATE_PREFIX + OtaUserSelectionDebug.state(this@MainActivity)
+                if (state.contentDescription?.toString() != value) state.contentDescription = value
+            }
+        })
+        root.addView(MaterialButton(this).apply {
+            text = "打开原生 Tab 承载 Demo"
+            contentDescription = "ota-open-native-tabs"
+            setOnClickListener { startActivity(Intent(this@MainActivity, NativeTabDemoActivity::class.java)) }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        setContentView(root)
     }
 
     private fun openOtaAcceptanceHome() {
@@ -141,6 +197,21 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         // reLaunch 的 CLEAR_TOP 会复用当前实例；更新 Intent 方便宿主读取最新主页参数。
         setIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (OtaUserSelectionDebug.enabled) { userSelectionHandler.removeCallbacks(userSelectionTick); userSelectionHandler.post(userSelectionTick) }
+    }
+
+    override fun onPause() {
+        userSelectionHandler.removeCallbacks(userSelectionTick)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        userSelectionHandler.removeCallbacks(userSelectionTick)
+        super.onDestroy()
     }
 
 }

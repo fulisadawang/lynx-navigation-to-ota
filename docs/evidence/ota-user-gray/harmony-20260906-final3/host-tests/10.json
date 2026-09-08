@@ -1,0 +1,8 @@
+{
+  "name": "实际 PageRefreshGate：旧 reserve/complete/mark/clear 不得修改新 epoch",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

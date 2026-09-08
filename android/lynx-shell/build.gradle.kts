@@ -1,4 +1,7 @@
 import org.gradle.api.publish.maven.MavenPublication
+import com.android.build.api.variant.BuildConfigField
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.tasks.testing.Test
 
 plugins {
     id("com.android.library")
@@ -87,6 +90,32 @@ dependencies {
     implementation("com.facebook.fresco:webpsupport:2.3.0")
     implementation("com.facebook.fresco:animated-base:2.3.0")
     implementation("com.squareup.okhttp3:okhttp:4.9.0")
+}
+
+// Lynx 4.0 AAR 的 getter 固定返回 0.0.1，Manifest 也不是 Maven semver。
+// 从当前 variant 实际解析到的 Runtime 组件生成版本，不使用业务默认值或声明文本。
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        val runtimeVersion = providers.provider {
+            val versions = variant.runtimeConfiguration.incoming.resolutionResult.allComponents
+                .mapNotNull { it.id as? ModuleComponentIdentifier }
+                .filter { it.group == "org.lynxsdk.lynx" && it.module == "lynx" }
+                .map { it.version }.toSet()
+            check(versions.size == 1) { "${variant.name} 必须解析到唯一 Lynx Runtime" }
+            versions.single().also { check(Regex("[0-9]+(?:\\.[0-9]+){0,2}").matches(it)) { "Lynx Runtime 必须使用稳定数字版本" } }
+        }
+        variant.buildConfigFields.put("LYNX_RUNTIME_VERSION", runtimeVersion.map { version ->
+            BuildConfigField("String", "\"$version\"", "Resolved Lynx Runtime version for this variant")
+        })
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    val origin = providers.environmentVariable("OTA_USER_GRAY_SERVER_ORIGIN").orElse("")
+    inputs.property("otaUserGrayOrigin", origin)
+    inputs.property("otaUserGrayEvidenceDirectory", providers.environmentVariable("OTA_USER_GRAY_EVIDENCE_DIR").orElse(""))
+    // 真实 Server 是外部可变状态；显式协议验收每次实跑，不能复用曾经的 skipped/通过结果。
+    outputs.upToDateWhen { origin.get().isBlank() }
 }
 
 afterEvaluate {

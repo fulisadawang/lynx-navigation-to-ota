@@ -1,6 +1,23 @@
 import Foundation
 import UIKit
 
+public extension Notification.Name {
+    static let lynxOtaUserContextDidChange = Notification.Name("LynxOtaUserContextDidChange")
+    static let lynxOtaUserSyncCompleted = Notification.Name("LynxOtaUserSyncCompleted")
+}
+
+/** 安装前的显式注册（包含匿名）优先于配置；只保留进程内状态。 */
+private final class PendingOtaUser {
+    static let shared = PendingOtaUser()
+    private let lock = NSLock()
+    private var explicit = false
+    private var userId: String?
+    func set(_ value: String?) { lock.lock(); defer { lock.unlock() }; explicit = true; userId = value }
+    func get() -> (explicit: Bool, userId: String?) {
+        lock.lock(); defer { lock.unlock() }; return (explicit, userId)
+    }
+}
+
 /**
  * iOS 端与 Android `LynxRouter` 对齐的统一门面。
  *
@@ -8,6 +25,31 @@ import UIKit
  * Bundle 与 params，不需要注册 routeId。旧的 `LynxShell` API 保留，便于已有 App 平滑迁移。
  */
 public enum LynxRouter {
+    /** 原生宿主注册/更新用户；无效值返回 false 且保持当前身份。 */
+    @MainActor @discardableResult
+    public static func registerOtaUserId(_ userId: String?) -> Bool {
+        do {
+            let normalized = try OtaUserContext.normalizeUserId(userId)
+            let runtime = LynxShell.otaRuntime() as? LynxOtaRuntime
+            let changed = try runtime?.registerUserId(normalized) ?? false
+            PendingOtaUser.shared.set(normalized)
+            if changed, let runtime {
+                NotificationCenter.default.post(name: .lynxOtaUserContextDidChange, object: runtime,
+                                                userInfo: ["epoch": runtime.userIdentityEpoch])
+            }
+            return true
+        } catch {
+            NSLog("[LynxShell][OTA] 用户注册参数无效")
+            return false
+        }
+    }
+
+    @MainActor @discardableResult
+    public static func clearOtaUserId() -> Bool { registerOtaUserId(nil) }
+
+    public static var otaUserIdentityEpoch: UInt64? {
+        (LynxShell.otaRuntime() as? LynxOtaRuntime)?.userIdentityEpoch
+    }
     /** 一次安装 Runtime 并绑定业务 App 的 UINavigationController。 */
     public static func install(to navigationController: UINavigationController) {
         LynxShell.bootstrap()
@@ -29,6 +71,8 @@ public enum LynxRouter {
     ) throws -> LynxOtaRuntime {
         install(to: navigationController)
         let runtime = try LynxOtaRuntime(configuration: otaConfiguration)
+        let pending = PendingOtaUser.shared.get()
+        if pending.explicit { try runtime.registerInitialUserId(pending.userId) }
         LynxShell.installOtaRuntime(runtime)
 #if DEBUG
         if ProcessInfo.processInfo.environment["LYNX_TEST_SKIP_STARTUP_SYNC"] == "1" {
@@ -37,7 +81,7 @@ public enum LynxRouter {
 #endif
         Task {
             await runtime.registerEmbeddedReleases()
-            _ = await runtime.synchronizeAllBundles()
+            _ = await runtime.synchronizeAllBundles(coalesce: true)
         }
         return runtime
     }
@@ -96,7 +140,7 @@ private enum OtaDebugF12Status {
     /** Demo/宿主主动刷新全量 OTA；返回是否完成了一次可用的全量同步。 */
     public static func refreshAllOtaBundles() async -> Bool {
         if let runtime = LynxShell.otaRuntime() as? LynxOtaRuntime {
-            return await runtime.synchronizeAllBundles()
+            return await runtime.synchronizeAllBundles(coalesce: true)
         }
 #if DEBUG
         if let runtime = LynxShell.otaRuntime() as? LynxDebugMockOtaRuntime {

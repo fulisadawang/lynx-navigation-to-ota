@@ -25,6 +25,34 @@ public protocol OtaAPIClientProtocol: Sendable {
         platform: OtaPlatform
     ) async throws -> OtaHostLatestBundleLists
     func reportEvent(_ payload: OtaReportPayload) async throws -> OtaReportResponse
+    func fetchLatestBundleList(env: OtaEnvironment, app: OtaAppID, lynxAppId: String, platform: OtaPlatform, context: OtaUserContext) async throws -> OtaLatestSelection
+    func fetchLatestBundleLists(env: OtaEnvironment, app: OtaAppID, platform: OtaPlatform, context: OtaUserContext) async throws -> OtaHostLatestBundleLists
+}
+
+public extension OtaAPIClientProtocol {
+    func fetchLatestBundleList(env: OtaEnvironment, app: OtaAppID, lynxAppId: String, platform: OtaPlatform, context: OtaUserContext) async throws -> OtaLatestSelection {
+        .release(try await fetchLatestBundleList(env: env, app: app, lynxAppId: lynxAppId, platform: platform))
+    }
+    func fetchLatestBundleLists(env: OtaEnvironment, app: OtaAppID, platform: OtaPlatform, context: OtaUserContext) async throws -> OtaHostLatestBundleLists {
+        try await fetchLatestBundleLists(env: env, app: app, platform: platform)
+    }
+}
+
+struct OtaSingleSelectionResponse: Decodable {
+    let env: OtaEnvironment
+    let app: OtaAppID
+    let platform: OtaPlatform
+    let selection: OtaLatestSelection
+    enum CodingKeys: String, CodingKey { case env, hostApp, platform, selectionSchemaVersion, decision }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        env = try values.decode(OtaEnvironment.self, forKey: .env)
+        app = try values.decode(OtaAppID.self, forKey: .hostApp)
+        platform = try values.decode(OtaPlatform.self, forKey: .platform)
+        guard try values.decodeIfPresent(Int.self, forKey: .selectionSchemaVersion) == 1 else { throw OtaSelectionError.missingSelectionMetadata }
+        if let directive = try values.decodeIfPresent(OtaSelectionDirective.self, forKey: .decision) { selection = .directive(directive) }
+        else { selection = .release(try OtaLatestBundleList(from: decoder)) }
+    }
 }
 
 public protocol OtaBundleDownloading: Sendable {
@@ -371,6 +399,39 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
         return try await send(urlRequest, as: OtaReportResponse.self)
     }
 
+    public func fetchLatestBundleList(env: OtaEnvironment, app: OtaAppID, lynxAppId: String, platform: OtaPlatform, context: OtaUserContext) async throws -> OtaLatestSelection {
+        let request = try latestRequest(env: env, app: app, lynxAppId: lynxAppId, platform: platform, context: context)
+        let response = try await sendConditional(request, as: OtaSingleSelectionResponse.self, cacheKey: selectionCacheKey(request, context: context))
+        guard response.env == env, response.app == app, response.platform == platform else { throw OtaSelectionError.invalidSelectionMetadata }
+        return response.selection
+    }
+
+    public func fetchLatestBundleLists(env: OtaEnvironment, app: OtaAppID, platform: OtaPlatform, context: OtaUserContext) async throws -> OtaHostLatestBundleLists {
+        let request = try latestRequest(env: env, app: app, lynxAppId: nil, platform: platform, context: context)
+        let response = try await sendConditional(request, as: OtaHostLatestBundleLists.self, cacheKey: selectionCacheKey(request, context: context))
+        guard response.env == env, response.app == app, response.platform == platform, response.selectionSchemaVersion == 1 else { throw OtaSelectionError.missingSelectionMetadata }
+        return response
+    }
+
+    func latestRequest(env: OtaEnvironment, app: OtaAppID, lynxAppId: String?, platform: OtaPlatform, context: OtaUserContext) throws -> URLRequest {
+        guard let versionCode = context.versionCode, let sdk = context.lynxSdkVersion else { throw OtaSelectionError.invalidVersionCode }
+        let latestURL = baseURL.appendingPathComponent("api/ota/v1/releases/latest-bundle-list")
+        var components = URLComponents(url: latestURL, resolvingAgainstBaseURL: false)!
+        var items = [URLQueryItem(name: "env", value: env.rawValue), URLQueryItem(name: "hostApp", value: app.rawValue),
+                     URLQueryItem(name: "platform", value: platform.rawValue), URLQueryItem(name: "versioncode", value: versionCode),
+                     URLQueryItem(name: "lynxSdkVersion", value: sdk)]
+        if let lynxAppId { items.append(URLQueryItem(name: "lynxAppId", value: lynxAppId)) }
+        if let userId = context.userId { items.append(URLQueryItem(name: "userId", value: userId)) }
+        components.queryItems = items
+        var request = URLRequest(url: components.url!)
+        applyClientToken(to: &request)
+        return request
+    }
+
+    private func selectionCacheKey(_ request: URLRequest, context: OtaUserContext) -> String {
+        OtaSelectionValidation.digest([request.url?.absoluteString ?? "", context.clientContextKey, String(context.identityEpoch)])
+    }
+
     private func applyClientToken(to request: inout URLRequest) {
         request.setValue(otaClientToken, forHTTPHeaderField: Self.otaClientTokenHeader)
     }
@@ -428,6 +489,7 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
                 body: String(data: data, encoding: .utf8) ?? ""
             )
         }
+        let decoded = try decoder.decode(T.self, from: data)
         if let cacheKey,
            let etag = http.value(forHTTPHeaderField: "ETag"),
            !etag.isEmpty {
@@ -436,7 +498,7 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
                 for: cacheKey
             )
         }
-        return try decoder.decode(T.self, from: data)
+        return decoded
     }
 }
 

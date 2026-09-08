@@ -1,0 +1,8 @@
+{
+  "name": "实际 Context：旧无上下文兼容模式与不完整新上下文边界",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

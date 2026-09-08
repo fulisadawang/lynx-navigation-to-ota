@@ -46,6 +46,17 @@ public actor ReleaseTransaction {
         self.canonicalStore = Self.makeBackend(store: store)
     }
 
+    init(store: FileOtaReleaseStore, userContext: OtaUserContextBox, faultInjector: any OtaTransactionFaultInjecting = NoopOtaTransactionFaultInjector()) {
+        self.canonicalStore = Self.makeBackend(store: store, faultInjector: faultInjector, userContext: userContext)
+    }
+
+    func recordDecision(scope: OtaReleaseScope, decision: OtaLastDecision, selection: OtaStoredSelection?) async throws {
+        try validateAppId(scope.lynxAppId)
+        try await canonicalStore.recordDecision(app: scope.app, lynxAppId: scope.lynxAppId, decision: decision, selection: selection)
+    }
+
+    func reconcileUserContext(app: OtaAppID) async throws { try await canonicalStore.reconcileUserContext(app: app) }
+
     /// 测试专用初始化：把持久化提交前后的故障点注入 canonical store。
     /// 生产调用方继续使用 `init(store:)`，因此不会暴露或依赖故障控制能力。
     init(store: FileOtaReleaseStore, faultInjector: any OtaTransactionFaultInjecting) {
@@ -108,7 +119,7 @@ public actor ReleaseTransaction {
             )
         }
         let currentRelease = await current(scope: request.scope)
-        if currentRelease?.context.releaseId == request.release.context.releaseId {
+        if currentRelease?.context.releaseId == request.release.context.releaseId && request.release.selection == nil {
             return .alreadyActive(currentRelease ?? request.release)
         }
         let activated = try await canonicalStore.install(request.release)
@@ -264,7 +275,8 @@ public actor ReleaseTransaction {
     private static func makeBackend(
         store: FileOtaReleaseStore,
         faultInjector: any OtaTransactionFaultInjecting = NoopOtaTransactionFaultInjector(),
-        capacityProbe: any OtaStorageCapacityProbing = SystemOtaStorageCapacityProbe()
+        capacityProbe: any OtaStorageCapacityProbing = SystemOtaStorageCapacityProbe(),
+        userContext: OtaUserContextBox? = nil
     ) -> any OtaReleaseStoreBackend {
         switch store.version {
         case .v2:
@@ -277,7 +289,8 @@ public actor ReleaseTransaction {
             return ContentAddressedOtaStore(
                 baseDirectory: store.baseDirectoryURL,
                 faultInjector: faultInjector,
-                capacityProbe: capacityProbe
+                capacityProbe: capacityProbe,
+                userContext: userContext
             )
         }
     }

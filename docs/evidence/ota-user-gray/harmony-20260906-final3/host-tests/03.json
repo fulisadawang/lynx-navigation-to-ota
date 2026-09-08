@@ -1,0 +1,8 @@
+{
+  "name": "实际 ContextBox：同身份幂等，旧 epoch/旧 owner 操作拒绝",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

@@ -23,6 +23,7 @@ LynxView + GlobalProps + NativeModules + XElement
 - Android Activity-first、iOS `UINavigationController`、HarmonyOS ArkUI Router 三套真实原生页面栈。
 - 本地资源、直接 HTTPS Bundle 和 OTA Bundle 三种明确加载路径。
 - Store v3：完整 Manifest、App ID 作用域 SHA-256 CAS、原子 State、回滚、lease 和 Mark-and-Sweep GC。
+- 原生用户注册、full/gray 选择、原生构建号与 Lynx Runtime 兼容校验；兼容 full V7 胜过 gray V6。
 - 原生 Tab 承载：Android Fragment、iOS UIViewController、HarmonyOS ArkUI Tabs。
 - Android/iOS 原生转场：基础转场、Skyline routeType、共享元素、Open Container、BottomSheet、heroSheet 和跟手返回。
 - `LynxShellModule`：导航、页面结果、消息、隔离存储、AppInfo、媒体和 OTA 诊断。
@@ -220,6 +221,25 @@ LynxRouter.install(this.context, ota)
 
 如果业务不需要 OTA，可以不传 OTA 配置，只使用本地或直接 HTTPS Bundle。没有 client token 时，Runtime 保持 embedded-only，不会偷偷请求 OTA。
 
+### 用户与原生版本上下文
+
+三端原生宿主使用 `LynxRouter.registerOtaUserId(userId)` 注册、`clearOtaUserId()` 清除，可在 install 前恢复身份，避免先匿名请求再重复同步。
+相同规范化身份不重复同步/重建 Tab；身份变化立即递增 epoch，旧请求、导航 session 和候选回调不能修改新身份 State。
+注册不等待网络，返回值不代表下载完成；等待同步使用既有主动刷新入口。
+
+新版 latest 的精确 query 为 `versioncode`、`lynxSdkVersion`、可选 `userId`，匿名省略 userId。
+构建码是 `1..9223372036854775807` 的十进制字符串，与版本名称和 `buildNumber` 上报字段独立。
+
+| 平台 | 构建码默认来源 | 实际 Lynx Runtime 来源 |
+|---|---|---|
+| Android | PackageInfo.longVersionCode / versionCode | Library resolved variant 生成 `BuildConfig.LYNX_RUNTIME_VERSION`；预编译 AAR 被宿主强换 Runtime 后不属于已认证组合 |
+| iOS | 纯整数 CFBundleVersion；分段值须显式覆盖 | 可信 LynxResources.bundle / Lynx framework metadata，多个来源必须一致 |
+| HarmonyOS | 宿主自身 BundleInfo.versionCode | 实际 HAR 的 `LynxEnv.getLynxVersion()`；请求固定 harmony，不再降级为 Android |
+
+Server 先按用户资格和兼容范围过滤，再比较 releaseSequence：full7 胜 gray6，gray8 仅对有资格用户胜 full7。
+policyRevision 控制决定新旧，更高修订可以授权更低序号的回滚。注册及匿名内置下载示例见
+[Module 接入](MODULE_INTEGRATION.md)，wire 见 [OTA API 契约](OTA_SERVER_API_CONTRACT.md)。
+
 ## Bundle 的两种业务身份
 
 Router 不猜 App ID，也不把 HTTPS URL 自动改造成 OTA Bundle。
@@ -279,7 +299,9 @@ App 启动 / 回到前台
         ↓
 全量 latest-bundle-list
         ↓
-完整 Release Manifest
+整批校验 selection/directives，逐 App 先提交 lastDecision
+        ↓
+完整 Release Manifest（selected App）
         ↓
 按 App ID 查询 SHA-256 CAS
         ↓
@@ -296,7 +318,7 @@ App 启动 / 回到前台
 - 命中远程 current 后，当前 App ID 按默认 30 分钟间隔做后台检查，不阻塞当前页面。
 - 本地缺包、文件损坏或 SHA/size 不匹配时，跳过门控，显示原生 Loading 并定向修复。
 - 首屏失败最多回滚一次，不做无限循环。
-- Native Tab 普通切换不联网，只有主动刷新或下一次冷启动消费新 current。
+- Native Tab 普通切换 cache-only，不联网；普通后台检查不重建实例。身份变化和主动刷新完成后按有效 epoch 重读 State，partial failure 不能遮蔽其他 App 已提交的更新或撤销。
 
 ### 磁盘结构
 
@@ -315,10 +337,14 @@ App 启动 / 回到前台
 - Manifest 是完整快照，不让客户端维护长期 patch 链。
 - embedded Bundle 直接读取 APK assets、iOS App Bundle 或 HarmonyOS rawfile，不复制进 Store。
 - State 是唯一激活点，页面永远不读取未完成 transaction。
+- State v3 的引用保存 selection，State 保存 selectionSchemaVersion 与 lastDecision（audience/context 摘要、revision、action、目标）；不写原始 userId，不创建用户 Bundle 副本目录。
+- 新模式下旧 v3 unknown 引用须等 Server 确认；所有 remote 读取都校验身份与 code/SDK 范围。明确 embedded 指令在冷启动后仍阻断旧 remote。
 - `current + previous + candidate + active lease + transaction` 组成 GC roots。
 - Android/iOS 可以选择 candidate/trial；HarmonyOS 明确不启用 candidate。
 
-100 个 Bundle 只有一个变化时，V2 Manifest 仍有 100 条，但网络只下载 1 个新对象，磁盘只新增 1 个 CAS Object。测试脚本和三端报告位于 [OTA Store v3 测试用例](docs/lynx-ota-store-v3-test-cases.md)。
+100 个 Bundle 只有一个变化时，V2 Manifest 仍有 100 条，但网络/对象只新增 1，未变对象复制 0 次。
+GC 保留有界，不无限保存历史版本；回滚目标旧 050 已被回收时，允许补下缺失 1 个并复用其余 99 个。
+基础用例见 [OTA Store v3 测试用例](docs/lynx-ota-store-v3-test-cases.md)，本次选择证据见下方当前报告。
 
 ## Native Tab
 
@@ -335,7 +361,7 @@ Module 提供容器能力，不接管业务 TabBar 设计：
 - Tab 实例第一次创建时只读已提交 current 或 embedded baseline。
 - Home/Settings 普通切换不触发 latest、Manifest 或 Bundle 请求。
 - 后台发现新版本时，当前实例继续使用旧 Snapshot。
-- 主动刷新成功后，宿主 reset Snapshot、递增 generation，再重建 Tab 内容。
+- 身份变化及主动刷新完成后，宿主在有效 epoch 内 reset Snapshot、递增 generation，从已提交 State 重读；部分失败仍显示已提交决定，但不伪报整批成功。
 - 页面和 Snapshot 分别持有 lease，GC 不会删除仍在显示的对象。
 
 ## Router 与页面通信
@@ -467,7 +493,17 @@ NODE_HOME=/Applications/DevEco-Studio.app/Contents/tools/node \
   assembleHar --mode module -p module=lynx_shell_kit@default --no-daemon
 ```
 
-静态、单测、构建、模拟器和真机是不同证据层。某一层通过不能替代另一层。最新 OTA 运行结果见：
+静态、单测、构建、模拟器和真机是不同证据层。某一层通过不能替代另一层。
+本次 user-gray/versioncode 证据快照（2026-09-06）：
+
+- [iOS 当前报告](docs/ios-ota-user-gray-test-report.html)：Core 83 项、最终 UI run 4/4、19 张截图。
+- [Android 当前报告](docs/android-ota-user-gray-test-report.html)：87 tests、0 failure/error/skipped＋APK；HTML 已验收，不代表设备测试。
+- [HarmonyOS 当前报告](docs/harmony-ota-user-gray-test-report.html)：host-final3 mode=all 为18/18（5项真实HTTP），Core25/25，均0失败/跳过；release HAR/App 构建通过，静态90/0/0。HTML展示验收与自动测试分开记录。
+- Server：实际 npm pack Contracts 本地产物联编重跑125/125、0 skipped；只读 backfill preview 核实44 scopes/372条本地记录，不重排已有不可变序号。未发布npm、未连接远程DB、未部署。
+
+用户已取消本次 Android/Harmony 模拟器测试，按代码、自动/真实 HTTP 协议测试、构建和 HTML 验收；真机本轮未验收。逐项证据和未覆盖边界见 [最终验收索引](docs/ota-user-gray-acceptance-matrix.md)，可运行 `node scripts/ota-user-gray/verify-delivery.mjs` 只读复核报告资源和产物哈希。
+复现带真实 Server 的门禁时按 [fixture 联调说明](scripts/ota-user-gray/README.md) 配置专用 loopback 环境；未设置真实 Server 环境而出现 skipped，不能沿用报告的零跳过结论。
+以下是**历史 Store v3 基础报告**，不是本次灰度功能的设备通过证明：
 
 - [iOS Store v3 报告](docs/ios-ota-store-v3-test-report.html)
 - [Android Store v3 报告](docs/android-ota-store-v3-test-report.html)

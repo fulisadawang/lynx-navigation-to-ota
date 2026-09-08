@@ -3,6 +3,8 @@ import fs from '@ohos.file.fs';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import OtaApiClient from './OtaApiClient';
 import OtaJson from './OtaJson';
+import { OtaUserContext, OtaUserContextBox } from './OtaUserContext';
+import { OtaLastDecision, OtaLatestSelection, OtaSelection, OtaStoredSelection } from './OtaSelection';
 import {
   LynxOtaConfig,
   OtaBundleArtifact,
@@ -31,6 +33,7 @@ interface OtaTreeScan {
 
 interface OtaTransactionRecord {
   objectIds?: string[];
+  manifestId?: string;
 }
 
 /**
@@ -50,14 +53,20 @@ export default class ContentAddressedOtaStore {
   private readonly testPauseMillis: number;
   private readonly testPauseToken: string;
   private readonly validatedObjects: Map<string, number> = new Map();
-  private readonly activeLeases: Map<string, number> = new Map();
+  private readonly activeLeases: Map<string, number> = ContentAddressedOtaStore.sharedLeases;
   private leaseReleaseScheduler: (() => void) | null = null;
   private lastOperation: string = 'none';
+  private readonly identityBox: OtaUserContextBox;
+  private static readonly runningTransactions: Set<string> = new Set();
+  private static readonly sharedLeases: Map<string, number> = new Map();
+  private static readonly leasedSelections: Map<string, OtaStoredSelection> = new Map();
 
-  constructor(config: LynxOtaConfig, api: OtaApiClient) {
+  constructor(config: LynxOtaConfig, api: OtaApiClient, identityBox?: OtaUserContextBox) {
     this.config = config;
     this.api = api;
     this.root = config.storageDirectory;
+    this.identityBox = identityBox ?? new OtaUserContextBox(config);
+    this.api.bindUserContext(this.identityBox);
     this.testFaultPoint = config.environment.toUpperCase() === 'TEST' ? config.testFaultPoint.trim().toLowerCase() : '';
     this.testAvailableCapacityBytes = config.environment.toUpperCase() === 'TEST' ? config.testAvailableCapacityBytes : -1;
     this.testPausePoint = config.environment.toUpperCase() === 'TEST' ? config.testPausePoint.trim().toLowerCase() : '';
@@ -73,56 +82,73 @@ export default class ContentAddressedOtaStore {
   }
 
   /** 只读取 current；embedded current 返回 null，由 Registry 直接读取 rawfile。 */
-  acquireCurrentBundleLease(lynxAppId: string, bundleName: string): PreparedPageBundle | null {
-    const state = this.readState(lynxAppId);
-    if (state === null || state.current.kind !== 'downloaded') return null;
-    this.ensureScope(state, lynxAppId);
-    return this.acquireBundleLease(state.current, lynxAppId, bundleName);
+  acquireCurrentBundleLease(lynxAppId: string, bundleName: string, context?: OtaUserContext): PreparedPageBundle | null {
+    this.validateContext(context);
+    const state = this.contextState(lynxAppId, context);
+    if (state === null) return null;
+    const ref = this.effectiveRef(state, context);
+    if (ref === undefined || ref.kind !== 'downloaded') return null;
+    return this.acquireBundleLease(ref, lynxAppId, bundleName, context);
   }
 
   /** 按固定 Release 读取 Bundle；用于同一导航 session 继承旧 Manifest。 */
-  acquireBundleLeaseForRelease(lynxAppId: string, releaseId: string, bundleName: string, manifestId: string = ''): PreparedPageBundle | null {
-    if (manifestId.trim().length > 0) {
+  acquireBundleLeaseForRelease(lynxAppId: string, releaseId: string, bundleName: string, manifestId: string = '', context?: OtaUserContext): PreparedPageBundle | null {
+    this.validateContext(context);
+    if (manifestId.trim().length > 0 && !context?.selectionEnabled) {
       const pinnedRef: OtaReleaseRef = { kind: 'downloaded', releaseId: releaseId, manifestId: manifestId };
       return this.acquireBundleLease(pinnedRef, lynxAppId, bundleName);
     }
-    const state = this.readState(lynxAppId);
+    const state = this.contextState(lynxAppId, context);
     if (state === null) return null;
     this.ensureScope(state, lynxAppId);
+    if (manifestId.length > 0 && this.activeLeases.has(this.leaseKey(lynxAppId, manifestId))) {
+      const pinned: OtaReleaseRef = { kind: 'downloaded', releaseId: releaseId, manifestId: manifestId,
+        selection: ContentAddressedOtaStore.leasedSelections.get(this.leaseKey(lynxAppId, manifestId)) };
+      if (this.eligible(pinned, state, context)) return this.acquireBundleLease(pinned, lynxAppId, bundleName, context);
+    }
     const ref = [state.current, state.previous]
       .find((item: OtaReleaseRef | undefined) => item !== undefined && item.releaseId === releaseId);
     if (ref === undefined) return null;
-    return this.acquireBundleLease(ref, lynxAppId, bundleName);
+    if (manifestId.length > 0 && ref.manifestId !== manifestId) return null;
+    if (!this.eligible(ref, state, context)) return null;
+    return this.acquireBundleLease(ref, lynxAppId, bundleName, context);
   }
 
   /** 为 NavigationSnapshot 建立独立 Manifest lease，不依赖某一个页面 Bundle。 */
-  acquireReleaseLease(lynxAppId: string, releaseId: string, manifestId: string = ''): OtaBundleLease | null {
-    const state = this.readState(lynxAppId);
+  acquireReleaseLease(lynxAppId: string, releaseId: string, manifestId: string = '', context?: OtaUserContext): OtaBundleLease | null {
+    this.validateContext(context);
+    const state = this.contextState(lynxAppId, context);
     if (state === null) return null;
     this.ensureScope(state, lynxAppId);
     const ref = [state.current, state.previous]
       .find((item: OtaReleaseRef | undefined) => item !== undefined && item.releaseId === releaseId);
     if (ref === undefined || ref.kind !== 'downloaded' || ref.manifestId === undefined) return null;
+    if (!this.eligible(ref, state, context)) return null;
     if (manifestId.trim().length > 0 && ref.manifestId !== manifestId) return null;
     const manifest = this.readManifest(lynxAppId, ref.manifestId);
     if (manifest === null || !this.manifestObjectsUsable(lynxAppId, manifest.bundles)) return null;
-    return this.createManifestLease(lynxAppId, ref.manifestId);
+    return this.createManifestLease(lynxAppId, ref.manifestId, ref.selection);
   }
 
   /** 缺包/校验失败时只修复指定 App ID。 */
   async ensureBundleReady(
     lynxAppId: string,
     bundleName: string,
-    signal: OtaPrepareSignal
+    signal: OtaPrepareSignal,
+    context?: OtaUserContext
   ): Promise<PreparedPageBundle> {
     signal.throwIfCancelled();
-    const current = this.acquireCurrentBundleLease(lynxAppId, bundleName);
+    this.validateContext(context);
+    const current = this.acquireCurrentBundleLease(lynxAppId, bundleName, context);
     if (current !== null) return current;
-    const latest = await this.api.fetchLatestBundleList(lynxAppId, signal);
+    const selected = await this.api.fetchLatestSelection(lynxAppId, signal, context);
     signal.throwIfCancelled();
-    await this.install(latest, signal);
+    this.validateContext(context);
+    if (context?.selectionEnabled) this.recordDecision(lynxAppId, selected, context);
+    if (selected.release === undefined) throw new Error('no_compatible_release');
+    await this.install(selected.release, signal, context);
     signal.throwIfCancelled();
-    const repaired = this.acquireCurrentBundleLease(lynxAppId, bundleName);
+    const repaired = this.acquireCurrentBundleLease(lynxAppId, bundleName, context);
     if (repaired === null) {
       throw new Error(`Release 已激活但 Bundle 无法建立 lease：${lynxAppId}/${bundleName}`);
     }
@@ -135,7 +161,17 @@ export default class ContentAddressedOtaStore {
    * 服务端 changedBundles 是完整快照。每个 artifact 先按 SHA 查 CAS；命中就直接复用，
    * 未命中才下载到 transactions/<tx>/.part，校验后原子发布对象，最后写 Manifest 与 State。
    */
-  async install(snapshot: OtaReleaseSnapshot, signal: OtaPrepareSignal): Promise<void> {
+  async install(snapshot: OtaReleaseSnapshot, signal: OtaPrepareSignal, context?: OtaUserContext): Promise<void> {
+    this.validateContext(context);
+    let selected: OtaStoredSelection | undefined;
+    let decision: OtaLastDecision | undefined;
+    if (context?.selectionEnabled) {
+      const value: OtaLatestSelection = { release: snapshot };
+      selected = OtaSelection.fromRelease(snapshot, context);
+      decision = OtaSelection.decision(value, context);
+      this.recordDecision(snapshot.lynxAppId, value, context);
+      if (!OtaSelection.compatible(selected, context)) throw new Error('incompatible_release');
+    }
     this.validateSnapshot(snapshot);
     signal.throwIfCancelled();
     this.ensureAppDirectories(snapshot.lynxAppId);
@@ -149,6 +185,8 @@ export default class ContentAddressedOtaStore {
         oldState.current.releaseId === snapshot.releaseId &&
         oldState.current.manifestId === targetManifestId &&
         this.manifestObjectsUsable(snapshot.lynxAppId, snapshot.changedBundles)) {
+        this.retireRecoveredTransactions(snapshot.lynxAppId);
+        this.pruneApp(snapshot.lynxAppId);
         this.lastOperation = 'already_active';
         return;
       }
@@ -178,8 +216,10 @@ export default class ContentAddressedOtaStore {
       schemaVersion: ContentAddressedOtaStore.STORE_SCHEMA_VERSION,
       lynxAppId: snapshot.lynxAppId,
       releaseId: snapshot.releaseId,
+      manifestId: targetManifestId,
       objectIds: snapshot.changedBundles.map((item: OtaBundleArtifact) => item.bundleSha256)
     }));
+    ContentAddressedOtaStore.runningTransactions.add(transaction);
 
     let downloadedCount = 0;
     let reusedCount = 0;
@@ -192,8 +232,9 @@ export default class ContentAddressedOtaStore {
           continue;
         }
         const part = `${transaction}/object-${index}.part`;
-        const binary = await this.api.downloadBundle(artifact.bundleUrl, signal);
+        const binary = await this.api.downloadBundle(artifact.bundleUrl, signal, context);
         signal.throwIfCancelled();
+        this.validateCommit(snapshot.lynxAppId, context, decision);
         this.ensureDeclaredSize(binary.byteLength, artifact);
         this.ensureExpectedSha(this.sha256(binary), artifact.bundleSha256, artifact.bundlePath);
         this.writeBinaryAtomic(part, binary);
@@ -219,6 +260,7 @@ export default class ContentAddressedOtaStore {
       await this.pauseAtTestPoint('after_objects_ready');
       this.checkTestFault('after_objects_ready');
       signal.throwIfCancelled();
+      this.validateCommit(snapshot.lynxAppId, context, decision);
       const manifest: OtaLocalManifest = {
         schemaVersion: ContentAddressedOtaStore.STORE_SCHEMA_VERSION,
         manifestId: targetManifestId,
@@ -247,38 +289,67 @@ export default class ContentAddressedOtaStore {
       await this.pauseAtTestPoint('after_manifest_commit');
       this.checkTestFault('after_manifest_commit');
 
-      const previous: OtaReleaseRef | undefined = oldState !== null &&
-        oldState.current.releaseId !== snapshot.releaseId ? oldState.current : oldState?.previous;
+      // 所有 await 之后重新读 State；不能把下载前 oldState 的 previous 写回。
+      await this.pauseAtTestPoint('before_state_commit');
+      this.validateCommit(snapshot.lynxAppId, context, decision);
+      const publishState = this.readState(snapshot.lynxAppId);
+      const previous: OtaReleaseRef | undefined = publishState !== null &&
+        publishState.current.releaseId !== snapshot.releaseId ? publishState.current : publishState?.previous;
       const state: OtaReleaseState = {
         schemaVersion: ContentAddressedOtaStore.STORE_SCHEMA_VERSION,
         env: snapshot.env,
         hostApp: snapshot.hostApp,
         lynxAppId: snapshot.lynxAppId,
         platform: snapshot.platform,
-        generation: (oldState?.generation ?? 0) + 1,
-        current: { kind: 'downloaded', releaseId: snapshot.releaseId, manifestId: targetManifestId },
-        previous: previous
+        generation: (publishState?.generation ?? 0) + 1,
+        current: { kind: 'downloaded', releaseId: snapshot.releaseId, manifestId: targetManifestId, selection: selected },
+        previous: previous,
+        selectionSchemaVersion: context?.selectionEnabled ? 1 : publishState?.selectionSchemaVersion,
+        lastDecision: decision ?? publishState?.lastDecision
       };
       // State 是唯一激活点，必须最后原子写入。
-      await this.pauseAtTestPoint('before_state_commit');
       this.checkTestFault('before_state_commit');
       this.checkTestFault('enospc_state_commit');
-      this.writeState(state);
+      this.writeState(state, context, decision);
       await this.pauseAtTestPoint('after_state_commit');
+      this.validateContext(context);
       this.checkTestFault('after_state_commit_report_failure');
+      this.removeIfPresent(transaction);
+      this.retireRecoveredTransactions(snapshot.lynxAppId);
       this.pruneApp(snapshot.lynxAppId);
       this.lastOperation = `install:${snapshot.releaseId}:downloaded=${downloadedCount}:reused=${reusedCount}`;
-      this.removeIfPresent(this.transactionRoot(snapshot.lynxAppId));
-      this.ensureDirectory(this.transactionRoot(snapshot.lynxAppId));
     } catch (error) {
       // 保留 transaction.json 作为下一次进程启动的恢复索引；下次启动会先读取其中的
       // 已验证 Object ID，再清理 transaction，避免 force-stop 后丢掉可复用的 orphan。
-      throw new Error(`OTA v3 Release 事务失败：${error}`);
+      const failure = error as Error;
+      if (failure.message === 'stale_identity' || failure.message === 'stale_decision') {
+        this.removeIfPresent(transaction);
+        this.pruneApp(snapshot.lynxAppId);
+      }
+      throw (error as Error);
+    } finally {
+      ContentAddressedOtaStore.runningTransactions.delete(transaction);
     }
   }
 
-  rollback(lynxAppId: string): boolean {
-    const state = this.readState(lynxAppId);
+  rollback(lynxAppId: string, expectedReleaseId?: string, context?: OtaUserContext): boolean {
+    this.validateContext(context);
+    const state = this.contextState(lynxAppId, context);
+    if (context?.selectionEnabled) {
+      if (state === null) return false;
+      const current = this.effectiveRef(state, context);
+      if (expectedReleaseId !== undefined && current?.releaseId !== expectedReleaseId) throw new Error('stale_decision');
+      let previous = state.previous;
+      if (previous?.releaseId === current?.releaseId) previous = undefined;
+      if (previous !== undefined && (!this.eligible(previous, state, context) || this.resolveRef(previous, lynxAppId) === null)) previous = undefined;
+      state.current = previous ?? this.embeddedRef();
+      state.previous = undefined;
+      state.generation += 1;
+      this.writeState(state, context);
+      this.pruneApp(lynxAppId);
+      // boolean 保留原接口的“恢复远程 previous”含义；false 也已原子写入 embedded。
+      return previous !== undefined;
+    }
     if (state === null || state.previous === undefined || state.previous.kind !== 'downloaded') return false;
     this.ensureScope(state, lynxAppId);
     const restored = this.resolveRef(state.previous, lynxAppId);
@@ -300,8 +371,20 @@ export default class ContentAddressedOtaStore {
     return true;
   }
 
-  deleteBundles(lynxAppId: string): void {
+  deleteBundles(lynxAppId: string, context?: OtaUserContext): void {
+    this.validateContext(context);
     this.ensureSafeAppId(lynxAppId);
+    if (context?.selectionEnabled) {
+      const state = this.contextState(lynxAppId, context) ?? this.emptyState(lynxAppId, context);
+      state.current = this.embeddedRef();
+      state.previous = undefined;
+      state.generation += 1;
+      state.lastDecision = { action: 'use_embedded', audienceKey: context.audienceKey, clientContextKey: context.clientContextKey,
+        policyRevision: state.lastDecision?.policyRevision ?? '0', reason: 'local_delete' };
+      this.writeState(state, context);
+      this.pruneApp(lynxAppId);
+      return;
+    }
     this.removeIfPresent(this.statePath(lynxAppId));
     this.removeIfPresent(this.transactionRoot(lynxAppId));
     this.writeTextAtomic(this.purgeMarkerPath(lynxAppId), 'delete');
@@ -310,10 +393,12 @@ export default class ContentAddressedOtaStore {
     this.lastOperation = `delete:${lynxAppId}`;
   }
 
-  deleteAllBundles(): void {
+  deleteAllBundles(context?: OtaUserContext): void {
+    this.validateContext(context);
     if (!this.exists(this.appsRoot())) return;
     fs.listFileSync(this.appsRoot()).forEach((name: string) => {
       if (!this.isValidAppId(name)) return;
+      if (context?.selectionEnabled) { this.deleteBundles(name, context); return; }
       this.removeIfPresent(this.statePath(name));
       this.removeIfPresent(this.transactionRoot(name));
       this.writeTextAtomic(this.purgeMarkerPath(name), 'delete');
@@ -323,7 +408,9 @@ export default class ContentAddressedOtaStore {
     this.lastOperation = 'delete_all';
   }
 
-  pruneAllUnreferencedReleases(): void {
+  pruneAllUnreferencedReleases(context?: OtaUserContext): void {
+    // 无 context 的调用仅用于 lease.close 后的维护，不包含身份敏感 State 变更。
+    if (context !== undefined) this.validateContext(context);
     if (!this.exists(this.appsRoot())) return;
     fs.listFileSync(this.appsRoot()).forEach((name: string) => {
       if (this.isValidAppId(name)) this.pruneApp(name, this.transactionObjectIds(name));
@@ -332,6 +419,97 @@ export default class ContentAddressedOtaStore {
 
   storageRoot(): string {
     return this.root;
+  }
+
+  /** 所有 App 在网络下载前先调用此同步提交；合法决定与引用 metadata 一次写入。 */
+  recordDecision(lynxAppId: string, value: OtaLatestSelection, context: OtaUserContext): void {
+    this.validateContext(context);
+    if (!context.selectionEnabled) throw new Error('selection_context_required');
+    this.ensureSafeAppId(lynxAppId);
+    if ((value.release?.lynxAppId ?? value.directive?.lynxAppId) !== lynxAppId) throw new Error('invalid_selection_scope');
+    const decision = OtaSelection.decision(value, context);
+    const state = this.contextState(lynxAppId, context) ?? this.emptyState(lynxAppId, context);
+    const old = state.lastDecision;
+    if (old !== undefined && old.clientContextKey === context.clientContextKey &&
+      OtaUserContext.compareDecimal(decision.policyRevision, old.policyRevision) < 0) throw new Error('stale_decision');
+    if (value.release !== undefined) {
+      const selected = OtaSelection.fromRelease(value.release, context);
+      if (state.current.releaseId === value.release.releaseId) state.current.selection = selected;
+      if (state.previous?.releaseId === value.release.releaseId) state.previous.selection = selected;
+    }
+    state.selectionSchemaVersion = 1;
+    state.lastDecision = decision;
+    if (decision.action !== 'use_release') {
+      if (state.current.kind === 'downloaded') state.previous = state.current;
+      state.current = this.embeddedRef();
+    } else if (!this.eligible(state.current, state, context)) {
+      const replacement = this.effectiveRef(state, context) ?? this.embeddedRef();
+      const former = state.current;
+      state.current = replacement;
+      state.previous = former;
+    }
+    state.generation += 1;
+    this.writeState(state, context);
+  }
+
+  /** 只整理元数据；不联网，不清理进程 SHA 缓存，不释放仍在显示的页面 lease。 */
+  reconcileUserContext(context: OtaUserContext): void {
+    this.validateContext(context);
+    if (!context.selectionEnabled || !this.exists(this.appsRoot())) return;
+    fs.listFileSync(this.appsRoot()).forEach((appId: string) => {
+      if (!this.isValidAppId(appId)) return;
+      const state = this.contextState(appId, context);
+      if (state === null || this.eligible(state.current, state, context)) return;
+      const replacement = this.effectiveRef(state, context) ?? this.embeddedRef();
+      state.previous = state.current;
+      state.current = replacement;
+      state.selectionSchemaVersion = 1;
+      state.generation += 1;
+      this.writeState(state, context);
+    });
+  }
+
+  private validateContext(context: OtaUserContext | undefined): void {
+    if (this.config.versionCode !== undefined && context === undefined) throw new Error('missing_captured_context');
+    if (context !== undefined) this.identityBox.validate(context);
+  }
+
+  private validateCommit(appId: string, context: OtaUserContext | undefined, decision?: OtaLastDecision): void {
+    this.validateContext(context);
+    if (decision !== undefined && !OtaSelection.sameDecision(this.readState(appId)?.lastDecision, decision)) throw new Error('stale_decision');
+  }
+
+  private contextState(appId: string, context: OtaUserContext | undefined): OtaReleaseState | null {
+    const state = this.readState(appId);
+    if (state === null) return null;
+    if (context?.selectionEnabled && (state.env !== context.env || state.hostApp !== context.hostApp || state.platform !== context.platform)) return null;
+    this.ensureScope(state, appId);
+    return state;
+  }
+
+  private emptyState(appId: string, context: OtaUserContext): OtaReleaseState {
+    return { schemaVersion: 3, env: context.env, hostApp: context.hostApp, lynxAppId: appId, platform: context.platform,
+      generation: 0, current: this.embeddedRef(), selectionSchemaVersion: 1 };
+  }
+
+  private embeddedRef(): OtaReleaseRef { return { kind: 'embedded', releaseId: '__embedded__' }; }
+
+  private eligible(ref: OtaReleaseRef, state: OtaReleaseState, context: OtaUserContext | undefined): boolean {
+    if (context === undefined || !context.selectionEnabled || ref.kind === 'embedded') return true;
+    if (state.selectionSchemaVersion !== 1 || !OtaSelection.compatible(ref.selection, context)) return false;
+    const decision = state.lastDecision;
+    if (decision !== undefined && decision.audienceKey === context.audienceKey) {
+      if (decision.action !== 'use_release') return false;
+      if (ref.selection?.kind === 'gray' && decision.targetReleaseId !== ref.releaseId) return false;
+    }
+    return true;
+  }
+
+  private effectiveRef(state: OtaReleaseState, context: OtaUserContext | undefined): OtaReleaseRef | undefined {
+    if (this.eligible(state.current, state, context)) return state.current;
+    const previous = state.previous;
+    if (previous !== undefined && previous.selection?.kind === 'full' && this.eligible(previous, state, context)) return previous;
+    return undefined;
   }
 
   storageSnapshot(maxFilesPerTree: number = 2_000): OtaStorageSnapshot {
@@ -437,21 +615,28 @@ export default class ContentAddressedOtaStore {
     return result;
   }
 
-  private acquireBundleLease(ref: OtaReleaseRef, appId: string, bundleName: string): PreparedPageBundle | null {
+  private acquireBundleLease(ref: OtaReleaseRef, appId: string, bundleName: string, context?: OtaUserContext): PreparedPageBundle | null {
     const prepared = this.resolveBundle(ref, appId, bundleName, true);
     if (prepared === null || ref.kind !== 'downloaded') return prepared;
     const manifestId = ref.manifestId ?? ref.releaseId;
-    prepared.lease = this.createManifestLease(appId, manifestId);
+    prepared.lease = this.createManifestLease(appId, manifestId, ref.selection);
+    prepared.selection = ref.selection;
+    prepared.identityEpoch = context?.identityEpoch;
+    prepared.userIdentityEpoch = context?.identityEpoch;
+    prepared.selectionKind = ref.selection?.kind;
+    prepared.releaseSequence = ref.selection?.releaseSequence;
+    prepared.policyRevision = ref.selection?.policyRevision;
     return prepared;
   }
 
-  private createManifestLease(appId: string, manifestId: string): OtaBundleLease {
+  private createManifestLease(appId: string, manifestId: string, selection?: OtaStoredSelection): OtaBundleLease {
     const key = this.leaseKey(appId, manifestId);
     this.activeLeases.set(key, (this.activeLeases.get(key) ?? 0) + 1);
+    if (selection !== undefined) ContentAddressedOtaStore.leasedSelections.set(key, selection);
     return new OtaBundleLease(() => {
       const remaining = (this.activeLeases.get(key) ?? 0) - 1;
       if (remaining > 0) this.activeLeases.set(key, remaining);
-      else this.activeLeases.delete(key);
+      else { this.activeLeases.delete(key); ContentAddressedOtaStore.leasedSelections.delete(key); }
       this.leaseReleaseScheduler?.();
     });
   }
@@ -543,13 +728,14 @@ export default class ContentAddressedOtaStore {
       const manifest = OtaJson.parseLocalManifest(fs.readTextSync(path));
       if (manifest.schemaVersion !== ContentAddressedOtaStore.STORE_SCHEMA_VERSION || manifest.manifestId !== manifestId) return null;
       if (manifest.lynxAppId !== appId || manifest.status !== 'ACTIVE') return null;
+      if (manifest.env !== this.config.environment || manifest.hostApp !== this.config.hostApp || manifest.platform !== this.config.requestPlatform()) return null;
       return manifest;
     } catch (error) {
       return null;
     }
   }
 
-  private writeState(state: OtaReleaseState): void {
+  private writeState(state: OtaReleaseState, context?: OtaUserContext, decision?: OtaLastDecision): void {
     this.writeTextAtomic(this.statePath(state.lynxAppId), JSON.stringify({
       schemaVersion: ContentAddressedOtaStore.STORE_SCHEMA_VERSION,
       env: state.env,
@@ -558,8 +744,10 @@ export default class ContentAddressedOtaStore {
       platform: state.platform,
       generation: state.generation,
       current: state.current,
-      previous: state.previous
-    }));
+      previous: state.previous,
+      selectionSchemaVersion: state.selectionSchemaVersion,
+      lastDecision: state.lastDecision
+    }), () => this.validateCommit(state.lynxAppId, context, decision));
   }
 
   private readState(appId: string): OtaReleaseState | null {
@@ -583,8 +771,10 @@ export default class ContentAddressedOtaStore {
       return;
     }
     const retainedManifests = new Set<string>();
+    this.transactionManifestIds(appId).forEach((manifestId: string) => retainedManifests.add(manifestId));
     const retainedObjects = new Set<string>();
     preservedObjectIds.forEach((objectId: string) => retainedObjects.add(objectId));
+    this.transactionObjectIds(appId).forEach((objectId: string) => retainedObjects.add(objectId));
     const retain = (ref: OtaReleaseRef | undefined): boolean => {
       if (ref === undefined || ref.kind !== 'downloaded' || ref.manifestId === undefined) return true;
       retainedManifests.add(ref.manifestId);
@@ -625,6 +815,7 @@ export default class ContentAddressedOtaStore {
     }
     fs.listFileSync(root).forEach((name: string) => {
       const transaction = `${root}/${name}`;
+      if (ContentAddressedOtaStore.runningTransactions.has(transaction)) return;
       if (!this.isDirectory(transaction)) {
         this.removeIfPresent(transaction);
         return;
@@ -647,6 +838,17 @@ export default class ContentAddressedOtaStore {
         this.removeIfPresent(transaction);
       }
     });
+  }
+
+  /** 成功后退休已结束的恢复索引；不能清除另一个 epoch 正在 await 的事务。 */
+  private retireRecoveredTransactions(appId: string): void {
+    const root = this.transactionRoot(appId);
+    if (!this.exists(root)) return;
+    fs.listFileSync(root).forEach((name: string) => {
+      const transaction = `${root}/${name}`;
+      if (!ContentAddressedOtaStore.runningTransactions.has(transaction)) this.removeIfPresent(transaction);
+    });
+    this.syncDirectory(root);
   }
 
   /** 新进程先清理上次未完成的事务；只有显式 delete purge 才在启动期强制清理 orphan。 */
@@ -678,6 +880,21 @@ export default class ContentAddressedOtaStore {
       } catch (error) {
         // 损坏的事务索引不参与 roots，后续按保守策略清理其不可验证对象。
       }
+    });
+    return result;
+  }
+
+  private transactionManifestIds(appId: string): string[] {
+    const result: string[] = [];
+    const root = this.transactionRoot(appId);
+    if (!this.exists(root)) return result;
+    fs.listFileSync(root).forEach((name: string) => {
+      const marker = `${root}/${name}/transaction.json`;
+      if (!this.isRegularFile(marker)) return;
+      try {
+        const record = JSON.parse(fs.readTextSync(marker)) as OtaTransactionRecord;
+        if (record.manifestId !== undefined && /^sha256:[0-9a-f]{64}$/.test(record.manifestId)) result.push(record.manifestId);
+      } catch (error) { }
     });
     return result;
   }
@@ -857,13 +1074,17 @@ export default class ContentAddressedOtaStore {
     try { fs.writeSync(file.fd, binary); fs.fsyncSync(file.fd); } finally { fs.closeSync(file); }
   }
 
-  private writeTextAtomic(path: string, raw: string): void {
+  private writeTextAtomic(path: string, raw: string, finalGuard?: () => void): void {
     this.ensureParent(path);
     const temporary = `${path}.tmp-${new Date().getTime()}-${Math.floor(Math.random() * 1000000)}`;
     const file = fs.openSync(temporary, fs.OpenMode.WRITE_ONLY | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
     try { fs.writeSync(file.fd, raw); fs.fsyncSync(file.fd); } finally { fs.closeSync(file); }
-    fs.moveFileSync(temporary, path, 0);
-    this.syncDirectory(path.substring(0, path.lastIndexOf('/')));
+    try {
+      // UI-thread 同步区段：最终 epoch/revision 校验到 rename 之间没有 await。
+      finalGuard?.();
+      fs.moveFileSync(temporary, path, 0);
+      this.syncDirectory(path.substring(0, path.lastIndexOf('/')));
+    } finally { this.removeIfPresent(temporary); }
   }
 
   /** 持久化目录项，确保 atomic rename 在进程终止后对下一进程可见。 */
@@ -924,12 +1145,12 @@ export default class ContentAddressedOtaStore {
 
   private activeLeasedManifestIds(appId: string): Set<string> {
     const result = new Set<string>();
-    const prefix = `${appId}|`;
+    const prefix = `${this.root}|${appId}|`;
     this.activeLeases.forEach((count: number, key: string) => { if (count > 0 && key.startsWith(prefix)) result.add(key.substring(prefix.length)); });
     return result;
   }
 
-  private leaseKey(appId: string, manifestId: string): string { return `${appId}|${manifestId}`; }
+  private leaseKey(appId: string, manifestId: string): string { return `${this.root}|${appId}|${manifestId}`; }
 
   private static readonly STORE_SCHEMA_VERSION: number = 3;
   private static readonly MAX_BUNDLE_BYTES: number = 20 * 1024 * 1024;

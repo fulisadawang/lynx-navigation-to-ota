@@ -22,6 +22,7 @@ import ShellGenericResourceFetcher from '../provider/ShellGenericResourceFetcher
 import ShellMediaResourceFetcher from '../provider/ShellMediaResourceFetcher';
 import ShellTemplateResourceFetcher from '../provider/ShellTemplateResourceFetcher';
 import PageBundleRuntimeRegistry, { OtaBundleLease, PageBundleRuntime } from '../ota/OtaModels';
+import OtaUserContextEvents from '../ota/OtaUserContextEvents';
 
 /** 一个原生 Tab 的逻辑描述，不包含 Tabs、TabBar 或选中态。 */
 export interface LynxTabSpec {
@@ -85,6 +86,11 @@ export struct LynxTabContainer {
   private releaseLease: OtaBundleLease | null = null;
   private viewWidth: number | string = '100%';
   private viewHeight: number | string = '100%';
+  private firstScreenReached: boolean = false;
+  private contextCreated: (context: LynxContext) => void = () => {};
+  private readonly userListener: (epoch: number) => void = () => {
+    if (this.initialized && this.request.isOtaRequest()) this.reloadFromCurrent();
+  };
 
   aboutToAppear(): void {
     this.consumedRefreshGeneration = this.refreshGeneration;
@@ -93,6 +99,7 @@ export struct LynxTabContainer {
       return;
     }
     this.initialized = true;
+    OtaUserContextEvents.subscribe(this.userListener);
     this.modules.set('LynxShellModule', { moduleClass: LynxShellModule });
     this.configureForLoad();
     this.startLoad();
@@ -106,6 +113,8 @@ export struct LynxTabContainer {
   }
 
   aboutToBeDeleted(): void {
+    OtaUserContextEvents.unsubscribe(this.userListener);
+    PageBundleRuntimeRegistry.current()?.releaseNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
     this.disposeCurrentView('arkui_tab_deleted');
     this.initialized = false;
   }
@@ -118,15 +127,27 @@ export struct LynxTabContainer {
   }
 
   private configureForLoad(): void {
+    const generation = ++this.prepareGeneration;
+    this.contextCreated = (context: LynxContext) => {
+      if (generation !== this.prepareGeneration) { context.onEnterBackground(); return; }
+      this.lynxContext = context;
+      ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
+        pageKey: this.request.routeKey, hostMode: 'arkui_tab_container' }, context);
+      context.onEnterForeground();
+      context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
+      ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_tab_appear');
+      context.setExtraTiming(this.extraTiming);
+    };
+    this.firstScreenReached = false;
     this.request = this.makeRequest();
     this.metaData = new MetaData(
       new TemplateData(this.request.initDataJson),
       new TemplateData(this.buildTabGlobalProps())
     );
     this.clients = [new ShellLynxViewClient(
-      () => this.handleLoadSuccess(),
-      (message: string) => this.handleLoadError(message),
-      () => this.handleFirstScreen()
+      () => { if (generation === this.prepareGeneration) this.handleLoadSuccess(); },
+      (message: string) => { if (generation === this.prepareGeneration && !this.firstScreenReached) this.handleLoadError(message); },
+      () => { if (generation === this.prepareGeneration) this.handleFirstScreen(); }
     )];
     this.templateFetcher = new ShellTemplateResourceFetcher(false);
     this.genericFetcher = new ShellGenericResourceFetcher();
@@ -159,9 +180,11 @@ export struct LynxTabContainer {
   }
 
   private reloadFromCurrent(): void {
+    PageBundleRuntimeRegistry.current()?.resetNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
     this.disposeCurrentView('arkui_tab_explicit_refresh');
     this.configureForLoad();
-    setTimeout(() => this.startLoad(), 0);
+    const generation = this.prepareGeneration;
+    setTimeout(() => { if (generation === this.prepareGeneration) this.startLoad(); }, 0);
   }
 
   private disposeCurrentView(reason: string): void {
@@ -215,14 +238,16 @@ export struct LynxTabContainer {
       this.errorMessage = '当前没有安装 HarmonyOS OTA runtime';
       return;
     }
-    const generation = ++this.prepareGeneration;
+    const generation = this.prepareGeneration;
+    const epoch = runtime.userIdentityEpoch;
     let pendingLease: OtaBundleLease | null = null;
     this.isLoading = true;
     this.errorMessage = '';
     runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName, this.request.sessionID)
       .then((prepared) => {
         pendingLease = prepared?.lease ?? null;
-        if (generation !== this.prepareGeneration) {
+        if (generation !== this.prepareGeneration || runtime !== PageBundleRuntimeRegistry.current() || epoch !== runtime.userIdentityEpoch ||
+          (prepared?.userIdentityEpoch !== undefined && prepared.userIdentityEpoch !== epoch)) {
           pendingLease?.close();
           pendingLease = null;
           return;
@@ -247,6 +272,10 @@ export struct LynxTabContainer {
           navigationSnapshotID: prepared.navigationSnapshotID,
           source: prepared.source ?? 'ota_current',
           loadPolicy: 'cache_only',
+          userIdentityEpoch: prepared.userIdentityEpoch,
+          selectionKind: prepared.selectionKind,
+          releaseSequence: prepared.releaseSequence,
+          policyRevision: prepared.policyRevision,
           bundleName: prepared.bundleName,
           sha256: prepared.sha256
         };
@@ -266,7 +295,7 @@ export struct LynxTabContainer {
       .catch((error: Error) => {
         pendingLease?.close();
         pendingLease = null;
-        if (generation !== this.prepareGeneration) return;
+        if (generation !== this.prepareGeneration || runtime !== PageBundleRuntimeRegistry.current() || epoch !== runtime.userIdentityEpoch) return;
         this.isLoading = false;
         this.errorMessage = `Tab active Bundle 读取失败：${error.message}`;
       });
@@ -278,6 +307,7 @@ export struct LynxTabContainer {
   }
 
   private handleFirstScreen(): void {
+    this.firstScreenReached = true;
     this.isLoading = false;
   }
 
@@ -312,19 +342,7 @@ export struct LynxTabContainer {
             sendableModules: this.sendableModules,
             behaviors: this.behaviors,
             metaData: this.metaData,
-            onCreate: (context: LynxContext) => {
-              this.lynxContext = context;
-              ShellMessageHub.register({
-                pageId: this.request.entryID,
-                containerId: this.request.entryID,
-                pageKey: this.request.routeKey,
-                hostMode: 'arkui_tab_container'
-              }, context);
-              context.onEnterForeground();
-              context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
-              ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_tab_appear');
-              context.setExtraTiming(this.extraTiming);
-            }
+            onCreate: this.contextCreated
           })
             .width(this.viewWidth)
             .height(this.viewHeight)

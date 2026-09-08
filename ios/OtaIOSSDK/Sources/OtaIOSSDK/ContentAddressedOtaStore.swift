@@ -21,6 +21,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     private let fileManager = FileManager.default
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let userContext: OtaUserContextBox?
     private var embeddedReleases: [String: OtaInstalledRelease] = [:]
     private var leaseCounts: [LeaseKey: Int] = [:]
     private var lastOperation: OtaStoreOperationMetrics?
@@ -41,6 +42,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         let kind: RefKind
         let releaseId: String
         let manifestId: String?
+        var selection: OtaStoredSelection? = nil
     }
 
     private struct CandidateState: Codable, Equatable {
@@ -58,6 +60,8 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         var current: ReleaseRef
         var previous: ReleaseRef?
         var candidate: CandidateState?
+        var selectionSchemaVersion: Int? = nil
+        var lastDecision: OtaLastDecision? = nil
     }
 
     private struct EmbeddedBundle: Codable {
@@ -120,6 +124,9 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         let manifestId: String
         let objectIds: [String]
         var status: String
+        var selection: OtaStoredSelection? = nil
+        var identityEpoch: UInt64? = nil
+        var clientContextKey: String? = nil
     }
 
     private struct LeaseKey: Hashable {
@@ -138,9 +145,11 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     init(
         baseDirectory: URL,
         faultInjector: any OtaTransactionFaultInjecting = NoopOtaTransactionFaultInjector(),
-        capacityProbe: any OtaStorageCapacityProbing = SystemOtaStorageCapacityProbe()
+        capacityProbe: any OtaStorageCapacityProbing = SystemOtaStorageCapacityProbe(),
+        userContext: OtaUserContextBox? = nil
     ) {
         self.baseDirectory = baseDirectory.standardizedFileURL
+        self.userContext = userContext
         self.faultInjector = faultInjector
         self.capacityProbe = capacityProbe
         let encoder = JSONEncoder()
@@ -153,6 +162,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     }
 
     func registerEmbedded(_ release: OtaInstalledRelease) async throws {
+        let identity = try selectionContext()
         try validateAppId(release.context.lynxAppId)
         // embedded bytes 属于 App Bundle；注册只保存逻辑元数据，不能要求把它们复制到
         // OTA Store，也不能因为旧 embedded 路径在测试/升级后变化而阻断启动。
@@ -180,7 +190,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
                 )
             }
         )
-        try writeDurableAtomic(try encoder.encode(descriptor), to: embeddedURL(lynxAppId: release.context.lynxAppId))
+        try writeDurableAtomic(try encoder.encode(descriptor), to: embeddedURL(lynxAppId: release.context.lynxAppId), identity: identity)
 
         let existing = readState(app: release.context.app, lynxAppId: release.context.lynxAppId)
         if existing == nil {
@@ -199,7 +209,96 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     func current(app: OtaAppID, lynxAppId: String) async throws -> OtaInstalledRelease? {
         guard let state = readState(app: app, lynxAppId: lynxAppId) else { return nil }
         try ensureScope(state.scope, app: app, lynxAppId: lynxAppId)
-        return try resolve(state.current, app: app, lynxAppId: lynxAppId)
+        guard let reference = try currentReference(state) else { return embeddedReleases[lynxAppId] }
+        return try resolve(reference, app: app, lynxAppId: lynxAppId)
+    }
+
+    private func selectionContext() throws -> OtaUserContext? {
+        guard let userContext, userContext.enabled else { return nil }
+        let identity = try OtaOperationContext.identity ?? userContext.capture()
+        try userContext.validate(identity)
+        return identity
+    }
+
+    private func eligible(_ reference: ReleaseRef, state: State) throws -> Bool {
+        guard let identity = try selectionContext() else { return true }
+        guard state.scope.env == identity.env.rawValue, state.scope.hostApp == identity.app.rawValue,
+              state.scope.platform == identity.platform.rawValue else { return false }
+        if reference.kind == .embedded { return true }
+        guard state.selectionSchemaVersion == 1, let selection = reference.selection,
+              selection.isCompatible(with: identity) else { return false }
+        if let decision = state.lastDecision, decision.audienceKey == identity.audienceKey {
+            if decision.action != .useRelease { return false }
+            if (selection.kind == .gray || decision.reason == "server_rollback") && reference.releaseId != decision.targetReleaseId { return false }
+        }
+        return true
+    }
+
+    private func currentReference(_ state: State) throws -> ReleaseRef? {
+        if try eligible(state.current, state: state) { return state.current }
+        if let previous = state.previous, try eligible(previous, state: state), previous.selection?.kind != .gray { return previous }
+        return nil
+    }
+
+    private func validateCandidate(_ candidate: CandidateState, state: State) throws {
+        if let expected = OtaOperationContext.expectedCandidate, candidate.release.releaseId != expected { throw OtaSelectionError.staleCandidate }
+        guard try eligible(candidate.release, state: state) else { throw OtaSelectionError.staleCandidate }
+    }
+
+    func recordDecision(app: OtaAppID, lynxAppId: String, decision: OtaLastDecision, selection: OtaStoredSelection?) async throws {
+        guard let identity = try selectionContext(), decision.clientContextKey == identity.clientContextKey else { throw OtaSelectionError.staleIdentity }
+        try validateAppId(lynxAppId)
+        let revision = try OtaSelectionValidation.decimal(decision.policyRevision, allowZero: true)
+        var state = try stateOrEmbedded(app: app, lynxAppId: lynxAppId, context: OtaCurrentReleaseContext(
+            env: identity.env, app: app, lynxAppId: lynxAppId, releaseId: "embedded", platform: identity.platform, status: .active))
+        if state.scope.env != identity.env.rawValue || state.scope.platform != identity.platform.rawValue {
+            state = State(schemaVersion: Self.storeSchemaVersion, generation: state.generation + 1,
+                          scope: Scope(env: identity.env.rawValue, hostApp: app.rawValue, lynxAppId: lynxAppId, platform: identity.platform.rawValue),
+                          current: ReleaseRef(kind: .embedded, releaseId: embeddedReleases[lynxAppId]?.context.releaseId ?? "embedded", manifestId: nil),
+                          previous: nil, candidate: nil)
+        }
+        if let prior = state.lastDecision, prior.clientContextKey == identity.clientContextKey {
+            let previousRevision = try OtaSelectionValidation.decimal(prior.policyRevision, allowZero: true)
+            guard revision >= previousRevision else { throw OtaSelectionError.staleDecision }
+            if revision == previousRevision && (prior.action != decision.action || prior.targetReleaseId != decision.targetReleaseId) {
+                throw OtaSelectionError.staleDecision
+            }
+        }
+        state.lastDecision = decision
+        state.selectionSchemaVersion = 1
+        if let selection, let target = decision.targetReleaseId {
+            if state.current.releaseId == target { state.current.selection = selection }
+            if state.previous?.releaseId == target { state.previous?.selection = selection }
+            if state.current.releaseId != target, let previous = state.previous, previous.releaseId == target {
+                let oldCurrent = state.current
+                state.current = previous
+                state.previous = oldCurrent
+            }
+            if var candidate = state.candidate, candidate.release.releaseId == target {
+                var reference = candidate.release; reference.selection = selection
+                candidate = CandidateState(release: reference, status: candidate.status, failureCount: candidate.failureCount,
+                                           createdAt: candidate.createdAt, trialStartedAt: candidate.trialStartedAt)
+                state.candidate = candidate
+            }
+        }
+        try commitState(state, app: app, lynxAppId: lynxAppId, operation: "selection_decision")
+    }
+
+    func reconcileUserContext(app: OtaAppID) async throws {
+        guard userContext?.enabled == true, fileManager.fileExists(atPath: appsDirectory.path) else { return }
+        _ = try selectionContext()
+        for directory in try fileManager.contentsOfDirectory(at: appsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+            let id = directory.lastPathComponent
+            guard var state = readState(app: app, lynxAppId: id) else { continue }
+            if let candidate = state.candidate, try !eligible(candidate.release, state: state) { state.candidate = nil }
+            if try !eligible(state.current, state: state) {
+                let previousCurrent = state.current
+                state.current = try currentReference(state) ?? ReleaseRef(kind: .embedded, releaseId: embeddedReleases[id]?.context.releaseId ?? "embedded", manifestId: nil)
+                // Keep the prior CAS snapshot until normal publication/GC, with eligibility enforced on every read.
+                state.previous = previousCurrent
+            }
+            try commitState(state, app: app, lynxAppId: id, operation: "reconcile_identity")
+        }
     }
 
     /** 按 appId + SHA 复用任意已存在 CAS 对象，不要求它来自 current release。 */
@@ -231,7 +330,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     func staged(app: OtaAppID, lynxAppId: String) async throws -> OtaInstalledRelease? {
         guard let journal = readyTransaction(app: app, lynxAppId: lynxAppId) else { return nil }
         return try resolve(
-            ReleaseRef(kind: .downloaded, releaseId: journal.releaseId, manifestId: journal.manifestId),
+            ReleaseRef(kind: .downloaded, releaseId: journal.releaseId, manifestId: journal.manifestId, selection: journal.selection),
             app: app,
             lynxAppId: lynxAppId
         )
@@ -239,7 +338,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
 
     func install(_ release: OtaInstalledRelease) async throws -> OtaInstalledRelease {
         if let current = try await current(app: release.context.app, lynxAppId: release.context.lynxAppId),
-           current.context.releaseId == release.context.releaseId {
+           current.context.releaseId == release.context.releaseId, release.selection == nil {
             return current
         }
         try await stage(release)
@@ -247,6 +346,15 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     }
 
     func stage(_ release: OtaInstalledRelease) async throws {
+        let operationContext = try selectionContext()
+        if operationContext != nil && release.selection == nil { throw OtaSelectionError.missingSelectionMetadata }
+        if let identity = operationContext {
+            guard let decision = readState(app: release.context.app, lynxAppId: release.context.lynxAppId)?.lastDecision,
+                  decision.clientContextKey == identity.clientContextKey, decision.action == .useRelease,
+                  decision.targetReleaseId == release.context.releaseId, decision.policyRevision == release.selection?.policyRevision else {
+                throw OtaSelectionError.staleDecision
+            }
+        }
         try validateAppId(release.context.lynxAppId)
         try validateRelease(release)
         try ensureAppDirectories(lynxAppId: release.context.lynxAppId)
@@ -344,7 +452,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
             }
             try faultInjector.check(.afterManifestCommit)
 
-            let ready = TransactionJournal(
+            var ready = TransactionJournal(
                 schemaVersion: Self.storeSchemaVersion,
                 scope: scope(for: release.context),
                 releaseId: release.context.releaseId,
@@ -352,6 +460,10 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
                 objectIds: localBundles.map(\.objectId),
                 status: "ready"
             )
+            ready.selection = release.selection
+            ready.identityEpoch = operationContext?.identityEpoch
+            ready.clientContextKey = operationContext?.clientContextKey
+            if let operationContext { try userContext?.validate(operationContext) }
             try writeDurableAtomic(try encoder.encode(ready), to: journalURL(transactionDirectory))
             let objectStats = objectStatistics(lynxAppId: release.context.lynxAppId)
             lastOperation = OtaStoreOperationMetrics(
@@ -378,7 +490,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         }
         var state = try stateOrEmbedded(app: release.context.app, lynxAppId: release.context.lynxAppId, context: release.context)
         state.candidate = CandidateState(
-            release: ReleaseRef(kind: .downloaded, releaseId: journal.releaseId, manifestId: journal.manifestId),
+            release: ReleaseRef(kind: .downloaded, releaseId: journal.releaseId, manifestId: journal.manifestId, selection: journal.selection),
             status: .pending,
             failureCount: 0,
             createdAt: Date(),
@@ -393,6 +505,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     func candidate(app: OtaAppID, lynxAppId: String) async throws -> OtaCandidateSnapshot? {
         guard let state = readState(app: app, lynxAppId: lynxAppId),
               let candidate = state.candidate,
+              try eligible(candidate.release, state: state),
               let release = try resolve(candidate.release, app: app, lynxAppId: lynxAppId) else {
             return nil
         }
@@ -408,6 +521,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     func beginCandidateTrial(app: OtaAppID, lynxAppId: String) async throws -> OtaCandidateSnapshot {
         var state = try stateOrThrow(app: app, lynxAppId: lynxAppId)
         guard var candidateState = state.candidate else { throw OtaSDKError.missingCandidateRelease }
+        try validateCandidate(candidateState, state: state)
         if candidateState.status != .trial {
             candidateState.status = .trial
             candidateState.trialStartedAt = Date()
@@ -422,6 +536,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
 
     func confirmCandidate(app: OtaAppID, lynxAppId: String) async throws -> OtaInstalledRelease {
         var state = try stateOrThrow(app: app, lynxAppId: lynxAppId)
+        if let candidate = state.candidate { try validateCandidate(candidate, state: state) }
         guard let candidate = state.candidate, candidate.status == .trial,
               let installed = try resolve(candidate.release, app: app, lynxAppId: lynxAppId) else {
             throw OtaSDKError.candidateNotInTrial
@@ -439,6 +554,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     func candidateBundle(app: OtaAppID, lynxAppId: String, bundleName: String) async throws -> URL? {
         guard let state = readState(app: app, lynxAppId: lynxAppId),
               let candidate = state.candidate,
+              try eligible(candidate.release, state: state),
               let release = try resolve(candidate.release, app: app, lynxAppId: lynxAppId),
               let bundle = resolveBundle(named: bundleName, in: release) else { return nil }
         return URL(fileURLWithPath: bundle.localFilePath)
@@ -446,9 +562,9 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
 
     func acquireCurrentBundleLease(app: OtaAppID, lynxAppId: String, bundleName: String) async throws -> OtaBundleLease? {
         guard let state = readState(app: app, lynxAppId: lynxAppId) else { return nil }
-        guard state.current.kind == .downloaded else { return nil }
+        guard let reference = try currentReference(state), reference.kind == .downloaded else { return nil }
         return try acquireBundleLease(
-            reference: state.current,
+            reference: reference,
             app: app,
             lynxAppId: lynxAppId,
             bundleName: bundleName
@@ -457,6 +573,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
 
     func acquireCandidateBundleLease(app: OtaAppID, lynxAppId: String, bundleName: String) async throws -> OtaBundleLease? {
         guard let state = readState(app: app, lynxAppId: lynxAppId), let candidate = state.candidate else { return nil }
+        try validateCandidate(candidate, state: state)
         return try acquireBundleLease(
             reference: candidate.release,
             app: app,
@@ -467,6 +584,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
 
     func discardCandidate(app: OtaAppID, lynxAppId: String) async throws {
         guard var state = readState(app: app, lynxAppId: lynxAppId), state.candidate != nil else { return }
+        if let expected = OtaOperationContext.expectedCandidate, state.candidate?.release.releaseId != expected { throw OtaSelectionError.staleCandidate }
         state.candidate = nil
         try commitState(state, app: app, lynxAppId: lynxAppId, operation: "candidate_discard")
         lastOperation = updatedMetrics(stateCommitCount: 1, operation: "candidate_discard", appId: lynxAppId)
@@ -481,7 +599,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     func activate(app: OtaAppID, lynxAppId: String) async throws -> OtaInstalledRelease {
         guard let journal = readyTransaction(app: app, lynxAppId: lynxAppId),
               let installed = try resolve(
-                  ReleaseRef(kind: .downloaded, releaseId: journal.releaseId, manifestId: journal.manifestId),
+                  ReleaseRef(kind: .downloaded, releaseId: journal.releaseId, manifestId: journal.manifestId, selection: journal.selection),
                   app: app,
                   lynxAppId: lynxAppId
               ) else {
@@ -493,7 +611,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
             context: installed.context
         )
         let oldCurrent = state.current
-        state.current = ReleaseRef(kind: .downloaded, releaseId: journal.releaseId, manifestId: journal.manifestId)
+        state.current = ReleaseRef(kind: .downloaded, releaseId: journal.releaseId, manifestId: journal.manifestId, selection: journal.selection)
         state.previous = oldCurrent.releaseId == journal.releaseId ? state.previous : oldCurrent
         state.candidate = nil
         try commitState(state, app: app, lynxAppId: lynxAppId, operation: "activate")
@@ -504,7 +622,19 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     }
 
     func deleteDownloadedBundles(app: OtaAppID, lynxAppId: String) async throws {
+        let identity = try selectionContext()
         guard var state = readState(app: app, lynxAppId: lynxAppId) else { return }
+        if identity != nil && embeddedReleases[lynxAppId] == nil {
+            // Still commit through the identity guard when no embedded bytes were registered.
+            // GC honors leases; removing the whole App directory would bypass both safeguards.
+            state.generation += 1
+            state.current = ReleaseRef(kind: .embedded, releaseId: "embedded", manifestId: nil)
+            state.previous = nil
+            state.candidate = nil
+            try commitState(state, app: app, lynxAppId: lynxAppId, operation: "delete_downloaded")
+            try pruneApp(app: app, lynxAppId: lynxAppId)
+            return
+        }
         guard let embedded = embeddedReleases[lynxAppId] else {
             try removeItemIfPresent(appDirectory(lynxAppId: lynxAppId))
             return
@@ -534,6 +664,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     }
 
     func pruneAllUnreferencedReleases() async throws {
+        _ = try selectionContext()
         guard fileManager.fileExists(atPath: appsDirectory.path) else { return }
         let directories = try fileManager.contentsOfDirectory(
             at: appsDirectory,
@@ -549,7 +680,20 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     }
 
     func rollback(app: OtaAppID, lynxAppId: String) async throws -> OtaInstalledRelease? {
+        if userContext?.enabled == true {
+            guard var state = readState(app: app, lynxAppId: lynxAppId) else { return embeddedReleases[lynxAppId] }
+            if let previous = state.previous, try eligible(previous, state: state) {
+                // The ordinary path below applies the same atomic commit guard.
+            } else {
+                let embedded = embeddedReleases[lynxAppId]
+                state.current = ReleaseRef(kind: .embedded, releaseId: embedded?.context.releaseId ?? "embedded", manifestId: nil)
+                state.candidate = nil
+                try commitState(state, app: app, lynxAppId: lynxAppId, operation: "rollback_embedded")
+                return embedded
+            }
+        }
         guard var state = readState(app: app, lynxAppId: lynxAppId), let previous = state.previous,
+              try eligible(previous, state: state),
               let restored = try resolve(previous, app: app, lynxAppId: lynxAppId) else { return nil }
         let oldCurrent = state.current
         state.current = previous
@@ -717,6 +861,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     }
 
     private func resolve(_ reference: ReleaseRef, app: OtaAppID, lynxAppId: String) throws -> OtaInstalledRelease? {
+        let identity = try selectionContext()
         switch reference.kind {
         case .embedded:
             return embeddedReleases[lynxAppId]
@@ -729,7 +874,12 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
                   manifest.platform == OtaPlatform.ios.rawValue else {
                 throw storageError("v3 Manifest scope 不匹配")
             }
-            return try installedRelease(from: manifest, app: app, lynxAppId: lynxAppId)
+            if let identity, manifest.env != identity.env.rawValue { throw OtaSelectionError.invalidSelectionMetadata }
+            var release = try installedRelease(from: manifest, app: app, lynxAppId: lynxAppId)
+            release.selection = reference.selection
+            release.identityEpoch = identity?.identityEpoch
+            if let identity { try userContext?.validate(identity) }
+            return release
         }
     }
 
@@ -815,8 +965,22 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     }
 
     private func commitState(_ state: State, app: OtaAppID, lynxAppId: String, operation: String) throws {
+        let identity = try selectionContext()
+        var state = state
+        if let identity {
+            state.selectionSchemaVersion = 1
+            if ["activate", "stage_candidate", "candidate_confirm", "candidate_trial"].contains(operation) {
+                let reference = operation == "stage_candidate" || operation == "candidate_trial" ? state.candidate?.release : state.current
+                guard let reference, let selection = reference.selection,
+                      selection.isCompatible(with: identity),
+                      OtaOperationContext.selection == nil || OtaOperationContext.selection == selection,
+                      let decision = state.lastDecision, decision.clientContextKey == identity.clientContextKey,
+                      decision.action == .useRelease, decision.targetReleaseId == reference.releaseId,
+                      decision.policyRevision == selection.policyRevision else { throw OtaSelectionError.staleDecision }
+            }
+        }
         try faultInjector.check(.beforeStateCommit)
-        try writeDurableAtomic(try encoder.encode(state), to: stateURL(lynxAppId: lynxAppId))
+        try writeDurableAtomic(try encoder.encode(state), to: stateURL(lynxAppId: lynxAppId), identity: identity)
         try faultInjector.check(.afterStateCommit)
         if lastOperation == nil || lastOperation?.lynxAppId != lynxAppId {
             lastOperation = OtaStoreOperationMetrics(operation: operation, lynxAppId: lynxAppId, stateCommitCount: 1)
@@ -888,13 +1052,21 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         return manifest
     }
 
-    private func readyTransaction(app: OtaAppID, lynxAppId: String) -> (releaseId: String, manifestId: String, directory: URL)? {
+    private func readyTransaction(app: OtaAppID, lynxAppId: String) -> (releaseId: String, manifestId: String, directory: URL, selection: OtaStoredSelection?)? {
         let root = transactionsDirectory(lynxAppId: lynxAppId)
         guard let directories = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else { return nil }
-        return directories.compactMap { directory -> (String, String, URL)? in
+        return directories.compactMap { directory -> (String, String, URL, OtaStoredSelection?)? in
             guard let journal = try? decoder.decode(TransactionJournal.self, from: Data(contentsOf: journalURL(directory))), journal.status == "ready",
                   journal.scope.hostApp == app.rawValue, journal.scope.lynxAppId == lynxAppId else { return nil }
-            return (journal.releaseId, journal.manifestId, directory)
+            if userContext?.enabled == true {
+                guard let identity = try? selectionContext(), journal.identityEpoch == identity.identityEpoch,
+                      journal.clientContextKey == identity.clientContextKey,
+                      let decision = readState(app: app, lynxAppId: lynxAppId)?.lastDecision,
+                      decision.action == .useRelease, decision.targetReleaseId == journal.releaseId,
+                      decision.policyRevision == journal.selection?.policyRevision,
+                      OtaOperationContext.selection == nil || OtaOperationContext.selection == journal.selection else { return nil }
+            }
+            return (journal.releaseId, journal.manifestId, directory, journal.selection)
         }.sorted { $0.2.lastPathComponent < $1.2.lastPathComponent }.last
     }
 
@@ -1015,18 +1187,21 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         try fileManager.createDirectory(at: transactionsDirectory(lynxAppId: lynxAppId), withIntermediateDirectories: true)
     }
 
-    private func writeDurableAtomic(_ data: Data, to url: URL) throws {
+    private func writeDurableAtomic(_ data: Data, to url: URL, identity: OtaUserContext? = nil) throws {
         try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let temporary = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).tmp-\(UUID().uuidString)")
+        defer { try? removeItemIfPresent(temporary) }
         try data.write(to: temporary)
         let handle = try FileHandle(forWritingTo: temporary)
         try handle.synchronize()
         try handle.close()
-        if fileManager.fileExists(atPath: url.path) {
-            _ = try fileManager.replaceItemAt(url, withItemAt: temporary, backupItemName: nil, options: .usingNewMetadataOnly)
-        } else {
-            try fileManager.moveItem(at: temporary, to: url)
+        let replace = {
+            if self.fileManager.fileExists(atPath: url.path) {
+                _ = try self.fileManager.replaceItemAt(url, withItemAt: temporary, backupItemName: nil, options: .usingNewMetadataOnly)
+            } else { try self.fileManager.moveItem(at: temporary, to: url) }
         }
+        if let identity, let userContext { try userContext.withCurrent(identity, replace) }
+        else { try replace() }
     }
 
     private func removeItemIfPresent(_ url: URL) throws {

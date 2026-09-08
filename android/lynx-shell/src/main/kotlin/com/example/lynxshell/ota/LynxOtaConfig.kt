@@ -5,6 +5,8 @@ import android.os.Build
 import android.provider.Settings
 import com.ota.android.sdk.OtaModels
 import com.ota.android.sdk.OtaURLPolicy
+import com.ota.android.sdk.OtaUserContext
+import com.example.lynxshell.BuildConfig
 import java.io.File
 import java.net.URI
 
@@ -31,7 +33,7 @@ data class LynxOtaConfig(
     val channel: String? = null,
     val region: String? = null,
     val nativeProtocolVersion: String? = null,
-    val lynxSdkVersion: String? = "4.0.0",
+    val lynxSdkVersion: String? = null,
     val clientToken: String? = null,
     val storageDirectory: File? = null,
     /** 本地 Bundle 有效时，页面打开触发当前 appId 后台检查的最小间隔。默认 30 分钟。 */
@@ -42,6 +44,8 @@ data class LynxOtaConfig(
     val storeVersion: OtaModels.StoreVersion = OtaModels.StoreVersion.V3,
     /** 仅本地 TEST OTA server 使用；生产配置必须保持 false。 */
     val allowLocalHTTPForTest: Boolean = false,
+    /** 独立原生构建号；未指定时读取 PackageInfo，不借用上报用 buildNumber。 */
+    val versionCode: String? = null,
 ) {
     companion object {
         /** 页面后台刷新默认 30 分钟；传 0 可用于测试时每次页面打开都检查。 */
@@ -78,6 +82,15 @@ data class LynxOtaConfig(
             @Suppress("DEPRECATION")
             packageInfo.versionCode.toString()
         }
+        val nativeCode = if (Build.VERSION.SDK_INT >= 28) packageInfo.longVersionCode.toString() else {
+            @Suppress("DEPRECATION")
+            packageInfo.versionCode.toString()
+        }
+        val resolvedCode = OtaUserContext.normalizeVersionCode(versionCode ?: nativeCode)
+        val actualSDK = OtaUserContext.normalizeLynxSdkVersion(BuildConfig.LYNX_RUNTIME_VERSION)
+        val resolvedSDK = OtaUserContext.normalizeLynxSdkVersion(lynxSdkVersion ?: actualSDK)
+        require(resolvedSDK == actualSDK) { "lynxSdkVersion 必须等于实际 Lynx Runtime 版本" }
+        require(platform.equals("android", ignoreCase = true)) { "Android Runtime 必须使用 platform=android" }
         val resolvedDeviceId = deviceId ?: runCatching {
             Settings.Secure.getString(
                 appContext.contentResolver,
@@ -100,12 +113,13 @@ data class LynxOtaConfig(
             channel,
             region,
             nativeProtocolVersion,
-            lynxSdkVersion,
+            resolvedSDK,
             clientToken,
             storageDirectory ?: File(appContext.filesDir, "lynx-ota-store"),
             candidateActivationEnabled,
             storeVersion,
             allowLocalHTTPForTest,
+            versionCode = resolvedCode,
         )
     }
 }

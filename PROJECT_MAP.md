@@ -45,6 +45,7 @@ android/lynx-shell/
 ```
 
 业务方只依赖 `:lynx-shell` 或发布后的 AAR，不需要另外接 OTA SDK。
+Runtime 接线还位于 `src/main/kotlin/com/example/lynxshell/ota/`，含 `LynxOtaRuntime`、`LynxOtaConfig` 与 epoch 隔离的 `OtaPageRefreshGate`；Core 的 `OtaSelection/OtaSdk` 负责身份和持久决定。
 `android/lynx-capacitor` 尚未加入默认 `settings.gradle.kts` 和 Sample，必须由宿主显式接入。
 
 ### iOS
@@ -58,6 +59,7 @@ ios/
 
 业务方只声明 `pod 'LynxShellKit'`。`OtaIOSSDK/Sources` 保留 Swift 单测边界，
 不是业务方的第二个 Pod。
+`LynxShellKit/OTA/LynxSDKVersionResolver.swift` 解析可信 Lynx 资源/framework metadata；Core 只接收结果，不依赖 UIKit。
 `ios/LynxCapacitorKit` 尚未加入默认 Podspec/Xcode Target，当前只交付原生能力源码。
 
 ### HarmonyOS
@@ -76,6 +78,7 @@ harmony/
 
 `lynx_shell/oh-package.json5` 只声明 `@lynx/lynx-shell-kit`；底层 Lynx、Service、
 XElement 和 OTA 依赖由 HAR 管理。
+`ota/OtaUserContext.ets` 提供同步身份 box 与显式 captured context；`OtaSelection*.ets`、JSON/API 与 v3 Store 承载选择协议。Harmony 没有 candidate/trial。
 `harmony/lynx_capacitor_kit` 尚未加入根 build profile 和 Entry Demo 依赖，当前只交付独立 HAR 源码。
 
 ## LynxCapacitor 当前边界
@@ -94,6 +97,24 @@ open(lynxAppId, bundleName, params)      -> OTA Bundle，按 appId + bundleName 
 启动或回到前台执行全量 `latest-bundle-list`；页面命中本地有效 Bundle 时立即渲染，
 当前 appId 按 30 分钟门控后台检查；缺包、损坏或 SHA/size 不匹配时跳过门控，显示原生
 Loading，完成下载、校验和原子激活后再创建 LynxView。首屏失败最多回滚一次。
+
+原生 `registerOtaUserId` / `clearOtaUserId` 支持 install 前调用；身份变化使旧 epoch 失效。全量/定向/repair/主动刷新
+统一携带 `versioncode`、`lynxSdkVersion` 与可选 userId。构建码独立于版本名称：Android 用 PackageInfo 与 resolved-variant BuildConfig，
+iOS 用整数 CFBundleVersion 与可信 Lynx metadata，Harmony 用自身 BundleInfo 与 LynxEnv getter，请求固定 harmony。
+
+Server 在用户/兼容过滤后比较 releaseSequence，full7 胜 gray6；policyRevision 控制决策新旧。State v3 的 ref selection 与 lastDecision
+保存归属和决定，不增加用户字节副本；unknown 旧引用须重新确认。完整 100 包只变 1 时增量 1/复制 0，有界 GC 后回滚允许补下已回收对象。
+Tab 普通切换 cache-only、后台不重建；身份变化和主动完成后重读 State，partial failure 不遮蔽已提交决定。
+
+## 本次验证入口
+
+- [iOS user-gray 报告](docs/ios-ota-user-gray-test-report.html)：83 Core＋4/4 UI，19 图。
+- [Android user-gray 报告](docs/android-ota-user-gray-test-report.html)：87 tests / 0 skipped＋APK，非设备验收。
+- Harmony：[当前报告](docs/harmony-ota-user-gray-test-report.html)、[host 测试](scripts/ota-user-gray/harmony-host-tests.mjs)、[Core 测试](scripts/ota-user-gray/harmony-core-tests.cjs)。host-final3 18/18（5真实HTTP）＋Core25/25，0失败/跳过；release HAR/App与静态90/0/0通过，设备按用户要求未验收。
+- 独立Server本地 npm pack Contracts 产物联编125/125、0 skipped；只读历史序号preview为44 scopes/372条本地记录。没有npm发布、远程DB操作或部署。
+- [OTA API 契约](OTA_SERVER_API_CONTRACT.md)；旧 `*-ota-store-v3-test-report.html` 仅为历史基础证据。
+
+本次 Android/Harmony 不运行设备测试，不用历史 HDC/ADB 记录替代当前验收。
 
 ## 关键验证
 

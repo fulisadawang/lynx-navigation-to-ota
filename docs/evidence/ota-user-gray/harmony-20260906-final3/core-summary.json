@@ -1,0 +1,153 @@
+{
+  "source": {
+    "kind": "core-tap-log",
+    "path": "/tmp/lynx-ota-user-gray-harmony-core-final3.log",
+    "bytes": 6178,
+    "sha256": "bc23e136b630311b108041ac7634cdf8f6cd03154b099becb6cf4e3c440258b2",
+    "modifiedAt": "2026-09-06T08:22:26.819Z"
+  },
+  "counts": {
+    "total": 25,
+    "passed": 25,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0
+  },
+  "footer": {
+    "tests": 25,
+    "pass": 25,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "todo": 0
+  },
+  "cases": [
+    {
+      "index": 1,
+      "name": "batch wire retains directive separately from selected release",
+      "status": "PASS"
+    },
+    {
+      "index": 2,
+      "name": "malformed directive container cannot silently become empty",
+      "status": "PASS"
+    },
+    {
+      "index": 3,
+      "name": "Harmony query platform never uses legacy Android compatibility override",
+      "status": "PASS"
+    },
+    {
+      "index": 4,
+      "name": "A installed gray cannot be read by B before reconcile; full previous still usable",
+      "status": "PASS"
+    },
+    {
+      "index": 5,
+      "name": "registration after captured A refuses State commit even when release is full",
+      "status": "PASS"
+    },
+    {
+      "index": 6,
+      "name": "normalizers retain exact large decimals and reject raw controls before trim",
+      "status": "PASS"
+    },
+    {
+      "index": 7,
+      "name": "same normalized registration is no-op and invalidation also advances anonymous epoch",
+      "status": "PASS"
+    },
+    {
+      "index": 8,
+      "name": "C05 gray only becomes null for offline B, no raw ID is persisted",
+      "status": "PASS"
+    },
+    {
+      "index": 9,
+      "name": "C08 same release full promotion updates metadata without download and survives anonymous cold read",
+      "status": "PASS"
+    },
+    {
+      "index": 10,
+      "name": "C11 anonymous cold gray and old unknown State do not become full implicitly",
+      "status": "PASS"
+    },
+    {
+      "index": 11,
+      "name": "C21 code and SDK range compatibility is rechecked on cold read",
+      "status": "PASS"
+    },
+    {
+      "index": 12,
+      "name": "C06 delayed A download cannot commit after B sync and current lease remains available during network wait",
+      "status": "PASS"
+    },
+    {
+      "index": 13,
+      "name": "higher revision embedded decision rejects same-user in-flight release and persists on cold read",
+      "status": "PASS"
+    },
+    {
+      "index": 14,
+      "name": "C10 rollback never restores A gray previous and expected-current prevents deleting newer full",
+      "status": "PASS"
+    },
+    {
+      "index": 15,
+      "name": "batch commits directive and all decisions before selected download failures, preserves structured partial success",
+      "status": "PASS"
+    },
+    {
+      "index": 16,
+      "name": "malformed later batch metadata prevents every State decision and download",
+      "status": "PASS"
+    },
+    {
+      "index": 17,
+      "name": "C09 live lease and snapshot lease remain readable through identity change and delete until close",
+      "status": "PASS"
+    },
+    {
+      "index": 18,
+      "name": "transaction-published manifest remains protected if lease GC runs before final State commit",
+      "status": "PASS"
+    },
+    {
+      "index": 19,
+      "name": "same-context NavigationSnapshot full lease can still acquire after falling out of current and previous",
+      "status": "PASS"
+    },
+    {
+      "index": 20,
+      "name": "final State temp fsync then registration rejects the final rename, not just pre-download epoch checks",
+      "status": "PASS"
+    },
+    {
+      "index": 21,
+      "name": "C14 100 objects change one then B uses its own full selection without another copy or GET",
+      "status": "PASS"
+    },
+    {
+      "index": 22,
+      "name": "API real loopback query is harmony with exact code SDK optional user and per-context ETags",
+      "status": "PASS"
+    },
+    {
+      "index": 23,
+      "name": "direct single directive preserves schema and missing new metadata is rejected",
+      "status": "PASS"
+    },
+    {
+      "index": 24,
+      "name": "completed later transaction releases abandoned recovery roots without touching live transactions",
+      "status": "PASS"
+    },
+    {
+      "index": 25,
+      "name": "higher policy revision accepts lower release sequence, older same-context response stays rejected",
+      "status": "PASS"
+    }
+  ],
+  "evidenceLayer": "核心 TAP 宿主测试日志，不代表设备或 Harmony 系统 IO"
+}

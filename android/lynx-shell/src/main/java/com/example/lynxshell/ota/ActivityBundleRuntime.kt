@@ -11,6 +11,8 @@ import java.io.File
  * 校验。Router 会在后台线程调用 prepare，因此不会阻塞主线程。
  */
 interface ActivityBundleRuntime {
+    /** null 表示非用户选择运行时；异步页面必须携带准备时的代际，不在回调时重新捕获。 */
+    val userIdentityEpoch: Long? get() = null
     /**
      * Application 完成初始化时调用。OTA 适配器可在这里异步同步全量 latest-bundle-list，
      * 普通本地 Bundle 适配器保持默认空实现即可。
@@ -83,11 +85,17 @@ interface ActivityBundleRuntime {
     /** candidate 页面首屏健康后由容器调用；默认 runtime 没有 candidate。 */
     fun confirmCandidateHealthy(lynxAppId: String): Boolean = false
 
+    fun confirmCandidateHealthy(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: Long?): Boolean =
+        confirmCandidateHealthy(lynxAppId)
+
     /**
      * 页面首屏失败时按 appId 回滚一次。没有可回滚版本时返回 false，避免误报成功。
      */
     @Throws(Exception::class)
     fun rollback(lynxAppId: String, reason: String): Boolean = false
+
+    fun rollback(lynxAppId: String, reason: String, expectedReleaseId: String?, expectedIdentityEpoch: Long?): Boolean =
+        rollback(lynxAppId, reason)
 }
 
 /**
@@ -109,6 +117,9 @@ data class PreparedActivityBundle(
     val releaseLease: AutoCloseable? = null,
     /** 路由固定的导航会话；只用于诊断与 Store v3 snapshot，不参与 Bundle URL。 */
     val navigationSnapshotID: String? = null,
+    val userIdentityEpoch: Long? = null,
+    val selectionKind: String? = null,
+    val releaseSequence: String? = null,
 ) {
     init {
         require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }

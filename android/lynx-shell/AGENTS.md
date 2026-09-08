@@ -82,6 +82,14 @@ files/lynx-ota-store/apps/<lynxAppId>/
 - 页面打开的 30 分钟门控只控制后台版本检查；缺包、损坏、启动/前台全量同步不受该门控限制。
 - 首屏失败最多回滚一次，禁止无限重试。
 - Store v3 不迁移 v2 Demo 沙盒；需要验证新 schema 时卸载重装。
+- 新版 latest 全部入口必须带精确 `versioncode`、`lynxSdkVersion`、可选 userId；匿名省略 userId。原生注册/清除用 `registerOtaUserId/clearOtaUserId`，同身份不重复同步。
+- versionCode 默认取 PackageInfo 原生构建码，不从 versionName/buildNumber 猜测；SDK 用 resolved variant 生成的 `BuildConfig.LYNX_RUNTIME_VERSION`。预编译 AAR 被宿主强换 Runtime 未认证，不能声称自动检测到了新 Runtime。
+- Server 用户/兼容过滤后按 releaseSequence 选择，full7 胜 gray6；policyRevision 控制新旧，高修订可回滚低序号。十进制字段不可转浮点。
+- State ref selection 与 lastDecision 原子持久化；unknown 旧 v3 metadata 必须等新确认，gray/current/previous/candidate 均检查 audience 与 native/SDK 范围。CAS 只存 App ID/SHA，不建用户字节副本。
+- 批次先校验全部协议，再独立提交每个决定，最后下载；partialResult 不能伪报全量成功，也不能遮蔽其他 App directive。
+- 注册与 State 最终 rename 共享身份锁；保留外层 ThreadLocal，Executor 显式传播。旧页面 callback 传 expected release/epoch，trial 与 lease 原子获取；旧 lease.close 不受身份失效阻止。
+- Tab 普通切换 cache-only、后台不重建；身份/主动刷新完成后在有效 epoch 重读 State，包含 partial failure。只更新成功 App 门控。
+- 100→1 要验证下载/对象新增1、复制0；GC 有界，旧回滚目标已 GC 可补缺失对象，不无限保存历史。
 
 ### 3. 原生转场
 
@@ -136,6 +144,10 @@ gradle :app:assembleDebug --no-daemon
 ```
 
 涉及 UI、转场、Back、Fragment、Activity 恢复或 OTA 页面时，还需在 emulator/device 验证，并记录：设备/API、Bundle 身份、网络请求数、页面版本、截图或日志。涉及 Store v3 时优先复用 `scripts/ota-store-v3/` 和 `docs/lynx-ota-store-v3-test-cases.md`。
+
+本次 user-gray/versioncode 分包例外：用户明确取消 Android 模拟器测试，以 JVM/真实 HTTP、APK、HTML 为门禁；真机本轮未验收。
+当前 [报告](../../docs/android-ota-user-gray-test-report.html) 为 87 tests / 0 skipped＋APK，不能改写成设备通过；历史 v3/真机报告另列。
+匿名内置脚本命令见 [Module 接入](../../MODULE_INTEGRATION.md#三端匿名内置-baseline-下载)，必须有 `--target android --platform android --versioncode ... --lynx-sdk-version ...`，不传 userId。
 
 ## 交付说明
 

@@ -12,6 +12,7 @@ final class DemoNavigationController: UINavigationController {}
 /** Scene 只负责建立系统导航栈，并把深链交给统一 Router。 */
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private var hasEnteredForeground = false
 
     func scene(
         _ scene: UIScene,
@@ -122,6 +123,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
+        guard hasEnteredForeground else { hasEnteredForeground = true; return }
         LynxRouter.onApplicationForeground()
     }
 
@@ -305,6 +307,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private static func makeOtaConfiguration() -> LynxOtaConfiguration? {
         let environment = ProcessInfo.processInfo.environment
         let info = Bundle.main.infoDictionary ?? [:]
+        var testStorageDirectory: URL?
+#if DEBUG
+        if let runId = environment["LYNX_OTA_TEST_STORE_ID"],
+           runId.range(of: "^[a-zA-Z0-9-]{1,80}$", options: .regularExpression) != nil {
+            testStorageDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("lynx-ota-test-stores", isDirectory: true)
+                .appendingPathComponent(runId, isDirectory: true)
+        }
+#endif
         let baseValue = Self.configurationValue(
             environment["LYNX_OTA_API_BASE_URL"]
                 ?? info["LynxOtaAPIBaseURL"] as? String
@@ -339,12 +350,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 ?? "capp",
             defaultLynxAppId: "10000001",
             environment: otaEnvironment,
+            userId: Self.configurationValue(environment["LYNX_OTA_USER_ID"]),
             clientToken: token,
+            storageDirectory: testStorageDirectory,
             candidateActivationEnabled: Self.booleanValue(
                 environment["LYNX_OTA_CANDIDATE_MODE"]
                     ?? info["LynxOtaCandidateActivationEnabled"] as? String
             ),
-            allowLocalHTTPForTest: isLocalHTTP
+            allowLocalHTTPForTest: isLocalHTTP,
+            versionCode: Self.configurationValue(environment["LYNX_OTA_VERSIONCODE"])
         )
     }
 

@@ -1,0 +1,290 @@
+[
+  {
+    "file": "ios/LynxCapacitorKit/Bridge/LynxCapacitorModule.swift",
+    "sha256": "25a118f2d9cfdd76ef41a8dcc700a09aa2eb849fa1ce11b592c75c9d2f3ef31b"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Bridge/LynxNativeCapabilityCatalog.swift",
+    "sha256": "0441089b3dbad43403b32ca406f689b5371e0e6032e01e75507d9e1d3407b34d"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Bridge/LynxNativeCapabilityContract.swift",
+    "sha256": "4725acaa6531fcac3b4a6de878250482ff2b4f848417668112af7b166c3558e8"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Bridge/LynxNativeCapabilityDispatcher.swift",
+    "sha256": "492e0ba6607a6e275265deb45aadd3ca04043cfb06cbd3d6c85f3ea97104bff9"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Bridge/LynxNativeCapabilityRuntime.swift",
+    "sha256": "482763f8a433893e3c9880e890b76338aa6a74320c776498f5d7922f52219e6c"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Capabilities/LynxNativeAudioCapabilities.swift",
+    "sha256": "ca96ec4645636f6be1827015819aad04cd3c89f8287d3daf4aa112a1b61bec82"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Capabilities/LynxNativeBarcodeCapabilities.swift",
+    "sha256": "ea5a105739db4af3166e785178559f6f9a72f5059f758837e65e09d052365aa8"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Capabilities/LynxNativeBiometricsCapabilities.swift",
+    "sha256": "a016f095c90fc0466130b9e643735e5971988b39860d75064d61995e4875f4ca"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Capabilities/LynxNativeDatabaseCapabilities.swift",
+    "sha256": "0a81b0647fbf7f9f41ee1fa21b30828706fd0f2c25d0ba708bf244a24d7c5444"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Capabilities/LynxNativeInteractiveCapabilities.swift",
+    "sha256": "8525302f7879d72a150da9db02dba9ad94eba70280c1a2c4a0328c50b76cf08c"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Capabilities/LynxNativeMediaCapabilities.swift",
+    "sha256": "e6de05ca965378be06e9cbb5b7d1e305f1fab5c4681df8a13181fbc98b7e4cba"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Capabilities/LynxNativeProviderCapabilities.swift",
+    "sha256": "0b46545600a47adfba496811647d2be498d631cc8c0faca1a5fe149328c7f4e5"
+  },
+  {
+    "file": "ios/LynxCapacitorKit/Capabilities/LynxNativeSystemCapabilities.swift",
+    "sha256": "a015f392973c551ee92a9923d5432ae0d157ada7a8ddf74332ced1a406978f9e"
+  },
+  {
+    "file": "ios/LynxShellKit/Bridge/LynxShellModule.swift",
+    "sha256": "fcedaf0401c411865f73673b91e7ad78b25e2738527e014df2f5199b229b4359"
+  },
+  {
+    "file": "ios/LynxShellKit/Bridge/ShellMediaBridge.swift",
+    "sha256": "f54e1cf9af4b829009dc92d76d4e5abee2f30c7492db31fa7b318d509d7557e5"
+  },
+  {
+    "file": "ios/LynxShellKit/Container/LynxContainerViewController.swift",
+    "sha256": "bc22d836e67165cf0b9fc627f0dcc5f7ff7cd17b9f233bd812892100ea735671"
+  },
+  {
+    "file": "ios/LynxShellKit/Container/LynxTabLoadGeneration.swift",
+    "sha256": "e06fd37321e73a7f9c995f08985d09082579862bdb2a83a89fbdd4be50ffff28"
+  },
+  {
+    "file": "ios/LynxShellKit/LynxRouter.swift",
+    "sha256": "7ff49ab7f57fe5ff83a87fce7e366d725522caf37f1b08191511f61178ec0cf2"
+  },
+  {
+    "file": "ios/LynxShellKit/LynxShell.swift",
+    "sha256": "4cb26a33dd394625272216131a0e88b7a47c433c10de6e08ae79be3c56811b30"
+  },
+  {
+    "file": "ios/LynxShellKit/Model/LynxPageRequest.swift",
+    "sha256": "df595deff87ee858347df8fbd6010e4a05acf6e52f64f902bdec57183faeb8ca"
+  },
+  {
+    "file": "ios/LynxShellKit/Model/ShellTransitionSpec.swift",
+    "sha256": "e4be40cc0bb39635913f1c19e4771c8f2facab562010f08b61832afe698aba16"
+  },
+  {
+    "file": "ios/LynxShellKit/OTA/LynxOtaRuntime.swift",
+    "sha256": "c057b0d6c17f3a412e15ceab5e6a35d984a588b3e905d296045da85212785c79"
+  },
+  {
+    "file": "ios/LynxShellKit/OTA/LynxSDKVersionResolver.swift",
+    "sha256": "63c00784eabb50ef08fd23baf7f1d0ad39f20e9c2b62347d1e78310fdf691bd9"
+  },
+  {
+    "file": "ios/LynxShellKit/Resource/ShellPreparedRouteStore.swift",
+    "sha256": "d13ca1013baace01b202fdbe01e660085e68531a76d702374ef1bf8837a149e9"
+  },
+  {
+    "file": "ios/LynxShellKit/Resource/ShellTemplateProvider.swift",
+    "sha256": "7a5569958fff78fd4ce350c24155a5c3f22a8a08d1b7f50aa5d559d08294c70d"
+  },
+  {
+    "file": "ios/LynxShellKit/Routing/LynxRouteParser.swift",
+    "sha256": "5c04c1e7836e524554c37787ba1609a1d0976e262a6553c08a64eff7ef4bf7b7"
+  },
+  {
+    "file": "ios/LynxShellKit/Routing/ShellNavigator.swift",
+    "sha256": "020511ef2f3969a619ad7c9eba97f5ccb71dff9b309c69b878797c012fea5813"
+  },
+  {
+    "file": "ios/LynxShellKit/Runtime/ShellGlobalPropsFactory.swift",
+    "sha256": "8c81ef358e19b36aefeeeefa8491ec2c42f5bf272a78f7773758d27b9a80555f"
+  },
+  {
+    "file": "ios/LynxShellKit/Runtime/ShellMessageHub.swift",
+    "sha256": "f0a3d8e7fe9d43c69ffc0fd56936e5d5de6d8b174b7dee14244e501c4c005cc6"
+  },
+  {
+    "file": "ios/LynxShellKit/Transition/LynxFirstScreenObserver.swift",
+    "sha256": "c2171beaffe1c56a884db072129b287860333c9f3de033dbe94949abba48e40d"
+  },
+  {
+    "file": "ios/LynxShellKit/Transition/ShellBottomSheetMotion.swift",
+    "sha256": "70071c72d6581f989c3d58e4c2ae8745662f46e48a8b8994bccac531ff90ef43"
+  },
+  {
+    "file": "ios/LynxShellKit/Transition/ShellHeroSheetMotion.swift",
+    "sha256": "4a51f45795d4365a65f43ff80e3dd8fbe0d59a820da1547f82e73e6c6509d23e"
+  },
+  {
+    "file": "ios/LynxShellKit/Transition/ShellNavigationAnimator.swift",
+    "sha256": "f20ba9f89695cbd2fa9b6e9624f15f648cef242f65d829eaa64f2dfff81cf7dc"
+  },
+  {
+    "file": "ios/LynxShellKit/Transition/ShellTransitionCoordinator.swift",
+    "sha256": "b377779c3da1dac2aa7aac7a759bc576d7b75266c75178da07b7299f49ccea2b"
+  },
+  {
+    "file": "ios/LynxShellKit/UI/ShellErrorView.swift",
+    "sha256": "933324bcc00aa350b2e1b828af63ec0090c2301af86b9b17c8fdd7ae08bb30be"
+  },
+  {
+    "file": "ios/LynxShellKit/UI/ShellLoadingView.swift",
+    "sha256": "c2288b4df47feb7d98cc11ee124b95d0f4d0407e8aa31f01a4097ca234389e5c"
+  },
+  {
+    "file": "ios/LynxShellKit/UI/UIColor+ShellHex.swift",
+    "sha256": "831e00461f7f34ce87abeebc1383152f68c880377437ae6aac81cd0acbb4da7c"
+  },
+  {
+    "file": "ios/LynxShellSample/App/AppDelegate.swift",
+    "sha256": "9e5bd645810e48e806dbdab0d055f216e09f9956ae6af01b3cb955841fe9649e"
+  },
+  {
+    "file": "ios/LynxShellSample/App/SceneDelegate.swift",
+    "sha256": "894f033553bd0ac716b4eb2897ceb9c80f8536bd5177f60d5dce0f6b98e1dabc"
+  },
+  {
+    "file": "ios/LynxShellSample/UI/LauncherViewController.swift",
+    "sha256": "a0f7dfe9749955e1b00f6e3bf25c3f10d0452dde4b556501d119a4d2dd4e4a56"
+  },
+  {
+    "file": "ios/LynxShellSample/UI/NativeTabBarDemoViewController.swift",
+    "sha256": "1181b710ded0954daba7ceab2cfc8073438a4d061a5a9d53b4445090cc9aa34a"
+  },
+  {
+    "file": "ios/LynxShellSample/UI/UIViewController+ShellAlert.swift",
+    "sha256": "934fd23b7e2b4142f19f76ff23a5c473c428f5bb705913f34865d3777beb5a34"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Package.swift",
+    "sha256": "fe4b01bb497d9844431b9f2fb7bdcf8f811c9a2ab86bc498381acf118b58483b"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/BundleRuntime.swift",
+    "sha256": "e1d6abfe24bb4df8d381456692f8a060dee58fce962c90859fccd91f236effe9"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/CanonicalOtaStore.swift",
+    "sha256": "9e93125ea0dd78eec89fbba7f1170dfe859b60936c689f7dafdb266c79472d24"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/ContentAddressedOtaStore.swift",
+    "sha256": "fc3b05d4154ed619af7457c0c3e946a10f639eebe5a8b9124635200758570ae8"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/LynxHotUpdate.swift",
+    "sha256": "451cc9b236053ec546053e03ed2b4d8c2dab5331b4fbb117475b04475265118a"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/Models.swift",
+    "sha256": "355ecd458c7c68c694daca7f2a82da0e63756a0aac65ade3e3aa0d047d46af04"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/OtaBundleLease.swift",
+    "sha256": "3dbb2377b6fbea5d64a404bceb9af78c434d0f584782e7fcbfb2948801e9fe16"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/OtaHTTP.swift",
+    "sha256": "5c39b15ed06cfdc6dee034ae0cc40cbe35da086be8e78627a47e77e881cfa6b6"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/OtaReleaseStoreBackend.swift",
+    "sha256": "8f833ec8560e4dea56fce23f79069fa65855eebec1aefe2f8a4e2ec9f2110b88"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/OtaSDK.swift",
+    "sha256": "d0048e40f9d8d2ca060cabc6508714a78a3d1be9ee083b97caa1c5a266c9deb5"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/OtaSDKError.swift",
+    "sha256": "91e05e1fe4044fc507bea4eafef623cc4e1adb0f06337d59cfa3b33142d81974"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/OtaSelection.swift",
+    "sha256": "5b5d3f4c37bebe8aa492f0e65f0ba1f96145810396a346bf8e3d836579be6108"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/OtaStorageDiagnostics.swift",
+    "sha256": "3dbbb153fe0a797ef64e34ded0fdd58cd2160d4b2caa24343bc7ed9df4c415d4"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/OtaStore.swift",
+    "sha256": "11326d168ff611893b3c92eec9246275d59691fb422cab98ad8eea99449cd3c6"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Sources/OtaIOSSDK/ReleaseTransaction.swift",
+    "sha256": "97502d07ce81e610864b02ed80e9800192e471fc225b808bb5fbc03b6a5a430f"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/BundleValidationCacheTests.swift",
+    "sha256": "ad4cde1904b34ea2ad55189841ffa52a75c2db8c6759278d2bbde0d32f5bb787"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaCandidateActivationTests.swift",
+    "sha256": "a609bd6f739af46865d0d5e4523e495e0d1a2931e42359a3f20f872829198373"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaReleaseLeaseTests.swift",
+    "sha256": "d8497585c3dc252c84eb972ae8e8f627bfd389b68114cc869d0f099368ce5c43"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaSDKFaultPathTests.swift",
+    "sha256": "e84828151f71441c5e67e726689aa78e6e94a9d134b77cd455fb69be64e82264"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaSDKTests.swift",
+    "sha256": "20142313e1ee498004eb442178798a692c55ffca402c88af6546150141e0203d"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaStorageDiagnosticsTests.swift",
+    "sha256": "8b51a4d874f45b596ea47d366077b9678c452f7e1aabb4b055b706a438343027"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaStoreV2RetentionTests.swift",
+    "sha256": "fae0795b4a6b5367d7e5ad4a4220326d2b447d40a9a13ef16fef828b9ee0754f"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaStoreV3Golden100Tests.swift",
+    "sha256": "1eb5a04c7316d5e4a6ef822765b8322d4eb64923762e4fb9693928d50a19b94a"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaTransactionFaultTests.swift",
+    "sha256": "fa29c098e3ad2ece223a91784aa34b2a5fb8683800e8f17ccf68d851b987eae8"
+  },
+  {
+    "file": "ios/OtaIOSSDK/Tests/OtaIOSSDKTests/OtaUserSelectionTests.swift",
+    "sha256": "8891642fb848898f69afbade4c55c0ce2635c8a02c0200482d5061778de7f05a"
+  },
+  {
+    "file": "ios/Tests/LynxSDKVersionResolverTests.swift",
+    "sha256": "d5e2b36c98ed694a947670ee8b5fb564e14a7d515d510da47fd4f3ebde9ffd54"
+  },
+  {
+    "file": "ios/Tests/LynxTabLoadGenerationTests.swift",
+    "sha256": "81789183cda06b3d27c5f5b5110268345c4e9764615d5cc47c7d30b166bc9c58"
+  },
+  {
+    "file": "ios/Tests/ShellBottomSheetMotionTests.swift",
+    "sha256": "af75f7c2a99ef6be266f6fd8fb5231843bdbf3c5d7beddae791e2e28de9c390f"
+  },
+  {
+    "file": "ios/Tests/UITests/LynxShellUITests.swift",
+    "sha256": "c8aecefade2485dc02592a069027d5d4837f0f2a72d98f3e21848991e04749d4"
+  },
+  {
+    "file": "ios/Tests/UITests/OtaUserSelectionUITests.swift",
+    "sha256": "1073a0b91c32053ee2ffba1529b9e4777728c41398e4371dc6483e8a3ea4a711"
+  }
+]

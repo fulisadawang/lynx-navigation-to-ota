@@ -1,0 +1,8 @@
+{
+  "name": "实际 OtaUserContext：稳定 SDK 数字段排序及 UTF-8 身份规范化",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

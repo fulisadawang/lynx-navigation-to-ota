@@ -1,0 +1,8 @@
+{
+  "name": "实际 PageRefreshGate：30 分钟上下界、并发占位与零间隔",
+  "status": "PASS",
+  "evidenceKind": "host-transpiled-arkts-node-adapters",
+  "deviceTested": false,
+  "nativeIOValidated": false,
+  "layer": "host-pure"
+}

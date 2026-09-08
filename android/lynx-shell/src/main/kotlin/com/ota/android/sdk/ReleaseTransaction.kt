@@ -67,6 +67,7 @@ class ReleaseTransaction @JvmOverloads constructor(
     @JvmField val embeddedDescriptor: OtaModels.InstalledRelease? = null,
     /** true 时只发布 release 目录并写 candidate，不修改 current/previous。 */
     @JvmField val stageAsCandidate: Boolean = false,
+    @JvmField val selection: OtaStoredSelection? = null,
   ) {
     constructor(scope: ReleaseScope, targetManifest: OtaModels.ReleaseManifest) : this(scope, targetManifest, null)
   }
@@ -1057,10 +1058,11 @@ class ReleaseTransaction @JvmOverloads constructor(
     }
     val completion = ExecutorCompletionService<BundleTransferResult>(executor)
     val futures = ArrayList<java.util.concurrent.Future<BundleTransferResult>>(plans.size)
+    val operationContext = OtaOperationContext.snapshot()
 
     try {
       for (plan in plans) {
-        futures += completion.submit(Callable { transferBundle(plan, previousRelease) })
+        futures += completion.submit(Callable { OtaOperationContext.withSnapshot(operationContext) { transferBundle(plan, previousRelease) } })
       }
 
       val results = arrayOfNulls<BundleTransferResult>(plans.size)
