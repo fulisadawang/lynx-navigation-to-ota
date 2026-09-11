@@ -24,6 +24,7 @@ object LynxContainerFactory {
         val builder = LynxViewBuilder()
             .setTemplateProvider(templateProvider)
             .setThreadStrategyForRendering(ThreadStrategyForRendering.MOST_ON_TASM)
+            .setColorScheme(ShellGlobalPropsFactory.resolveColorScheme(activity))
 
         // 全部页面统一安装 Lynx 4.0 Explorer 范围内的完整 XElement Behavior。
         XElementRuntime.install(builder)

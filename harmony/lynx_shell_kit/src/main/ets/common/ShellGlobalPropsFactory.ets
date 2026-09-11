@@ -1,6 +1,7 @@
 import { display } from '@kit.ArkUI';
 import ShellJson from './ShellJson';
 import ShellConstants from './ShellConstants';
+import ShellThemeState from './ShellTheme';
 import LynxPageRequest from '../model/LynxPageRequest';
 
 /** 页面可见的真实 Bundle 身份；loadPolicy 与 source 分离，避免把 cache-only 当成来源。 */
@@ -31,6 +32,8 @@ export default class ShellGlobalPropsFactory {
     business['platform'] = 'harmony';
     business['os'] = 'harmony';
     business['lynxVersion'] = '4.0';
+    business['theme'] = ShellThemeState.current();
+    business['frontendTheme'] = 'system';
     business['hostAppVersion'] = ShellConstants.APP_VERSION;
     business['density'] = currentDisplay.densityPixels;
     business['screenWidthPx'] = currentDisplay.width;

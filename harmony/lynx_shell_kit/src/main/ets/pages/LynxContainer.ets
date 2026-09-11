@@ -14,6 +14,7 @@ import {
 import ShellLynxViewClient from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
 import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
+import ShellThemeState from '../common/ShellTheme';
 import OtaUserContextEvents from '../ota/OtaUserContextEvents';
 import { ShellViewAppearPayload } from '../common/ShellTypes';
 import ShellWindowController from '../common/ShellWindowController';
@@ -131,6 +132,9 @@ export struct LynxContainer {
         context.onEnterBackground(); return;
       }
       this.lynxContext = context;
+      // Harmony LynxView 的 colorScheme 字段由 SDK 保持私有；Context 建立后立即使用
+      // 官方动态 API 设定首值，早于壳层登记和前台事件，不重载 Bundle。
+      context.updateColorScheme(ShellThemeState.colorScheme());
       ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
         pageKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.request.bundleUrl, hostMode: 'arkui_page' }, context);
       context.onEnterForeground();

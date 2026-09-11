@@ -72,6 +72,11 @@
     builder.config = config;
     builder.screenSize = screenSize;
     builder.fontScale = 1.0;
+    id theme = globalProps[@"theme"];
+    builder.colorScheme = [theme isKindOfClass:NSString.class] &&
+                                  [theme caseInsensitiveCompare:@"dark"] == NSOrderedSame
+                              ? LynxColorSchemeDark
+                              : LynxColorSchemeLight;
   }];
 
   lynxView.preferredLayoutWidth = screenSize.width;
@@ -100,6 +105,11 @@
   lynxView.preferredLayoutHeight = size.height;
   lynxView.frame = CGRectMake(0, 0, size.width, size.height);
   [lynxView triggerLayout];
+}
+
++ (void)updateColorSchemeForView:(LynxView *)lynxView darkMode:(BOOL)darkMode {
+  NSAssert([NSThread isMainThread], @"LynxView.updateColorScheme 必须在主线程调用");
+  [lynxView updateColorScheme:darkMode ? LynxColorSchemeDark : LynxColorSchemeLight];
 }
 
 + (void)updateGlobalProps:(NSDictionary<NSString *, id> *)globalProps

@@ -7,6 +7,7 @@
 export { LynxContainer } from './pages/LynxContainer';
 export { default as ShellConstants } from './common/ShellConstants';
 export { default as ShellGlobalPropsFactory } from './common/ShellGlobalPropsFactory';
+export { ShellTheme } from './common/ShellTheme';
 export { default as ShellSecurityPolicy } from './common/ShellSecurityPolicy';
 export { default as ShellWindowController } from './common/ShellWindowController';
 export { default as XElementRuntime } from './common/XElementRuntime';

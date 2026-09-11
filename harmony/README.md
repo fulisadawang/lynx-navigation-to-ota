@@ -207,6 +207,8 @@ ota.hostApp = 'capp';
 ota.platform = 'harmony';
 ota.clientToken = secureRuntimeToken;
 LynxRouter.install(this.context, ota);
+// 宿主把已解析的两态主题传给 HAR；不要直接透传 Configuration 的原始数值。
+LynxRouter.setTheme('Light');
 
 await LynxRouter.openOta('10000001', 'home.lynx.bundle', { orderId: '10001' });
 await LynxRouter.deleteOtaBundles('10000001');
@@ -222,6 +224,11 @@ hdc shell aa start -a EntryAbility -b com.example.lynxshell \
 ```
 
 该参数只用于启动时建立本次进程的 OTA 配置，不会写入仓库、HAR 或日志。
+
+`UIAbility.onConfigurationUpdate` 中可在 `COLOR_MODE_DARK` / `COLOR_MODE_LIGHT` 变化时再次
+调用 `LynxRouter.setTheme('Dark' | 'Light')`。HAR 只接收已经映射的两态，`NOT_SET` 保持
+当前有效主题；鸿蒙当前没有 Android/iOS 同等的 Lynx 主动全局内存查询 API，因此不提供
+伪造的零值诊断结果。共享元素转场仍保持现有 Router 降级状态。
 
 ### 原生用户注册与版本来源
 

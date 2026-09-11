@@ -13,6 +13,7 @@ import {
 import ShellLynxViewClient from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
 import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
+import ShellThemeState from '../common/ShellTheme';
 import { ShellViewAppearPayload } from '../common/ShellTypes';
 import XElementRuntime from '../common/XElementRuntime';
 import LynxPageRequest from '../model/LynxPageRequest';
@@ -131,6 +132,9 @@ export struct LynxTabContainer {
     this.contextCreated = (context: LynxContext) => {
       if (generation !== this.prepareGeneration) { context.onEnterBackground(); return; }
       this.lynxContext = context;
+      // Harmony LynxView 的 colorScheme 字段由 SDK 保持私有；Context 建立后立即使用
+      // 官方动态 API 设定首值，避免 Tab 首帧继续沿用旧主题。
+      context.updateColorScheme(ShellThemeState.colorScheme());
       ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
         pageKey: this.request.routeKey, hostMode: 'arkui_tab_container' }, context);
       context.onEnterForeground();

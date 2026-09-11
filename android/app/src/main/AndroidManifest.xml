@@ -22,6 +22,7 @@
 
         <activity
             android:name=".NativeTabDemoActivity"
+            android:configChanges="uiMode"
             android:exported="false"
             android:label="原生 Tab 承载 Demo" />
 

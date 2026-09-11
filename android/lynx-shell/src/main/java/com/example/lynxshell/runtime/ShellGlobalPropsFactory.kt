@@ -9,10 +9,23 @@ import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.routing.LynxNavigator
 import com.example.lynxshell.transition.LynxTransitionIntent
 import com.example.lynxshell.util.JsonObjectCodec
+import com.lynx.tasm.LynxColorScheme
 import java.util.Locale
 
 /** 构造两端约定的宿主全局参数；系统保留字段不允许页面覆盖。 */
 object ShellGlobalPropsFactory {
+    /** 将当前 Activity 的有效夜间模式映射为 Lynx 4.0 两态颜色枚举。 */
+    fun resolveColorScheme(activity: Activity): LynxColorScheme =
+        if (isDarkTheme(activity)) LynxColorScheme.DARK else LynxColorScheme.LIGHT
+
+    /** 与页面 GlobalProps 使用同一份主题判定，避免引擎和页面出现不同步。 */
+    fun resolveThemeName(activity: Activity): String =
+        if (isDarkTheme(activity)) "Dark" else "Light"
+
+    private fun isDarkTheme(activity: Activity): Boolean =
+        activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+            Configuration.UI_MODE_NIGHT_YES
+
     fun create(
         activity: Activity,
         request: LynxPageRequest,
@@ -42,10 +55,7 @@ object ShellGlobalPropsFactory {
         props["statusBarHeight"] = safeAreaTop
         props["navigationBarHeight"] = safeAreaBottom
         props["isNotchScreen"] = (systemBars?.top ?: 0) > 24 * metrics.density
-        props["theme"] = if (
-            activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
-            Configuration.UI_MODE_NIGHT_YES
-        ) "Dark" else "Light"
+        props["theme"] = resolveThemeName(activity)
         props["frontendTheme"] = "system"
         props["systemVersion"] = Build.VERSION.RELEASE
         props["locale"] = Locale.getDefault().toLanguageTag()

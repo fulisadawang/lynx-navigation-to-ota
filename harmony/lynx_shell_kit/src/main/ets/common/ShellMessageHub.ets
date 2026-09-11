@@ -1,5 +1,10 @@
-import { LynxContext } from '@lynx/lynx';
+import { LynxContext, MetaData, TemplateData } from '@lynx/lynx';
 import { ShellRouterMessage, ShellRouterMessageHandler, ShellRouterMessageReply, ShellRouterPageInfo } from './ShellTypes';
+import ShellThemeState, { ShellTheme } from './ShellTheme';
+
+interface ShellThemeGlobalProps extends Record<string, Object> {
+  theme: ShellTheme;
+}
 
 /**
  * HarmonyOS 进程内 Lynx 页面消息中心。
@@ -25,6 +30,18 @@ export default class ShellMessageHub {
   static unregister(pageId: string): void {
     ShellMessageHub.infos.delete(pageId);
     ShellMessageHub.contexts.delete(pageId);
+  }
+
+  /** 将已解析的主题同步到所有仍登记的 LynxContext；不重建 View 或重新加载 Bundle。 */
+  static updateTheme(theme: ShellTheme): void {
+    const globalProps: ShellThemeGlobalProps = { theme: theme };
+    ShellMessageHub.contexts.forEach((context: LynxContext) => {
+      context.updateColorScheme(ShellThemeState.colorScheme(theme));
+      context.updateMetaData(new MetaData(
+        undefined,
+        new TemplateData(globalProps)
+      ));
+    });
   }
 
   static pages(): ShellRouterPageInfo[] {

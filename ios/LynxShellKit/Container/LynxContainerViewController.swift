@@ -188,6 +188,15 @@ final class LynxContainerViewController: UIViewController {
         ShellNavigator.shared.updateBackGesture(for: self)
     }
 
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection == nil ||
+                previousTraitCollection!.hasDifferentColorAppearance(comparedTo: traitCollection) else {
+            return
+        }
+        updateLynxColorScheme()
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isMovingFromParent || isBeingDismissed ||
@@ -714,6 +723,23 @@ final class LynxContainerViewController: UIViewController {
             url: request.bundleURL,
             initData: request.initialData,
             in: createdView
+        )
+    }
+
+    /** 主题由当前容器的有效 trait 决定，同时更新引擎和页面已有 GlobalProps。 */
+    private func updateLynxColorScheme() {
+        guard Thread.isMainThread, isViewLoaded, let lynxView else { return }
+        let darkMode = traitCollection.userInterfaceStyle == .dark
+        LynxNativeRuntime.updateColorScheme(for: lynxView, darkMode: darkMode)
+        LynxNativeRuntime.updateGlobalProps(
+            ShellGlobalPropsFactory.make(
+                for: contentHostView,
+                request: request,
+                pageId: navigationEntryID,
+                sessionId: navigationSessionID,
+                bundleMetadata: bundleRuntimeMetadata
+            ),
+            in: lynxView
         )
     }
 

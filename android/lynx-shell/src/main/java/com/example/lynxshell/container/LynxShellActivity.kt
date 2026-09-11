@@ -1,6 +1,7 @@
 package com.example.lynxshell.container
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -39,6 +40,7 @@ import com.example.lynxshell.ui.ShellErrorView
 import com.example.lynxshell.ui.ShellLoadingView
 import com.example.lynxshell.ota.ActivityBundleRuntime
 import com.example.lynxshell.ota.PreparedActivityBundle
+import com.example.lynxshell.runtime.ShellGlobalPropsFactory
 import com.example.lynxshell.util.JsonObjectCodec
 import com.google.android.material.appbar.MaterialToolbar
 import com.lynx.tasm.LynxError
@@ -797,9 +799,16 @@ class LynxShellActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         restoreContentReleasedForRouteSnapshot()
+        syncColorScheme()
         routerPageId()?.let { pageId ->
             ShellMessageHub.sendLifecycle(pageId, "active", "activity_on_resume")
         }
+    }
+
+    /** 宿主选择不因夜间模式重建 Activity 时，更新当前 LynxView 的引擎与页面主题。 */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        syncColorScheme()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -871,6 +880,17 @@ class LynxShellActivity : AppCompatActivity() {
 
     private fun routerPageId(): String? =
         LynxNavigator.routerPageIdentity(this)?.entryID
+
+    private fun syncColorScheme() {
+        if (!::container.isInitialized || isFinishing || isDestroyed) return
+        val view = lynxView ?: return
+        view.updateColorScheme(ShellGlobalPropsFactory.resolveColorScheme(this))
+        view.updateGlobalProps(
+            hashMapOf<String, Any>(
+                "theme" to ShellGlobalPropsFactory.resolveThemeName(this),
+            ),
+        )
+    }
 
     private fun isLightColor(color: Int): Boolean {
         val luminance = (

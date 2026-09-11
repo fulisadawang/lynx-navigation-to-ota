@@ -1,5 +1,8 @@
 package com.example.lynxshell.sample
 
+import android.content.res.ColorStateList
+import android.content.res.Configuration
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -8,13 +11,16 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentContainerView
 import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.ota.EmbeddedBundleRegistry
 import com.example.lynxshell.tab.LynxTabFragment
 import com.example.lynxshell.tab.LynxTabSpec
+import com.google.android.material.R
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.color.MaterialColors
 import org.json.JSONObject
 
 /**
@@ -44,9 +50,27 @@ class NativeTabDemoActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "原生 Tab 承载 Demo"
-        val appId = if (OtaUserSelectionDebug.enabled) OtaUserSelectionDebug.APP_ID else EmbeddedBundleRegistry(this).uniqueAppIdForBundles(
-            setOf(PLAYGROUND_OTA_BUNDLE_NAME),
-        ) ?: error("内置 Manifest 中没有唯一的 Tab Demo appId")
+        // 普通运行直接读取构建同步到 APK assets 根目录的最新 Playground Bundle；
+        // 只有显式开启本地 OTA fixture 时才读取 Manifest/current，避免示例 Tab 被旧的
+        // OTA current 与最新前端产物分成两个版本，出现两个 Tab 主题不一致。
+        val otaV3FixtureEnabled = OtaUserSelectionDebug.enabled ||
+            (BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER)
+        val tabAppId = if (otaV3FixtureEnabled) {
+            if (OtaUserSelectionDebug.enabled) {
+                OtaUserSelectionDebug.APP_ID
+            } else {
+                EmbeddedBundleRegistry(this).uniqueAppIdForBundles(
+                    setOf(PLAYGROUND_OTA_BUNDLE_NAME),
+                ) ?: error("内置 Manifest 中没有唯一的 Tab Demo appId")
+            }
+        } else {
+            null
+        }
+        val tabBundleName = if (otaV3FixtureEnabled) {
+            OTA_STORE_V3_FIXTURE_BUNDLE_NAME
+        } else {
+            null
+        }
         tabSpecs = listOf(
             LynxTabSpec(
                 tabId = "home",
@@ -55,8 +79,8 @@ class NativeTabDemoActivity : AppCompatActivity() {
                 routeKey = "native-tab-home",
                 initDataJson = "{\"source\":\"android-native-tab-demo\"}",
                 globalPropsJson = "{\"queryItems\":{\"native_tab_id\":\"home\"}}",
-                lynxAppId = appId,
-                bundleName = demoTabBundleName(),
+                lynxAppId = tabAppId,
+                bundleName = tabBundleName,
             ),
             LynxTabSpec(
                 tabId = "settings",
@@ -65,8 +89,8 @@ class NativeTabDemoActivity : AppCompatActivity() {
                 routeKey = "native-tab-settings",
                 initDataJson = "{\"source\":\"android-native-tab-demo\"}",
                 globalPropsJson = "{\"queryItems\":{\"native_tab_id\":\"settings\"}}",
-                lynxAppId = appId,
-                bundleName = demoTabBundleName(),
+                lynxAppId = tabAppId,
+                bundleName = tabBundleName,
             ),
         )
 
@@ -138,6 +162,67 @@ class NativeTabDemoActivity : AppCompatActivity() {
                 bottomNavigation.findViewById<android.view.View>(menuId(index))?.contentDescription = "ota-tab-${spec.tabId}"
             }
         }
+        syncNativeChrome()
+    }
+
+    /** 夜间模式由 Manifest 的 uiMode 接管时，重新应用 DayNight 资源并同步存活 Tab。 */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        delegate.applyDayNight()
+        syncNativeChrome()
+    }
+
+    /** Material 组件不会在接管 uiMode 后自动重建内部 tint，显式按当前主题刷新宿主 Chrome。 */
+    private fun syncNativeChrome() {
+        if (!::refreshButton.isInitialized || !::bottomNavigation.isInitialized) return
+        val dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+            Configuration.UI_MODE_NIGHT_YES
+        val primary = MaterialColors.getColor(
+            this,
+            R.attr.colorPrimary,
+            if (dark) Color.rgb(208, 188, 255) else Color.rgb(103, 80, 164),
+        )
+        val onPrimary = MaterialColors.getColor(
+            this,
+            R.attr.colorOnPrimary,
+            if (dark) Color.rgb(55, 41, 72) else Color.WHITE,
+        )
+        val surface = MaterialColors.getColor(
+            this,
+            R.attr.colorSurface,
+            if (dark) Color.rgb(33, 31, 38) else Color.rgb(243, 237, 247),
+        )
+        val selected = MaterialColors.getColor(
+            this,
+            R.attr.colorOnSecondaryContainer,
+            if (dark) Color.rgb(232, 222, 248) else Color.rgb(29, 25, 43),
+        )
+        val unselected = MaterialColors.getColor(
+            this,
+            R.attr.colorOnSurfaceVariant,
+            if (dark) Color.rgb(202, 196, 208) else Color.rgb(73, 69, 79),
+        )
+        val activeIndicator = MaterialColors.getColor(
+            this,
+            R.attr.colorSecondaryContainer,
+            if (dark) Color.rgb(74, 68, 88) else Color.rgb(234, 221, 255),
+        )
+        refreshButton.backgroundTintList = ColorStateList.valueOf(primary)
+        refreshButton.setTextColor(onPrimary)
+        bottomNavigation.backgroundTintList = ColorStateList.valueOf(surface)
+        val itemColors = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(selected, unselected),
+        )
+        bottomNavigation.itemIconTintList = itemColors
+        bottomNavigation.itemTextColor = itemColors
+        bottomNavigation.itemActiveIndicatorColor = ColorStateList.valueOf(activeIndicator)
+        window.statusBarColor = primary
+        window.navigationBarColor = surface
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !MaterialColors.isColorLight(primary)
+            isAppearanceLightNavigationBars = !dark
+        }
     }
 
     /** 显式刷新结束后重读本地决定；部分 App 失败不遮住其他 App 已提交或撤销的结果。 */
@@ -188,13 +273,6 @@ class NativeTabDemoActivity : AppCompatActivity() {
         tabSpecs.getOrNull(menuId - MENU_ID_BASE)?.tabId
 
     private fun fragmentTag(tabId: String): String = "native-lynx-tab-$tabId"
-
-    private fun demoTabBundleName(): String =
-        if (OtaUserSelectionDebug.enabled || (BuildConfig.DEBUG && BuildConfig.LYNX_OTA_LOCAL_SERVER)) {
-            OTA_STORE_V3_FIXTURE_BUNDLE_NAME
-        } else {
-            PLAYGROUND_OTA_BUNDLE_NAME
-        }
 
     private fun addDebugControls(root: LinearLayout) {
         val users = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }

@@ -17,6 +17,7 @@ import EmbeddedBundleRegistry, {
   EmbeddedBundleIdentity,
   EmbeddedOnlyRuntime
 } from '../ota/EmbeddedBundleRegistry';
+import ShellThemeState, { ShellTheme } from '../common/ShellTheme';
 
 /**
  * HarmonyOS 端与 Android `LynxRouter`、iOS `LynxRouter` 对齐的统一门面。
@@ -68,6 +69,17 @@ export default class LynxRouter {
     if (previous !== null) OtaUserContextEvents.emit(runtime.userIdentityEpoch);
     runtime.onApplicationStarted();
     return runtime;
+  }
+
+  /** 宿主传入已经解析的 Light/Dark；HAR 不读取 Demo 的 AppStorage。 */
+  static setTheme(theme: ShellTheme): void {
+    if (ShellThemeState.set(theme)) {
+      ShellMessageHub.updateTheme(theme);
+    }
+  }
+
+  static currentTheme(): ShellTheme {
+    return ShellThemeState.current();
   }
 
   /** 宿主回到前台时调用；每次触发全量 latest-bundle-list，不受页面 30 分钟门控影响。 */

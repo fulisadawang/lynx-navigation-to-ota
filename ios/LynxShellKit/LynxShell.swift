@@ -178,6 +178,8 @@ public final class LynxTabViewController: UIViewController {
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
     private var releaseLease: OtaBundleLease?
+    /** 当前 LynxView 的完整 GlobalProps；主题更新不能只回传一个 theme 字段。 */
+    private var runtimeGlobalProps: [String: Any]?
     private var loadTask: Task<Void, Never>?
     private let pageID: String
     private var didStartLoad = false
@@ -259,14 +261,33 @@ public final class LynxTabViewController: UIViewController {
         }
     }
 
+    public override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // 常驻 Tab 在未选中时可能没有进入当前 trait 传播链；切回可见前重新对齐，
+        // 不重建 LynxView、Bundle 或 OTA lease。
+        synchronizeColorScheme()
+    }
+
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         lynxView?.onEnterForeground()
+        // 首次布局后再补一次完整 GlobalProps；创建前的注入用于初始引擎配置，
+        // 这里确保 Lynx 页面 JS 已经能读到 theme 和 native_tab_id。
+        synchronizeColorScheme()
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
         lynxView?.onEnterBackground()
         super.viewWillDisappear(animated)
+    }
+
+    public override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection == nil ||
+                previousTraitCollection!.hasDifferentColorAppearance(comparedTo: traitCollection) else {
+            return
+        }
+        synchronizeColorScheme()
     }
 
     /** 用户主动刷新 OTA 后，销毁当前 LynxView 并重新读取已提交 current；不触发 Tab 网络请求。 */
@@ -284,6 +305,7 @@ public final class LynxTabViewController: UIViewController {
         ShellMessageHub.unregister(pageId: pageID)
         lynxView?.removeFromSuperview()
         lynxView = nil
+        runtimeGlobalProps = nil
         releaseCurrentLease()
         contentView.viewWithTag(0x4C5958)?.removeFromSuperview()
         didStartLoad = false
@@ -444,6 +466,7 @@ public final class LynxTabViewController: UIViewController {
             )
             props["__lynxRouterNavigationModel"] = "native_tab_host"
             props["__lynxRouterPlatformContainer"] = "uikit_tab_container"
+            runtimeGlobalProps = props
             let created = LynxNativeRuntime.makeView(
                 provider: provider,
                 screenSize: contentView.bounds.size,
@@ -506,6 +529,7 @@ public final class LynxTabViewController: UIViewController {
         firstScreenObserver = nil
         lynxView?.removeFromSuperview()
         lynxView = nil
+        runtimeGlobalProps = nil
         releaseCurrentLease()
 #if DEBUG
         debugLastError = message
@@ -525,6 +549,21 @@ public final class LynxTabViewController: UIViewController {
                 label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             ])
         }
+    }
+
+    /**
+     * 用当前 Tab 容器的有效 trait 同步主题。宿主自定义 UITabBarController 时可以传入
+     * 父容器 trait，确保隐藏的常驻 Tab 也使用同一主题源。
+     */
+    public func synchronizeColorScheme(with source: UITraitCollection? = nil) {
+        guard Thread.isMainThread, isViewLoaded, let lynxView else { return }
+        let effectiveTrait = source ?? view.window?.traitCollection ?? traitCollection
+        let darkMode = effectiveTrait.userInterfaceStyle == .dark
+        LynxNativeRuntime.updateColorScheme(for: lynxView, darkMode: darkMode)
+        guard var props = runtimeGlobalProps else { return }
+        props["theme"] = darkMode ? "Dark" : "Light"
+        runtimeGlobalProps = props
+        LynxNativeRuntime.updateGlobalProps(props, in: lynxView)
     }
 
     private func releaseCurrentLease() {

@@ -142,9 +142,16 @@ baseline（按 `lynxAppId + bundleName` 定位）；它不是运行时 OTA 下�
 写入应用私有 OTA Store，下一次打开页面时优先使用已校验的 current，embedded 仅作为
 安装包 baseline 和回滚兜底。
 
-Demo 不再根据文件名猜 appId：`MainActivity` 和 `NativeTabDemoActivity` 只使用 Manifest
-中唯一匹配 `home.lynx.bundle + main.lynx.bundle` 的 identity。生产宿主仍应从自己的业务/OTA
-响应拿到完整的 `lynxAppId + bundleName`，因为同名 Bundle 可以属于多个 appId。
+Demo 不再根据文件名猜 appId：`MainActivity` 的 OTA 页面只使用 Manifest 中唯一匹配
+`home.lynx.bundle + main.lynx.bundle` 的 identity。普通 `NativeTabDemoActivity` 直接读取
+构建同步到 `assets://bundles/main.lynx.bundle` 的最新 Playground Bundle，保证原生 Tab 的
+首页和设置页使用同一份前端产物；只有显式设置 `LYNX_OTA_LOCAL_SERVER=1` 的 OTA v3 fixture
+验收才使用 Manifest/current。生产宿主仍应从自己的业务/OTA 响应拿到完整的
+`lynxAppId + bundleName`，因为同名 Bundle 可以属于多个 appId。
+
+Native Tab 示例声明 `android:configChanges="uiMode"`，系统夜间模式变化由宿主原地接管：
+存活的 `LynxTabFragment` 更新 Lynx 4.0 color scheme 和 `globalProps.theme`，示例的
+Material 顶栏、底部 TabBar 也同步刷新，不重载 Bundle、不触发 OTA。
 
 Android 的 embedded baseline 不会在启动时复制到 `filesDir`。命中内置 Bundle 时由
 `EmbeddedBundleRegistry` 直接从 APK `AssetManager` 读取、校验 size/SHA 后以 bytes 交给
@@ -240,6 +247,10 @@ App 私有目录 `files/lynx-ota-store`，不放进 `assets/ota`。
 Demo 原生 Launcher 提供“查看 OTA 磁盘目录”入口。页面使用 `LynxRouter.otaStorageSnapshot()`
 读取与事务共锁的只读快照，展示绝对路径、current/previous/candidate/leased/orphan、staging、
 文件数和字节数；打开和刷新该页面不会触发 OTA 请求或修改 Store。
+
+需要排查 Lynx 进程内存时，可从原生诊断入口低频调用 `LynxRouter.queryMemoryUsage`。它把
+4.0 的 `completed/timeout`、实例计数和聚合字节回调到主线程，不暴露实例 URL/pageId，
+也不属于 `LynxShellModule` 页面 Bridge。实际数值和超时场景仍需在目标设备验证。
 
 ## 默认沉浸式容器
 

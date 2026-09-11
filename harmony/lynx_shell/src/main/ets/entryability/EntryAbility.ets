@@ -77,6 +77,7 @@ export default class EntryAbility extends UIAbility {
     LynxRouter.install(this.context, otaConfig);
     console.info(`[${ShellConstants.TAG}] OTA base=${launchBaseUrl}, localHttp=${otaConfig.allowLocalHTTPForTest}, testFault=${otaConfig.testFaultPoint || 'none'}, capacityOverride=${otaConfig.testAvailableCapacityBytes}, testPause=${otaConfig.testPausePoint || 'none'}:${otaConfig.testPauseMillis}:${otaConfig.testPauseToken || 'none'}, wantKeys=${launchParameterKeys}`);
     AppStorage.setOrCreate(ShellConstants.STORAGE_COLOR_MODE, this.context.config.colorMode);
+    this.applyTheme(this.context.config.colorMode);
     console.info(`[${ShellConstants.TAG}] EntryAbility created, launchReason=${launchParam.launchReason}`);
   }
 
@@ -113,6 +114,15 @@ export default class EntryAbility extends UIAbility {
     const current = AppStorage.get<ConfigurationConstant.ColorMode>(ShellConstants.STORAGE_COLOR_MODE);
     if (current !== newConfig.colorMode) {
       AppStorage.setOrCreate(ShellConstants.STORAGE_COLOR_MODE, newConfig.colorMode);
+    }
+    this.applyTheme(newConfig.colorMode);
+  }
+
+  private applyTheme(colorMode: ConfigurationConstant.ColorMode | undefined): void {
+    if (colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK) {
+      LynxRouter.setTheme('Dark');
+    } else if (colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT) {
+      LynxRouter.setTheme('Light');
     }
   }
 

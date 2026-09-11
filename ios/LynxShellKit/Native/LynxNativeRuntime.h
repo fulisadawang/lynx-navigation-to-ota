@@ -26,6 +26,14 @@ NS_ASSUME_NONNULL_BEGIN
                        size:(CGSize)size
     NS_SWIFT_NAME(updateLayout(view:size:));
 
+/**
+ * 更新 Lynx 4.0 的 prefers-color-scheme；调用方必须在主线程执行。
+ * Swift 使用 Bool 避免把平台枚举值泄露到壳层，Objective-C 内部再映射为 LynxColorScheme。
+ */
++ (void)updateColorSchemeForView:(LynxView *)lynxView
+                         darkMode:(BOOL)darkMode
+    NS_SWIFT_NAME(updateColorScheme(for:darkMode:));
+
 + (void)updateGlobalProps:(NSDictionary<NSString *, id> *)globalProps
                    inView:(LynxView *)lynxView
     NS_SWIFT_NAME(updateGlobalProps(_:in:));
