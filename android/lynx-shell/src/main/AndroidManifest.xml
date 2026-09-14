@@ -7,6 +7,7 @@
         <!-- Activity 与 Native Module 一并进入 AAR，宿主无需复制容器声明。 -->
         <activity
             android:name=".container.LynxShellActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="true"
             android:screenOrientation="unspecified">
             <intent-filter>

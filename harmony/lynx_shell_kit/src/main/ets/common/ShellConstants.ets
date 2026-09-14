@@ -24,6 +24,7 @@ export default class ShellConstants {
   static readonly STORAGE_INITIAL_URI_VERSION: string = 'lynx_initial_uri_version';
   static readonly STORAGE_WINDOW_STAGE: string = 'lynx_window_stage';
   static readonly STORAGE_COLOR_MODE: string = 'lynx_color_mode';
+  static readonly STORAGE_LOCALE_OVERRIDE: string = 'lynx_shell_app_locale';
 
   private constructor() {
   }

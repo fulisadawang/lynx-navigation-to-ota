@@ -226,6 +226,28 @@ private enum OtaDebugF12Status {
         LynxShell.setHostManagedBackGesture(enabled)
     }
 
+    /** 返回当前 App 语言；语言资源由各个 Lynx Bundle 自己加载。 */
+    public static func currentLocale() -> LynxLocaleState {
+        ShellLocaleStore.current()
+    }
+
+    /** 设置 App 语言并同步所有存活 LynxView；nil 清除覆盖并恢复跟随系统。 */
+    @discardableResult
+    public static func setLocale(_ locale: String?) throws -> LynxLocaleState {
+        let previous = ShellLocaleStore.current()
+        let state = try ShellLocaleStore.set(appLocale: locale)
+        if state != previous {
+            _ = ShellMessageHub.updateLocale(state)
+        }
+        return state
+    }
+
+    /** 清除 App 语言覆盖，等价于 setLocale(nil)。 */
+    @discardableResult
+    public static func clearLocale() throws -> LynxLocaleState {
+        try setLocale(nil)
+    }
+
     /**
      * 打开 assets/HTTPS Bundle；params 同时作为 initData 和 queryItems。
      *

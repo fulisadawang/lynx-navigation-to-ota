@@ -17,6 +17,12 @@ NS_ASSUME_NONNULL_BEGIN
                        globalProps:(NSDictionary<NSString *, id> *)globalProps
     NS_SWIFT_NAME(makeView(provider:screenSize:globalProps:));
 
++ (LynxView *)makeViewWithProvider:(id<LynxTemplateProvider>)provider
+                        screenSize:(CGSize)screenSize
+                      viewportSize:(CGSize)viewportSize
+                       globalProps:(NSDictionary<NSString *, id> *)globalProps
+    NS_SWIFT_NAME(makeView(provider:screenSize:viewportSize:globalProps:));
+
 + (void)loadURL:(NSString *)url
        initData:(NSDictionary<NSString *, id> *)initData
          inView:(LynxView *)lynxView
@@ -25,6 +31,11 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)updateLayoutForView:(LynxView *)lynxView
                        size:(CGSize)size
     NS_SWIFT_NAME(updateLayout(view:size:));
+
++ (void)updateLayoutForView:(LynxView *)lynxView
+                        size:(CGSize)size
+                  screenSize:(CGSize)screenSize
+    NS_SWIFT_NAME(updateLayout(view:size:screenSize:));
 
 /**
  * 更新 Lynx 4.0 的 prefers-color-scheme；调用方必须在主线程执行。

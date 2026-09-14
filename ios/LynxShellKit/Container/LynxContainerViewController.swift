@@ -31,6 +31,8 @@ final class LynxContainerViewController: UIViewController {
     private var bundleRuntimeMetadata: [String: Any]?
     private var preparedUserIdentityEpoch: UInt64?
     private var loadGeneration = UUID()
+    private let layoutUpdateCoordinator = ShellLayoutUpdateCoordinator()
+    private var latestLayoutSnapshot: ShellLayoutSnapshot?
     private var firstScreenObserver: LynxFirstScreenObserver?
     private var firstScreenReady = false
     private var firstScreenFailed = false
@@ -227,18 +229,13 @@ final class LynxContainerViewController: UIViewController {
            contentHostView.bounds.width > 0,
            contentHostView.bounds.height > 0 {
             rebuildLynxView(resetOtaRecovery: true)
-        } else if let lynxView {
-            LynxNativeRuntime.updateLayout(view: lynxView, size: resolvedSize())
-            // 旋转、分屏或状态栏变化后同步安全区和主题等系统参数。
-            let globalProps = ShellGlobalPropsFactory.make(
-                for: contentHostView,
-                request: request,
-                pageId: navigationEntryID,
-                sessionId: navigationSessionID,
-                bundleMetadata: bundleRuntimeMetadata
-            )
-            LynxNativeRuntime.updateGlobalProps(globalProps, in: lynxView)
         }
+        scheduleLayoutUpdate()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        scheduleLayoutUpdate()
     }
 
     override var prefersStatusBarHidden: Bool { request.hideStatusBar }
@@ -265,6 +262,7 @@ final class LynxContainerViewController: UIViewController {
     func replaceRequest(_ newRequest: LynxPageRequest) {
         request = newRequest
         guard isViewLoaded else { return }
+        layoutUpdateCoordinator.invalidate()
         applyChrome()
         layoutPresetContainer()
         rebuildLynxView(resetOtaRecovery: true)
@@ -351,7 +349,8 @@ final class LynxContainerViewController: UIViewController {
                 request: request,
                 pageId: navigationEntryID,
                 sessionId: navigationSessionID,
-                bundleMetadata: bundleRuntimeMetadata
+                bundleMetadata: bundleRuntimeMetadata,
+                layoutSnapshot: latestLayoutSnapshot
             ),
             in: lynxView
         )
@@ -669,16 +668,26 @@ final class LynxContainerViewController: UIViewController {
         templateProvider = provider
 
         let size = resolvedSize()
+        let layoutSnapshot = latestLayoutSnapshot ?? ShellLayoutSnapshot(
+            revision: 0,
+            timestampMillis: Int64(Date().timeIntervalSince1970 * 1000),
+            measurement: ShellLayoutSnapshot.measure(
+                for: contentHostView,
+                viewportSize: size
+            )
+        )
         let globalProps = ShellGlobalPropsFactory.make(
             for: contentHostView,
             request: request,
             pageId: navigationEntryID,
             sessionId: navigationSessionID,
-            bundleMetadata: bundleRuntimeMetadata
+            bundleMetadata: bundleRuntimeMetadata,
+            layoutSnapshot: layoutSnapshot
         )
         let createdView = LynxNativeRuntime.makeView(
             provider: provider,
-            screenSize: size,
+            screenSize: layoutSnapshot.screenSize,
+            viewportSize: layoutSnapshot.viewportSize,
             globalProps: globalProps
         )
         let observer = LynxFirstScreenObserver(
@@ -706,7 +715,10 @@ final class LynxContainerViewController: UIViewController {
                 pageKey: request.resolvedRouteKey,
                 hostMode: "uikit_view_controller"
             ),
-            view: createdView
+            view: createdView,
+            updateLocale: { [weak self] state in
+                self?.synchronizeLocale(state)
+            }
         )
 
 #if DEBUG
@@ -737,10 +749,55 @@ final class LynxContainerViewController: UIViewController {
                 request: request,
                 pageId: navigationEntryID,
                 sessionId: navigationSessionID,
-                bundleMetadata: bundleRuntimeMetadata
+                bundleMetadata: bundleRuntimeMetadata,
+                layoutSnapshot: latestLayoutSnapshot
             ),
             in: lynxView
         )
+    }
+
+    /** 语言状态由宿主统一提交；页面原位接收完整 GlobalProps，不重建 OTA 内容。 */
+    func synchronizeLocale(_ state: LynxLocaleState) {
+        guard Thread.isMainThread, isViewLoaded, let lynxView else { return }
+        let globalProps = ShellGlobalPropsFactory.make(
+            for: contentHostView,
+            request: request,
+            pageId: navigationEntryID,
+            sessionId: navigationSessionID,
+            bundleMetadata: bundleRuntimeMetadata,
+            localeState: state,
+            layoutSnapshot: latestLayoutSnapshot
+        )
+        LynxNativeRuntime.updateGlobalProps(globalProps, in: lynxView)
+    }
+
+    private func scheduleLayoutUpdate() {
+        layoutUpdateCoordinator.schedule(
+            for: contentHostView,
+            viewportSize: { [weak self] in self?.resolvedSize() ?? .zero },
+            onUpdate: { [weak self] snapshot in
+                self?.applyLayoutUpdate(snapshot)
+            }
+        )
+    }
+
+    private func applyLayoutUpdate(_ snapshot: ShellLayoutSnapshot) {
+        latestLayoutSnapshot = snapshot
+        guard let lynxView else { return }
+        LynxNativeRuntime.updateLayout(
+            view: lynxView,
+            size: snapshot.viewportSize,
+            screenSize: snapshot.screenSize
+        )
+        let globalProps = ShellGlobalPropsFactory.make(
+            for: contentHostView,
+            request: request,
+            pageId: navigationEntryID,
+            sessionId: navigationSessionID,
+            bundleMetadata: bundleRuntimeMetadata,
+            layoutSnapshot: snapshot
+        )
+        LynxNativeRuntime.updateGlobalProps(globalProps, in: lynxView)
     }
 
     /** Provider/首屏错误时，OTA 页面只允许一次 previous/embedded 回滚。 */

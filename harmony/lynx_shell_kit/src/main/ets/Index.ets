@@ -8,6 +8,28 @@ export { LynxContainer } from './pages/LynxContainer';
 export { default as ShellConstants } from './common/ShellConstants';
 export { default as ShellGlobalPropsFactory } from './common/ShellGlobalPropsFactory';
 export { ShellTheme } from './common/ShellTheme';
+export {
+  default as ShellLocaleState,
+  ShellLocaleTag,
+  ShellLocaleSource,
+  ShellLocaleCapabilities,
+  ShellLocaleStateValue,
+  ShellLocaleMutation
+} from './common/ShellLocale';
+export {
+  default as ShellLayoutState,
+  ShellCapabilityStatus,
+  ShellLayoutOrientation,
+  ShellWindowMode,
+  ShellFoldStatus,
+  ShellFoldDisplayMode,
+  ShellLogicalRect,
+  ShellInsets,
+  ShellLayoutCapabilities,
+  ShellLayoutFold,
+  ShellLayoutSnapshot,
+  ShellRawScreenSize
+} from './common/ShellLayoutState';
 export { default as ShellSecurityPolicy } from './common/ShellSecurityPolicy';
 export { default as ShellWindowController } from './common/ShellWindowController';
 export { default as XElementRuntime } from './common/XElementRuntime';

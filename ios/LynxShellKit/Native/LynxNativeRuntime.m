@@ -65,6 +65,16 @@
 + (LynxView *)makeViewWithProvider:(id<LynxTemplateProvider>)provider
                         screenSize:(CGSize)screenSize
                        globalProps:(NSDictionary<NSString *, id> *)globalProps {
+  return [self makeViewWithProvider:provider
+                         screenSize:screenSize
+                       viewportSize:screenSize
+                        globalProps:globalProps];
+}
+
++ (LynxView *)makeViewWithProvider:(id<LynxTemplateProvider>)provider
+                        screenSize:(CGSize)screenSize
+                      viewportSize:(CGSize)viewportSize
+                       globalProps:(NSDictionary<NSString *, id> *)globalProps {
   LynxConfig *config = [[LynxConfig alloc] initWithProvider:provider];
   [config registerModule:LynxShellModule.class];
 
@@ -79,11 +89,11 @@
                               : LynxColorSchemeLight;
   }];
 
-  lynxView.preferredLayoutWidth = screenSize.width;
-  lynxView.preferredLayoutHeight = screenSize.height;
+  lynxView.preferredLayoutWidth = viewportSize.width;
+  lynxView.preferredLayoutHeight = viewportSize.height;
   lynxView.layoutWidthMode = LynxViewSizeModeExact;
   lynxView.layoutHeightMode = LynxViewSizeModeExact;
-  lynxView.frame = CGRectMake(0, 0, screenSize.width, screenSize.height);
+  lynxView.frame = CGRectMake(0, 0, viewportSize.width, viewportSize.height);
 
   LynxTemplateData *templateData =
       [[LynxTemplateData alloc] initWithDictionary:globalProps ?: @{}];
@@ -101,10 +111,18 @@
 }
 
 + (void)updateLayoutForView:(LynxView *)lynxView size:(CGSize)size {
-  lynxView.preferredLayoutWidth = size.width;
-  lynxView.preferredLayoutHeight = size.height;
+  [self updateLayoutForView:lynxView size:size screenSize:size];
+}
+
++ (void)updateLayoutForView:(LynxView *)lynxView
+                        size:(CGSize)size
+                  screenSize:(CGSize)screenSize {
+  NSAssert([NSThread isMainThread], @"LynxView 布局更新必须在主线程调用");
   lynxView.frame = CGRectMake(0, 0, size.width, size.height);
-  [lynxView triggerLayout];
+  [lynxView updateScreenMetricsWithWidth:screenSize.width height:screenSize.height];
+  [lynxView updateViewportWithPreferredLayoutWidth:size.width
+                               preferredLayoutHeight:size.height
+                                          needLayout:YES];
 }
 
 + (void)updateColorSchemeForView:(LynxView *)lynxView darkMode:(BOOL)darkMode {

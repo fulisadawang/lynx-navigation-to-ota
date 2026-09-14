@@ -41,6 +41,8 @@ typealias LynxRouterMessageHandler = (LynxRouterMessage) -> LynxRouterMessageRep
  */
 object ShellMessageHub {
     const val LIFECYCLE_EVENT = "lynxRouterLifecycle"
+    const val LOCALE_EVENT = "lynxShellLocaleChanged"
+    const val LAYOUT_EVENT = "lynxShellLayoutChanged"
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val lock = Any()
@@ -159,11 +161,18 @@ object ShellMessageHub {
     }
 
     private fun validateEventName(value: String, allowLifecycle: Boolean) {
-        require(value.trim().isNotEmpty() && value.length <= 128) {
+        val normalized = value.trim()
+        require(normalized.isNotEmpty() && normalized.length <= 128) {
             "eventName 不能为空且不能超过 128 个字符"
         }
-        require(allowLifecycle || value != LIFECYCLE_EVENT) {
+        require(allowLifecycle || normalized != LIFECYCLE_EVENT) {
             "lynxRouterLifecycle 是宿主保留事件"
+        }
+        require(normalized != LOCALE_EVENT) {
+            "lynxShellLocaleChanged 是宿主保留事件"
+        }
+        require(normalized != LAYOUT_EVENT) {
+            "lynxShellLayoutChanged 是宿主保留事件"
         }
     }
 

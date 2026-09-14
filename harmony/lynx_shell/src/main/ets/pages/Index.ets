@@ -3,7 +3,9 @@ import {
   ShellConstants,
   LynxRouter,
   LynxTabContainer,
-  LynxTabSpec
+  LynxTabSpec,
+  ShellLocaleState,
+  ShellLocaleStateValue
 } from '@lynx/lynx-shell-kit';
 
 /**
@@ -24,6 +26,7 @@ struct Index {
   @State private tabLynxAppId: string = '';
   @State private tabBundleName: string = '';
   @State private otaIdentityEpoch: number = 0;
+  @State private localeRevision: number = 0;
 
   @StorageLink('lynx_ota_demo_user')
   private otaDemoUser: string = 'anonymous';
@@ -45,8 +48,17 @@ struct Index {
   private playgroundBundleName: string = 'main.lynx.bundle';
   private useLocalFixture: boolean = false;
   private static readonly LOCAL_FIXTURE_BUNDLE_NAME: string = 'pages/10000001/bundle-050.lynx.bundle';
+  private readonly localeListener: (state: ShellLocaleStateValue) => void = (state: ShellLocaleStateValue): void => {
+    this.localeRevision = state.revision;
+  };
+
+  private isEnglish(): boolean {
+    return this.localeRevision >= 0 && LynxRouter.currentLocaleState().appLocale === 'en-US';
+  }
 
   aboutToAppear(): void {
+    ShellLocaleState.subscribe(this.localeListener);
+    this.localeRevision = LynxRouter.currentLocaleState().revision;
     this.otaIdentityEpoch = LynxRouter.getOtaUserIdentityEpoch();
     this.useLocalFixture = AppStorage.get<string>('lynx_ota_local_fixture') === '1';
     if (this.useLocalFixture) {
@@ -57,6 +69,10 @@ struct Index {
     if (!this.consumeInitialRoute()) {
       this.openDefaultOtaHome();
     }
+  }
+
+  aboutToDisappear(): void {
+    ShellLocaleState.unsubscribe(this.localeListener);
   }
 
   private onInitialUriVersionChanged(): void {
@@ -378,7 +394,8 @@ struct Index {
     if (this.showNativeTabDemo) {
       Column() {
         Row() {
-          Button('返回原生壳首页')
+          Button(this.isEnglish() ? 'Back' : '返回')
+            .layoutWeight(1)
             .height(44)
             .fontSize(14)
             .fontColor($r('app.color.shell_text_primary'))
@@ -387,9 +404,10 @@ struct Index {
             .borderRadius(12)
             .onClick(() => this.closeNativeTabDemo())
 
-          Blank()
+          Blank().width(8)
 
-          Button('磁盘')
+          Button(this.isEnglish() ? 'Files' : '磁盘')
+            .layoutWeight(0.6)
             .height(44)
             .fontSize(14)
             .fontColor($r('app.color.shell_text_primary'))
@@ -398,7 +416,8 @@ struct Index {
             .borderRadius(12)
             .onClick(() => this.openStorageInspector())
 
-          Button(this.isRefreshingOta ? '正在同步 OTA…' : '刷新 OTA')
+          Button(this.isRefreshingOta ? (this.isEnglish() ? 'Syncing OTA…' : '正在同步 OTA…') : (this.isEnglish() ? 'Refresh OTA' : '刷新 OTA'))
+            .layoutWeight(1)
             .height(44)
             .fontSize(14)
             .fontWeight(FontWeight.Medium)
@@ -434,7 +453,7 @@ struct Index {
               refreshGeneration: this.tabReloadGeneration
             })
           }
-          .tabBar('首页')
+          .tabBar(this.isEnglish() ? 'Home' : '首页')
 
           TabContent() {
             LynxTabContainer({
@@ -442,7 +461,7 @@ struct Index {
               refreshGeneration: this.tabReloadGeneration
             })
           }
-          .tabBar('设置')
+          .tabBar(this.isEnglish() ? 'Settings' : '设置')
         }
         .barMode(BarMode.Fixed)
         .onChange((index: number) => this.selectedNativeTab = index)

@@ -22,7 +22,7 @@
 
         <activity
             android:name=".NativeTabDemoActivity"
-            android:configChanges="uiMode"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"
             android:label="原生 Tab 承载 Demo" />
 

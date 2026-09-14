@@ -18,7 +18,7 @@ import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.model.PageOrientation
 import com.example.lynxshell.resource.ShellTemplateProvider
-import com.example.lynxshell.runtime.ShellGlobalPropsFactory
+import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
 import com.example.lynxshell.util.JsonObjectCodec
 import com.lynx.tasm.LynxError
 import com.lynx.tasm.LynxView
@@ -120,6 +120,7 @@ class LynxTabFragment : Fragment() {
 
     override fun onDestroyView() {
         LynxRouter.removeOtaUserContextListener(userContextListener)
+        LynxEnvironmentCoordinator.unbind(lynxView)
         releaseContent(view as? ViewGroup)
         super.onDestroyView()
     }
@@ -206,6 +207,7 @@ class LynxTabFragment : Fragment() {
         unregister()
         templateProvider?.close()
         templateProvider = null
+        LynxEnvironmentCoordinator.unbind(lynxView)
         lynxView?.destroy()
         lynxView = null
         releaseCurrentLease()
@@ -296,6 +298,7 @@ class LynxTabFragment : Fragment() {
             activity = activity,
             view = created,
         )
+        LynxEnvironmentCoordinator.bind(activity, created)
         created.renderTemplateUrl(
             request.bundleUrl,
             JsonObjectCodec.toMap(request.initDataJson, "initData"),
@@ -307,6 +310,7 @@ class LynxTabFragment : Fragment() {
         debugIdentity = ""
         templateProvider?.close()
         templateProvider = null
+        LynxEnvironmentCoordinator.unbind(lynxView)
         lynxView?.destroy()
         lynxView = null
         releaseCurrentLease()
@@ -323,13 +327,7 @@ class LynxTabFragment : Fragment() {
     /** 宿主不重建 Fragment 时，保持引擎 media query 与既有 theme 字段同源。 */
     private fun syncColorScheme() {
         val activity = activity ?: return
-        val view = lynxView ?: return
-        view.updateColorScheme(ShellGlobalPropsFactory.resolveColorScheme(activity))
-        view.updateGlobalProps(
-            hashMapOf<String, Any>(
-                "theme" to ShellGlobalPropsFactory.resolveThemeName(activity),
-            ),
-        )
+        LynxEnvironmentCoordinator.synchronize(activity)
     }
 
     private fun unregister() {

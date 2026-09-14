@@ -15,6 +15,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentContainerView
 import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.ota.EmbeddedBundleRegistry
+import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
+import com.example.lynxshell.runtime.LynxLocaleState
+import com.example.lynxshell.runtime.LynxLocaleStore
 import com.example.lynxshell.tab.LynxTabFragment
 import com.example.lynxshell.tab.LynxTabSpec
 import com.google.android.material.R
@@ -39,6 +42,7 @@ class NativeTabDemoActivity : AppCompatActivity() {
     private var syncStatus = "idle"
     private var activeTabId = "home"
     private var debugStateView: TextView? = null
+    private var localeChangeSubscription: AutoCloseable? = null
     private val debugHandler = Handler(Looper.getMainLooper())
     private val debugTick = object : Runnable {
         override fun run() {
@@ -163,6 +167,11 @@ class NativeTabDemoActivity : AppCompatActivity() {
             }
         }
         syncNativeChrome()
+        localeChangeSubscription = LynxLocaleStore.addChangeListener { state ->
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) syncLocaleChrome(state)
+            }
+        }
     }
 
     /** 夜间模式由 Manifest 的 uiMode 接管时，重新应用 DayNight 资源并同步存活 Tab。 */
@@ -170,11 +179,13 @@ class NativeTabDemoActivity : AppCompatActivity() {
         super.onConfigurationChanged(newConfig)
         delegate.applyDayNight()
         syncNativeChrome()
+        LynxEnvironmentCoordinator.synchronize(this)
     }
 
     /** Material 组件不会在接管 uiMode 后自动重建内部 tint，显式按当前主题刷新宿主 Chrome。 */
     private fun syncNativeChrome() {
         if (!::refreshButton.isInitialized || !::bottomNavigation.isInitialized) return
+        syncLocaleChrome(LynxLocaleStore.current(this))
         val dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
             Configuration.UI_MODE_NIGHT_YES
         val primary = MaterialColors.getColor(
@@ -222,6 +233,32 @@ class NativeTabDemoActivity : AppCompatActivity() {
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = !MaterialColors.isColorLight(primary)
             isAppearanceLightNavigationBars = !dark
+        }
+    }
+
+    /** 原生 TabBar 属于 Sample 宿主，必须与 Lynx 页面消费同一个 LocaleState。 */
+    private fun syncLocaleChrome(state: LynxLocaleState) {
+        if (!::refreshButton.isInitialized || !::bottomNavigation.isInitialized) return
+        val english = state.effectiveLocale == LynxLocaleStore.EN_US
+        title = if (english) "Native Tab Demo" else "原生 Tab 承载 Demo"
+        if (!refreshing) {
+            refreshButton.text = if (OtaUserSelectionDebug.enabled) {
+                if (english) "Refresh OTA" else "刷新 OTA"
+            } else {
+                if (english) "Refresh OTA and reload Tabs" else "刷新 OTA 后重载 Tab"
+            }
+        }
+        tabSpecs.getOrNull(0)?.let { spec ->
+            bottomNavigation.menu.findItem(menuId(0))?.apply {
+                title = if (english) "Home" else spec.title
+                contentDescription = if (english) "Home" else "首页"
+            }
+        }
+        tabSpecs.getOrNull(1)?.let { spec ->
+            bottomNavigation.menu.findItem(menuId(1))?.apply {
+                title = if (english) "Settings" else spec.title
+                contentDescription = if (english) "Settings" else "设置"
+            }
         }
     }
 
@@ -360,6 +397,7 @@ class NativeTabDemoActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        LynxEnvironmentCoordinator.synchronize(this)
         if (OtaUserSelectionDebug.enabled) { debugHandler.removeCallbacks(debugTick); debugHandler.post(debugTick) }
     }
 
@@ -370,6 +408,8 @@ class NativeTabDemoActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         debugHandler.removeCallbacks(debugTick)
+        localeChangeSubscription?.close()
+        localeChangeSubscription = null
         super.onDestroy()
     }
 

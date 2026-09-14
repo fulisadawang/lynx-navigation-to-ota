@@ -245,8 +245,11 @@ final class NativeTabBarDemoViewController: UITabBarController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let success = await LynxRouter.refreshAllOtaBundles()
-            // 主动刷新即重新读取已提交状态；部分下载失败不应遮住其他 App 的成功决定。
-            tabControllers.forEach { $0.refreshFromCurrent() }
+            // 只有宿主完成一次可用的 OTA 同步后才重读 Tab；没有 runtime 或同步失败时，
+            // 保留当前 LynxView，避免“刷新失败”反而替换用户正在看的页面。
+            if success {
+                tabControllers.forEach { $0.refreshFromCurrent() }
+            }
             refreshItem?.isEnabled = true
             presentShellAlert(
                 title: success ? "OTA 同步完成" : "OTA 同步失败",

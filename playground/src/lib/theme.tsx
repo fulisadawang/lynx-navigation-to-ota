@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from '@lynx-js/react'
+import { LocaleProvider } from './locale.js'
 
 export type ThemePreference = 'Auto' | 'Light' | 'Dark'
 export type ResolvedTheme = 'light' | 'dark'
@@ -80,9 +81,11 @@ export function ThemeProvider(props: { children: any }) {
   const resolved = resolveTheme(preference)
 
   return (
-    <ThemeContext.Provider value={{ preference, resolved, setPreference }}>
-      {props.children}
-    </ThemeContext.Provider>
+    <LocaleProvider>
+      <ThemeContext.Provider value={{ preference, resolved, setPreference }}>
+        {props.children}
+      </ThemeContext.Provider>
+    </LocaleProvider>
   )
 }
 

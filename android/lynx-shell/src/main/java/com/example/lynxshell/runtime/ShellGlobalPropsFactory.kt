@@ -3,14 +3,12 @@ package com.example.lynxshell.runtime
 import android.app.Activity
 import android.content.res.Configuration
 import android.os.Build
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import android.view.View
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.routing.LynxNavigator
 import com.example.lynxshell.transition.LynxTransitionIntent
 import com.example.lynxshell.util.JsonObjectCodec
 import com.lynx.tasm.LynxColorScheme
-import java.util.Locale
 
 /** 构造两端约定的宿主全局参数；系统保留字段不允许页面覆盖。 */
 object ShellGlobalPropsFactory {
@@ -26,40 +24,46 @@ object ShellGlobalPropsFactory {
         activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
             Configuration.UI_MODE_NIGHT_YES
 
-    fun create(
-        activity: Activity,
-        request: LynxPageRequest,
-        bundleMetadata: Map<String, Any>? = null,
-    ): HashMap<String, Any> {
-        val metrics = activity.resources.displayMetrics
-        val insets = ViewCompat.getRootWindowInsets(activity.window.decorView)
-        val systemBars = insets?.getInsets(WindowInsetsCompat.Type.systemBars())
-        val props = JsonObjectCodec.toMap(request.globalPropsJson, "globalProps")
-        val safeAreaTop = (systemBars?.top ?: 0) / metrics.density
-        val safeAreaBottom = (systemBars?.bottom ?: 0) / metrics.density
-        val safeAreaLeft = (systemBars?.left ?: 0) / metrics.density
-        val safeAreaRight = (systemBars?.right ?: 0) / metrics.density
+    /** 供 Builder 和布局协调器读取同一份 WindowMetrics。 */
+    fun captureLayout(activity: Activity, view: View? = null): LynxLayoutSnapshot =
+        LynxLayoutSnapshot.capture(activity, view)
 
+    /** 构造不依赖具体路由身份的环境字段；GlobalProps 更新会合并这些保留字段。 */
+    fun createEnvironment(
+        activity: Activity,
+        view: View? = null,
+        snapshot: LynxLayoutSnapshot = captureLayout(activity, view),
+        layoutRevision: Long = 0L,
+        locale: LynxLocaleState = LynxLocaleStore.current(activity),
+    ): HashMap<String, Any> {
+        val props = snapshot.toGlobalProps(layoutRevision)
         props["platform"] = "android"
-        // Sparkling Playground 的旧字段名。保留壳字段，同时提供兼容别名。
         props["os"] = "android"
-        props["screenWidth"] = metrics.widthPixels / metrics.density
-        props["screenHeight"] = metrics.heightPixels / metrics.density
-        props["density"] = metrics.density
-        props["safeAreaTop"] = safeAreaTop
-        props["safeAreaBottom"] = safeAreaBottom
-        props["safeAreaLeft"] = safeAreaLeft
-        props["safeAreaRight"] = safeAreaRight
-        props["topHeight"] = safeAreaTop
-        props["bottomHeight"] = safeAreaBottom
-        props["statusBarHeight"] = safeAreaTop
-        props["navigationBarHeight"] = safeAreaBottom
-        props["isNotchScreen"] = (systemBars?.top ?: 0) > 24 * metrics.density
         props["theme"] = resolveThemeName(activity)
         props["frontendTheme"] = "system"
         props["systemVersion"] = Build.VERSION.RELEASE
-        props["locale"] = Locale.getDefault().toLanguageTag()
-
+        props["locale"] = locale.effectiveLocale
+        props["language"] = locale.language
+        props["appLanguage"] = locale.language
+        props["appLocale"] = locale.appLocale ?: org.json.JSONObject.NULL
+        props["appLocaleOverride"] = locale.appLocale ?: org.json.JSONObject.NULL
+        props["systemLocale"] = locale.systemLocale
+        props["localeSource"] = locale.source
+        props["localeStatus"] = locale.status
+        props["localeRevision"] = locale.revision
+        props["direction"] = locale.direction
+        props["formatLocale"] = locale.effectiveLocale
+        props["__lynxShellLocale"] = locale.toGlobalMap()
+        props["layoutCapabilities"] = hashMapOf<String, Any>(
+            "windowMetrics" to "supported",
+            "viewportMetrics" to if (snapshot.viewportWidthPx != null && snapshot.viewportHeightPx != null) {
+                "supported"
+            } else {
+                "pending"
+            },
+            "foldStatus" to snapshot.foldingCapability,
+            "creaseGeometry" to if (snapshot.foldingFeature == null) "unavailable" else "supported",
+        )
         val packageInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
         props["appVersion"] = packageInfo.versionName ?: ""
         props["buildNumber"] = if (Build.VERSION.SDK_INT >= 28) {
@@ -67,6 +71,22 @@ object ShellGlobalPropsFactory {
         } else {
             @Suppress("DEPRECATION") packageInfo.versionCode.toString()
         }
+        return props
+    }
+
+    fun create(
+        activity: Activity,
+        request: LynxPageRequest,
+        bundleMetadata: Map<String, Any>? = null,
+        initialLayout: LynxLayoutSnapshot? = null,
+    ): HashMap<String, Any> {
+        val props = JsonObjectCodec.toMap(request.globalPropsJson, "globalProps")
+        props.putAll(
+            createEnvironment(
+                activity = activity,
+                snapshot = initialLayout ?: captureLayout(activity),
+            ),
+        )
         // 页面应读取“原生最终采用”的 chrome 状态，而不是调用方可能遗漏或互相冲突的
         // 原始参数。保留其他 queryItems，并覆盖这四个宿主保留字段。
         val queryItems = hashMapOf<String, Any>()
@@ -80,6 +100,9 @@ object ShellGlobalPropsFactory {
         queryItems["hide_status_bar"] = if (request.hideStatusBar) "1" else "0"
         queryItems["trans_status_bar"] =
             if (request.fullscreen && !request.hideStatusBar) "1" else "0"
+        val locale = LynxLocaleStore.current(activity)
+        queryItems["locale"] = locale.effectiveLocale
+        queryItems["language"] = locale.language
         props["queryItems"] = queryItems
         // Native Page Stack 身份必须按页面实例生成：同一个 Bundle 多次 push 不能共享
         // containerID，否则 sendToPage 会把消息误投到旧 Activity。

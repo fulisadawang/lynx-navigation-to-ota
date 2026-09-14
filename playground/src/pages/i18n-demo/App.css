@@ -1,0 +1,87 @@
+.i18n-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 16px;
+}
+
+.i18n-card--dark {
+  background-color: #1c1c1e;
+}
+
+.i18n-card--light {
+  background-color: #ffffff;
+}
+
+.i18n-title {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.i18n-title--dark,
+.i18n-state-label--dark,
+.i18n-hint--dark {
+  color: #ffffff;
+}
+
+.i18n-title--light,
+.i18n-state-label--light,
+.i18n-hint--light {
+  color: #111111;
+}
+
+.i18n-description,
+.i18n-hint {
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.i18n-description--dark {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.i18n-description--light {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.i18n-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 10px;
+}
+
+.i18n-state--dark {
+  background-color: #2a2a2a;
+}
+
+.i18n-state--light {
+  background-color: #f0f2f5;
+}
+
+.i18n-state-label {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.i18n-button {
+  min-height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #009995;
+}
+
+.i18n-button--dark,
+.i18n-button--light {
+  border-width: 0;
+}
+
+.i18n-button-text {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+}

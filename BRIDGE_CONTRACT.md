@@ -16,6 +16,40 @@ Android/iOS 的高级导航、直接 NativeModules 调用、launch mode、页面
 高级栈 API；其栈元数据由 `LynxNavigator` 维护并映射到 ArkUI Router，转场状态为明确的
 Router 降级态。
 
+## App 语言
+
+三端宿主统一支持 `zh-CN` 和 `en-US`。语言是 App 级状态，可以独立于系统语言：首次启动
+按系统语言选择，系统不是中文或英文时回退 `zh-CN`；用户选择后保存 App 覆盖值，直到宿主
+显式清除覆盖。RTL 本批次不支持，状态中的 `direction` 固定为 `ltr`。
+
+```ts
+setLocale(locale: 'zh-CN' | 'en-US' | null, callback: Callback): void
+getLocale(callback: Callback): void
+```
+
+- `null`（HarmonyOS/跨语言调用也可传 `system`）清除 App 覆盖并恢复跟随系统；成功码仍是原始 Module 的 `code=0`；
+- `data.state` 是带 `revision` 的完整状态，包含 `locale`、`language`、`systemLocale`、
+  `appLocale`/`appLocaleOverride`、`source` 和 `direction`；
+- 宿主先更新所有存活 LynxView 的完整 GlobalProps，再发送保留事件
+  `lynxShellLocaleChanged`；业务不得通过通用 `broadcast` 伪造该事件；
+- 新页面的 `GlobalProps.queryItems.locale` 和 Playground 的导航 wrapper 会携带当前
+  canonical locale，业务页面不需要逐页拼接语言参数；
+- 每个 Lynx Bundle 都是独立 JavaScript runtime，翻译资源和 i18next 实例由 Bundle 自己
+  管理。宿主只提供状态同步，不把资源加载完成伪装成 `setLocale` 成功。
+
+## 窗口与折叠屏环境
+
+三端在 Lynx 4.0 页面创建时注入 `__lynxShellLayout` 和兼容 flat 字段
+`screenWidth/screenHeight`、`viewportWidth/viewportHeight`、`safeAreaInsets`、
+`orientation`、`windowMode`、`layoutRevision`。`screen` 表示当前 Window/Scene，
+`viewport` 表示具体 LynxView 的可用区域；页面收到窗口、旋转、分屏或安全区变化后，宿主
+原位调用 Lynx 4.0 的 screen metrics 和 viewport 更新 API，并发送
+`lynxShellLayoutChanged`。
+
+折叠状态、显示模式、角度和折痕只有在当前平台官方 API 明确可用时才出现在 `fold`；没有
+真实数据时返回 capability `unknown`/`unavailable`，不生成伪造的双栏布局。HarmonyOS
+共享元素转场和业务双栏布局继续延期。
+
 ## open
 
 ```ts

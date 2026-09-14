@@ -12,6 +12,9 @@ import com.example.lynxshell.routing.LynxNavigationOptions
 import com.example.lynxshell.routing.LynxNavigationResult
 import com.example.lynxshell.routing.LynxNavigator
 import com.example.lynxshell.routing.LynxRouteParser
+import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
+import com.example.lynxshell.runtime.LynxLocaleState
+import com.example.lynxshell.runtime.LynxLocaleStore
 import com.lynx.tasm.LynxGlobalMemoryUsageCallback
 import com.lynx.tasm.LynxMemoryUsageQuery
 import org.json.JSONObject
@@ -85,6 +88,7 @@ object LynxRouter {
         activityBundleRuntime: ActivityBundleRuntime? = null,
     ) {
         LynxShell.initialize(application)
+        LynxLocaleStore.install(application)
         val runtime = activityBundleRuntime ?: EmbeddedBundleRuntime(application)
         synchronized(otaUserLock) {
             if (runtime is LynxOtaRuntime && hasPendingOtaUser) runtime.registerInitialUserId(pendingOtaUser)
@@ -113,6 +117,59 @@ object LynxRouter {
      */
     fun onApplicationForeground() {
         LynxShell.activityBundleRuntime()?.onApplicationForeground()
+    }
+
+    /** 返回当前 App 语言；app 覆盖优先于系统语言，未支持的系统语言回退 zh-CN。 */
+    @JvmStatic
+    fun currentLocale(): LynxLocaleState = LynxLocaleStore.current()
+
+    /**
+     * 设置 App 语言并原位同步全部存活 LynxView，null 表示清除 App 覆盖并跟随系统。
+     *
+     * callback 的 code=0 只表示宿主状态已经提交且更新已经排入主线程；页面资源是否完成
+     * 加载由页面自己的 i18n 状态负责，不能由这个回调伪装成资源 ready。
+     */
+    @JvmStatic
+    fun setLocale(
+        localeTag: String?,
+        onComplete: (LynxLocaleResult) -> Unit = {},
+    ) {
+        val change = runCatching {
+            LynxLocaleStore.setLocale(LynxLocaleStore.applicationContext(), localeTag)
+        }.getOrElse { error ->
+            val failure = LynxLocaleResult(
+                code = 1001,
+                message = error.message ?: "语言参数不合法",
+                state = runCatching { currentLocale() }.getOrNull(),
+            )
+            postLocaleCallback(onComplete, failure)
+            return
+        }
+        val apply = Runnable {
+            val affectedCount = if (change.changed) {
+                LynxEnvironmentCoordinator.updateLocale(change.state)
+            } else {
+                0
+            }
+            if (change.changed) LynxLocaleStore.notifyChanged(change.state)
+            onComplete(
+                LynxLocaleResult(
+                    code = 0,
+                    message = if (change.changed) "语言已更新" else "语言未变化",
+                    state = change.state,
+                    affectedCount = affectedCount,
+                ),
+            )
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) apply.run() else mainHandler.post(apply)
+    }
+
+    private fun postLocaleCallback(
+        onComplete: (LynxLocaleResult) -> Unit,
+        result: LynxLocaleResult,
+    ) {
+        if (Looper.myLooper() == Looper.getMainLooper()) onComplete(result)
+        else mainHandler.post { onComplete(result) }
     }
 
     /**
@@ -359,6 +416,13 @@ data class LynxMemoryUsageSnapshot(
     val viewBytes: Long,
     val mainThreadRuntimeBytes: Long,
     val backgroundThreadRuntimeBytes: Long,
+)
+
+data class LynxLocaleResult(
+    val code: Int,
+    val message: String,
+    val state: LynxLocaleState?,
+    val affectedCount: Int = 0,
 )
 
 internal object LynxDebugFaults {

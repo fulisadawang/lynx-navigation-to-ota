@@ -19,6 +19,9 @@ export default class EntryAbility extends UIAbility {
     // 接入时应从构建/宿主配置注入真实 HTTPS 地址，不要把这个测试地址带入生产包。
     const launchBaseUrl = (want.parameters?.lynx_ota_api_base_url as string) ??
       'http://10.0.2.2:18766';
+    // 本地 HDC 验收可以显式请求 embedded-only，跳过 OTA 网络和 Token；默认路径仍保持
+    // TEST OTA，避免把设备验收开关混入正常宿主配置。
+    const embeddedOnly = ((want.parameters?.lynx_embedded_only as string) ?? '').trim() === '1';
     const otaConfig = new LynxOtaConfig(launchBaseUrl);
     otaConfig.environment = 'TEST';
     otaConfig.hostApp = 'capp';
@@ -28,7 +31,7 @@ export default class EntryAbility extends UIAbility {
       otaConfig.environment === 'TEST';
     AppStorage.setOrCreate(
       'lynx_ota_local_fixture',
-      otaConfig.allowLocalHTTPForTest ? '1' : '0'
+      !embeddedOnly && otaConfig.allowLocalHTTPForTest ? '1' : '0'
     );
     // Demo 不写死客户端令牌；验收时可通过 Want 参数临时注入，真实宿主应改为自己的安全配置。
     const launchToken = (want.parameters?.lynx_ota_client_token as string) ?? '';
@@ -74,8 +77,12 @@ export default class EntryAbility extends UIAbility {
     } else {
       LynxRouter.registerOtaUserId(demoAudience === 'A' ? 'user_demo_A' : 'user_demo_B');
     }
-    LynxRouter.install(this.context, otaConfig);
-    console.info(`[${ShellConstants.TAG}] OTA base=${launchBaseUrl}, localHttp=${otaConfig.allowLocalHTTPForTest}, testFault=${otaConfig.testFaultPoint || 'none'}, capacityOverride=${otaConfig.testAvailableCapacityBytes}, testPause=${otaConfig.testPausePoint || 'none'}:${otaConfig.testPauseMillis}:${otaConfig.testPauseToken || 'none'}, wantKeys=${launchParameterKeys}`);
+    if (embeddedOnly) {
+      LynxRouter.install(this.context);
+    } else {
+      LynxRouter.install(this.context, otaConfig);
+    }
+    console.info(`[${ShellConstants.TAG}] OTA base=${launchBaseUrl}, embeddedOnly=${embeddedOnly}, localHttp=${otaConfig.allowLocalHTTPForTest}, testFault=${otaConfig.testFaultPoint || 'none'}, capacityOverride=${otaConfig.testAvailableCapacityBytes}, testPause=${otaConfig.testPausePoint || 'none'}:${otaConfig.testPauseMillis}:${otaConfig.testPauseToken || 'none'}, wantKeys=${launchParameterKeys}`);
     AppStorage.setOrCreate(ShellConstants.STORAGE_COLOR_MODE, this.context.config.colorMode);
     this.applyTheme(this.context.config.colorMode);
     console.info(`[${ShellConstants.TAG}] EntryAbility created, launchReason=${launchParam.launchReason}`);
@@ -84,6 +91,7 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     AppStorage.setOrCreate(ShellConstants.STORAGE_WINDOW_STAGE, windowStage);
     windowStage.getMainWindow().then((currentWindow: window.Window) => {
+      LynxRouter.attachWindow(currentWindow);
       currentWindow.setPreferredOrientation(window.Orientation.AUTO_ROTATION_RESTRICTED);
     }).catch((error: Error) => {
       console.error(`[${ShellConstants.TAG}] getMainWindow failed: ${error.message}`);
@@ -102,6 +110,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageDestroy(): void {
+    LynxRouter.detachWindow();
     AppStorage.delete(ShellConstants.STORAGE_WINDOW_STAGE);
   }
 
@@ -116,6 +125,7 @@ export default class EntryAbility extends UIAbility {
       AppStorage.setOrCreate(ShellConstants.STORAGE_COLOR_MODE, newConfig.colorMode);
     }
     this.applyTheme(newConfig.colorMode);
+    LynxRouter.onSystemLocaleChanged();
   }
 
   private applyTheme(colorMode: ConfigurationConstant.ColorMode | undefined): void {

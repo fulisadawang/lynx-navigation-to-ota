@@ -357,6 +357,9 @@ def bridge_contract() -> None:
         "removeStorageItem",
         "clearStorage",
         "getAppInfo",
+        # App 级语言状态；宿主提交后广播给存活页面。
+        "getLocale",
+        "setLocale",
         "chooseMedia",
         "uploadFile",
         "uploadImage",

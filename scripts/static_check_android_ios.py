@@ -447,6 +447,9 @@ def bridge_contract() -> None:
         "removeStorageItem",
         "clearStorage",
         "getAppInfo",
+        # App 级语言状态；宿主提交后由各端统一广播给存活页面。
+        "getLocale",
+        "setLocale",
     }
     media_methods = {
         "chooseMedia",

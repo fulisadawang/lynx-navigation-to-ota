@@ -1,9 +1,26 @@
 import { LynxContext, MetaData, TemplateData } from '@lynx/lynx';
 import { ShellRouterMessage, ShellRouterMessageHandler, ShellRouterMessageReply, ShellRouterPageInfo } from './ShellTypes';
 import ShellThemeState, { ShellTheme } from './ShellTheme';
+import ShellGlobalPropsFactory from './ShellGlobalPropsFactory';
+import ShellLayoutState, { ShellLayoutSnapshot } from './ShellLayoutState';
+import ShellLocaleState, { ShellLocaleStateValue } from './ShellLocale';
 
 interface ShellThemeGlobalProps extends Record<string, Object> {
   theme: ShellTheme;
+}
+
+interface ShellLocaleChangedPayload {
+  schemaVersion: number;
+  revision: number;
+  reason: string;
+  state: ShellLocaleStateValue;
+}
+
+interface ShellLayoutChangedPayload {
+  schemaVersion: number;
+  revision: number;
+  reason: string;
+  snapshot: ShellLayoutSnapshot;
 }
 
 /**
@@ -14,6 +31,8 @@ interface ShellThemeGlobalProps extends Record<string, Object> {
  */
 export default class ShellMessageHub {
   static readonly LIFECYCLE_EVENT: string = 'lynxRouterLifecycle';
+  static readonly LOCALE_EVENT: string = 'lynxShellLocaleChanged';
+  static readonly LAYOUT_EVENT: string = 'lynxShellLayoutChanged';
   private static infos: Map<string, ShellRouterPageInfo> = new Map();
   private static contexts: Map<string, LynxContext> = new Map();
   private static messageHandler: ShellRouterMessageHandler | null = null;
@@ -25,23 +44,69 @@ export default class ShellMessageHub {
   static register(info: ShellRouterPageInfo, context: LynxContext): void {
     ShellMessageHub.infos.set(info.pageId, info);
     ShellMessageHub.contexts.set(info.pageId, context);
+    ShellMessageHub.applyEnvironment(context, info.pageId);
   }
 
   static unregister(pageId: string): void {
     ShellMessageHub.infos.delete(pageId);
     ShellMessageHub.contexts.delete(pageId);
+    ShellLayoutState.clearViewport(pageId);
   }
 
   /** 将已解析的主题同步到所有仍登记的 LynxContext；不重建 View 或重新加载 Bundle。 */
   static updateTheme(theme: ShellTheme): void {
     const globalProps: ShellThemeGlobalProps = { theme: theme };
-    ShellMessageHub.contexts.forEach((context: LynxContext) => {
+    ShellMessageHub.contexts.forEach((context: LynxContext, pageId: string) => {
       context.updateColorScheme(ShellThemeState.colorScheme(theme));
+      const environment = ShellGlobalPropsFactory.environmentProps(pageId);
+      Object.keys(globalProps).forEach((key: string) => {
+        environment[key] = globalProps[key];
+      });
+      context.updateMetaData(new MetaData(undefined, new TemplateData(environment)));
+    });
+  }
+
+  /** 将完整 LocaleState 更新到所有存活 Context，并通知页面侧资源层。 */
+  static updateLocale(reason: string): number {
+    const state = ShellLocaleState.current();
+    let affectedCount = 0;
+    ShellMessageHub.contexts.forEach((context: LynxContext, pageId: string) => {
+      ShellMessageHub.applyEnvironment(context, pageId);
+      const payload: ShellLocaleChangedPayload = {
+        schemaVersion: 1,
+        revision: state.revision,
+        reason: reason,
+        state: state
+      };
+      context.sendGlobalEvent(ShellMessageHub.LOCALE_EVENT, [payload]);
+      affectedCount += 1;
+    });
+    return affectedCount;
+  }
+
+  /** 将当前 Window/viewport LayoutSnapshot 更新到所有存活 Context。 */
+  static updateLayout(reason: string): number {
+    let affectedCount = 0;
+    ShellMessageHub.contexts.forEach((context: LynxContext, pageId: string) => {
+      const snapshot = ShellLayoutState.snapshot(pageId);
+      const rawScreen = ShellLayoutState.rawScreenSize();
+      context.updateScreenMetrics(rawScreen.width, rawScreen.height);
+      // Harmony Lynx 4.0 binding 已公开 updateViewport；Mode=1 是 definite。
+      context.updateViewport(snapshot.viewportWidth, 1, snapshot.viewportHeight, 1);
       context.updateMetaData(new MetaData(
         undefined,
-        new TemplateData(globalProps)
+        new TemplateData(ShellGlobalPropsFactory.environmentProps(pageId))
       ));
+      const payload: ShellLayoutChangedPayload = {
+        schemaVersion: 1,
+        revision: snapshot.revision,
+        reason: reason,
+        snapshot: snapshot
+      };
+      context.sendGlobalEvent(ShellMessageHub.LAYOUT_EVENT, [payload]);
+      affectedCount += 1;
     });
+    return affectedCount;
   }
 
   static pages(): ShellRouterPageInfo[] {
@@ -140,7 +205,21 @@ export default class ShellMessageHub {
   private static isPublicEvent(eventName: string): boolean {
     const normalized = eventName.trim();
     return normalized.length > 0 && normalized.length <= 128 &&
-      normalized !== ShellMessageHub.LIFECYCLE_EVENT;
+      normalized !== ShellMessageHub.LIFECYCLE_EVENT &&
+      normalized !== ShellMessageHub.LOCALE_EVENT &&
+      normalized !== ShellMessageHub.LAYOUT_EVENT;
+  }
+
+  private static applyEnvironment(context: LynxContext, pageId: string): void {
+    const snapshot = ShellLayoutState.snapshot(pageId);
+    const rawScreen = ShellLayoutState.rawScreenSize();
+    context.updateColorScheme(ShellThemeState.colorScheme());
+    context.updateScreenMetrics(rawScreen.width, rawScreen.height);
+    context.updateViewport(snapshot.viewportWidth, 1, snapshot.viewportHeight, 1);
+    context.updateMetaData(new MetaData(
+      undefined,
+      new TemplateData(ShellGlobalPropsFactory.environmentProps(pageId))
+    ));
   }
 
   private constructor() {

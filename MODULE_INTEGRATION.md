@@ -15,6 +15,19 @@ Module 内保留当前全部手写 `NativeModules.LynxShellModule`、高级导�
 资源 Provider 和 XElement。Sample 只演示初始化、绑定宿主导航器、打开 Bundle 以及
 “回业务主页”接线。不使用 `sparkling-method`、`spkPipe`、autolink 或 codegen。
 
+## App 语言与窗口环境
+
+三端 Module 都提供 `setLocale` / `getLocale`。支持 `zh-CN`、`en-US`，App 覆盖优先于系统，
+清除覆盖后恢复系统；状态带单调 `revision`。宿主负责把完整状态更新到所有存活页面（包括
+隐藏 Native Tab），随后发送 `lynxShellLocaleChanged`。资源内容不放在 Module 中，由每个
+Bundle 自己加载；Playground 的接入边界见 [`playground/src/locales/README.md`](playground/src/locales/README.md)。
+
+窗口环境在页面创建和原生布局回调后同步 Lynx 4.0 的 screen metrics、viewport 与完整
+GlobalProps，并发送 `lynxShellLayoutChanged`。`screen` 是 Window/Scene 尺寸，`viewport`
+是具体 LynxView 可用区域；布局更新采用合帧、去重和 revision，不重建页面、不触发 OTA
+resolve。没有官方折叠数据的平台只报告 capability，不推导双栏；HarmonyOS 共享元素转场
+暂不在本批次接入。
+
 ## Android
 
 ### 目录与依赖

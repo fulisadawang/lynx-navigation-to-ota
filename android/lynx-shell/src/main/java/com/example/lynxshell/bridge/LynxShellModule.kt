@@ -13,6 +13,9 @@ import com.example.lynxshell.routing.findActivity
 import com.example.lynxshell.transition.LynxTransitionRuntime
 import com.example.lynxshell.transition.PreparedRouteStore
 import com.example.lynxshell.ota.LynxOtaRuntime
+import com.example.lynxshell.LynxLocaleResult
+import com.example.lynxshell.LynxRouter
+import com.example.lynxshell.runtime.LynxLocaleState
 import com.lynx.jsbridge.Arguments
 import com.lynx.jsbridge.LynxMethod
 import com.lynx.jsbridge.LynxModule
@@ -218,6 +221,25 @@ class LynxShellModule(context: Context) : LynxModule(context) {
         }.onFailure {
             callback.invoke(result(1001, it.message ?: "广播发送失败"))
         }
+    }
+
+    /** 读取宿主当前语言状态；返回值中的 state 与 GlobalProps 使用同一份 revision。 */
+    @LynxMethod
+    fun getLocale(callback: Callback) {
+        mainHandler.post {
+            val state = runCatching { LynxRouter.currentLocale() }.getOrNull()
+            if (state == null) {
+                callback.invoke(result(1004, "LynxRouter 尚未安装或语言状态不可用"))
+            } else {
+                callback.invoke(localeStateMap(state))
+            }
+        }
+    }
+
+    /** 设置 App 语言；null 清除覆盖并恢复跟随系统，成功码沿用 Native Module 的 code=0。 */
+    @LynxMethod
+    fun setLocale(localeTag: String?, callback: Callback) {
+        LynxRouter.setLocale(localeTag) { value -> callback.invoke(localeResultMap(value)) }
     }
 
     /** 按 pageId 向另一个 Lynx Activity 定向发送消息。 */
@@ -533,6 +555,30 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     private fun result(value: LynxNavigationResult): JavaOnlyMap {
         val data = hashMapOf<String, Any>("affectedCount" to value.affectedCount)
         data.putAll(value.data)
+        return nativeMap(
+            hashMapOf(
+                "code" to value.code,
+                "message" to value.message,
+                "data" to data,
+            ),
+        )
+    }
+
+    private fun localeStateMap(state: LynxLocaleState): JavaOnlyMap =
+        nativeMap(
+            hashMapOf(
+                "code" to 0,
+                "message" to "语言状态读取成功",
+                "data" to state.toMap(),
+            ),
+        )
+
+    private fun localeResultMap(value: LynxLocaleResult): JavaOnlyMap {
+        val data = hashMapOf<String, Any>("affectedCount" to value.affectedCount)
+        value.state?.let { state ->
+            data["state"] = state.toMap()
+            data.putAll(state.toMap())
+        }
         return nativeMap(
             hashMapOf(
                 "code" to value.code,

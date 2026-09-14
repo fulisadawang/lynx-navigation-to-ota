@@ -54,6 +54,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.8.0")
     implementation("androidx.fragment:fragment-ktx:1.8.5")
+    // WindowMetrics/FoldingFeature 用于当前 Activity 的真实窗口与折叠能力快照。
+    implementation("androidx.window:window:1.5.0")
     implementation("com.google.android.material:material:1.12.0")
 
     // Lynx 4.0 核心与 JS Runtime。
