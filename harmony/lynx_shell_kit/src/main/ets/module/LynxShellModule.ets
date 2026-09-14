@@ -3,9 +3,15 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 import { LLog, LynxContext, LynxModule } from '@lynx/lynx';
 import ShellConstants from '../common/ShellConstants';
 import { ShellAppInfo, ShellBridgeResult, ShellMessageCount, ShellRouterPayload } from '../common/ShellTypes';
+import { ShellLocaleStateValue } from '../common/ShellLocale';
 import LynxRouteParser from '../routing/LynxRouteParser';
 import LynxNavigator from '../routing/LynxNavigator';
+import LynxRouter from '../routing/LynxRouter';
 import ShellMessageHub from '../common/ShellMessageHub';
+
+interface ShellLocaleReadData {
+  state: ShellLocaleStateValue;
+}
 
 /**
  * Lynx 页面统一原生能力入口。
@@ -122,6 +128,21 @@ export class LynxShellModule extends LynxModule {
     } catch (error) {
       callback({ code: 1001, message: `广播发送失败: ${error}` });
     }
+  }
+
+  /** 页面设置 App 语言；资源加载状态由页面自己的 i18next 实例独立维护。 */
+  public setLocale(locale: string, callback: (result: ShellBridgeResult) => void): void {
+    callback(LynxRouter.setLocale(locale));
+  }
+
+  /** 页面读取当前宿主 LocaleState；新页面也会在初始 GlobalProps 中得到同一状态。 */
+  public getLocale(callback: (result: ShellBridgeResult) => void): void {
+    const data: ShellLocaleReadData = { state: LynxRouter.currentLocaleState() };
+    callback({
+      code: 0,
+      message: '当前语言读取成功',
+      data: data
+    });
   }
 
   /** 页面按 pageId 向另一个 Lynx 页面发送事件。 */

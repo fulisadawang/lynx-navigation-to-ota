@@ -20,6 +20,7 @@ export default defineConfig({
       'scheme-presets': './src/pages/scheme-presets/index.tsx',
       'go-bundles': './src/pages/go-bundles/index.tsx',
       'nav-basic': './src/pages/nav-basic/index.tsx',
+      'i18n-demo': './src/pages/i18n-demo/index.tsx',
       'nav-chain': './src/pages/nav-chain/index.tsx',
       'transition-gallery': './src/pages/transition-gallery/index.tsx',
       'transition-detail': './src/pages/transition-detail/index.tsx',

@@ -15,6 +15,19 @@ Module 内保留当前全部手写 `NativeModules.LynxShellModule`、高级导�
 资源 Provider 和 XElement。Sample 只演示初始化、绑定宿主导航器、打开 Bundle 以及
 “回业务主页”接线。不使用 `sparkling-method`、`spkPipe`、autolink 或 codegen。
 
+## App 语言与窗口环境
+
+三端 Module 都提供 `setLocale` / `getLocale`。支持 `zh-CN`、`en-US`，App 覆盖优先于系统，
+清除覆盖后恢复系统；状态带单调 `revision`。宿主负责把完整状态更新到所有存活页面（包括
+隐藏 Native Tab），随后发送 `lynxShellLocaleChanged`。资源内容不放在 Module 中，由每个
+Bundle 自己加载；Playground 的接入边界见 [`playground/src/locales/README.md`](playground/src/locales/README.md)。
+
+窗口环境在页面创建和原生布局回调后同步 Lynx 4.0 的 screen metrics、viewport 与完整
+GlobalProps，并发送 `lynxShellLayoutChanged`。`screen` 是 Window/Scene 尺寸，`viewport`
+是具体 LynxView 可用区域；布局更新采用合帧、去重和 revision，不重建页面、不触发 OTA
+resolve。没有官方折叠数据的平台只报告 capability，不推导双栏；HarmonyOS 共享元素转场
+暂不在本批次接入。
+
 ## Android
 
 ### 目录与依赖
@@ -93,6 +106,34 @@ class MyApplication : Application() {
 
 如果一个 Lynx session 中间会插入业务原生 Activity，再按业务 Router 注入
 `SessionExitHandler`；纯连续 Lynx Activity 栈不需要。
+
+### Lynx 4.0 主题同步
+
+宿主的有效浅色/深色主题同时驱动 Lynx 4.0 的 `prefers-color-scheme` 和页面已有的
+`globalProps.theme`。普通 Activity 重建时，容器会在创建 `LynxView` 时读取当前配置；宿主
+声明不重建配置变化时，Activity/Native Tab 会在 UI 线程更新存活 View。主题同步不重载 Bundle、
+不触发 OTA，也不新增主题 NativeModule；页面已有的显式 Light/Dark/Auto 选择复用现成的
+`broadcast`/`GlobalEventEmitter`，让多个存活 LynxView 保持同一偏好。业务页面仍需要使用
+`theme`、CSS 变量或 CSS 条件声明自己的颜色。
+
+HarmonyOS 宿主需要把已经解析好的两态主题显式传给 HAR；系统 `ColorMode` 的数值不能直接
+透传给 Lynx：
+
+```ts
+LynxRouter.install(this.context, ota)
+LynxRouter.setTheme('Light')
+
+onConfigurationUpdate(newConfig: Configuration): void {
+    if (newConfig.colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK) {
+        LynxRouter.setTheme('Dark')
+    } else if (newConfig.colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT) {
+        LynxRouter.setTheme('Light')
+    }
+}
+```
+
+`NOT_SET` 不作为 Lynx 枚举传入；首次缺失保持 HAR 的 Light 默认，已有页面保持上次有效
+主题。多 Window 或业务自定义 override 由宿主自行解析后再次调用 `setTheme`。
 
 ### 原生打开 Lynx
 
@@ -179,6 +220,21 @@ LynxRouter.deleteAllOtaBundles { success, message -> /* 全部 appId */ }
 Lynx 页面侧对应 `NativeModules.LynxShellModule.deleteOtaBundles` /
 `deleteAllOtaBundles`。两者永久清除远程引用，不生成隐藏备份目录；活体 lease 保护的对象延后回收，
 选择模式保留必要 State/lastDecision，`embedded` 描述和 APK assets 保留，回调必须检查 `code === 0`。
+
+### Android 原生内存诊断
+
+需要排查当前进程内 Lynx 内存时，宿主可以低频调用 4.0 的聚合查询；回调会回到主线程，
+结果不包含实例 URL/pageId，也不会发送到 OTA：
+
+```kotlin
+LynxRouter.queryMemoryUsage { snapshot ->
+    log("${snapshot.collectionStatus}: ${snapshot.totalBytes} bytes")
+}
+```
+
+`collectionStatus` 为 `completed` 或 `timeout`；超时时 `completedInstanceCount` 可能小于
+`expectedInstanceCount`，不能把部分结果包装成完整成功。该接口是基座的原生诊断入口，不是
+`LynxShellModule` 页面 Bridge。
 
 ## iOS
 
@@ -306,11 +362,19 @@ _ = try LynxRouter.open(
 
 try await LynxRouter.deleteOtaBundles(lynxAppId: "10000001")
 try await LynxRouter.deleteAllOtaBundles()
+
+LynxRouter.queryMemoryUsage { snapshot in
+    print("\(snapshot.collectionStatus): \(snapshot.totalBytes) bytes")
+}
 ```
 
 OTA 命中合法 `current` 时立即打开，并按 appId 做 30 分钟后台检查；缺包或校验失败会显示
 原生 Loading，等待定向下载、size/SHA 校验、staging 和原子激活。首屏失败最多回滚一次。
 直接 `https://...lynx.bundle` 仍然绕过 OTA，不写入 OTA Store。
+
+iOS 的主题会从每个容器自身 `traitCollection` 解析，并在外观变化时更新存活的
+`LynxView`；宿主不需要增加主题 NativeModule。内存查询同样是原生低频诊断入口，回调会
+回到主线程，保留 `completed/timeout` 和实例计数，不暴露实例明细。
 
 调试表单也可使用便捷入口：
 

@@ -1,6 +1,7 @@
 package com.example.lynxshell.container
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -39,6 +40,7 @@ import com.example.lynxshell.ui.ShellErrorView
 import com.example.lynxshell.ui.ShellLoadingView
 import com.example.lynxshell.ota.ActivityBundleRuntime
 import com.example.lynxshell.ota.PreparedActivityBundle
+import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
 import com.example.lynxshell.util.JsonObjectCodec
 import com.google.android.material.appbar.MaterialToolbar
 import com.lynx.tasm.LynxError
@@ -345,6 +347,7 @@ class LynxShellActivity : AppCompatActivity() {
         templateProvider?.close()
         templateProvider = null
         lynxView?.let { oldView ->
+            LynxEnvironmentCoordinator.unbind(oldView)
             lynxViewClient?.let(oldView::removeLynxViewClient)
             container.removeView(oldView)
             oldView.destroy()
@@ -490,6 +493,7 @@ class LynxShellActivity : AppCompatActivity() {
             lynxView = view
             lynxViewClient = client
             registerMessageEndpoint(view)
+            LynxEnvironmentCoordinator.bind(this, view)
             transitionCoordinator.onPageGenerationChanged(view, generation)
             val initData = JsonObjectCodec.toMap(request.initDataJson, "initData")
             view.renderTemplateUrl(request.bundleUrl, initData)
@@ -633,6 +637,7 @@ class LynxShellActivity : AppCompatActivity() {
         templateProvider?.close()
         templateProvider = null
         lynxView?.let { view ->
+            LynxEnvironmentCoordinator.unbind(view)
             lynxViewClient?.let(view::removeLynxViewClient)
             container.removeView(view)
             view.destroy()
@@ -730,6 +735,7 @@ class LynxShellActivity : AppCompatActivity() {
         val view = lynxView ?: return false
         templateProvider?.close()
         templateProvider = null
+        LynxEnvironmentCoordinator.unbind(view)
         lynxViewClient?.let(view::removeLynxViewClient)
         container.removeView(view)
         view.destroy()
@@ -797,9 +803,16 @@ class LynxShellActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         restoreContentReleasedForRouteSnapshot()
+        syncColorScheme()
         routerPageId()?.let { pageId ->
             ShellMessageHub.sendLifecycle(pageId, "active", "activity_on_resume")
         }
+    }
+
+    /** 宿主选择不因夜间模式重建 Activity 时，更新当前 LynxView 的引擎与页面主题。 */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        syncColorScheme()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -829,6 +842,7 @@ class LynxShellActivity : AppCompatActivity() {
         templateProvider?.close()
         templateProvider = null
         lynxView?.let { view ->
+            LynxEnvironmentCoordinator.unbind(view)
             lynxViewClient?.let(view::removeLynxViewClient)
             view.destroy()
         }
@@ -871,6 +885,11 @@ class LynxShellActivity : AppCompatActivity() {
 
     private fun routerPageId(): String? =
         LynxNavigator.routerPageIdentity(this)?.entryID
+
+    private fun syncColorScheme() {
+        if (!::container.isInitialized || isFinishing || isDestroyed) return
+        LynxEnvironmentCoordinator.synchronize(this)
+    }
 
     private fun isLightColor(color: Int): Boolean {
         val luminance = (

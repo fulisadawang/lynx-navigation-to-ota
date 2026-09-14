@@ -43,6 +43,26 @@ open("https://cdn.example.com/pay.lynx.bundle", { orderId: "123" })
 Bundle 文件名作为默认 `pageKey`；同一个 Bundle 多次打开仍由 `pageId` 区分实例。
 `hybrid://lynxview_page?bundle=...` 是兼容入口，解析后仍进入默认 Native Page Stack。
 
+### 页面语言标识
+
+宿主的 App 语言由 `LynxShellModule.setLocale` 统一保存。打开新页面时，三端 GlobalProps
+都会带当前的 `locale`/`language`，Playground 的 `navigate` 和 `open` wrapper 还会在
+`hybrid://lynxview_page` / `lynxshell://open` 路由上补一个 canonical `locale` query；已有
+旧值会被当前 App 状态覆盖。页面只读取 GlobalProps 或使用自己的资源层，不需要自行从系统
+语言推导。
+
+页面资源仍由各 Bundle 管理。每个 Bundle 入口应监听 `lynxShellLocaleChanged`，根据事件中
+`revision` 丢弃旧状态，并让自己的资源层调用 `changeLanguage('zh-CN'|'en-US')`。本仓库的
+Playground 提供 `LocaleProvider` 和资源注册边界，但不代替业务提交完整翻译内容。
+
+### Window / Foldable 环境
+
+页面应使用 `viewportWidth` / `viewportHeight` 和响应式 Lynx 单位适配可用空间；不要把
+Window 的 `screenWidth` 当成页面布局宽度。宿主监听原生 Window/Scene/ArkUI area 变化，
+原位更新 Lynx 4.0 screen metrics、viewport 和 GlobalProps，不重建 LynxView、不重新 resolve
+OTA、不丢 Native Tab 的 lease/generation。折叠 posture/crease 属于 capability 数据，当前
+没有真实官方数据的平台保持 `unknown`，不自动切双栏。
+
 ### 路由转场动画
 
 `open` / `push` / `replace` 的 `options` 支持统一的 `animated` 布尔参数，默认值为 `true`：

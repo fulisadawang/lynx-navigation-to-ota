@@ -21,9 +21,12 @@ object LynxContainerFactory {
         lynxViewClient: LynxViewClient? = null,
         bundleMetadata: Map<String, Any>? = null,
     ): LynxView {
+        val initialLayout = ShellGlobalPropsFactory.captureLayout(activity)
         val builder = LynxViewBuilder()
             .setTemplateProvider(templateProvider)
             .setThreadStrategyForRendering(ThreadStrategyForRendering.MOST_ON_TASM)
+            .setColorScheme(ShellGlobalPropsFactory.resolveColorScheme(activity))
+            .setScreenSize(initialLayout.screenWidthPx, initialLayout.screenHeightPx)
 
         // 全部页面统一安装 Lynx 4.0 Explorer 范围内的完整 XElement Behavior。
         XElementRuntime.install(builder)
@@ -39,7 +42,12 @@ object LynxContainerFactory {
         return builder.build(activity).also { lynxView ->
             // Lynx 4.0 没有 Builder.setLynxViewClient；必须在 build 后、render 前安装。
             lynxViewClient?.let(lynxView::addLynxViewClient)
-            val globalProps = ShellGlobalPropsFactory.create(activity, request, bundleMetadata)
+            val globalProps = ShellGlobalPropsFactory.create(
+                activity = activity,
+                request = request,
+                bundleMetadata = bundleMetadata,
+                initialLayout = initialLayout,
+            )
             lynxView.updateGlobalProps(TemplateData.fromMap(globalProps))
         }
     }

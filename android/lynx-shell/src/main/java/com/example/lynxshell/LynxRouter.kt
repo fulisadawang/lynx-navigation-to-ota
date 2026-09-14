@@ -12,6 +12,11 @@ import com.example.lynxshell.routing.LynxNavigationOptions
 import com.example.lynxshell.routing.LynxNavigationResult
 import com.example.lynxshell.routing.LynxNavigator
 import com.example.lynxshell.routing.LynxRouteParser
+import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
+import com.example.lynxshell.runtime.LynxLocaleState
+import com.example.lynxshell.runtime.LynxLocaleStore
+import com.lynx.tasm.LynxGlobalMemoryUsageCallback
+import com.lynx.tasm.LynxMemoryUsageQuery
 import org.json.JSONObject
 import com.ota.android.sdk.OtaUserContext
 import com.example.lynxshell.ota.LynxOtaRuntime
@@ -25,6 +30,7 @@ import java.util.concurrent.CopyOnWriteArraySet
  * Activity 的 Intent extra、Registry 或 Provider 细节，也不需要预注册 routeId。
  */
 object LynxRouter {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val otaUserLock = Any()
     private var hasPendingOtaUser = false
     private var pendingOtaUser: String? = null
@@ -82,6 +88,7 @@ object LynxRouter {
         activityBundleRuntime: ActivityBundleRuntime? = null,
     ) {
         LynxShell.initialize(application)
+        LynxLocaleStore.install(application)
         val runtime = activityBundleRuntime ?: EmbeddedBundleRuntime(application)
         synchronized(otaUserLock) {
             if (runtime is LynxOtaRuntime && hasPendingOtaUser) runtime.registerInitialUserId(pendingOtaUser)
@@ -110,6 +117,59 @@ object LynxRouter {
      */
     fun onApplicationForeground() {
         LynxShell.activityBundleRuntime()?.onApplicationForeground()
+    }
+
+    /** 返回当前 App 语言；app 覆盖优先于系统语言，未支持的系统语言回退 zh-CN。 */
+    @JvmStatic
+    fun currentLocale(): LynxLocaleState = LynxLocaleStore.current()
+
+    /**
+     * 设置 App 语言并原位同步全部存活 LynxView，null 表示清除 App 覆盖并跟随系统。
+     *
+     * callback 的 code=0 只表示宿主状态已经提交且更新已经排入主线程；页面资源是否完成
+     * 加载由页面自己的 i18n 状态负责，不能由这个回调伪装成资源 ready。
+     */
+    @JvmStatic
+    fun setLocale(
+        localeTag: String?,
+        onComplete: (LynxLocaleResult) -> Unit = {},
+    ) {
+        val change = runCatching {
+            LynxLocaleStore.setLocale(LynxLocaleStore.applicationContext(), localeTag)
+        }.getOrElse { error ->
+            val failure = LynxLocaleResult(
+                code = 1001,
+                message = error.message ?: "语言参数不合法",
+                state = runCatching { currentLocale() }.getOrNull(),
+            )
+            postLocaleCallback(onComplete, failure)
+            return
+        }
+        val apply = Runnable {
+            val affectedCount = if (change.changed) {
+                LynxEnvironmentCoordinator.updateLocale(change.state)
+            } else {
+                0
+            }
+            if (change.changed) LynxLocaleStore.notifyChanged(change.state)
+            onComplete(
+                LynxLocaleResult(
+                    code = 0,
+                    message = if (change.changed) "语言已更新" else "语言未变化",
+                    state = change.state,
+                    affectedCount = affectedCount,
+                ),
+            )
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) apply.run() else mainHandler.post(apply)
+    }
+
+    private fun postLocaleCallback(
+        onComplete: (LynxLocaleResult) -> Unit,
+        result: LynxLocaleResult,
+    ) {
+        if (Looper.myLooper() == Looper.getMainLooper()) onComplete(result)
+        else mainHandler.post { onComplete(result) }
     }
 
     /**
@@ -157,6 +217,44 @@ object LynxRouter {
     /** 返回只读 OTA Store 快照；调用方应在后台线程执行。 */
     fun otaStorageSnapshot(): com.ota.android.sdk.OtaStorageSnapshot? {
         return LynxShell.activityBundleRuntime()?.otaStorageSnapshot()
+    }
+
+    /**
+     * 按需读取当前进程内 Lynx 实例的聚合内存快照。
+     *
+     * 这是原生诊断入口，不属于页面 Bridge 或 OTA 上报；回调统一切回主线程，结果不暴露
+     * Bundle URL 和实例明细。timeoutMs 小于等于 0 时沿用 Lynx 4.0 的 2000ms 默认值。
+     */
+    fun queryMemoryUsage(
+        timeoutMs: Long = 0L,
+        onComplete: (LynxMemoryUsageSnapshot) -> Unit,
+    ) {
+        val callback = object : LynxGlobalMemoryUsageCallback() {
+            override fun onResult(result: com.lynx.tasm.LynxGlobalMemoryUsageResult) {
+                val snapshot = LynxMemoryUsageSnapshot(
+                    collectionStatus = result.collectionStatus.name.lowercase(),
+                    collectionStartMs = result.collectionStartMs,
+                    collectionDurationMs = result.collectionDurationMs,
+                    collectionTimeoutMs = result.collectionTimeoutMs,
+                    expectedInstanceCount = result.expectedInstanceCount,
+                    completedInstanceCount = result.completedInstanceCount,
+                    totalBytes = result.totalBytes,
+                    appBytes = result.appBytes,
+                    ratioToApp = result.ratioToApp,
+                    elementBytes = result.elementBytes,
+                    elementNodeCount = result.elementNodeCount,
+                    viewBytes = result.viewBytes,
+                    mainThreadRuntimeBytes = result.mainThreadRuntimeBytes,
+                    backgroundThreadRuntimeBytes = result.backgroundThreadRuntimeBytes,
+                )
+                mainHandler.post { onComplete(snapshot) }
+            }
+        }
+        if (timeoutMs <= 0L) {
+            LynxMemoryUsageQuery.inst().queryLynxGlobalMemoryUsageAsync(callback)
+        } else {
+            LynxMemoryUsageQuery.inst().queryLynxGlobalMemoryUsageAsync(callback, timeoutMs)
+        }
     }
 
     /** 运行时替换 OTA 适配器；适合宿主完成环境配置后再安装。 */
@@ -301,6 +399,31 @@ object LynxRouter {
         }
     }
 }
+
+/** 原生诊断使用的无实例明细内存结果；不把 URL/pageId 带出壳层。 */
+data class LynxMemoryUsageSnapshot(
+    val collectionStatus: String,
+    val collectionStartMs: Long,
+    val collectionDurationMs: Long,
+    val collectionTimeoutMs: Long,
+    val expectedInstanceCount: Int,
+    val completedInstanceCount: Int,
+    val totalBytes: Long,
+    val appBytes: Long,
+    val ratioToApp: Double,
+    val elementBytes: Long,
+    val elementNodeCount: Long,
+    val viewBytes: Long,
+    val mainThreadRuntimeBytes: Long,
+    val backgroundThreadRuntimeBytes: Long,
+)
+
+data class LynxLocaleResult(
+    val code: Int,
+    val message: String,
+    val state: LynxLocaleState?,
+    val affectedCount: Int = 0,
+)
 
 internal object LynxDebugFaults {
     @Volatile

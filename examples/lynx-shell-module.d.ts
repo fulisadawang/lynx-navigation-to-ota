@@ -15,6 +15,22 @@ export interface AppInfo {
   systemVersion: string;
 }
 
+export type SupportedLocale = 'zh-CN' | 'en-US';
+
+export interface LocaleState {
+  schemaVersion: number;
+  revision: number;
+  systemLocale: string;
+  appLocale?: SupportedLocale | null;
+  appLocaleOverride?: SupportedLocale | null;
+  locale: SupportedLocale;
+  effectiveLocale?: SupportedLocale;
+  language: 'zh' | 'en';
+  source: string;
+  status: string;
+  direction: 'ltr' | string;
+}
+
 export type TransitionStyle =
   | 'default'
   | 'fade'
@@ -221,6 +237,12 @@ export interface LynxShellModule {
   removeStorageItem(key: string): void;
   clearStorage(): void;
   getAppInfo(callback: (info: AppInfo) => void): void;
+  /** 宿主 App 语言；null 或 system 清除 App 覆盖并恢复跟随系统。 */
+  setLocale(
+    locale: SupportedLocale | 'system' | null,
+    callback: (result: NativeResult<LocaleState & { affectedCount?: number }>) => void
+  ): void;
+  getLocale(callback: (result: NativeResult<LocaleState>) => void): void;
   /** Android Router OTA 扩展：按 appId 直接删除磁盘中的下载 Bundle。 */
   deleteOtaBundles?: (
     lynxAppId: string,

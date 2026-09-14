@@ -59,6 +59,14 @@ declare let NativeModules: {
       payload: Record<string, unknown>,
       callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void,
     ): void;
+    /** 宿主 App 语言；null 清除 App 覆盖并恢复跟随系统。 */
+    setLocale(
+      locale: 'zh-CN' | 'en-US' | 'system' | null,
+      callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void,
+    ): void;
+    getLocale(
+      callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void,
+    ): void;
     sendToPage(
       targetPageId: string,
       eventName: string,
@@ -114,6 +122,21 @@ declare module '@lynx-js/types' {
     preferredTheme?: string;
     theme: string;
     isNotchScreen: boolean;
+    locale?: string;
+    language?: string;
+    appLocale?: string | null;
+    appLocaleOverride?: string | null;
+    appLanguage?: string;
+    systemLocale?: string;
+    localeRevision?: number;
+    localeSource?: string;
+    localeStatus?: string;
+    direction?: string;
+    viewportWidth?: number;
+    viewportHeight?: number;
+    layoutRevision?: number;
+    __lynxShellLocale?: Record<string, unknown>;
+    __lynxShellLayout?: Record<string, unknown>;
   }
 
   interface InputProps {

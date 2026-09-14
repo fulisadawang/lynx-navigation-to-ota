@@ -51,14 +51,22 @@ public typealias LynxRouterMessageHandler = (LynxRouterMessage) -> LynxRouterMes
  */
 enum ShellMessageHub {
     static let lifecycleEvent = "lynxRouterLifecycle"
+    static let localeEvent = "lynxShellLocaleChanged"
+    static let layoutEvent = "lynxShellLayoutChanged"
 
     private final class Endpoint {
         let info: LynxRouterPageInfo
         weak var view: LynxView?
+        let updateLocale: ((LynxLocaleState) -> Void)?
 
-        init(info: LynxRouterPageInfo, view: LynxView) {
+        init(
+            info: LynxRouterPageInfo,
+            view: LynxView,
+            updateLocale: ((LynxLocaleState) -> Void)?
+        ) {
             self.info = info
             self.view = view
+            self.updateLocale = updateLocale
         }
     }
 
@@ -69,8 +77,16 @@ enum ShellMessageHub {
         messageHandler = handler
     }
 
-    static func register(info: LynxRouterPageInfo, view: LynxView) {
-        endpoints[info.pageId] = Endpoint(info: info, view: view)
+    static func register(
+        info: LynxRouterPageInfo,
+        view: LynxView,
+        updateLocale: ((LynxLocaleState) -> Void)? = nil
+    ) {
+        endpoints[info.pageId] = Endpoint(
+            info: info,
+            view: view,
+            updateLocale: updateLocale
+        )
     }
 
     static func unregister(pageId: String) {
@@ -133,6 +149,27 @@ enum ShellMessageHub {
         return true
     }
 
+    /** 提交新的 App 语言后，先更新完整 GlobalProps，再通知每个活体页面。 */
+    @discardableResult
+    static func updateLocale(_ state: LynxLocaleState) -> Int {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                _ = updateLocale(state)
+            }
+            return 0
+        }
+        let live = liveEndpoints()
+        live.forEach { endpoint in
+            endpoint.updateLocale?(state)
+            var payload = state.dictionary
+            payload["pageId"] = endpoint.info.pageId
+            payload["containerId"] = endpoint.info.containerId
+            payload["pageKey"] = endpoint.info.pageKey
+            post(endpoint, eventName: localeEvent, payload: payload)
+        }
+        return live.count
+    }
+
     static func sendLifecycle(pageId: String, state: String, reason: String) {
         guard let endpoint = endpoints[pageId] else { return }
         post(
@@ -185,6 +222,16 @@ enum ShellMessageHub {
         if !allowLifecycle && normalized == lifecycleEvent {
             throw NSError(domain: "LynxRouter", code: 1001, userInfo: [
                 NSLocalizedDescriptionKey: "lynxRouterLifecycle 是宿主保留事件",
+            ])
+        }
+        if normalized == localeEvent {
+            throw NSError(domain: "LynxRouter", code: 1001, userInfo: [
+                NSLocalizedDescriptionKey: "lynxShellLocaleChanged 是宿主保留事件",
+            ])
+        }
+        if normalized == layoutEvent {
+            throw NSError(domain: "LynxRouter", code: 1001, userInfo: [
+                NSLocalizedDescriptionKey: "lynxShellLayoutChanged 是宿主保留事件",
             ])
         }
     }

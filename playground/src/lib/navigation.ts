@@ -1,4 +1,5 @@
 import { normalizeShellResult, shellModule, type NativeResult } from './nativeModules.js'
+import { parseLocaleState, type SupportedLocale } from './locale.js'
 
 /** 页面 wrapper 统一后的结果：code=1 成功，code=0 失败。 */
 export interface NavigateResponse<T = unknown> {
@@ -359,6 +360,41 @@ type Callback<T = unknown> = (result: NavigateResponse<T>) => void
 const RESERVED_ROUTE_QUERY_KEYS = new Set(['bundle', 'url', 'route_key'])
 /** 当前 Playground OTA TEST 归属的服务端 App ID；发布脚本只接受服务端已有 ID。 */
 const PLAYGROUND_OTA_APP_ID = '10000001'
+const DIRECT_BUNDLE_NAMES = new Set(['i18n-demo.lynx.bundle'])
+
+/** 从当前 LynxView 的宿主 GlobalProps 读取规范化语言；旧壳没有注入时默认中文。 */
+function currentShellLocale(): SupportedLocale {
+  const globalProps = (lynx.__globalProps || {}) as Record<string, unknown>
+  return parseLocaleState(globalProps.__lynxShellLocale || {
+    locale: globalProps.locale,
+    appLocale: globalProps.appLocale,
+    appLocaleOverride: globalProps.appLocaleOverride,
+    revision: globalProps.localeRevision,
+    source: globalProps.localeSource,
+  })?.locale || 'zh-CN'
+}
+
+/** 给 hybrid/lynxshell 新页面补上宿主当前语言；已有旧参数会被当前状态覆盖。 */
+function withShellLocale(route: string): string {
+  if (!/^(?:hybrid:\/\/lynxview_page|lynxshell:\/\/open)(?:\?|$)/i.test(route)) return route
+  const hashIndex = route.indexOf('#')
+  const hash = hashIndex >= 0 ? route.slice(hashIndex) : ''
+  const withoutHash = hashIndex >= 0 ? route.slice(0, hashIndex) : route
+  const queryIndex = withoutHash.indexOf('?')
+  const base = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash
+  const query = queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : ''
+  const retained = query.split('&').filter((part) => {
+    if (!part) return false
+    const key = part.split('=', 1)[0]
+    try {
+      return decodeURIComponent(key) !== 'locale'
+    } catch {
+      return key !== 'locale'
+    }
+  })
+  retained.push(`locale=${encodeURIComponent(currentShellLocale())}`)
+  return `${base}?${retained.join('&')}${hash}`
+}
 
 function localBundleName(value: string): string | undefined {
   let normalized = value.trim()
@@ -370,6 +406,7 @@ function localBundleName(value: string): string | undefined {
 
 function otaIdentityForBundle(value: string): Record<string, string> {
   const bundleName = localBundleName(value)
+  if (bundleName && DIRECT_BUNDLE_NAMES.has(bundleName)) return {}
   return bundleName
     ? { lynxAppId: PLAYGROUND_OTA_APP_ID, bundleName }
     : {}
@@ -452,6 +489,8 @@ export function navigate(
   const otaIdentity = otaIdentityForBundle(request.path)
   const query = queryString({
     ...params,
+    // 页面入口统一接收 canonical locale；业务参数不能覆盖当前 App 语言。
+    locale: currentShellLocale(),
     ...otaIdentity,
     bundle: request.path,
     ...(routeKey ? { route_key: routeKey } : {}),
@@ -699,7 +738,12 @@ export function open(
   request: OpenRequest,
   callback?: Callback,
 ): void {
-  invokeRoute('open', withPlaygroundOtaIdentity(request.scheme), request.options || {}, callback)
+  invokeRoute(
+    'open',
+    withShellLocale(withPlaygroundOtaIdentity(request.scheme)),
+    request.options || {},
+    callback,
+  )
 }
 
 /** 关闭当前容器；即使当前页是 session 首页也可以返回宿主页。 */

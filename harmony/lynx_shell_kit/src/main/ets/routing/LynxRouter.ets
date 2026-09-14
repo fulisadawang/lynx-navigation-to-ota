@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import window from '@ohos.window';
 import LynxRuntimeInitializer from '../common/LynxRuntimeInitializer';
 import ShellMessageHub from '../common/ShellMessageHub';
 import {
@@ -17,6 +18,15 @@ import EmbeddedBundleRegistry, {
   EmbeddedBundleIdentity,
   EmbeddedOnlyRuntime
 } from '../ota/EmbeddedBundleRegistry';
+import ShellThemeState, { ShellTheme } from '../common/ShellTheme';
+import ShellLocaleState, { ShellLocaleStateValue } from '../common/ShellLocale';
+import ShellLayoutState, { ShellLayoutSnapshot } from '../common/ShellLayoutState';
+
+interface ShellLocaleResultData {
+  state: ShellLocaleStateValue;
+  changed: boolean;
+  affectedCount: number;
+}
 
 /**
  * HarmonyOS 端与 Android `LynxRouter`、iOS `LynxRouter` 对齐的统一门面。
@@ -53,6 +63,11 @@ export default class LynxRouter {
   /** Application/Ability 创建第一个 Lynx Page 前调用一次。 */
   static install(context: common.UIAbilityContext, otaConfig?: LynxOtaConfig): LynxOtaRuntime | null {
     LynxRuntimeInitializer.initialize(context);
+    ShellLocaleState.initialize(context);
+    ShellLayoutState.initialize();
+    ShellLayoutState.setChangeListener((reason: string): void => {
+      ShellMessageHub.updateLayout(reason);
+    });
     LynxRouter.embeddedBundleRegistry = new EmbeddedBundleRegistry(context);
     const previous = PageBundleRuntimeRegistry.current();
     if (otaConfig === undefined) {
@@ -68,6 +83,82 @@ export default class LynxRouter {
     if (previous !== null) OtaUserContextEvents.emit(runtime.userIdentityEpoch);
     runtime.onApplicationStarted();
     return runtime;
+  }
+
+  /** 宿主传入已经解析的 Light/Dark；HAR 不读取 Demo 的 AppStorage。 */
+  static setTheme(theme: ShellTheme): void {
+    if (ShellThemeState.set(theme)) {
+      ShellMessageHub.updateTheme(theme);
+    }
+  }
+
+  static currentTheme(): ShellTheme {
+    return ShellThemeState.current();
+  }
+
+  /** 设置 App 语言；传入 null 或 system 时清除覆盖并恢复系统语言。 */
+  static setLocale(locale: string | null): ShellBridgeResult {
+    const mutation = ShellLocaleState.setAppLocale(locale);
+    if (!mutation.success) {
+      const data: ShellLocaleResultData = {
+        state: mutation.state,
+        changed: false,
+        affectedCount: 0
+      };
+      return {
+        code: 1001,
+        message: mutation.message,
+        data: data
+      };
+    }
+    const isSystem = locale === null || locale.trim().toLowerCase() === 'system';
+    const affectedCount = mutation.changed ? ShellMessageHub.updateLocale(
+      isSystem ? 'clear_override' : 'app_override'
+    ) : 0;
+    if (mutation.changed) ShellLocaleState.notifyChanged(mutation.state);
+    const data: ShellLocaleResultData = {
+      state: mutation.state,
+      changed: mutation.changed,
+      affectedCount: affectedCount
+    };
+    return {
+      code: 0,
+      message: mutation.message,
+      data: data
+    };
+  }
+
+  static currentLocaleState(): ShellLocaleStateValue {
+    return ShellLocaleState.current();
+  }
+
+  static currentLocale(): ShellLocaleStateValue {
+    return LynxRouter.currentLocaleState();
+  }
+
+  /** Entry 在 Configuration 更新后调用；有 App 覆盖时仅更新 systemLocale 事实字段。 */
+  static onSystemLocaleChanged(): void {
+    if (ShellLocaleState.refreshSystemLocale()) {
+      ShellMessageHub.updateLocale('system_changed');
+      ShellLocaleState.notifyChanged(ShellLocaleState.current());
+    }
+  }
+
+  static currentLayoutSnapshot(pageId: string = ''): ShellLayoutSnapshot {
+    return ShellLayoutState.snapshot(pageId);
+  }
+
+  /** 由宿主页面外层 onAreaChange 提交当前 LynxView 的 viewport。 */
+  static updateViewport(pageId: string, width: number, height: number): void {
+    ShellLayoutState.updateViewport(pageId, width, height);
+  }
+
+  static attachWindow(currentWindow: window.Window): void {
+    ShellLayoutState.attachWindow(currentWindow);
+  }
+
+  static detachWindow(): void {
+    ShellLayoutState.detachWindow();
   }
 
   /** 宿主回到前台时调用；每次触发全量 latest-bundle-list，不受页面 30 分钟门控影响。 */

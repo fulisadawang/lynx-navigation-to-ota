@@ -1,5 +1,24 @@
 import Foundation
+import Lynx
 import UIKit
+
+/** 原生诊断使用的聚合内存结果；不暴露实例 URL/pageId。 */
+public struct LynxMemoryUsageSnapshot: Sendable {
+    public let collectionStatus: String
+    public let collectionStartMs: Int64
+    public let collectionDurationMs: Int64
+    public let collectionTimeoutMs: Int64
+    public let expectedInstanceCount: Int
+    public let completedInstanceCount: Int
+    public let totalBytes: Int64
+    public let appBytes: Int64
+    public let ratioToApp: Double
+    public let elementBytes: Int64
+    public let elementNodeCount: Int32
+    public let viewBytes: Int64
+    public let mainThreadRuntimeBytes: Int64
+    public let backgroundThreadRuntimeBytes: Int64
+}
 
 public extension Notification.Name {
     static let lynxOtaUserContextDidChange = Notification.Name("LynxOtaUserContextDidChange")
@@ -207,6 +226,28 @@ private enum OtaDebugF12Status {
         LynxShell.setHostManagedBackGesture(enabled)
     }
 
+    /** 返回当前 App 语言；语言资源由各个 Lynx Bundle 自己加载。 */
+    public static func currentLocale() -> LynxLocaleState {
+        ShellLocaleStore.current()
+    }
+
+    /** 设置 App 语言并同步所有存活 LynxView；nil 清除覆盖并恢复跟随系统。 */
+    @discardableResult
+    public static func setLocale(_ locale: String?) throws -> LynxLocaleState {
+        let previous = ShellLocaleStore.current()
+        let state = try ShellLocaleStore.set(appLocale: locale)
+        if state != previous {
+            _ = ShellMessageHub.updateLocale(state)
+        }
+        return state
+    }
+
+    /** 清除 App 语言覆盖，等价于 setLocale(nil)。 */
+    @discardableResult
+    public static func clearLocale() throws -> LynxLocaleState {
+        try setLocale(nil)
+    }
+
     /**
      * 打开 assets/HTTPS Bundle；params 同时作为 initData 和 queryItems。
      *
@@ -316,6 +357,43 @@ private enum OtaDebugF12Status {
             throw LynxOtaError.runtimeNotInstalled
         }
         return try await runtime.storageSnapshot()
+    }
+
+    /**
+     * 按需读取当前进程内 Lynx 实例的聚合内存快照。
+     *
+     * 回调会切回主线程，结果只包含聚合值、状态和实例计数，不进入 LynxShellModule 或
+     * OTA 上报。timeoutMilliseconds 小于等于 0 时沿用 Lynx 4.0 的 2000ms 默认值。
+     */
+    public static func queryMemoryUsage(
+        timeoutMilliseconds: Int64 = 0,
+        completion: @escaping (LynxMemoryUsageSnapshot) -> Void
+    ) {
+        let callback: (LynxGlobalMemoryUsageResult) -> Void = { result in
+            let snapshot = LynxMemoryUsageSnapshot(
+                collectionStatus: result.collectionStatus.rawValue == 0 ? "completed" : "timeout",
+                collectionStartMs: result.collectionStartMs,
+                collectionDurationMs: result.collectionDurationMs,
+                collectionTimeoutMs: result.collectionTimeoutMs,
+                expectedInstanceCount: result.expectedInstanceCount,
+                completedInstanceCount: result.completedInstanceCount,
+                totalBytes: result.totalBytes,
+                appBytes: result.appBytes,
+                ratioToApp: result.ratioToApp,
+                elementBytes: result.elementBytes,
+                elementNodeCount: result.elementNodeCount,
+                viewBytes: result.viewBytes,
+                mainThreadRuntimeBytes: result.mainThreadRuntimeBytes,
+                backgroundThreadRuntimeBytes: result.backgroundThreadRuntimeBytes
+            )
+            DispatchQueue.main.async {
+                completion(snapshot)
+            }
+        }
+        LynxMemoryUsageQuery.sharedInstance().queryLynxGlobalMemoryUsageAsync(
+            callback,
+            timeoutMs: timeoutMilliseconds
+        )
     }
 
     /** 打开 `hybrid://lynxview_page?...` 或其它兼容 Scheme。 */

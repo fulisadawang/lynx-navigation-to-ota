@@ -14,6 +14,8 @@ import {
 import ShellLynxViewClient from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
 import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
+import ShellThemeState from '../common/ShellTheme';
+import ShellLayoutState from '../common/ShellLayoutState';
 import OtaUserContextEvents from '../ota/OtaUserContextEvents';
 import { ShellViewAppearPayload } from '../common/ShellTypes';
 import ShellWindowController from '../common/ShellWindowController';
@@ -131,12 +133,18 @@ export struct LynxContainer {
         context.onEnterBackground(); return;
       }
       this.lynxContext = context;
+      // Harmony LynxView 的 colorScheme 字段由 SDK 保持私有；Context 建立后立即使用
+      // 官方动态 API 设定首值，早于壳层登记和前台事件，不重载 Bundle。
+      context.updateColorScheme(ShellThemeState.colorScheme());
       ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
         pageKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.request.bundleUrl, hostMode: 'arkui_page' }, context);
       context.onEnterForeground();
       context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
       ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_page_appear');
-      if (this.request.widthPx > 0 && this.request.heightPx > 0) context.updateScreenMetrics(this.request.widthPx, this.request.heightPx);
+      const rawScreen = ShellLayoutState.rawScreenSize();
+      const layout = ShellLayoutState.snapshot(this.request.entryID);
+      context.updateScreenMetrics(rawScreen.width, rawScreen.height);
+      context.updateViewport(layout.viewportWidth, 1, layout.viewportHeight, 1);
       context.setExtraTiming(this.extraTiming);
     };
     this.clients = [new ShellLynxViewClient(
@@ -401,6 +409,15 @@ export struct LynxContainer {
     lease.close();
   }
 
+  /** 外层 ArkUI 区域是当前 LynxView 的 viewport；只提交尺寸，更新由状态层合帧处理。 */
+  private onAreaChanged(area: Area): void {
+    ShellLayoutState.updateViewport(
+      this.request.entryID,
+      Number(area.width),
+      Number(area.height)
+    );
+  }
+
   build() {
     Column() {
       Stack({ alignContent: Alignment.Center }) {
@@ -415,6 +432,7 @@ export struct LynxContainer {
             sendableModules: this.sendableModules,
             behaviors: this.behaviors,
             metaData: this.metaData,
+            screenSize: ShellLayoutState.rawScreenSize(),
             onCreate: this.contextCreated
           })
             .width(this.viewWidth)
@@ -462,6 +480,7 @@ export struct LynxContainer {
       }
       .width('100%')
       .layoutWeight(1)
+      .onAreaChange((oldValue: Area, newValue: Area) => this.onAreaChanged(newValue))
       .backgroundColor(this.request.backgroundColor)
     }
     .width('100%')

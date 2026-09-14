@@ -67,6 +67,8 @@ public final class LynxShellModule: NSObject, LynxContextModule {
                 #selector(deleteAllOtaBundles(_:))
             ),
             "getAppInfo": NSStringFromSelector(#selector(getAppInfo(_:))),
+            "setLocale": NSStringFromSelector(#selector(setLocale(_:completion:))),
+            "getLocale": NSStringFromSelector(#selector(getLocale(_:))),
             "chooseMedia": NSStringFromSelector(#selector(chooseMedia(_:completion:))),
             "uploadFile": NSStringFromSelector(#selector(uploadFile(_:completion:))),
             "uploadImage": NSStringFromSelector(#selector(uploadImage(_:completion:))),
@@ -431,6 +433,37 @@ public final class LynxShellModule: NSObject, LynxContextModule {
             "buildNumber": info["CFBundleVersion"] as? String ?? "",
             "systemVersion": UIDevice.current.systemVersion,
         ])
+    }
+
+    /** 设置 App 语言；空值清除覆盖并恢复跟随系统，成功只表示状态已提交。 */
+    public func setLocale(
+        _ locale: String?,
+        completion: @escaping (NSDictionary) -> Void
+    ) {
+        DispatchQueue.main.async {
+            do {
+                let state = try LynxRouter.setLocale(locale)
+                completion([
+                    "code": 0,
+                    "message": "语言状态已更新",
+                    "data": state.dictionary,
+                ])
+            } catch {
+                completion(Self.result(code: 1001, message: error.localizedDescription))
+            }
+        }
+    }
+
+    /** 获取宿主当前语言状态；页面首次创建时也会收到同一份状态。 */
+    public func getLocale(_ completion: @escaping (NSDictionary) -> Void) {
+        DispatchQueue.main.async {
+            let state = LynxRouter.currentLocale()
+            completion([
+                "code": 0,
+                "message": "语言状态已获取",
+                "data": state.dictionary,
+            ])
+        }
     }
 
     /** 调系统相册/相机选择媒体；权限和控制器生命周期由媒体桥处理。 */

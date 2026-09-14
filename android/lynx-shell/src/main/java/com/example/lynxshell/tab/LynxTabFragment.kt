@@ -1,6 +1,7 @@
 package com.example.lynxshell.tab
 
 import android.os.Bundle
+import android.content.res.Configuration
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,6 +18,7 @@ import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.model.PageOrientation
 import com.example.lynxshell.resource.ShellTemplateProvider
+import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
 import com.example.lynxshell.util.JsonObjectCodec
 import com.lynx.tasm.LynxError
 import com.lynx.tasm.LynxView
@@ -90,12 +92,20 @@ class LynxTabFragment : Fragment() {
 
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
-        if (hidden) lynxView?.onEnterBackground() else lynxView?.onEnterForeground()
+        if (hidden) {
+            lynxView?.onEnterBackground()
+        } else {
+            lynxView?.onEnterForeground()
+            syncColorScheme()
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        if (!isHidden) lynxView?.onEnterForeground()
+        if (!isHidden) {
+            lynxView?.onEnterForeground()
+            syncColorScheme()
+        }
     }
 
     override fun onPause() {
@@ -103,8 +113,14 @@ class LynxTabFragment : Fragment() {
         super.onPause()
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        syncColorScheme()
+    }
+
     override fun onDestroyView() {
         LynxRouter.removeOtaUserContextListener(userContextListener)
+        LynxEnvironmentCoordinator.unbind(lynxView)
         releaseContent(view as? ViewGroup)
         super.onDestroyView()
     }
@@ -191,6 +207,7 @@ class LynxTabFragment : Fragment() {
         unregister()
         templateProvider?.close()
         templateProvider = null
+        LynxEnvironmentCoordinator.unbind(lynxView)
         lynxView?.destroy()
         lynxView = null
         releaseCurrentLease()
@@ -281,6 +298,7 @@ class LynxTabFragment : Fragment() {
             activity = activity,
             view = created,
         )
+        LynxEnvironmentCoordinator.bind(activity, created)
         created.renderTemplateUrl(
             request.bundleUrl,
             JsonObjectCodec.toMap(request.initDataJson, "initData"),
@@ -292,6 +310,7 @@ class LynxTabFragment : Fragment() {
         debugIdentity = ""
         templateProvider?.close()
         templateProvider = null
+        LynxEnvironmentCoordinator.unbind(lynxView)
         lynxView?.destroy()
         lynxView = null
         releaseCurrentLease()
@@ -303,6 +322,12 @@ class LynxTabFragment : Fragment() {
             setPadding(32)
             gravity = android.view.Gravity.CENTER
         }, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    }
+
+    /** 宿主不重建 Fragment 时，保持引擎 media query 与既有 theme 字段同源。 */
+    private fun syncColorScheme() {
+        val activity = activity ?: return
+        LynxEnvironmentCoordinator.synchronize(activity)
     }
 
     private fun unregister() {

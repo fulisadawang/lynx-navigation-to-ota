@@ -1,6 +1,7 @@
 import { useState, useEffect } from '@lynx-js/react'
 import { open, navigate } from '../../lib/navigation.js'
 import { ThemeProvider, useTheme } from '../../lib/theme.js'
+import { localeLabel, useLocale, type LocaleSelection, type SupportedLocale } from '../../lib/locale.js'
 import { Navigator, type TabPage } from '../../components/Navigator/index.js'
 import { getItem, setItem } from '../../lib/storage.js'
 
@@ -13,6 +14,8 @@ interface DemoItem {
   description: string
   bundle: string
   icon: string
+  titleKey?: string
+  descriptionKey?: string
 }
 
 interface Category {
@@ -78,6 +81,14 @@ const CATEGORIES: Category[] = [
       { title: '原生容器转场', description: '共享元素、Open Container、预置路由与跟手返回', bundle: 'transition-gallery.lynx.bundle', icon: '\u{1F3AC}' },
       { title: '原生转场目标页', description: '直接打开转场目标页，查看 ready 与原生状态', bundle: 'transition-detail.lynx.bundle', icon: '\u{1F3AF}' },
       { title: '参数传递', description: '通过 queryItems 传递自定义参数', bundle: 'nav-basic.lynx.bundle', icon: '\u{27A1}' },
+      {
+        title: '国际化测试',
+        description: '验证 App 语言、资源切换和新页面 locale 参数',
+        bundle: 'i18n-demo.lynx.bundle',
+        icon: '\u{1F30D}',
+        titleKey: 'home.i18nDemoTitle',
+        descriptionKey: 'home.i18nDemoDescription',
+      },
       { title: '路由预设', description: '常用 Scheme 配置示例', bundle: 'scheme-presets.lynx.bundle', icon: '\u{1F3A8}' },
       { title: '路由构建器', description: '构建并测试任意 Scheme 配置', bundle: 'scheme-builder.lynx.bundle', icon: '\u{1F527}' },
     ],
@@ -114,6 +125,7 @@ const CATEGORIES: Category[] = [
 
 function HomePage(props: { showPage: boolean; topInset: number }) {
   const { resolved } = useTheme()
+  const { t } = useLocale()
   const [source, setSource] = useState('')
   const [params, setParams] = useState<Record<string, string>>({})
   const [openResult, setOpenResult] = useState('')
@@ -134,6 +146,11 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
   const displayInput = buildSchemeInput(source, params)
   const isFullscreen = params.hide_nav_bar === '1' && params.trans_status_bar === '1'
   const activeTheme = params.force_theme_style || ''
+
+  const itemTitle = (item: DemoItem) => item.titleKey ? t(item.titleKey, item.title) : item.title
+  const itemDescription = (item: DemoItem) => item.descriptionKey
+    ? t(item.descriptionKey, item.description)
+    : item.description
 
   const handleInput = (event: { detail: { value: string } }) => {
     'background only'
@@ -277,7 +294,7 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
         <view className={dk('bundle-meta-card')}>
           <view className="bundle-meta-header">
             <view className="bundle-meta-status-dot" />
-            <text className={dk('bundle-meta-title')}>当前实际加载的 Bundle</text>
+            <text className={dk('bundle-meta-title')}>{t('home.loadedBundle', '当前实际加载的 Bundle')}</text>
           </view>
           <view className="bundle-meta-grid">
             <view className="bundle-meta-item">
@@ -308,8 +325,8 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
         <view className={dk('card')}>
           <view className="card-header-row">
             <text className="card-header-icon">{'\u{1F310}'}</text>
-            <text className={dk('card-label')}>
-              打开页面
+              <text className={dk('card-label')}>
+              {t('home.openPage', '打开页面')}
             </text>
           </view>
           <view className="input-row">
@@ -329,18 +346,18 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
               accessibility-label="打开页面"
               accessibility-traits="button"
             >
-              <text className="go-button-text">打开</text>
+              <text className="go-button-text">{t('home.open', '打开')}</text>
             </view>
           </view>
           <view className="toggle-row">
             <view className={`toggle-chip ${isFullscreen ? 'toggle-chip--active' : (isDark ? 'toggle-chip--dark' : 'toggle-chip--light')}`} bindtap={handleFullscreenToggle}>
-              <text className={`toggle-chip-text ${isFullscreen ? 'toggle-chip-text--active' : (isDark ? 'toggle-chip-text--dark' : 'toggle-chip-text--light')}`}>全屏</text>
+              <text className={`toggle-chip-text ${isFullscreen ? 'toggle-chip-text--active' : (isDark ? 'toggle-chip-text--dark' : 'toggle-chip-text--light')}`}>{t('home.fullscreen', '全屏')}</text>
             </view>
             <view className={`toggle-chip ${activeTheme === 'dark' ? 'toggle-chip--active' : (isDark ? 'toggle-chip--dark' : 'toggle-chip--light')}`} bindtap={() => handleThemeChip('dark')}>
-              <text className={`toggle-chip-text ${activeTheme === 'dark' ? 'toggle-chip-text--active' : (isDark ? 'toggle-chip-text--dark' : 'toggle-chip-text--light')}`}>深色</text>
+              <text className={`toggle-chip-text ${activeTheme === 'dark' ? 'toggle-chip-text--active' : (isDark ? 'toggle-chip-text--dark' : 'toggle-chip-text--light')}`}>{t('home.dark', '深色')}</text>
             </view>
             <view className={`toggle-chip ${activeTheme === 'light' ? 'toggle-chip--active' : (isDark ? 'toggle-chip--dark' : 'toggle-chip--light')}`} bindtap={() => handleThemeChip('light')}>
-              <text className={`toggle-chip-text ${activeTheme === 'light' ? 'toggle-chip-text--active' : (isDark ? 'toggle-chip-text--dark' : 'toggle-chip-text--light')}`}>浅色</text>
+              <text className={`toggle-chip-text ${activeTheme === 'light' ? 'toggle-chip-text--active' : (isDark ? 'toggle-chip-text--dark' : 'toggle-chip-text--light')}`}>{t('home.light', '浅色')}</text>
             </view>
           </view>
           {openResult && openResult !== '已打开' ? (
@@ -389,17 +406,17 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
                 <view key={item.title}>
                   <view
                     className="menu-item"
-                    bindtap={() => handleItemTap(item.bundle, item.title)}
+                    bindtap={() => handleItemTap(item.bundle, itemTitle(item))}
                     accessibility-element
-                    accessibility-label={item.title}
+                    accessibility-label={itemTitle(item)}
                     accessibility-traits="button"
                   >
                     <view className="menu-item-icon" style={{ backgroundColor: `${category.color}15` }}>
                       <text className="menu-item-icon-text">{item.icon}</text>
                     </view>
                     <view className="menu-item-content">
-                      <text className={dk('menu-item-title')}>{item.title}</text>
-                      <text className={dk('menu-item-desc')}>{item.description}</text>
+                      <text className={dk('menu-item-title')}>{itemTitle(item)}</text>
+                      <text className={dk('menu-item-desc')}>{itemDescription(item)}</text>
                     </view>
                     <text className={dk('menu-item-arrow')}>{'\u203A'}</text>
                   </view>
@@ -432,6 +449,7 @@ function getOrigin(url: string): string {
 
 function SettingsPage(props: { showPage: boolean; topInset: number }) {
   const { preference, resolved, setPreference } = useTheme()
+  const { state: localeState, locale: currentLocale, setLocale, t } = useLocale()
   const isDark = resolved === 'dark'
   const isDev = typeof __DEV__ !== 'undefined' && __DEV__
 
@@ -475,16 +493,23 @@ function SettingsPage(props: { showPage: boolean; topInset: number }) {
   const dk = (base: string) => `${base} ${isDark ? `${base}--dark` : `${base}--light`}`
 
   // --- Theme picker ---
-  const themes: Array<{ label: string; value: 'Auto' | 'Light' | 'Dark'; icon: string }> = [
-    { label: '跟随系统', value: 'Auto', icon: '\u2728' },
-    { label: '浅色', value: 'Light', icon: '\u2600' },
-    { label: '深色', value: 'Dark', icon: '\u{1F319}' },
+  const themes: Array<{ labelKey: string; fallback: string; value: 'Auto' | 'Light' | 'Dark'; icon: string }> = [
+    { labelKey: 'settings.themeSystem', fallback: '跟随系统', value: 'Auto', icon: '\u2728' },
+    { labelKey: 'settings.themeLight', fallback: '浅色', value: 'Light', icon: '\u2600' },
+    { labelKey: 'settings.themeDark', fallback: '深色', value: 'Dark', icon: '\u{1F319}' },
   ]
 
   const handleThemeSelect = (value: 'Auto' | 'Light' | 'Dark') => {
     'background only'
     setPreference(value)
   }
+
+  const languageOptions: Array<{ label: string; value: LocaleSelection; icon: string }> = [
+    { label: t('settings.systemDefault', '跟随系统'), value: 'system', icon: '\u2699' },
+    { label: localeLabel('zh-CN'), value: 'zh-CN', icon: '\u4e2d' },
+    { label: localeLabel('en-US'), value: 'en-US', icon: 'A' },
+  ]
+  const selectedLocale: LocaleSelection = localeState.source === 'app' ? currentLocale : 'system'
 
   // --- Dev URL validation & handlers ---
   const isValidUrl = /^https?:\/\/.+/.test(devUrlInput)
@@ -525,36 +550,61 @@ function SettingsPage(props: { showPage: boolean; topInset: number }) {
   const sysInfo = typeof SystemInfo !== 'undefined' ? SystemInfo : {} as any
 
   const systemInfo = [
-    { label: 'Lynx SDK 版本', value: sysInfo.lynxSdkVersion || sysInfo.engineVersion || 'N/A' },
-    { label: '平台', value: sysInfo.platform || 'N/A' },
-    { label: '系统版本', value: sysInfo.osVersion || 'N/A' },
-    { label: '像素密度', value: sysInfo.pixelRatio != null ? String(sysInfo.pixelRatio) : 'N/A' },
-    { label: '屏幕宽度', value: sysInfo.pixelWidth != null ? String(sysInfo.pixelWidth) + 'px' : 'N/A' },
-    { label: '屏幕高度', value: sysInfo.pixelHeight != null ? String(sysInfo.pixelHeight) + 'px' : 'N/A' },
+    { key: 'settings.sdkVersion', label: 'Lynx SDK 版本', value: sysInfo.lynxSdkVersion || sysInfo.engineVersion || 'N/A' },
+    { key: 'settings.platform', label: '平台', value: sysInfo.platform || 'N/A' },
+    { key: 'settings.osVersion', label: '系统版本', value: sysInfo.osVersion || 'N/A' },
+    { key: 'settings.pixelRatio', label: '像素密度', value: sysInfo.pixelRatio != null ? String(sysInfo.pixelRatio) : 'N/A' },
+    { key: 'settings.screenWidth', label: '屏幕宽度', value: sysInfo.pixelWidth != null ? String(sysInfo.pixelWidth) + 'px' : 'N/A' },
+    { key: 'settings.screenHeight', label: '屏幕高度', value: sysInfo.pixelHeight != null ? String(sysInfo.pixelHeight) + 'px' : 'N/A' },
   ]
 
   return (
     <scroll-view className="tab-content" scroll-orientation="vertical">
       <view className={`page ${isDark ? 'page--dark' : 'page--light'}`} style={{ paddingTop: `${props.topInset + 16}px` }}>
-        <text className={dk('page-title')}>设置</text>
+        <text className={dk('page-title')}>{t('settings.title', '设置')}</text>
 
         {/* Theme Picker */}
         <view className={dk('card')}>
-          <text className={dk('card-label')}>外观</text>
+          <text className={dk('card-label')}>{t('settings.appearance', '外观')}</text>
           <view className="theme-picker">
-            {themes.map((t) => (
+            {themes.map((theme) => (
               <view
-                key={t.value}
-                className={`theme-option ${preference === t.value ? (isDark ? 'theme-option--active-dark' : 'theme-option--active-light') : (isDark ? 'theme-option--inactive-dark' : 'theme-option--inactive-light')}`}
-                bindtap={() => handleThemeSelect(t.value)}
+                key={theme.value}
+                className={`theme-option ${preference === theme.value ? (isDark ? 'theme-option--active-dark' : 'theme-option--active-light') : (isDark ? 'theme-option--inactive-dark' : 'theme-option--inactive-light')}`}
+                bindtap={() => handleThemeSelect(theme.value)}
               >
-                <text className="theme-option-icon">{t.icon}</text>
-                <text className={`theme-option-label ${preference === t.value ? 'theme-option-label--active' : (isDark ? 'theme-option-label--dark' : 'theme-option-label--light')}`}>
-                  {t.label}
+                <text className="theme-option-icon">{theme.icon}</text>
+                <text className={`theme-option-label ${preference === theme.value ? 'theme-option-label--active' : (isDark ? 'theme-option-label--dark' : 'theme-option-label--light')}`}>
+                  {t(theme.labelKey, theme.fallback)}
                 </text>
               </view>
             ))}
           </view>
+        </view>
+
+        {/* App 语言选择；具体资源仍由各 Bundle 管理，宿主只提交共享状态。 */}
+        <view className={dk('card')}>
+          <text className={dk('card-label')}>{t('settings.language', '语言')}</text>
+          <view className="theme-picker">
+            {languageOptions.map((option) => (
+              <view
+                key={option.label}
+                className={`theme-option ${selectedLocale === option.value ? (isDark ? 'theme-option--active-dark' : 'theme-option--active-light') : (isDark ? 'theme-option--inactive-dark' : 'theme-option--inactive-light')}`}
+                bindtap={() => setLocale(option.value)}
+                accessibility-element
+                accessibility-label={option.label}
+                accessibility-traits="button"
+              >
+                <text className="theme-option-icon">{option.icon}</text>
+                <text className={`theme-option-label ${selectedLocale === option.value ? 'theme-option-label--active' : (isDark ? 'theme-option-label--dark' : 'theme-option-label--light')}`}>
+                  {option.label}
+                </text>
+              </view>
+            ))}
+          </view>
+          <text className={dk('dev-hint')}>
+            {t('settings.currentLocale', '当前生效：{{locale}} · 切换会同步已打开的 Tab 和后续页面', { locale: currentLocale })}
+          </text>
         </view>
 
         {/* Dev Server (only in dev mode) */}
@@ -646,10 +696,10 @@ function SettingsPage(props: { showPage: boolean; topInset: number }) {
 
         {/* System Info */}
         <view className={dk('card')}>
-          <text className={dk('card-label')}>系统信息</text>
+          <text className={dk('card-label')}>{t('settings.systemInfo', '系统信息')}</text>
           {systemInfo.map((item) => (
             <view key={item.label} className="info-row">
-              <text className={dk('info-label')}>{item.label}</text>
+              <text className={dk('info-label')}>{t(item.key, item.label)}</text>
               <text className={dk('info-value')}>{item.value}</text>
             </view>
           ))}
@@ -658,7 +708,7 @@ function SettingsPage(props: { showPage: boolean; topInset: number }) {
         {/* Footer */}
         <view className="home-footer">
           <text className={dk('home-footer-text')}>
-            跨平台 Lynx 调试壳
+            {t('settings.footer', '跨平台 Lynx 调试壳')}
           </text>
         </view>
       </view>

@@ -40,6 +40,9 @@ public enum LynxShell {
     /** 必须在创建第一个 LynxView 前调用；内部使用 dispatch_once，重复调用安全。 */
     public static func bootstrap() {
         LynxNativeRuntime.bootstrap()
+        ShellLocaleStore.startObserving { state in
+            _ = ShellMessageHub.updateLocale(state)
+        }
     }
 
     /** 绑定业务 App 实际承载 Lynx 页面的 UINavigationController。 */
@@ -178,6 +181,12 @@ public final class LynxTabViewController: UIViewController {
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
     private var releaseLease: OtaBundleLease?
+    /** 当前 LynxView 对应的请求；语言/布局原位更新需要复用同一份页面身份。 */
+    private var currentRequest: LynxPageRequest?
+    /** 当前 LynxView 的完整 GlobalProps；主题更新不能只回传一个 theme 字段。 */
+    private var runtimeGlobalProps: [String: Any]?
+    private let layoutUpdateCoordinator = ShellLayoutUpdateCoordinator()
+    private var latestLayoutSnapshot: ShellLayoutSnapshot?
     private var loadTask: Task<Void, Never>?
     private let pageID: String
     private var didStartLoad = false
@@ -254,14 +263,29 @@ public final class LynxTabViewController: UIViewController {
             didStartLoad = true
             load()
         }
-        if let lynxView {
-            LynxNativeRuntime.updateLayout(view: lynxView, size: contentView.bounds.size)
+        if lynxView != nil {
+            scheduleLayoutUpdate()
         }
+    }
+
+    public override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        scheduleLayoutUpdate()
+    }
+
+    public override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // 常驻 Tab 在未选中时可能没有进入当前 trait 传播链；切回可见前重新对齐，
+        // 不重建 LynxView、Bundle 或 OTA lease。
+        synchronizeColorScheme()
     }
 
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         lynxView?.onEnterForeground()
+        // 首次布局后再补一次完整 GlobalProps；创建前的注入用于初始引擎配置，
+        // 这里确保 Lynx 页面 JS 已经能读到 theme 和 native_tab_id。
+        synchronizeColorScheme()
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
@@ -269,10 +293,21 @@ public final class LynxTabViewController: UIViewController {
         super.viewWillDisappear(animated)
     }
 
+    public override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection == nil ||
+                previousTraitCollection!.hasDifferentColorAppearance(comparedTo: traitCollection) else {
+            return
+        }
+        synchronizeColorScheme()
+    }
+
     /** 用户主动刷新 OTA 后，销毁当前 LynxView 并重新读取已提交 current；不触发 Tab 网络请求。 */
     public func refreshFromCurrent() {
         loadTask?.cancel()
         loadTask = nil
+        layoutUpdateCoordinator.invalidate()
+        latestLayoutSnapshot = nil
         loadGeneration.invalidate()
         templateProvider?.cancel()
         templateProvider = nil
@@ -284,6 +319,8 @@ public final class LynxTabViewController: UIViewController {
         ShellMessageHub.unregister(pageId: pageID)
         lynxView?.removeFromSuperview()
         lynxView = nil
+        currentRequest = nil
+        runtimeGlobalProps = nil
         releaseCurrentLease()
         contentView.viewWithTag(0x4C5958)?.removeFromSuperview()
         didStartLoad = false
@@ -423,6 +460,7 @@ public final class LynxTabViewController: UIViewController {
                 widthInPhysicalPixels: nil,
                 heightInPhysicalPixels: nil
             ).validated()
+            currentRequest = request
             let provider = ShellTemplateProvider(
                 allowHTTPInDebug: false,
                 onLoadError: { [weak self] _, error in
@@ -440,13 +478,18 @@ public final class LynxTabViewController: UIViewController {
                 request: request,
                 pageId: pageID,
                 sessionId: "native-tab-host",
-                bundleMetadata: bundleMetadata
+                bundleMetadata: bundleMetadata,
+                layoutSnapshot: latestLayoutSnapshot
             )
             props["__lynxRouterNavigationModel"] = "native_tab_host"
             props["__lynxRouterPlatformContainer"] = "uikit_tab_container"
+            runtimeGlobalProps = props
             let created = LynxNativeRuntime.makeView(
                 provider: provider,
-                screenSize: contentView.bounds.size,
+                screenSize: latestLayoutSnapshot?.screenSize
+                    ?? ShellLayoutSnapshot.measure(for: contentView).screenSize,
+                viewportSize: latestLayoutSnapshot?.viewportSize
+                    ?? contentView.bounds.size,
                 globalProps: props
             )
             let observer = LynxFirstScreenObserver(
@@ -491,7 +534,10 @@ public final class LynxTabViewController: UIViewController {
                     pageKey: request.resolvedRouteKey,
                     hostMode: "uikit_tab_container"
                 ),
-                view: created
+                view: created,
+                updateLocale: { [weak self] state in
+                    self?.synchronizeLocale(state)
+                }
             )
             LynxNativeRuntime.load(url: request.bundleURL, initData: request.initialData, in: created)
         } catch {
@@ -506,6 +552,7 @@ public final class LynxTabViewController: UIViewController {
         firstScreenObserver = nil
         lynxView?.removeFromSuperview()
         lynxView = nil
+        runtimeGlobalProps = nil
         releaseCurrentLease()
 #if DEBUG
         debugLastError = message
@@ -525,6 +572,71 @@ public final class LynxTabViewController: UIViewController {
                 label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             ])
         }
+    }
+
+    /**
+     * 用当前 Tab 容器的有效 trait 同步主题。宿主自定义 UITabBarController 时可以传入
+     * 父容器 trait，确保隐藏的常驻 Tab 也使用同一主题源。
+     */
+    public func synchronizeColorScheme(with source: UITraitCollection? = nil) {
+        guard Thread.isMainThread, isViewLoaded, let lynxView else { return }
+        let effectiveTrait = source ?? view.window?.traitCollection ?? traitCollection
+        let darkMode = effectiveTrait.userInterfaceStyle == .dark
+        LynxNativeRuntime.updateColorScheme(for: lynxView, darkMode: darkMode)
+        guard var props = runtimeGlobalProps else { return }
+        props["theme"] = darkMode ? "Dark" : "Light"
+        runtimeGlobalProps = props
+        LynxNativeRuntime.updateGlobalProps(props, in: lynxView)
+    }
+
+    /** 语言状态由宿主统一提交；Tab 只原位更新完整 GlobalProps，不重新加载 Bundle。 */
+    func synchronizeLocale(_ state: LynxLocaleState) {
+        guard Thread.isMainThread, isViewLoaded, let lynxView, let request = currentRequest else { return }
+        var props = ShellGlobalPropsFactory.make(
+            for: contentView,
+            request: request,
+            pageId: pageID,
+            sessionId: "native-tab-host",
+            bundleMetadata: runtimeGlobalProps?["__lynxBundleMeta"] as? [String: Any],
+            localeState: state,
+            layoutSnapshot: latestLayoutSnapshot
+        )
+        props["__lynxRouterNavigationModel"] = "native_tab_host"
+        props["__lynxRouterPlatformContainer"] = "uikit_tab_container"
+        runtimeGlobalProps = props
+        LynxNativeRuntime.updateGlobalProps(props, in: lynxView)
+    }
+
+    private func scheduleLayoutUpdate() {
+        layoutUpdateCoordinator.schedule(
+            for: contentView,
+            viewportSize: { [weak self] in self?.contentView.bounds.size ?? .zero },
+            onUpdate: { [weak self] snapshot in
+                self?.applyLayoutUpdate(snapshot)
+            }
+        )
+    }
+
+    private func applyLayoutUpdate(_ snapshot: ShellLayoutSnapshot) {
+        latestLayoutSnapshot = snapshot
+        guard let lynxView, let request = currentRequest else { return }
+        LynxNativeRuntime.updateLayout(
+            view: lynxView,
+            size: snapshot.viewportSize,
+            screenSize: snapshot.screenSize
+        )
+        var props = ShellGlobalPropsFactory.make(
+            for: contentView,
+            request: request,
+            pageId: pageID,
+            sessionId: "native-tab-host",
+            bundleMetadata: runtimeGlobalProps?["__lynxBundleMeta"] as? [String: Any],
+            layoutSnapshot: snapshot
+        )
+        props["__lynxRouterNavigationModel"] = "native_tab_host"
+        props["__lynxRouterPlatformContainer"] = "uikit_tab_container"
+        runtimeGlobalProps = props
+        LynxNativeRuntime.updateGlobalProps(props, in: lynxView)
     }
 
     private func releaseCurrentLease() {

@@ -219,9 +219,15 @@ final class LynxShellUITests: XCTestCase {
         throw XCTSkip("OTA Server 在限定时间内无响应；客户端 mock suite 已覆盖同一协议")
     }
 
-    func testDeferredTabLoadCannotOverwriteNewGeneration() {
+    func testDeferredTabLoadCannotOverwriteNewGeneration() throws {
+        guard Self.testOtaToken != nil else {
+            throw XCTSkip("该用例需要 TEST OTA runtime 才能验证 deferred resolve 代际门禁")
+        }
         launchApp(extraEnvironment: [
             "LYNX_UI_TEST_EXPOSE_RUNTIME_STATE": "1",
+            // 该用例验证的是 OTA/cache-only resolve 的代际门禁；显式启用本地 v3 fixture，
+            // 否则 NativeTabDemo 会走 direct-asset 分支，resolve 计数永远是 0。
+            "LYNX_TEST_OTA_V3_FIXTURE": "1",
             "LYNX_TEST_TAB_DEFER_FIRST_RESOLVE_MS": "8000",
         ])
         let tabDemo = app.buttons["打开原生 Tab 承载 Demo"]

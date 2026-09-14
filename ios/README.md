@@ -83,6 +83,11 @@ try LynxRouter.install(to: navigationController, otaConfiguration: ota)
 随后使用 `LynxRouter.open(lynxAppId:bundleName:params:)`。命中本地 current 会立即打开并
 后台检查，缺包/损坏时显示原生 Loading；直接 HTTPS Bundle 不进入 OTA Store。
 
+LynxShellKit 会从每个容器自身的 `traitCollection` 初始化并更新 Lynx 4.0 的
+`prefers-color-scheme`，同时维护页面已有的 `globalProps.theme`，不需要新增主题 Bridge。
+原生诊断可低频调用 `LynxRouter.queryMemoryUsage`；结果回调到主线程，只包含状态、实例
+计数和聚合字节，不包含实例 URL/pageId。
+
 Sample Debug 的 OTA 配置约定：`Info-Debug.plist` 提供测试环境 API 地址，
 `LynxOtaClientToken` 只从 `LYNX_OTA_CLIENT_TOKEN` 环境变量或 Xcode Build Setting 注入。
 Xcode 的 Run Scheme 可在 **Arguments > Environment Variables** 增加同名变量；命令行构建也可
@@ -106,11 +111,12 @@ Debug Sample 使用 `DemoNavigationController` 作为全局原生导航承载：
 原生 `UINavigationBar`、标题、返回按钮和全局 `interactivePopGestureRecognizer`。这只是 Demo
 验收模式；业务 App 默认仍由自己的 Coordinator 决定导航栏和返回手势。
 
-Native Tab Demo 的两个 Tab 都从 embedded Manifest 解析 `main.lynx.bundle` 的真实 App ID，
-再调用 `resolveCurrent` cache-only 读取同一个 OTA current。Tab Home/Settings 只通过
-`native_tab_id` 改变页面展示状态，不更换 Bundle；因此 Tab Home 与单独打开 Playground
-`main.lynx.bundle` 的 Bundle、releaseId 和内容来源一致。Demo 顶部“刷新 OTA”会先做一次全量
-同步，再让两个 Tab 重新读取已经提交的 current。
+Native Tab Demo 的普通模式直接读取构建同步到 `Bundles/main.lynx.bundle` 的最新 Playground
+Bundle，避免调试按钮继续显示旧的 embedded fixture；设置 `LYNX_TEST_OTA_V3_FIXTURE=1` 时
+才切换到 Manifest/current 的 OTA v3 故障车道。Tab Home/Settings 只通过 `native_tab_id`
+改变页面展示状态，不更换 Bundle。两个常驻 LynxView 共用宿主的系统主题，页面显式选择
+Light/Dark/Auto 时复用已有 `broadcast`/`GlobalEventEmitter` 同步所有活体页面。OTA v3 模式下，
+Demo 顶部“刷新 OTA”仍会先做一次全量同步，再让两个 Tab 重新读取已经提交的 current。
 
 ### iOS OTA Store v3 与磁盘浏览器
 
