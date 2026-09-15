@@ -1,10 +1,11 @@
 {
   "name": "@lynx/lynx-shell-kit",
   "version": "1.0.0",
-  "description": "Reusable Lynx 4.0 HarmonyOS shell module",
+  "description": "Reusable Lynx 4.1 HarmonyOS shell module",
   "main": "src/main/ets/Index.ets",
   "license": "Apache-2.0",
   "dependencies": {
+    "@lynx/gfx": "file:../lynx_gfx",
     "@lynx/lynx": "@param:dependencies.lynx_version",
     "@lynx/lynx_base": "@param:dependencies.lynx_version",
     "@lynx/lynx_devtool": "@param:dependencies.lynx_version",
@@ -15,6 +16,7 @@
     "@lynx/xelement_markdown": "@param:dependencies.lynx_version",
     "@lynx/xelement_svg": "@param:dependencies.lynx_version",
     "@lynx/xelement_webview": "@param:dependencies.lynx_version",
+    "@lynx/xelement_video": "@param:dependencies.lynx_version",
     "@ohos/imageknifepro": "1.0.9"
   },
   "devDependencies": {},

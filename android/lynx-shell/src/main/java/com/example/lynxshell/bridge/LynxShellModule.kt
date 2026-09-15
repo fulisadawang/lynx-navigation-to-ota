@@ -536,7 +536,7 @@ class LynxShellModule(context: Context) : LynxModule(context) {
         Arguments.makeNativeMap(value)
 
     /** 把 Lynx 传入的 JavaOnlyMap/HashMap 统一转换为可递归编码的 Map。 */
-    /** Lynx 4.0 Bridge 只接受 ReadableMap，避免 Kotlin Any? 被反射成不支持的 Object。 */
+    /** Lynx 4.1 Bridge 只接受 ReadableMap，避免 Kotlin Any? 被反射成不支持的 Object。 */
     private fun payloadMap(value: ReadableMap?): Map<String, Any?> =
         value?.toHashMap()
             ?.filterKeys { it is String }

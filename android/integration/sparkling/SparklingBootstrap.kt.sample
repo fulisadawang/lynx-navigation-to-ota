@@ -15,7 +15,7 @@ import com.tiktok.sparkling.method.storage.removeItem.StorageRemoveItemMethod
 import com.tiktok.sparkling.method.storage.setItem.StorageSetItemMethod
 
 /**
- * 取自 Sparkling Playground 的启动顺序，仅作为 Lynx 4.0 对齐后的接入模板。
+ * 取自 Sparkling Playground 的启动顺序，仅作为 Lynx 4.1 对齐后的接入模板。
  * Host Depend 必须由业务实现，不能使用空实现返回假成功。
  */
 object SparklingBootstrap {

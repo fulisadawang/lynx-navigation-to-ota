@@ -1,14 +1,14 @@
-# iOS Lynx 4.0 Shell
+# iOS Lynx 4.1 Shell
 
-技术栈：Swift、UIKit、CocoaPods、Lynx 4.0。
+技术栈：Swift、UIKit、CocoaPods、Lynx 4.1。
 
 主工程使用 Swift + UIKit；Lynx 能力已经收进显式 CocoaPods Module
 `LynxShellKit`，Sample App 不再直接编译壳源码。`Native/LynxNativeRuntime.m` 是薄
-Objective-C 包装层，保留官方 Lynx 4.0 API 形态。
+Objective-C 包装层，保留官方 Lynx 4.1 API 形态。
 
 ## 主要结构
 
-- `LynxShellKit.podspec`：唯一业务接入 Module，统一声明 Lynx 4.0、Service、全量 XElement
+- `LynxShellKit.podspec`：唯一业务接入 Module，统一声明 Lynx 4.1、Service、全量 XElement
   和内置 OTA 源码。
 - `OtaIOSSDK/Sources/OtaIOSSDK`：Router 内部 OTA 实现源码；不需要在业务 Podfile 中单独引用。
 - `LynxShell`：业务 App 使用的公开 Interface。
@@ -21,15 +21,15 @@ Objective-C 包装层，保留官方 Lynx 4.0 API 形态。
 - `LynxShellModule`：页面打开、关闭、隔离存储、AppInfo 与媒体方法。
 - `ShellMediaBridge`：相册/相机选择、上传、下载和 Data URL 落盘。
 
-## XElement 4.0 全量接入
+## XElement 4.1 全量接入
 
 `LynxShellKit.podspec` 已显式声明 `Input`、`BlurView`、`Overlay`、
 `ScrollCoordinator`、`ViewPager`、`WebView`、`SVG`、`Refresh`、`Markdown` 与
-`Behavior` 十个 subspec。Sample 的 Podfile 只直接引用本地 `LynxShellKit`。
+`Behavior` 十一个 subspec（包含 Lynx 4.1 新增的 `Video`）。Sample 的 Podfile 只直接引用本地 `LynxShellKit`。
 
 `Behavior` 通过官方 `LYNX_LAZY_REGISTER_*` 机制自动完成组件映射，宿主不重复手工注册。`Native/LynxNativeRuntime.m` 还导入了全部组件公开头和 AutoRegistry 头，作为真实编译时的缺失检测哨兵。`project.yml` 与 Debug/Release Target 均加入 `-ObjC`，保证静态 Framework 内的自动注册类被链接。
 
-该范围严格对应 Lynx `release/4.0`，详情见根目录 [XELEMENT_INTEGRATION.md](../XELEMENT_INTEGRATION.md)。
+该范围严格对应 Lynx 4.1.0 的 `XElement` Specs，详情见根目录 [XELEMENT_INTEGRATION.md](../XELEMENT_INTEGRATION.md)。
 
 ## 工程入口
 
@@ -83,7 +83,7 @@ try LynxRouter.install(to: navigationController, otaConfiguration: ota)
 随后使用 `LynxRouter.open(lynxAppId:bundleName:params:)`。命中本地 current 会立即打开并
 后台检查，缺包/损坏时显示原生 Loading；直接 HTTPS Bundle 不进入 OTA Store。
 
-LynxShellKit 会从每个容器自身的 `traitCollection` 初始化并更新 Lynx 4.0 的
+LynxShellKit 会从每个容器自身的 `traitCollection` 初始化并更新 Lynx 4.1 的
 `prefers-color-scheme`，同时维护页面已有的 `globalProps.theme`，不需要新增主题 Bridge。
 原生诊断可低频调用 `LynxRouter.queryMemoryUsage`；结果回调到主线程，只包含状态、实例
 计数和聚合字节，不包含实例 URL/pageId。

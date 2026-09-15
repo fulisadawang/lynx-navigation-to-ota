@@ -91,7 +91,7 @@ export default class ShellMessageHub {
       const snapshot = ShellLayoutState.snapshot(pageId);
       const rawScreen = ShellLayoutState.rawScreenSize();
       context.updateScreenMetrics(rawScreen.width, rawScreen.height);
-      // Harmony Lynx 4.0 binding 已公开 updateViewport；Mode=1 是 definite。
+      // Harmony Lynx 4.1 binding 已公开 updateViewport；Mode=1 是 definite。
       context.updateViewport(snapshot.viewportWidth, 1, snapshot.viewportHeight, 1);
       context.updateMetaData(new MetaData(
         undefined,

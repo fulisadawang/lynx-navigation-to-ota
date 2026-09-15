@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-`lynx-navigation-to-ota` 是独立的 Lynx 4.0 三端原生 Router + OTA 源码工程，并包含尚未接入
+`lynx-navigation-to-ota` 是独立的 Lynx 4.1 三端原生 Router + OTA 源码工程，并包含尚未接入
 默认 Sample 的三端 `LynxCapacitorModule` 原生能力源码。
 三端 Shell 业务方分别引入一个平台模块：Android AAR、iOS CocoaPods Module、HarmonyOS HAR。
 本仓库不包含旧的 `LynxScreens-Android` 工程，也不依赖 Sparkling 原生 SDK。
@@ -24,7 +24,7 @@ ROUTING.md                Bundle、Scheme 与 params 路由规则
 NAVIGATION_README.md      高级原生栈与返回/结果协议
 TRANSITIONS_README.md     原生容器转场协议
 SECURITY.md               Bundle、HTTPS、缓存和运行时安全边界
-XELEMENT_INTEGRATION.md   Lynx 4.0 XElement 全量依赖清单
+XELEMENT_INTEGRATION.md   Lynx 4.1 XElement 全量依赖清单
 VALIDATION.md              分层验证命令与结果边界
 ```
 
@@ -39,7 +39,7 @@ android/lynx-shell/
 │   ├── container/                      Activity-first Lynx 容器
 │   ├── routing/                        Native Page Stack 与转场
 │   ├── bridge/                         NativeModules、Storage、页面消息
-│   └── runtime/                        Lynx 4.0/XElement/Provider
+│   └── runtime/                        Lynx 4.1/XElement/Provider
 └── src/main/kotlin/com/ota/android/sdk/
     └── 完整 Manifest、CAS 下载、SHA、current/previous 与回滚
 ```

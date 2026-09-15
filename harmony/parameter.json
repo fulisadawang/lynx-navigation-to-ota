@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "lynx_version": "4.0.0"
+    "lynx_version": "4.1.0",
+    "primjs_version": "4.1.1"
   }
 }

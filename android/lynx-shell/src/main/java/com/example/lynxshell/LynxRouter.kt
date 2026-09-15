@@ -223,7 +223,7 @@ object LynxRouter {
      * 按需读取当前进程内 Lynx 实例的聚合内存快照。
      *
      * 这是原生诊断入口，不属于页面 Bridge 或 OTA 上报；回调统一切回主线程，结果不暴露
-     * Bundle URL 和实例明细。timeoutMs 小于等于 0 时沿用 Lynx 4.0 的 2000ms 默认值。
+     * Bundle URL 和实例明细。timeoutMs 小于等于 0 时沿用 Lynx 4.1 的 2000ms 默认值。
      */
     fun queryMemoryUsage(
         timeoutMs: Long = 0L,

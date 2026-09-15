@@ -21,6 +21,7 @@ export default defineConfig({
       'go-bundles': './src/pages/go-bundles/index.tsx',
       'nav-basic': './src/pages/nav-basic/index.tsx',
       'i18n-demo': './src/pages/i18n-demo/index.tsx',
+      'video-demo': './src/pages/video-demo/index.tsx',
       'nav-chain': './src/pages/nav-chain/index.tsx',
       'transition-gallery': './src/pages/transition-gallery/index.tsx',
       'transition-detail': './src/pages/transition-detail/index.tsx',
@@ -47,6 +48,7 @@ export default defineConfig({
         return toSparklingScheme(url)
       },
     }),
-    pluginReactLynx(),
+    // 4.1 Runtime 才能消费本次 Bundle；engineVersion 会同时写入 targetSdkVersion。
+    pluginReactLynx({ engineVersion: '4.1.0' }),
   ],
 })

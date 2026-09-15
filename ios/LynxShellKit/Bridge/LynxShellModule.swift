@@ -23,7 +23,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
     public static var name: String { "LynxShellModule" }
 
     /**
-     * Lynx 4.0 iOS 使用 methodLookup 把 JS 方法名映射到 Objective-C selector。
+     * Lynx 4.1 iOS 使用 methodLookup 把 JS 方法名映射到 Objective-C selector。
      *
      * 新增方法必须同时更新 Android `@LynxMethod`、TypeScript 声明和静态契约检查。
      */
@@ -102,7 +102,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
     }
 
     /**
-     * Lynx 4.0 会优先通过 LynxContextModule 初始化。
+     * Lynx 4.1 会优先通过 LynxContextModule 初始化。
      *
      * 这样 open 的共享元素源节点属于哪个 LynxView 是确定的，不再用 keyWindow 或
      * 栈顶页面猜测；仍是完全手写 NativeModule，不依赖 autolink/codegen。

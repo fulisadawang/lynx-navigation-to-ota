@@ -22,6 +22,16 @@
   },
   "modules": [
     {
+      "name": "lynx_gfx",
+      "srcPath": "./lynx_gfx",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": ["default"]
+        }
+      ]
+    },
+    {
       "name": "lynx_shell_kit",
       "srcPath": "./lynx_shell_kit",
       "targets": [

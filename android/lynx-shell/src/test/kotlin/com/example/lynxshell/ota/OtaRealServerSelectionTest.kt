@@ -281,7 +281,7 @@ class OtaRealServerSelectionTest {
       channel = null,
       region = null,
       nativeProtocolVersion = null,
-      lynxSdkVersion = "4.0.0",
+      lynxSdkVersion = "4.1.0",
       otaClientToken = CLIENT_TOKEN,
       storageDirectory = root,
       candidateActivationEnabled = candidateEnabled,

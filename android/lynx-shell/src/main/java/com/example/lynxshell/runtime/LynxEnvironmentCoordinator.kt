@@ -11,7 +11,7 @@ import com.lynx.tasm.TemplateData
 import java.util.Collections
 import java.util.IdentityHashMap
 
-/** Lynx 4.0 环境变化的唯一 Android UI 主线程同步入口。 */
+/** Lynx 4.1 环境变化的唯一 Android UI 主线程同步入口。 */
 object LynxEnvironmentCoordinator {
     const val LOCALE_CHANGED_EVENT = "lynxShellLocaleChanged"
     const val LAYOUT_CHANGED_EVENT = "lynxShellLayoutChanged"

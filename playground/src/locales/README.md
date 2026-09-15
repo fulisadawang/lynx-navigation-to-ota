@@ -1,6 +1,6 @@
 # Playground 语言资源边界
 
-Playground 的宿主语言由 `LocaleProvider` 从 Lynx 4.0 GlobalProps 和
+Playground 的宿主语言由 `LocaleProvider` 从 Lynx 4.1 GlobalProps 和
 `lynxShellLocaleChanged` 事件取得，规范化为 `zh-CN` / `en-US`。每个 Bundle 都有独立
 的 JavaScript 运行时，因此每个 Bundle 需要在自己的入口注册资源或创建自己的 i18next
 实例；宿主只负责保存 App 语言、向活体页面同步状态和给后续页面补 `locale` 参数。

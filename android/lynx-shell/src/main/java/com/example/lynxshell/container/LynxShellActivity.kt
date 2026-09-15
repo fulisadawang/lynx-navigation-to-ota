@@ -430,7 +430,7 @@ class LynxShellActivity : AppCompatActivity() {
         runCatching {
             val client = object : LynxViewClient() {
                 /**
-                 * Lynx 4.0 正常以 onFirstScreen 为准；部分线程调度/厂商设备上
+                 * Lynx 4.1 正常以 onFirstScreen 为准；部分线程调度/厂商设备上
                  * onLoadSuccess 可能成为宿主 client 更稳定收到的同批次信号。
                  * Coordinator 内部按 generation 幂等，因此双信号不会启动两次动画。
                  */

@@ -1,0 +1,12 @@
+{
+  "name": "@lynx/gfx",
+  "version": "4.1.0",
+  "description": "Lynx 4.1.0 Harmony native Gfx library",
+  "license": "Apache-2.0",
+  "main": "Index.ets",
+  "dependencies": {
+    "@lynx/lynx_base": "4.1.0",
+    "liblynxgfx.so": "file:./src/main/ets/types/liblynxgfx"
+  },
+  "modelVersion": "5.0.0"
+}

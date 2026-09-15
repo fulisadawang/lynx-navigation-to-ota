@@ -141,7 +141,7 @@ function printHelp(exitCode) {
     --env TEST \\
     --host-app capp \\
     --versioncode 150 \\
-    --lynx-sdk-version 4.0.0
+    --lynx-sdk-version 4.1.0
 
 --versioncode 和 --lynx-sdk-version 必填；按目标宿主构建号及实际 Runtime 填写。
 HTTP 字段精确为 versioncode / lynxSdkVersion；前导零规范化，SDK 补齐三段。

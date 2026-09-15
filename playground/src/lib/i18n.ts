@@ -38,6 +38,8 @@ let resources: LocaleResources = {
     'home.light': '浅色',
     'home.i18nDemoTitle': '国际化测试',
     'home.i18nDemoDescription': '验证 App 语言、资源切换和新页面 locale 参数',
+    'home.videoDemoTitle': 'Video 组件测试',
+    'home.videoDemoDescription': '验证 Lynx 4.1 Video 的首帧、播放控制和错误事件',
   },
   'en-US': {
     'nav.home': 'Home',
@@ -66,6 +68,8 @@ let resources: LocaleResources = {
     'home.light': 'Light',
     'home.i18nDemoTitle': 'i18n Bundle test',
     'home.i18nDemoDescription': 'Verify App language, resource switching and the new page locale marker',
+    'home.videoDemoTitle': 'Video component test',
+    'home.videoDemoDescription': 'Verify Lynx 4.1 Video first frame, playback controls and error events',
   },
 }
 let i18nInstance: I18nInstanceLike | undefined

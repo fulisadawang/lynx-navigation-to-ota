@@ -1,6 +1,6 @@
 # Lynx Navigation to OTA
 
-`lynx-navigation-to-ota` 是一套面向业务 App 的 Lynx 4.0 三端原生宿主工程。它把 Runtime、原生页面容器、Router、NativeModules、XElement、OTA Store v3 和页面转场放进可复用的 Android、iOS、HarmonyOS Module，同时保留可以直接运行的三端 Sample 与 ReactLynx Playground。
+`lynx-navigation-to-ota` 是一套面向业务 App 的 Lynx 4.1 三端原生宿主工程。它把 Runtime、原生页面容器、Router、NativeModules、XElement、OTA Store v3 和页面转场放进可复用的 Android、iOS、HarmonyOS Module，同时保留可以直接运行的三端 Sample 与 ReactLynx Playground。
 
 这个仓库解决的不是“如何打开一个 Lynx Bundle”这么小的问题。它解决完整链路：
 
@@ -16,7 +16,7 @@ Provider / Store v3 / NavigationSnapshot
 LynxView + GlobalProps + NativeModules + XElement
 ```
 
-当前主线直接使用 Lynx 4.0。项目借鉴 Sparkling Playground 的页面组织方式，但不依赖 Sparkling 原生 SDK，不使用 autolink 或 codegen 注册宿主能力。
+当前主线直接使用 Lynx 4.1.0，PrimJS 使用官方组合 4.1.1。项目借鉴 Sparkling Playground 的页面组织方式，但不依赖 Sparkling 原生 SDK，不使用 autolink 或 codegen 注册宿主能力。
 
 ## 现在包含什么
 
@@ -27,7 +27,8 @@ LynxView + GlobalProps + NativeModules + XElement
 - 原生 Tab 承载：Android Fragment、iOS UIViewController、HarmonyOS ArkUI Tabs。
 - Android/iOS 原生转场：基础转场、Skyline routeType、共享元素、Open Container、BottomSheet、heroSheet 和跟手返回。
 - `LynxShellModule`：导航、页面结果、消息、隔离存储、AppInfo、媒体和 OTA 诊断。
-- Lynx 4.0 XElement 全量接入和统一 Runtime 初始化。
+- Lynx 4.1 XElement 全量接入和统一 Runtime 初始化，包含实验性 Video。Android AnimaX 宿主适配
+  单独维护在 `codex/lynx-4.1-animax` 分支，当前升级分支不显式接入 `animax-view`。
 - 本地 OTA Server、100 Bundle Golden Fixture、故障注入、三端测试报告和磁盘 Inspector。
 - 三端 `LynxCapacitorModule` 源码，覆盖 40 个能力域、146 个方法的统一调用契约。
 
@@ -143,7 +144,7 @@ target 'LynxShell' do
 end
 ```
 
-`LynxShellKit.podspec` 会把 Lynx 4.0、Service、XElement 和 `OtaIOSSDK/Sources` 一起编进同一个 Module。业务方不需要再引入独立 OTA Pod。
+`LynxShellKit.podspec` 会把 Lynx 4.1、Service、XElement 和 `OtaIOSSDK/Sources` 一起编进同一个 Module。业务方不需要再引入独立 OTA Pod。
 
 ### 4. HarmonyOS
 
@@ -447,12 +448,16 @@ handleCall(payloadJSON, callback)
 
 | 项目 | Android | iOS | HarmonyOS |
 |---|---|---|---|
-| Lynx | 4.0.0 | 4.0.0 | 4.0.0 |
-| PrimJS | 4.0.0 | 4.0.0 | 4.0.0 |
+| Lynx | 4.1.0 | 4.1.0 | 4.1.0 |
+| PrimJS | 4.1.1 | 4.1.1 | 4.1.1 |
 | 最低系统 | Android 24 | iOS 13 | compatibleSdk 13 |
-| XElement | 10/10 Maven 产物 | 10/10 CocoaPods subspec | 9/9 平台能力 |
+| XElement | 11/11 Maven 产物 | 11/11 CocoaPods subspec | 10 类平台能力 |
 
 HarmonyOS 的 Markdown、SVG、WebView 按官方 Harmony 接入方式独立注册，其余能力由核心 Registry 提供。完整列表见 [XELEMENT_INTEGRATION.md](XELEMENT_INTEGRATION.md)。
+
+Android 4.1 的官方 `xelement` 聚合 AAR 仍可能传递携带 AnimaX 二进制；升级主分支只保留
+现有 XElement 和 Video 的宿主注册，并在聚合结果中过滤 `animax-view`。需要 AnimaX JSON、字体、
+图片或视频资源链路时，使用独立的 Android AnimaX 分支。
 
 ## 验证
 

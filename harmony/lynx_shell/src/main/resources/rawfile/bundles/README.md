@@ -8,7 +8,8 @@ cd /absolute/path/to/lynx-navigation-to-ota
 ./scripts/sync_bundle.sh /absolute/path/to/playground/dist
 ```
 
-当前已导入 16 个 Bundle，包括 `main`、导航、媒体、存储、过渡和 Showcase 示例。
+当前已导入 Playground 的 18 个 Bundle，包括 `main`、导航、媒体、Video、存储、过渡和 Showcase 示例；
+另外保留 Capacitor 诊断 Bundle 作为独立宿主验收资源。
 
 统一逻辑地址示例：
 

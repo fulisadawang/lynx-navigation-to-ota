@@ -6,7 +6,7 @@
 #import <SDWebImage/SDWebImage.h>
 #import <SDWebImageWebPCoder/SDWebImageWebPCoder.h>
 
-// XElement 4.0 全量组件的公开头文件。
+// XElement 4.1 全量组件的公开头文件。
 // 这些 import 是编译期哨兵：Pod 缺少任一 subspec 时，真实 Xcode 编译会立即失败，
 // 而不是等 Lynx 页面渲染到对应标签时才暴露组件未注册问题。
 #import <XElement/LynxUIBlurView.h>
@@ -19,6 +19,7 @@
 #import <XElement/LynxUITextArea.h>
 #import <XElement/LynxUIViewPager.h>
 #import <XElement/LynxUIWebView.h>
+#import <XElement/LynxUIVideo.h>
 
 // Behavior subspec 的懒注册入口。Lynx 在创建组件时通过这些 Registry 完成映射；
 // 不需要宿主再手工调用 registerUI，避免与官方自动注册机制重复。
@@ -32,6 +33,7 @@
 #import <XElement/LynxUITextAreaAutoRegistry.h>
 #import <XElement/LynxUIViewPagerAutoRegistry.h>
 #import <XElement/LynxUIWebViewAutoRegistry.h>
+#import <XElement/LynxUIVideoAutoRegistry.h>
 
 // Swift Module 与 Provider 会出现在 CocoaPods Target 自动生成的接口头中。
 // 条件分支兼容 framework 与 development pod 两种 Header 搜索路径。
@@ -51,9 +53,9 @@
     [[SDImageCodersManager sharedManager] addCoder:webPCoder];
 
     // XElement/Behavior 使用 LYNX_LAZY_REGISTER_* 宏完成全量懒注册。
-    // Podfile 已显式包含 Behavior 及全部九个组件 subspec，宿主无需重复注册 UI 类。
+    // Podfile 已显式包含 Behavior、Video 及现有组件 subspec，宿主无需重复注册 UI 类。
 
-    // 与 Lynx 4.0 Explorer 一致：先拿到 LynxEnv，再准备全局 Config。
+    // 与 Lynx 4.1 Explorer 一致：先拿到 LynxEnv，再准备全局 Config。
     LynxEnv *env = [LynxEnv sharedInstance];
     LynxConfig *globalConfig =
         [[LynxConfig alloc] initWithProvider:[[ShellTemplateProvider alloc] init]];

@@ -13,7 +13,7 @@ const SCRIPT = fileURLToPath(new URL('./sync_ota_bundles_to_assets.mjs', import.
 const TEST_ENV = { LYNX_OTA_CLIENT_TOKEN: 'c22-synthetic-local-token' }
 const SHA = (bytes) => `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`
 
-function argv({ baseUrl = 'https://api.example.invalid', target = 'ios', versioncode = '150', sdk = '4.0.0', outputDirectory, local = false, dryRun = false } = {}) {
+function argv({ baseUrl = 'https://api.example.invalid', target = 'ios', versioncode = '150', sdk = '4.1.0', outputDirectory, local = false, dryRun = false } = {}) {
   return [
     '--base-url', baseUrl, '--target', target,
     ...(versioncode === undefined ? [] : ['--versioncode', versioncode]),
@@ -88,7 +88,7 @@ test('C22 SDK normalization pads stable numeric components and rejects unsupport
   for (const [raw, normalized] of [['4', '4.0.0'], ['4.10', '4.10.0'], [' 004.009.000 ', '4.9.0'], ['0', '0.0.0']]) {
     assert.equal(normalizeLynxSdkVersion(raw), normalized)
   }
-  for (const invalid of ['', '4-beta', '4.0.0+build', 'v4', '4.*', '^4', '-4', '4..1', '4.0.0.1', '4.1e3', null, 4]) {
+  for (const invalid of ['', '4-beta', '4.1.0+build', 'v4', '4.*', '^4', '-4', '4..1', '4.1.0.1', '4.1e3', null, 4]) {
     assert.throws(() => normalizeLynxSdkVersion(invalid), TypeError)
   }
 })
@@ -285,7 +285,7 @@ test('C22 real Server anonymously embeds only compatible full 100-bundle release
     return response.json()
   }
   async function fixtureSnapshot(userId) {
-    const query = new URLSearchParams({ env: 'TEST', hostApp: 'capp', lynxAppId: '10000001', platform: 'ios', versioncode: '150', lynxSdkVersion: '4.0.0' })
+    const query = new URLSearchParams({ env: 'TEST', hostApp: 'capp', lynxAppId: '10000001', platform: 'ios', versioncode: '150', lynxSdkVersion: '4.1.0' })
     if (userId) query.set('userId', userId)
     const response = await fetch(`${adapter.origin}/api/ota/v1/releases/latest-bundle-list?${query}`, { headers: { 'x-ota-client-token': CLIENT_TOKEN } })
     assert.equal(response.status, 200)
@@ -294,14 +294,14 @@ test('C22 real Server anonymously embeds only compatible full 100-bundle release
   const fullSnapshot = await fixtureSnapshot()
   const full = (await admin('POST', '/api/admin/ota/releases', {
     ...scope, platforms: ['ios'], createdBy: 'fixture-admin', versionCodeRange: { min: '1', max: '999' },
-    lynxSdkRange: { min: '4', max: '4' }, changedBundles: fullSnapshot.changedBundles,
+    lynxSdkRange: { min: '4', max: '4.1' }, changedBundles: fullSnapshot.changedBundles,
   }, 201)).data[0]
   await admin('POST', `/api/admin/ota/releases/${full.releaseId}/publish`, { type: 'full' })
   await control('stage', { stage: 'gray6' })
   const graySnapshot = await fixtureSnapshot('user_demo_A')
   const gray = (await admin('POST', '/api/admin/ota/releases', {
     ...scope, platforms: ['ios'], createdBy: 'fixture-admin', changedBundles: graySnapshot.changedBundles,
-    versionCodeRange: { min: '1', max: '999' }, lynxSdkRange: { min: '4', max: '4' },
+    versionCodeRange: { min: '1', max: '999' }, lynxSdkRange: { min: '4', max: '4.1' },
   }, 201)).data[0]
   await admin('POST', '/api/admin/ota/rules', { ...scope, ruleId: 'c22-gray-rule', userWhitelist: ['user_demo_A'], targetReleaseId: gray.releaseId }, 201)
   await admin('POST', `/api/admin/ota/releases/${gray.releaseId}/publish`, { type: 'gray', ruleId: 'c22-gray-rule' })
@@ -323,7 +323,7 @@ test('C22 real Server anonymously embeds only compatible full 100-bundle release
   const metrics = await control('metrics')
   assert.equal(metrics.latestRequestCount, 0, '字节 fixture 不参与这次版本选择')
   assert.equal(metrics.bundleRequestCount, 100)
-  assert.deepEqual(latestRequests, [{ env: 'TEST', hostApp: scope.hostApp, platform: 'ios', versioncode: '150', lynxSdkVersion: '4.0.0' }])
+  assert.deepEqual(latestRequests, [{ env: 'TEST', hostApp: scope.hostApp, platform: 'ios', versioncode: '150', lynxSdkVersion: '4.1.0' }])
   assert.ok(metrics.requests.filter((item) => item.kind === 'bundle').every((item) => !item.clientTokenPresent && !item.userQueryPresent))
 
   const before = fs.readFileSync(manifestFile, 'utf8')

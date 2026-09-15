@@ -39,7 +39,7 @@ final class OtaUserSelectionUITests: XCTestCase {
         let query = try XCTUnwrap(requests.first { $0["kind"] as? String == "latest" })
         // Sample 的 Info-Debug.plist 真实 CFBundleVersion=1，versionName=1.0.0。
         XCTAssertEqual(query["versioncode"] as? String, "1")
-        XCTAssertEqual(query["lynxSdkVersion"] as? String, "4.0.0")
+        XCTAssertEqual(query["lynxSdkVersion"] as? String, "4.1.0")
         openTabs()
         let ids = try XCTUnwrap(control("state")["actualReleaseIds"] as? [String: String])
         waitForRelease(try XCTUnwrap(ids["full5"]))
@@ -289,7 +289,7 @@ final class OtaUserSelectionUITests: XCTestCase {
             for request in requests where request["kind"] as? String == "latest" {
                 XCTAssertEqual(request["platform"] as? String, "ios")
                 XCTAssertEqual(request["versioncode"] as? String, app.launchEnvironment["LYNX_OTA_VERSIONCODE"] ?? "1")
-                XCTAssertEqual(request["lynxSdkVersion"] as? String, "4.0.0")
+                XCTAssertEqual(request["lynxSdkVersion"] as? String, "4.1.0")
             }
             let evidence: [String: Any] = [
                 "metrics": metrics, "server": try control("state"),
