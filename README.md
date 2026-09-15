@@ -27,7 +27,8 @@ LynxView + GlobalProps + NativeModules + XElement
 - 原生 Tab 承载：Android Fragment、iOS UIViewController、HarmonyOS ArkUI Tabs。
 - Android/iOS 原生转场：基础转场、Skyline routeType、共享元素、Open Container、BottomSheet、heroSheet 和跟手返回。
 - `LynxShellModule`：导航、页面结果、消息、隔离存储、AppInfo、媒体和 OTA 诊断。
-- Lynx 4.1 XElement 全量接入和统一 Runtime 初始化，包含实验性 Video；AnimaX 单独维护。
+- Lynx 4.1 XElement 全量接入和统一 Runtime 初始化，包含实验性 Video。Android AnimaX 宿主适配
+  单独维护在 `codex/lynx-4.1-animax` 分支，当前升级分支不显式接入 `animax-view`。
 - 本地 OTA Server、100 Bundle Golden Fixture、故障注入、三端测试报告和磁盘 Inspector。
 - 三端 `LynxCapacitorModule` 源码，覆盖 40 个能力域、146 个方法的统一调用契约。
 
@@ -453,6 +454,10 @@ handleCall(payloadJSON, callback)
 | XElement | 11/11 Maven 产物 | 11/11 CocoaPods subspec | 10 类平台能力 |
 
 HarmonyOS 的 Markdown、SVG、WebView 按官方 Harmony 接入方式独立注册，其余能力由核心 Registry 提供。完整列表见 [XELEMENT_INTEGRATION.md](XELEMENT_INTEGRATION.md)。
+
+Android 4.1 的官方 `xelement` 聚合 AAR 仍可能传递携带 AnimaX 二进制；升级主分支只保留
+现有 XElement 和 Video 的宿主注册，并在聚合结果中过滤 `animax-view`。需要 AnimaX JSON、字体、
+图片或视频资源链路时，使用独立的 Android AnimaX 分支。
 
 ## 验证
 
