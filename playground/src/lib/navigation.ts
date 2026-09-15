@@ -360,11 +360,11 @@ type Callback<T = unknown> = (result: NavigateResponse<T>) => void
 const RESERVED_ROUTE_QUERY_KEYS = new Set(['bundle', 'url', 'route_key'])
 /** 当前 Playground OTA TEST 归属的服务端 App ID；发布脚本只接受服务端已有 ID。 */
 const PLAYGROUND_OTA_APP_ID = '10000001'
-const DIRECT_BUNDLE_NAMES = new Set(['i18n-demo.lynx.bundle'])
+const DIRECT_BUNDLE_NAMES = new Set(['i18n-demo.lynx.bundle', 'video-demo.lynx.bundle'])
 
 /** 从当前 LynxView 的宿主 GlobalProps 读取规范化语言；旧壳没有注入时默认中文。 */
 function currentShellLocale(): SupportedLocale {
-  const globalProps = (lynx.__globalProps || {}) as Record<string, unknown>
+  const globalProps = (lynx.__globalProps || {}) as unknown as Record<string, unknown>
   return parseLocaleState(globalProps.__lynxShellLocale || {
     locale: globalProps.locale,
     appLocale: globalProps.appLocale,

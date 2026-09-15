@@ -1,6 +1,6 @@
-# Android Lynx 4.0 Shell
+# Android Lynx 4.1 Shell
 
-技术栈：Kotlin、Android Views、Material Components、Lynx 4.0。
+技术栈：Kotlin、Android Views、Material Components、Lynx 4.1。
 
 ## 主要结构
 
@@ -11,13 +11,13 @@
 - `LynxRuntimeInitializer`：初始化 Fresco、Image/Log/HTTP Service、`LynxEnv` 和 Native Module。
 - `LynxShellActivity`：一个页面一个容器，管理系统栏、Toolbar、错误态和 `LynxView.destroy()`。
 - `LynxContainerFactory`：集中配置 Builder、线程策略、尺寸、密度和 globalProps。
-- `XElementRuntime`：把 Lynx 4.0 全量 XElement Behavior 统一安装到每个 Builder。
+- `XElementRuntime`：把 Lynx 4.1 全量 XElement Behavior 统一安装到每个 Builder。
 - `ShellTemplateProvider`：本地 / HTTPS Bundle、安全校验、体积限制、取消和错误回传。
 - `LynxRouteParser`：解析 Intent、`lynxshell`、Sparkling hybrid 和 Explorer local 地址。
 - `LynxShellModule`：Lynx 调宿主的稳定能力协议。
 - `ShellMediaBridge` / `ShellMediaPickerActivity`：媒体选择、上传、下载和 Data URL 落盘。
 
-## XElement 4.0 全量接入
+## XElement 4.1 全量接入
 
 `lynx-shell/build.gradle.kts` 已显式声明：
 
@@ -32,6 +32,7 @@ xelement-markdown
 xelement-refresh
 xelement-blur-view
 xelement-webview
+xelement-video
 ```
 
 SVG、Markdown、Refresh 所需的 `lynxtextra:0.1.1`、`servalsvg:0.0.2`、
@@ -40,7 +41,11 @@ SVG、Markdown、Refresh 所需的 `lynxtextra:0.1.1`、`servalsvg:0.0.2`、
 `XElementBehaviors().create()` 聚合注册。`consumer-rules.pro` 同时保留反射入口，
 业务侧打开 R8 后会自动合并。
 
-该范围严格对应 Lynx `release/4.0` Explorer，详情见根目录 [XELEMENT_INTEGRATION.md](../XELEMENT_INTEGRATION.md)。
+`xelement-video:4.1.0` 提供实验性的 `<video>`，由 4.1 的聚合 `BehaviorGenerator` 注册，
+业务 Bundle 可以直接使用。AnimaX 宿主接入已拆到独立专项分支；官方聚合器可能携带其传递依赖。
+
+该范围对应 Lynx 4.1 Explorer，核心依赖组合为 Lynx/Service/XElement `4.1.0` 与
+PrimJS `4.1.1`。组件注册边界见 `lynx-shell/src/main/java/com/example/lynxshell/runtime/XElementRuntime.kt`。
 
 ## 使用步骤
 
@@ -150,7 +155,7 @@ Demo 不再根据文件名猜 appId：`MainActivity` 的 OTA 页面只使用 Man
 `lynxAppId + bundleName`，因为同名 Bundle 可以属于多个 appId。
 
 Native Tab 示例声明 `android:configChanges="uiMode"`，系统夜间模式变化由宿主原地接管：
-存活的 `LynxTabFragment` 更新 Lynx 4.0 color scheme 和 `globalProps.theme`，示例的
+存活的 `LynxTabFragment` 更新 Lynx 4.1 color scheme 和 `globalProps.theme`，示例的
 Material 顶栏、底部 TabBar 也同步刷新，不重载 Bundle、不触发 OTA。
 
 Android 的 embedded baseline 不会在启动时复制到 `filesDir`。命中内置 Bundle 时由
@@ -249,7 +254,7 @@ Demo 原生 Launcher 提供“查看 OTA 磁盘目录”入口。页面使用 `L
 文件数和字节数；打开和刷新该页面不会触发 OTA 请求或修改 Store。
 
 需要排查 Lynx 进程内存时，可从原生诊断入口低频调用 `LynxRouter.queryMemoryUsage`。它把
-4.0 的 `completed/timeout`、实例计数和聚合字节回调到主线程，不暴露实例 URL/pageId，
+4.1 的 `completed/timeout`、实例计数和聚合字节回调到主线程，不暴露实例 URL/pageId，
 也不属于 `LynxShellModule` 页面 Bridge。实际数值和超时场景仍需在目标设备验证。
 
 ## 默认沉浸式容器
@@ -340,7 +345,7 @@ Android 宿主用手写 `LynxModule + @LynxMethod` 暴露导航、存储、AppIn
 
 对象型 callback 不能直接返回 Kotlin `HashMap`。当前实现统一通过 Lynx 官方
 `Arguments.makeNativeMap` 递归编码为 `JavaOnlyMap`，包含导航栈、转场状态、
-AppInfo 和媒体结果中的嵌套 Map/List；否则 Lynx 4.0 会让 JS 收到 `null` 并报告
+AppInfo 和媒体结果中的嵌套 Map/List；否则 Lynx 4.1 会让 JS 收到 `null` 并报告
 `HashMap contained in JavaOnlyArray`。
 
 `integration/sparkling/*.sample` 仅保留为历史参考，不进入默认 SourceSet。

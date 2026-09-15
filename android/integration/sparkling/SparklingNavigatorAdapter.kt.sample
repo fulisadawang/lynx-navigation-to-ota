@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets
  * 将壳层页面模型翻译为 Sparkling Playground 当前使用的导航 API。
  *
  * 注意：此文件以 .sample 结尾，默认不进入 Android 编译；只有在 Sparkling
- * 与 Lynx 4.0 依赖完成对齐后，才应复制到 app/src/main/java。
+ * 与 Lynx 4.1 依赖完成对齐后，才应复制到 app/src/main/java。
  */
 object SparklingNavigatorAdapter {
     fun open(context: Context, request: LynxPageRequest) {

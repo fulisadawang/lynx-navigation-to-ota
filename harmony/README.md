@@ -1,18 +1,24 @@
-# Lynx 4.0 HarmonyOS 原生壳（XElement 全量版）
+# Lynx 4.1 HarmonyOS 原生壳（XElement 全量版）
 
-这是一套面向业务 App 的 **HarmonyOS Stage 模型 Lynx 宿主壳**，采用 ArkTS + ArkUI。代码参考 Lynx `release/4.0/explorer/harmony` 的真实初始化、`LynxView`、Provider、Native Module 与 XElement 接入方式，但没有照搬 Explorer 的扫描、Recorder、测试页面、GN 构建和 Lynx monorepo 相对路径。
+这是一套面向业务 App 的 **HarmonyOS Stage 模型 Lynx 宿主壳**，采用 ArkTS + ArkUI。代码使用 Lynx 4.1 官方 OHPM 包，沿用 Explorer 的 `LynxView`、Provider、Native Module 与 XElement 接入方式，但没有照搬 Explorer 的扫描、Recorder、测试页面、GN 构建和 Lynx monorepo 相对路径。
 
 ## 版本边界
 
 | 项目 | 版本 |
 |---|---:|
-| Lynx 前端/PrimJS 主版本 | `4.0.0` |
-| HarmonyOS `@lynx/*` OHPM 包 | `4.0.0` |
+| Lynx 前端/PrimJS 主版本 | Lynx `4.1.0` / PrimJS `4.1.1` |
+| HarmonyOS `@lynx/*` OHPM 包 | `4.1.0`（PrimJS `4.1.1`） |
 | HarmonyOS SDK | compatible `5.0.1(13)`，target `6.1.1(24)` |
 | DevEco Studio | 建议 `5.0.13.200+` |
 | ImageKnifePro | `1.0.9` |
 
-当前工程按 `parameter.json` 使用 HarmonyOS `@lynx/*` `4.0.0` 与 PrimJS `4.0.0`，静态检查器与运行时依赖口径一致。
+当前工程按 `parameter.json` 使用 HarmonyOS `@lynx/*` `4.1.0` 与 PrimJS `4.1.1`，静态检查器与运行时依赖口径一致。
+
+> 4.1.0 HarmonyOS 运行时注意：官方 `@lynx/lynx@4.1.0` 的 `liblynx.so` 声明依赖
+> `liblynxgfx.so`，而官方 OHPM `@lynx/gfx@4.1.0` HAR 没有携带该库。本工程使用 Lynx
+> 官方 `4.1.0` tag 的 `gfx/platform/harmony` GN target 构建 arm64/x86_64 原生库，放入
+> 本地 `lynx_gfx` HAR 并通过项目级 override 接入；HAP 会显式包含 `liblynxgfx.so`。构建来源、
+> ABI 和禁止混用 nightly 的边界见 [lynx_gfx/README.md](lynx_gfx/README.md)。
 
 ## 工程结构
 
@@ -20,9 +26,10 @@
 harmony/
 ├── AppScope/                         # App 级名称、图标与版本
 ├── hvigor/                           # Hvigor 5 配置
-├── build-profile.json5               # HAR Module + entry Demo、HarmonyOS SDK 13
-├── oh-package.json5                  # @lynx/primjs 4.0.0
-├── parameter.json                    # @lynx/* = 4.0.0
+├── build-profile.json5               # Gfx/Kit HAR + entry Demo、HarmonyOS SDK 13
+├── oh-package.json5                  # @lynx/primjs 4.1.1 与本地 Gfx override
+├── parameter.json                    # @lynx/* = 4.1.0，PrimJS = 4.1.1
+├── lynx_gfx/                          # 官方 4.1.0 源码构建的 Gfx 原生 HAR
 ├── examples/                         # LynxShellModule TypeScript 声明
 ├── integration/sparkling/            # Sparkling Harmony 边界说明（不参与构建）
 ├── scripts/
@@ -48,7 +55,7 @@ harmony/
 
 ## XElement 全量范围
 
-HarmonyOS `release/4.0` 官方源码包含 9 类 XElement：
+HarmonyOS Lynx 4.1 官方包在本壳中接入 10 类 XElement：
 
 1. BlurView
 2. Input / TextArea
@@ -59,8 +66,9 @@ HarmonyOS `release/4.0` 官方源码包含 9 类 XElement：
 7. Markdown
 8. SVG
 9. WebView
+10. Video（实验性）
 
-其中前 6 类由 `@lynx/lynx` 的原生 Registry 注册；Markdown 通过 `XElementMarkdown.initialize()` 注册；SVG 与 WebView 通过 `BehaviorRegistryMap` 注入每个 `LynxView`。详见 [XELEMENT_INTEGRATION.md](XELEMENT_INTEGRATION.md)。
+其中前 6 类由 `@lynx/lynx` 的原生 Registry 注册；Markdown 通过 `XElementMarkdown.initialize()` 注册；SVG、WebView 与 Video 通过 `BehaviorRegistryMap` 注入每个 `LynxView`。Video 仍属于 4.1 experimental XElement，详见 [XELEMENT_INTEGRATION.md](XELEMENT_INTEGRATION.md)。
 
 ## 导入方式
 
@@ -73,14 +81,18 @@ HarmonyOS `release/4.0` 官方源码包含 9 类 XElement：
 
 目录模式会将其中全部 `*.lynx.bundle` 和 `static/` 同步到 rawfile；单文件路径仍可用。
 
-构建 Demo（本次 user-gray 不执行设备安装）：
+构建 Demo：
 
 ```bash
+DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+  /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw \
+  assembleHar --mode module -p module=lynx_gfx@default --no-daemon
 DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
   /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw assembleApp --no-daemon
 ```
 
-在 DevEco Studio 中配置签名后可生成发布包。2026-09-06 本轮 release HAR/App 构建已通过；旧模拟器渲染记录在下方历史证据中，不能作为本轮设备通过。
+在 DevEco Studio 中配置签名后可生成发布包。当前分支已用 Mate X7 模拟器完成 unsigned App
+安装、Native Tab 中英文切换、4.1 direct Bundle、i18n 页面和 Video 首帧/播放控制验证。
 保留用户已有 `lynx_shell_kit/BuildProfile.ets`，禁止为了改变构建模式而手改、格式化或覆盖。
 
 ## 本地 Bundle
@@ -240,7 +252,7 @@ LynxRouter.clearOtaUserId();
 ```
 
 Server/Contracts 已支持 harmony；requestPlatform 固定 harmony，serverPlatform 旧字段不再允许降级为 Android。
-Runtime 默认从宿主自身 `bundleManager.getBundleInfoForSelfSync(...).versionCode` 读取构建码，SDK 使用实际 HAR 的 `LynxEnv.getLynxVersion()`（当前依赖4.0.0）。
+Runtime 默认从宿主自身 `bundleManager.getBundleInfoForSelfSync(...).versionCode` 读取构建码，SDK 使用实际 HAR 的 `LynxEnv.getLynxVersion()`（当前依赖 4.1.0）。
 显式 versionCode 优先但须是合法正整数；显式 SDK 必须与真实 getter 一致，不能用 ShellConstants 固定 BUILD_NUMBER/版本名称冒充。
 
 全量/定向/repair/主动刷新带精确 query `versioncode`、`lynxSdkVersion` 和可选 userId，匿名省略 userId。
@@ -255,10 +267,10 @@ Server 在用户资格及兼容过滤后按 releaseSequence 选择，full7 胜 g
 ```bash
 node android/app/scripts/sync_ota_bundles_to_assets.mjs \
   --base-url https://ota.example.com --env TEST --host-app capp \
-  --target harmony --platform harmony --versioncode 25 --lynx-sdk-version 4.0.0
+  --target harmony --platform harmony --versioncode 25 --lynx-sdk-version 4.1.0
 ```
 
-令牌仅由 `LYNX_OTA_CLIENT_TOKEN` 安全环境注入。25/4.0.0 是示例，必须匹配目标原生包与 Runtime；两个版本参数必填。
+令牌仅由 `LYNX_OTA_CLIENT_TOKEN` 安全环境注入。25/4.1.0 是示例，必须匹配目标原生包与 Runtime；两个版本参数必填。
 脚本拒绝 userId、gray、directive、target/platform 不一致及校验失败，不覆盖既有内置目录；可加 `--dry-run` 只下载校验。
 普通 `scripts/sync_bundle.sh` 是本地 dist 复制，不请求 Server，不接受上述版本参数。
 
@@ -268,7 +280,7 @@ OTA 与直连边界：
   `apps/<appId>/state.json` 的 `current/previous` Release ref、repair/rollback；新 state 不写
   Bundle 绝对路径。
 - `open('https://...lynx.bundle', params)`：直接下载渲染，不进入 OTA、不过 30 分钟门控。
-- 当前 Bundle 下载会在 `ArrayBuffer` 返回后执行 20 MB 硬上限；这是 Harmony Lynx 4.0
+- 当前 Bundle 下载会在 `ArrayBuffer` 返回后执行 20 MB 硬上限；这是 Harmony Lynx 4.1
   Provider 接缝的临时内存边界，尚未等价于 Android 的流式落盘上限，需待目标 SDK 提供文件流
   API 后再收敛。
 
@@ -444,4 +456,4 @@ callback 返回。媒体/文件五项目前保留同名方法并返回稳定 `co
 python3 scripts/check_harmony_shell.py
 ```
 
-该脚本检查工程文件、JSON/JSON5、版本、OHPM 依赖、XElement 9/9、Runtime 顺序、Provider 安全边界与取消、Bridge 契约、固定路由入口、Sparkling 隔离、注释和分隔符。它是静态门禁，不等价于 DevEco 编译。
+该脚本检查工程文件、JSON/JSON5、版本、OHPM 依赖、XElement 10 类能力（含实验性 Video）、Runtime 顺序、Provider 安全边界与取消、Bridge 契约、固定路由入口、Sparkling 隔离、注释和分隔符。它是静态门禁，不等价于 DevEco 编译。

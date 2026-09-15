@@ -6,7 +6,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * 用 Objective-C 保持 Lynx 4.0 官方 API 的原始调用形态，Swift 容器只面对稳定方法。
+ * 用 Objective-C 保持 Lynx 4.1 官方 API 的原始调用形态，Swift 容器只面对稳定方法。
  */
 @interface LynxNativeRuntime : NSObject
 
@@ -38,7 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(updateLayout(view:size:screenSize:));
 
 /**
- * 更新 Lynx 4.0 的 prefers-color-scheme；调用方必须在主线程执行。
+ * 更新 Lynx 4.1 的 prefers-color-scheme；调用方必须在主线程执行。
  * Swift 使用 Bool 避免把平台枚举值泄露到壳层，Objective-C 内部再映射为 LynxColorScheme。
  */
 + (void)updateColorSchemeForView:(LynxView *)lynxView

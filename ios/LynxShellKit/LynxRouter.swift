@@ -363,7 +363,7 @@ private enum OtaDebugF12Status {
      * 按需读取当前进程内 Lynx 实例的聚合内存快照。
      *
      * 回调会切回主线程，结果只包含聚合值、状态和实例计数，不进入 LynxShellModule 或
-     * OTA 上报。timeoutMilliseconds 小于等于 0 时沿用 Lynx 4.0 的 2000ms 默认值。
+     * OTA 上报。timeoutMilliseconds 小于等于 0 时沿用 Lynx 4.1 的 2000ms 默认值。
      */
     public static func queryMemoryUsage(
         timeoutMilliseconds: Int64 = 0,

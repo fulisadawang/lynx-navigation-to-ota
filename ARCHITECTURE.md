@@ -47,7 +47,7 @@ OTA Runtime current/SHA 热路径
 - `AppDelegate` / `SceneDelegate` 管 Runtime 与根导航；
 - 一个 Lynx 页面对应一个 `LynxContainerViewController`；
 - 使用系统 `UINavigationController`，保留原生 push/pop 和侧滑返回；
-- Objective-C 薄层保留 Lynx 4.0 API 的直接调用形态，Swift 处理业务壳职责。
+- Objective-C 薄层保留 Lynx 4.1 API 的直接调用形态，Swift 处理业务壳职责。
 - OTA 源码随 `LynxShellKit.podspec` 一起编译进同一个业务 Module；`LynxOtaRuntime` 只向容器
   交付已经校验过的 current 文件，不把 staging/previous 路径暴露给页面。
 
@@ -63,9 +63,9 @@ OTA Runtime current/SHA 热路径
 
 ## 3. Runtime 与 XElement
 
-- Android：`LynxRuntimeInitializer` 注册 Image、Log、HTTP 等 Service；`XElementRuntime` 把 4.0 全量 Behavior 装入每个 Builder。
-- iOS：`LynxNativeRuntime` 配置全局 Runtime；XElement `Behavior` subspec 使用 AutoRegistry，`-ObjC` 防止静态链接裁剪。
-- HarmonyOS：先注册 Log、DevTool、HTTP、Image Service，再执行 `LynxEnv.initialize`；Markdown 进程级初始化，SVG/WebView 通过 `BehaviorRegistryMap` 注入每个 `LynxView`，其余六类由核心 Registry 提供。
+- Android：`LynxRuntimeInitializer` 注册 Image、Log、HTTP 等 Service；`XElementRuntime` 把 4.1 全量 Behavior（含 Video）装入每个 Builder；AnimaX 宿主接入由独立分支维护；官方聚合器可能携带其传递依赖。
+- iOS：`LynxNativeRuntime` 配置全局 Runtime；XElement `Behavior` subspec 使用 AutoRegistry，`-ObjC` 防止静态链接裁剪，Video 已接入，AnimaX 延期。
+- HarmonyOS：先注册 Log、DevTool、HTTP、Image Service，再执行 `LynxEnv.initialize`；Markdown 进程级初始化，SVG/WebView/Video 通过 `BehaviorRegistryMap` 注入每个 `LynxView`，其余能力由核心 Registry 提供。
 
 ## 4. 资源层
 
@@ -124,7 +124,7 @@ HarmonyOS 额外拆分：
 | Provider / initData / globalProps | 按业务壳抽成稳定模型和独立实现 |
 | Router / Context / Method 分层 | 借鉴 Sparkling Playground 的职责隔离 |
 | Sparkling Playground 页面 | 作为 iOS 默认首页重新构建，不携带原生 SDK |
-| Sparkling Runtime | 不进入默认 Lynx 4.0 主链路；NativeModules 由宿主手工实现 |
+| Sparkling Runtime | 不进入默认 Lynx 4.1 主链路；NativeModules 由宿主手工实现 |
 | Explorer 展示能力 | 不包含扫码、Recorder、测试列表、Showcase、GN 构建任务 |
 
 Harmony Explorer 位于 Lynx monorepo 内，官方工程依赖本地源码 override、GN/CMake 与 Bundle 构建。业务壳改为标准 OHPM 依赖，只保留应用宿主必需部分。

@@ -174,7 +174,16 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
   }
 
   private loadLocal(path: string, callback: AsyncCallback<ArrayBuffer, void>): void {
-    const validation = ShellSecurityPolicy.validateLocalRawFilePath(path);
+    // LynxView 的本地模板 URL 使用 assets://；ResourceManager 只接受 rawfile 相对路径，
+    // 因此在安全校验前统一去掉本地 scheme，避免 direct Bundle 被误判为非法 URL。
+    let rawPath = path;
+    if (rawPath.startsWith('local://')) {
+      rawPath = rawPath.substring('local://'.length);
+    } else if (rawPath.startsWith('assets://')) {
+      rawPath = rawPath.substring('assets://'.length);
+    }
+
+    const validation = ShellSecurityPolicy.validateLocalRawFilePath(rawPath);
     if (!validation.valid) {
       callback(this.createError(1004, validation.message), new ArrayBuffer(0));
       return;
@@ -182,7 +191,7 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
 
     const context: Context = getContext(this);
     const manager: resourceManager.ResourceManager = context.resourceManager;
-    manager.getRawFileContent(path, (error: BusinessError, data: Uint8Array) => {
+    manager.getRawFileContent(rawPath, (error: BusinessError, data: Uint8Array) => {
       if (error && error.code !== 0) {
         callback(error, new ArrayBuffer(0));
         return;

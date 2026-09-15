@@ -448,7 +448,7 @@ function LynxCapacitorSplashDialogBuilder(params: LynxCapacitorSplashDialogParam
  * UNAVAILABLE，避免假成功。
  */
 export class LynxCapacitorModule extends LynxModule {
-  /** Lynx 4.0 NativeModules 对这三个无副作用查询使用同步返回语义。 */
+  /** Lynx 4.1 NativeModules 对这三个无副作用查询使用同步返回语义。 */
   public static syncMethods: Array<string> = ['getPlatform', 'getPluginHeaders', 'getCapabilityStatus'];
   private static readonly deviceIdentifierKey: string = '__lynx_capacitor_device_identifier';
   private static readonly preferenceKeysKey: string = '__lynx_capacitor_preference_keys';

@@ -12,7 +12,7 @@ import com.lynx.tasm.LynxColorScheme
 
 /** 构造两端约定的宿主全局参数；系统保留字段不允许页面覆盖。 */
 object ShellGlobalPropsFactory {
-    /** 将当前 Activity 的有效夜间模式映射为 Lynx 4.0 两态颜色枚举。 */
+    /** 将当前 Activity 的有效夜间模式映射为 Lynx 4.1 两态颜色枚举。 */
     fun resolveColorScheme(activity: Activity): LynxColorScheme =
         if (isDarkTheme(activity)) LynxColorScheme.DARK else LynxColorScheme.LIGHT
 

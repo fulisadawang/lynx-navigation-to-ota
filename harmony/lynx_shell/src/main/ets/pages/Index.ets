@@ -355,8 +355,10 @@ struct Index {
       routeKey: `native-tab-${tabId}`,
       initDataJson: '{"source":"harmony-native-tab-demo"}',
       globalPropsJson: `{"queryItems":{"native_tab_id":"${tabId}"}}`,
-      lynxAppId: this.tabLynxAppId,
-      bundleName: this.tabBundleName,
+      // 测试 OTA fixture 才使用 Manifest 身份；普通运行直接消费同步到 HAP 的 4.1 Bundle，
+      // 避免把旧 fixture release 当成新的 Playground Tab。
+      lynxAppId: this.useLocalFixture ? this.tabLynxAppId : '',
+      bundleName: this.useLocalFixture ? this.tabBundleName : '',
       backgroundColor: '#FFFFFF'
     };
   }

@@ -87,7 +87,7 @@ export function parseLocaleState(payload: unknown): LocaleState | undefined {
 }
 
 function readInitialLocaleState(): LocaleState {
-  const globalProps = (lynx.__globalProps || {}) as Record<string, unknown>
+  const globalProps = (lynx.__globalProps || {}) as unknown as Record<string, unknown>
   return parseLocaleState(
     globalProps.__lynxShellLocale || {
       locale: globalProps.locale ?? globalProps.language,
@@ -136,7 +136,7 @@ export function LocaleProvider(props: { children: any }) {
     emitter.addListener(LOCALE_CHANGED_EVENT, listener)
 
     const shell = typeof NativeModules !== 'undefined' ? NativeModules.LynxShellModule : undefined
-    shell?.getLocale?.((result) => {
+    shell?.getLocale?.((result: { code: number; data?: unknown }) => {
       const next = parseLocaleState(result?.data)
       if (next) setState((current) => next.revision >= current.revision ? next : current)
     })
@@ -147,7 +147,7 @@ export function LocaleProvider(props: { children: any }) {
   const setLocale = useCallback((nextLocale: LocaleSelection) => {
     const shell = typeof NativeModules !== 'undefined' ? NativeModules.LynxShellModule : undefined
     if (!shell?.setLocale) return
-    shell.setLocale(nextLocale, (result) => {
+    shell.setLocale(nextLocale, (result: { code: number; data?: unknown }) => {
       const next = parseLocaleState(result?.data)
       if (next && result?.code === 0) {
         setState((current) => next.revision >= current.revision ? next : current)

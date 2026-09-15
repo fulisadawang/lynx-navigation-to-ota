@@ -2,14 +2,15 @@ import { Behavior, BehaviorRegistryMap } from '@lynx/lynx';
 import { XElementMarkdown } from '@lynx/xelement_markdown';
 import { UISVG } from '@lynx/xelement_svg';
 import { UIWebView } from '@lynx/xelement_webview';
+import { UIVideo } from '@lynx/xelement_video';
 
 /**
- * HarmonyOS release/4.0 的 XElement 全量接入点。
+ * HarmonyOS Lynx 4.1 的 XElement 全量接入点。
  *
  * 与 Android/iOS 不同，HarmonyOS 的 XElement 分为两类：
  * 1. @lynx/lynx 原生 Registry 内置：BlurView、Input/TextArea、Overlay、Refresh、
  *    ScrollCoordinator、ViewPager；随 LynxEnv 初始化生效。
- * 2. 独立 OHPM 包：Markdown 需要 initialize，SVG/WebView 需要注入 behaviors。
+ * 2. 独立 OHPM 包：Markdown 需要 initialize，SVG/WebView/Video 需要注入 behaviors。
  */
 export default class XElementRuntime {
   static readonly SUPPORTED_XELEMENTS: string[] = [
@@ -21,7 +22,8 @@ export default class XElementRuntime {
     'ViewPager',
     'Markdown',
     'SVG',
-    'WebView'
+    'WebView',
+    'Video (experimental)'
   ];
 
   private static initialized: boolean = false;
@@ -37,7 +39,8 @@ export default class XElementRuntime {
   static createBehaviors(): BehaviorRegistryMap {
     return new Map([
       ['svg', new Behavior(UISVG, undefined)],
-      ['webview', new Behavior(UIWebView, undefined)]
+      ['webview', new Behavior(UIWebView, undefined)],
+      ['video', new Behavior(UIVideo, undefined)]
     ]);
   }
 

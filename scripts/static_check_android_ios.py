@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lynx 4.0 原生壳静态验收脚本。
+"""Lynx 4.1 原生壳静态验收脚本。
 
 本脚本只验证源码结构、配置、语法可解析性与跨端契约一致性；
 不会下载 Maven/CocoaPods 依赖，也不会替代 Gradle/Xcode 真正编译。
@@ -224,17 +224,22 @@ def versions() -> None:
         "org.lynxsdk.lynx:lynx",
         "org.lynxsdk.lynx:lynx-jssdk",
         "org.lynxsdk.lynx:lynx-trace",
-        "org.lynxsdk.lynx:primjs",
         "org.lynxsdk.lynx:lynx-service-image",
         "org.lynxsdk.lynx:lynx-service-log",
         "org.lynxsdk.lynx:lynx-service-http",
     ]
-    missing_core = [artifact for artifact in android_core_artifacts if f'{artifact}:4.0.0' not in gradle]
+    missing_core = [artifact for artifact in android_core_artifacts if f'{artifact}:4.1.0' not in gradle]
     require(
         not missing_core,
-        "Android Lynx/PrimJS/Service 核心依赖统一为 4.0.0"
+        "Android Lynx/JSSDK/Trace/Service 核心依赖统一为 4.1.0，PrimJS 使用官方 4.1.1"
         if not missing_core
-        else f"Android 缺少 4.0.0 核心依赖: {', '.join(missing_core)}",
+        else f"Android 缺少 4.1.0 核心依赖: {', '.join(missing_core)}",
+    )
+    require(
+        'org.lynxsdk.lynx:primjs:4.1.1' in gradle,
+        "Android PrimJS 使用官方 4.1.1"
+        if 'org.lynxsdk.lynx:primjs:4.1.1' in gradle
+        else "Android PrimJS 未固定为官方 4.1.1",
     )
 
     expected_android_xelement = {
@@ -248,10 +253,11 @@ def versions() -> None:
         "xelement-refresh",
         "xelement-blur-view",
         "xelement-webview",
+        "xelement-video",
     }
     actual_android_xelement = set(
         re.findall(
-            r'implementation\("org\.lynxsdk\.lynx:(xelement(?:-[a-z-]+)?):4\.0\.0"\)',
+            r'implementation\("org\.lynxsdk\.lynx:(xelement(?:-[a-z-]+)?):4\.1\.0"\)',
             gradle,
         )
     )
@@ -259,12 +265,17 @@ def versions() -> None:
     extra_android_xelement = actual_android_xelement - expected_android_xelement
     require(
         not missing_android_xelement and not extra_android_xelement,
-        "Android XElement 10/10 Maven 产物均显式接入"
+        "Android XElement 11/11 Maven 产物均显式接入"
         if not missing_android_xelement and not extra_android_xelement
         else (
             "Android XElement 清单不一致；"
             f"缺少={sorted(missing_android_xelement)}，额外={sorted(extra_android_xelement)}"
         ),
+    )
+    require(
+        'implementation("org.lynxsdk.lynx:xelement-animax:4.1.0")' not in gradle
+        and 'module = "xelement-animax"' not in gradle,
+        "Android 升级主分支不显式引入 AnimaX（官方聚合器仍可能传递该依赖）",
     )
 
     android_xelement_companions = [
@@ -298,16 +309,15 @@ def versions() -> None:
         and "com.lynx.xelement.svg.BehaviorGenerator" in android_proguard,
         "Android R8 保留 XElement BehaviorGenerator 反射入口",
     )
-
     pod_patterns = [
-        r"spec\.dependency 'Lynx/Framework', '4\.0\.0'",
-        r"spec\.dependency 'PrimJS/quickjs', '4\.0\.0'",
-        r"spec\.dependency 'LynxService/Image', '4\.0\.0'",
-        r"spec\.dependency 'XElement/Behavior', '4\.0\.0'",
+        r"spec\.dependency 'Lynx/Framework', '4\.1\.0'",
+        r"spec\.dependency 'PrimJS/quickjs', '4\.1\.1'",
+        r"spec\.dependency 'LynxService/Image', '4\.1\.0'",
+        r"spec\.dependency 'XElement/Behavior', '4\.1\.0'",
     ]
     require(
         all(re.search(pattern, podspec) for pattern in pod_patterns),
-        "iOS LynxShellKit Podspec 的 Lynx/PrimJS/Service/XElement 统一为 4.0.0",
+        "iOS LynxShellKit Podspec 使用 Lynx/Service/XElement 4.1.0 与 PrimJS 4.1.1",
     )
     lynx_ota_sources = "OtaIOSSDK/Sources/OtaIOSSDK/**/*.swift" in podspec
     single_ios_module = (
@@ -332,11 +342,12 @@ def versions() -> None:
         "SVG",
         "Refresh",
         "Markdown",
+        "Video",
         "Behavior",
     }
     actual_ios_xelement = set(
         re.findall(
-            r"spec\.dependency 'XElement/([A-Za-z]+)', '4\.0\.0'",
+            r"spec\.dependency 'XElement/([A-Za-z]+)', '4\.1\.0'",
             podspec,
         )
     )
@@ -344,7 +355,7 @@ def versions() -> None:
     extra_ios_xelement = actual_ios_xelement - expected_ios_xelement
     require(
         not missing_ios_xelement and not extra_ios_xelement,
-        "iOS LynxShellKit 10/10 XElement subspec 均显式接入"
+        "iOS LynxShellKit 11/11 XElement subspec 均显式接入"
         if not missing_ios_xelement and not extra_ios_xelement
         else (
             "iOS XElement subspec 清单不一致；"
@@ -364,6 +375,7 @@ def versions() -> None:
         "LynxUITextArea",
         "LynxUIViewPager",
         "LynxUIWebView",
+        "LynxUIVideo",
     }
     registry_headers = {f"{name}AutoRegistry" for name in public_headers}
     missing_public_headers = [
@@ -374,13 +386,13 @@ def versions() -> None:
     ]
     require(
         not missing_public_headers,
-        "iOS 导入 10/10 XElement 公开元素头作为编译期哨兵"
+        "iOS 导入 11/11 XElement 公开元素头作为编译期哨兵"
         if not missing_public_headers
         else f"iOS 缺少公开元素头: {', '.join(missing_public_headers)}",
     )
     require(
         not missing_registry_headers,
-        "iOS 导入 10/10 XElement AutoRegistry 头"
+        "iOS 导入 11/11 XElement AutoRegistry 头"
         if not missing_registry_headers
         else f"iOS 缺少 AutoRegistry 头: {', '.join(missing_registry_headers)}",
     )
@@ -408,8 +420,8 @@ def versions() -> None:
         "默认编译链没有混入 Lynx 3.9.0",
     )
     require(
-        "xelement-video" not in gradle and "XElement/Video" not in podspec,
-        "XElement 清单严格限定 release/4.0，未混入后续 nightly Video",
+        "4.0.0" not in gradle and "4.0.0" not in podspec,
+        "默认编译链已切换到 Lynx 4.1，未残留 4.0.0 依赖",
     )
 
     xelement_doc = read("XELEMENT_INTEGRATION.md")
@@ -1392,7 +1404,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             fail(f"检查器内部异常 {check.__name__}: {exc}")
 
-    print("Lynx 4.0 Native Shell 静态验收")
+    print("Lynx 4.1 Native Shell 静态验收")
     print(f"工程目录: {ROOT}")
     print("范围: 结构 / XML / Plist / Swift parse / 版本 / XElement 全量 / 路由 / Bridge / 安全配置")
     print("说明: 未下载依赖，未执行 Gradle、CocoaPods 或 Xcode 编译。\n")

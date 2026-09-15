@@ -119,6 +119,14 @@ const CATEGORIES: Category[] = [
       { title: '选择媒体', description: '从相册或相机选择图片和视频', bundle: 'media-choose.lynx.bundle', icon: '\u{1F4F7}' },
       { title: '上传文件', description: '向服务器上传文件和图片', bundle: 'media-upload.lynx.bundle', icon: '\u{2B06}' },
       { title: '下载与保存', description: '下载文件并保存 Data URL', bundle: 'media-download.lynx.bundle', icon: '\u{2B07}' },
+      {
+        title: 'Video 组件测试',
+        description: '验证 Lynx 4.1 Video 的首帧、播放控制和错误事件',
+        bundle: 'video-demo.lynx.bundle',
+        icon: '\u{1F3AC}',
+        titleKey: 'home.videoDemoTitle',
+        descriptionKey: 'home.videoDemoDescription',
+      },
     ],
   },
 ]
@@ -432,7 +440,7 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
         {/* Version Footer */}
         <view className="home-footer">
           <text className={dk('home-footer-text')}>
-            Sparkling Playground · Lynx 4.0 · {bundleSourceLabel(bundleMeta.source)}
+            Sparkling Playground · Lynx 4.1 · {bundleSourceLabel(bundleMeta.source)}
           </text>
         </view>
       </view>

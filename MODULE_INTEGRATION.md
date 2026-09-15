@@ -8,7 +8,7 @@
 业务 App
   -> LynxShell 公开 Interface
   -> Runtime / Container / Router / Transition / NativeModules
-  -> Lynx 4.0 + Service + XElement
+  -> Lynx 4.1 + Service + XElement
 ```
 
 Module 内保留当前全部手写 `NativeModules.LynxShellModule`、高级导航、页面级原生转场、
@@ -22,7 +22,7 @@ Module 内保留当前全部手写 `NativeModules.LynxShellModule`、高级导�
 隐藏 Native Tab），随后发送 `lynxShellLocaleChanged`。资源内容不放在 Module 中，由每个
 Bundle 自己加载；Playground 的接入边界见 [`playground/src/locales/README.md`](playground/src/locales/README.md)。
 
-窗口环境在页面创建和原生布局回调后同步 Lynx 4.0 的 screen metrics、viewport 与完整
+窗口环境在页面创建和原生布局回调后同步 Lynx 4.1 的 screen metrics、viewport 与完整
 GlobalProps，并发送 `lynxShellLayoutChanged`。`screen` 是 Window/Scene 尺寸，`viewport`
 是具体 LynxView 可用区域；布局更新采用合帧、去重和 revision，不重建页面、不触发 OTA
 resolve。没有官方折叠数据的平台只报告 capability，不推导双栏；HarmonyOS 共享元素转场
@@ -107,9 +107,9 @@ class MyApplication : Application() {
 如果一个 Lynx session 中间会插入业务原生 Activity，再按业务 Router 注入
 `SessionExitHandler`；纯连续 Lynx Activity 栈不需要。
 
-### Lynx 4.0 主题同步
+### Lynx 4.1 主题同步
 
-宿主的有效浅色/深色主题同时驱动 Lynx 4.0 的 `prefers-color-scheme` 和页面已有的
+宿主的有效浅色/深色主题同时驱动 Lynx 4.1 的 `prefers-color-scheme` 和页面已有的
 `globalProps.theme`。普通 Activity 重建时，容器会在创建 `LynxView` 时读取当前配置；宿主
 声明不重建配置变化时，Activity/Native Tab 会在 UI 线程更新存活 View。主题同步不重载 Bundle、
 不触发 OTA，也不新增主题 NativeModule；页面已有的显式 Light/Dark/Auto 选择复用现成的
@@ -223,7 +223,7 @@ Lynx 页面侧对应 `NativeModules.LynxShellModule.deleteOtaBundles` /
 
 ### Android 原生内存诊断
 
-需要排查当前进程内 Lynx 内存时，宿主可以低频调用 4.0 的聚合查询；回调会回到主线程，
+需要排查当前进程内 Lynx 内存时，宿主可以低频调用 4.1 的聚合查询；回调会回到主线程，
 结果不包含实例 URL/pageId，也不会发送到 OTA：
 
 ```kotlin
@@ -243,7 +243,7 @@ LynxRouter.queryMemoryUsage { snapshot ->
 ```text
 ios/
 ├── LynxShellKit/          CocoaPods Module 源码
-├── LynxShellKit.podspec   Lynx 4.0、Service、全量 XElement 依赖
+├── LynxShellKit.podspec   Lynx 4.1、Service、全量 XElement 依赖
 └── LynxShellSample/       可运行 App，仅保留 App/Scene/Launcher/Bundles
 ```
 
@@ -448,15 +448,15 @@ full/gray metadata 或用户变更不复制 CAS。100→1 只下载缺失 1、�
 ```bash
 node android/app/scripts/sync_ota_bundles_to_assets.mjs \
   --base-url https://ota.example.com --env TEST --host-app capp \
-  --target android --platform android --versioncode 120 --lynx-sdk-version 4.0.0
+  --target android --platform android --versioncode 120 --lynx-sdk-version 4.1.0
 
 node android/app/scripts/sync_ota_bundles_to_assets.mjs \
   --base-url https://ota.example.com --env TEST --host-app capp \
-  --target ios --platform ios --versioncode 800 --lynx-sdk-version 4.0.0
+  --target ios --platform ios --versioncode 800 --lynx-sdk-version 4.1.0
 
 node android/app/scripts/sync_ota_bundles_to_assets.mjs \
   --base-url https://ota.example.com --env TEST --host-app capp \
-  --target harmony --platform harmony --versioncode 25 --lynx-sdk-version 4.0.0
+  --target harmony --platform harmony --versioncode 25 --lynx-sdk-version 4.1.0
 ```
 
 `--versioncode` 与 `--lynx-sdk-version` 必填，SDK 值也必须对应实际打包依赖。`--platform` 默认等于 target，显式提供也必须一致。

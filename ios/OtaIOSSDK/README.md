@@ -106,7 +106,7 @@ Lynx SDK 版本由 Shell 从**与实际 Lynx 依赖一起打包的可信 metadat
 - 显式 `lynxSDKVersion` 也必须与解析出的实际版本相同。metadata 缺失或冲突时配置失败。
 
 这避免某些源码 Pod 缺少版本宏时 `LynxVersion` 方法误报 `1.4.0`，也不会将链接 build number 或写死
-`4.0.0` 当作实际 Runtime 版本。读取及校验逻辑位于 Shell 的 `LynxOtaConfiguration` /
+`4.1.0` 当作实际 Runtime 版本。读取及校验逻辑位于 Shell 的 `LynxOtaConfiguration` /
 `LynxSDKVersionResolver`，Core 只接收其结果，不因此依赖 UIKit 或 Lynx。
 
 以下是直接调用 Core 的 SwiftPM 示例。URL 必须是宿主已验证的 HTTPS URL；`clientToken` 来自宿主安全配置，
@@ -188,7 +188,7 @@ func reconcileSDKIdentity(_ sdk: OtaSDK, expectedEpoch: UInt64) async throws {
 全量调用为 `try await sdk.updateToLatestBundleLists()`。请求字段固定为：
 
 ```http
-GET /api/ota/v1/releases/latest-bundle-list?env=TEST&hostApp=capp&lynxAppId=10000001&platform=ios&versioncode=800&lynxSdkVersion=4.0.0
+GET /api/ota/v1/releases/latest-bundle-list?env=TEST&hostApp=capp&lynxAppId=10000001&platform=ios&versioncode=800&lynxSdkVersion=4.1.0
 ```
 
 有用户时才附加 `userId`，全量请求省略 `lynxAppId`。上述数字仅展示 wire 形状，实际值来自宿主配置。

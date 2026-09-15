@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Lynx 4.0 Shell</string>
+    <string name="app_name">Lynx 4.1 Shell</string>
     <string name="open_page">打开 Lynx 页面</string>
     <string name="bundle_url">Bundle URL</string>
     <string name="page_title">页面标题</string>

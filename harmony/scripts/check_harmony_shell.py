@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lynx 4.0 HarmonyOS 壳静态验收。
+"""Lynx 4.1 HarmonyOS 壳静态验收。
 
 只检查源码、配置和跨文件契约；不会下载 OHPM 依赖，也不会替代 DevEco/Hvigor 编译。
 """
@@ -69,6 +69,14 @@ def expected_files() -> None:
         "parameter.json",
         "hvigorfile.ts",
         "hvigor/hvigor-config.json5",
+        "lynx_gfx/oh-package.json5",
+        "lynx_gfx/README.md",
+        "lynx_gfx/Index.ets",
+        "lynx_gfx/build-profile.json5",
+        "lynx_gfx/hvigorfile.ts",
+        "lynx_gfx/src/main/module.json5",
+        "lynx_gfx/src/main/ets/types/liblynxgfx/oh-package.json5",
+        "lynx_gfx/src/main/ets/types/liblynxgfx/index.d.ts",
         "AppScope/app.json5",
         "lynx_shell/build-profile.json5",
         "lynx_shell/hvigorfile.ts",
@@ -159,10 +167,12 @@ def versions_and_dependencies() -> None:
     entry_package = load_json("lynx_shell/oh-package.json5")
     dependencies = module_package["dependencies"]
 
-    require(root_package["dependencies"].get("@lynx/primjs") == "4.0.0", "HarmonyOS PrimJS 固定为 4.0.0")
-    require(params["dependencies"].get("lynx_version") == "4.0.0", "HarmonyOS release/4.0 OHPM 映射固定为 4.0.0")
+    require(root_package["dependencies"].get("@lynx/primjs") == "@param:dependencies.primjs_version", "HarmonyOS PrimJS 使用独立版本参数")
+    require(params["dependencies"].get("lynx_version") == "4.1.0", "HarmonyOS Lynx OHPM 映射固定为 4.1.0")
+    require(params["dependencies"].get("primjs_version") == "4.1.1", "HarmonyOS PrimJS 固定为 4.1.1")
 
     expected_lynx = {
+        "@lynx/gfx",
         "@lynx/lynx",
         "@lynx/lynx_base",
         "@lynx/lynx_devtool",
@@ -173,10 +183,16 @@ def versions_and_dependencies() -> None:
         "@lynx/xelement_markdown",
         "@lynx/xelement_svg",
         "@lynx/xelement_webview",
+        "@lynx/xelement_video",
     }
     actual_lynx = {name for name in dependencies if name.startswith("@lynx/")}
-    require(actual_lynx == expected_lynx, "HarmonyOS Lynx/Service/XElement OHPM 依赖清单完整")
-    require(all(dependencies[name] == "@param:dependencies.lynx_version" for name in expected_lynx), "HarmonyOS @lynx/* 统一引用 4.0.0 参数")
+    require(actual_lynx == expected_lynx, "HarmonyOS Lynx/Service/XElement OHPM 依赖清单完整（含 Video）")
+    require(
+        all(dependencies[name] == "@param:dependencies.lynx_version" for name in expected_lynx if name != "@lynx/gfx")
+        and dependencies.get("@lynx/gfx") == "file:../lynx_gfx",
+        "HarmonyOS @lynx/* 统一引用 4.1.0 参数，Gfx 使用同版本本地原生包",
+    )
+    require("@lynx/xelement_animax" not in dependencies, "HarmonyOS 不声明没有稳定 OHPM 包的 AnimaX")
     require(dependencies.get("@ohos/imageknifepro") == "1.0.9", "HarmonyOS ImageKnifePro 固定为官方 Explorer 使用的 1.0.9")
     require(
         entry_package.get("dependencies") == {"@lynx/lynx-shell-kit": "file:../lynx_shell_kit"},
@@ -186,6 +202,25 @@ def versions_and_dependencies() -> None:
     root_text = read("oh-package.json5") + read("build-profile.json5") + read("hvigorfile.ts")
     require("file:../../" not in root_text and "gnPlugin" not in root_text, "业务壳已移除 Lynx monorepo 本地 override 与 GN 插件")
     require("externalNativeOptions" not in read("lynx_shell/build-profile.json5"), "业务壳不依赖 Explorer 源码 CMake 构建")
+
+    gfx_package = load_json("lynx_gfx/oh-package.json5")
+    gfx_module = load_json("lynx_gfx/src/main/module.json5")["module"]
+    profile = load_json("build-profile.json5")
+    require(
+        gfx_package.get("name") == "@lynx/gfx"
+        and gfx_package.get("version") == "4.1.0"
+        and gfx_package.get("dependencies", {}).get("liblynxgfx.so") == "file:./src/main/ets/types/liblynxgfx"
+        and gfx_module.get("name") == "lynx_gfx"
+        and gfx_module.get("type") == "har"
+        and any(module.get("name") == "lynx_gfx" for module in profile.get("modules", [])),
+        "HarmonyOS Gfx 本地 HAR 与 4.1.0 工程模块已注册",
+    )
+    gfx_libs = [
+        ROOT / "lynx_gfx/libs/arm64-v8a/liblynxgfx.so",
+        ROOT / "lynx_gfx/libs/x86_64/liblynxgfx.so",
+    ]
+    missing_gfx_libs = [str(path.relative_to(ROOT)) for path in gfx_libs if not path.is_file() or path.read_bytes()[:4] != b"\x7fELF"]
+    require(not missing_gfx_libs, "HarmonyOS Gfx arm64/x86_64 原生库已随仓库提供" if not missing_gfx_libs else f"Gfx 原生库缺失或不是 ELF: {', '.join(missing_gfx_libs)}")
 
 
 def xelement_full() -> None:
@@ -202,13 +237,29 @@ def xelement_full() -> None:
         "Markdown",
         "SVG",
         "WebView",
+        "Video (experimental)",
     ]
-    require(all(name in runtime for name in expected), "HarmonyOS XElement 9/9 能力清单完整")
+    require(all(name in runtime for name in expected), "HarmonyOS XElement 10/10 能力清单完整（含实验性 Video）")
     require("XElementMarkdown.initialize()" in runtime, "HarmonyOS Markdown 通过进程级 initialize 注册")
-    require("new Behavior(UISVG, undefined)" in runtime and "new Behavior(UIWebView, undefined)" in runtime, "HarmonyOS SVG/WebView Behavior 全量注入")
+    require(
+        all(marker in runtime for marker in [
+            "new Behavior(UISVG, undefined)",
+            "new Behavior(UIWebView, undefined)",
+            "new Behavior(UIVideo, undefined)",
+        ]),
+        "HarmonyOS SVG/WebView/Video Behavior 全量注入",
+    )
     require("XElementRuntime.createBehaviors()" in container, "每个 HarmonyOS LynxView 使用统一 XElement BehaviorMap")
-    require(all(name in package for name in ["@lynx/xelement_markdown", "@lynx/xelement_svg", "@lynx/xelement_webview"]), "HarmonyOS 三个独立 XElement OHPM 包显式声明")
-    require("xelement_video" not in package.lower() and "Video" not in runtime, "HarmonyOS XElement 严格限定 release/4.0，未混入 Video")
+    require(
+        all(name in package for name in [
+            "@lynx/xelement_markdown",
+            "@lynx/xelement_svg",
+            "@lynx/xelement_webview",
+            "@lynx/xelement_video",
+        ]),
+        "HarmonyOS 四个独立 XElement OHPM 包显式声明",
+    )
+    require("@lynx/xelement_animax" not in package.lower(), "HarmonyOS 不混入没有稳定 OHPM 包的 AnimaX")
 
 
 def runtime_and_container() -> None:
@@ -327,6 +378,11 @@ def route_and_security() -> None:
     container = shell_read("src/main/ets/pages/LynxContainer.ets")
     require("this.cancelPendingRequests();" in container, "HarmonyOS 页面退出与重试释放 Provider 请求")
     require("resource://rawfile/" in shell_read("src/main/ets/provider/ShellMediaResourceFetcher.ets"), "HarmonyOS Media Provider 转换 rawfile 逻辑地址")
+    template = shell_read("src/main/ets/provider/ShellTemplateResourceFetcher.ets")
+    require(
+        all(marker in template for marker in ["rawPath.startsWith('local://')", "rawPath.startsWith('assets://')", "getRawFileContent(rawPath"]),
+        "HarmonyOS Template Provider 支持 assets/local direct Bundle URL",
+    )
 
 
 def bridge_contract() -> None:
@@ -475,11 +531,11 @@ def native_tab_ota_parity() -> None:
         all(marker in index for marker in [
             "LynxRouter.openEmbedded(",
             "LynxRouter.embeddedIdentity(this.embeddedPlaygroundBundleName, this.otaTestAppId)",
-            "lynxAppId: this.tabLynxAppId",
-            "bundleName: this.tabBundleName",
+            "lynxAppId: this.useLocalFixture ? this.tabLynxAppId : ''",
+            "bundleName: this.useLocalFixture ? this.tabBundleName : ''",
             "native_tab_id",
-        ]) and "lynxAppId: ''" not in index and "bundleName: ''" not in index,
-        "HarmonyOS Home/Playground/两个原生 Tab 均使用 Manifest 解析出的非空 OTA 身份",
+        ]),
+        "HarmonyOS OTA fixture Tab 使用 Manifest 身份，普通 Tab 直接加载 4.1 Bundle",
     )
     require(
         all(marker in index for marker in [
@@ -772,7 +828,7 @@ def main() -> int:
             fail(f"检查器内部异常 {check.__name__}: {exc}")
 
     if not args.quiet:
-        print("Lynx 4.0 HarmonyOS Shell 静态验收")
+        print("Lynx 4.1 HarmonyOS Shell 静态验收")
         print(f"工程目录: {ROOT}")
         print("说明: 本脚本只检查源码与配置；DevEco/Hvigor/HAP 构建结果需单独验收。\n")
         for message in PASS:

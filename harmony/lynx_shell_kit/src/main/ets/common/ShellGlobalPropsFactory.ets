@@ -36,7 +36,7 @@ export default class ShellGlobalPropsFactory {
     });
     business['platform'] = 'harmony';
     business['os'] = 'harmony';
-    business['lynxVersion'] = '4.0';
+    business['lynxVersion'] = '4.1';
     business['theme'] = ShellThemeState.current();
     business['frontendTheme'] = 'system';
     business['hostAppVersion'] = ShellConstants.APP_VERSION;

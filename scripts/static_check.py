@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lynx 4.0 Android/iOS/HarmonyOS 三端静态验收总入口。"""
+"""Lynx 4.1 Android/iOS/HarmonyOS 三端静态验收总入口。"""
 from __future__ import annotations
 
 import re

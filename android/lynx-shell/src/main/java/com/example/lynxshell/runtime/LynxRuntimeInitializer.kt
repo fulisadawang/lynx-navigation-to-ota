@@ -28,7 +28,7 @@ object LynxRuntimeInitializer {
             .build()
         Fresco.initialize(application, imageConfig)
 
-        // Lynx Service 需要宿主主动注入；顺序与官方 4.0 接入示例一致。
+        // Lynx Service 需要宿主主动注入；顺序与官方 4.1 接入示例一致。
         LynxServiceCenter.inst().registerService(LynxImageService.getInstance())
         LynxServiceCenter.inst().registerService(LynxLogService)
         LynxServiceCenter.inst().registerService(LynxHttpService)

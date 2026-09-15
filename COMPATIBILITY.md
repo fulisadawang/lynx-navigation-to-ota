@@ -4,21 +4,21 @@
 
 | 平台 | Lynx / PrimJS | Service / XElement | 默认启用 |
 |---|---|---|---:|
-| Android | Maven `4.0.0` | Maven `4.0.0` | 是 |
-| iOS | CocoaPods `4.0.0` | CocoaPods `4.0.0` | 是 |
-| HarmonyOS | PrimJS `4.0.0` | OHPM `1.4.0` | 是 |
-| Sparkling Playground UI | `main` 源码参考 | iOS 默认首页，重新构建为 Lynx 4.0 Bundle | 否 |
+| Android | Lynx/Service/XElement `4.1.0`；PrimJS `4.1.1` | 同左 | 是 |
+| iOS | Lynx/Service/XElement `4.1.0`；PrimJS `4.1.1` | 同左 | 是 |
+| HarmonyOS | Lynx/Service/XElement `4.1.0`；PrimJS `4.1.1` | OHPM 官方包 | 是 |
+| Sparkling Playground UI | `main` 源码参考 | iOS 默认首页，重新构建为 Lynx 4.1 Bundle | 否 |
 | Sparkling Native Runtime | `main` 源码参考 | 不加入默认主链路 | 否 |
 
-HarmonyOS `release/4.0` Explorer 使用 `parameter.json` 将 `@lynx/*` 指向 `1.4.0`，根工程的 `@lynx/primjs` 仍为 `4.0.0`。这是平台包发布编号差异，不应把 Harmony OHPM 坐标改写成不存在的 `4.0.0`。
+HarmonyOS 当前使用官方 Lynx/Service/XElement `4.1.0` OHPM 包和 PrimJS `4.1.1`；版本通过根 `parameter.json` 传递，不能把 Android Maven 坐标机械改写成不存在的 Harmony 包。
 
 ## XElement 边界
 
-- Android：`xelement` 聚合产物 + Input、Overlay、ViewPager、ScrollCoordinator、SVG、Markdown、Refresh、BlurView、WebView；
-- iOS：`Behavior` + 九类组件 subspec；
-- HarmonyOS：源码目录包含 BlurView、Input、Markdown、Overlay、Refresh、ScrollCoordinator、SVG、ViewPager、WebView 共九类。
+- Android：`xelement` 聚合产物 + Input、Overlay、ViewPager、ScrollCoordinator、SVG、Markdown、Refresh、BlurView、WebView、Video；AnimaX 宿主接入由独立分支维护；官方聚合器可能携带其传递依赖。
+- iOS：`Behavior` + 现有组件和 Video subspec；AnimaX 因 iOS 13/SSZipArchive 兼容问题延期；
+- HarmonyOS：核心 Registry 加 BlurView、Input、Markdown、Overlay、Refresh、ScrollCoordinator、SVG、ViewPager、WebView、Video 共十类。
 
-三端都不加入不属于 `release/4.0` 边界的 Video 组件。详见 [XELEMENT_INTEGRATION.md](XELEMENT_INTEGRATION.md)。
+Video 是 4.1 的实验性组件，Android/iOS/HarmonyOS 均按官方依赖接入；AnimaX 不进入本升级分支，详见 [XELEMENT_INTEGRATION.md](XELEMENT_INTEGRATION.md)。
 
 ## HarmonyOS 工程边界
 
@@ -39,8 +39,8 @@ HarmonyOS `release/4.0` Explorer 使用 `parameter.json` 将 `@lynx/*` 指向 `1
 
 ## 为什么不直接编入 Sparkling main
 
-本次不把 Sparkling iOS 原生依赖与 Lynx 4.0 混装。iOS 默认首页只复刻其 ReactLynx
-页面结构，并使用当前工程锁定的 Lynx 4.0 前端工具链重新构建；原生能力全部直接调用
+本次不把 Sparkling iOS 原生依赖与 Lynx 4.1 混装。iOS 默认首页只复刻其 ReactLynx
+页面结构，并使用当前工程锁定的 Lynx 4.1 前端工具链重新构建；原生能力全部直接调用
 手写的 `NativeModules.LynxShellModule`。
 
 `android/integration/sparkling` 与 `ios/Integration/Sparkling` 中的 `.sample` 不参与默认编译。HarmonyOS 当前没有复制一个未经官方验证的 Sparkling Runtime 适配层。

@@ -36,7 +36,7 @@ struct OtaUserSelectionTests {
         let request = try client.latestRequest(env: .test, app: .capp, lynxAppId: fixture.appId, platform: .ios, context: context)
         let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
         #expect(query.first { $0.name == "versioncode" }?.value == "25")
-        #expect(query.first { $0.name == "lynxSdkVersion" }?.value == "4.0.0")
+        #expect(query.first { $0.name == "lynxSdkVersion" }?.value == "4.1.0")
         #expect(query.first { $0.name == "userId" }?.value == "001Aa")
         #expect(!query.contains { $0.name == "selectionProtocol" || $0.name == "versionCode" })
     }
@@ -173,7 +173,7 @@ struct OtaUserSelectionTests {
         await f.api.set(.release(try f.latest("5", minCode: "26")))
         do { _ = try await sdk.updateToLatestBundleList(lynxAppId: f.appId); Issue.record("incompatible code accepted") }
         catch { #expect(error as? OtaSelectionError == .incompatibleRelease) }
-        await f.api.set(.release(try f.latest("5", sdkMin: "4.1")))
+        await f.api.set(.release(try f.latest("5", sdkMin: "4.1.1", sdkMax: "4.2")))
         do { _ = try await sdk.updateToLatestBundleList(lynxAppId: f.appId); Issue.record("incompatible SDK accepted") }
         catch { #expect(error as? OtaSelectionError == .incompatibleRelease) }
         let missingSDK = OtaSDK(configuration: f.config(user: "A", sdk: nil), apiClient: f.api, downloader: f.downloader)
@@ -762,7 +762,7 @@ private final class SelectionFixture: @unchecked Sendable {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }
     func cleanup() { try? FileManager.default.removeItem(at: root) }
-    func config(user: String?, versionCode: String? = "25", sdk: String? = "4.0.0", candidate: Bool = false) -> OtaSDKConfiguration {
+    func config(user: String?, versionCode: String? = "25", sdk: String? = "4.1.0", candidate: Bool = false) -> OtaSDKConfiguration {
         .init(apiBaseURL: URL(string: "http://127.0.0.1:1")!, app: .capp, lynxAppId: appId, environment: .test,
               appVersion: "1.0.0", buildNumber: "legacy-build", versionCode: versionCode, userId: user, lynxSdkVersion: sdk,
               storageDirectory: storage, candidateActivationEnabled: candidate, storeVersion: .v3, allowLocalHTTPForTest: true)
@@ -777,7 +777,7 @@ private final class SelectionFixture: @unchecked Sendable {
         try await sdk.initializeEmbeddedRelease(.init(context: .init(env: .test, app: .capp, lynxAppId: appId, releaseId: "embedded", platform: .ios, status: .active), installedAt: Date(), bundles: [bundle]))
         return sdk
     }
-    func latest(_ version: String, count: Int = 1, kind: OtaSelectionKind = .full, revision: String = "1", metadata: Bool = true, minCode: String = "20", sdkMin: String = "4.0", reason: String? = nil, reuseVersion: String? = nil, appId: String? = nil) throws -> OtaLatestBundleList {
+    func latest(_ version: String, count: Int = 1, kind: OtaSelectionKind = .full, revision: String = "1", metadata: Bool = true, minCode: String = "20", sdkMin: String = "4.0", sdkMax: String = "4.1", reason: String? = nil, reuseVersion: String? = nil, appId: String? = nil) throws -> OtaLatestBundleList {
         let bundles = try (0..<count).map { index -> OtaBundleArtifact in
             let bytesVersion = index == 50 ? version : (reuseVersion ?? version)
             let data = Data("version=\(bytesVersion);bundle=\(index)".utf8)
@@ -786,7 +786,7 @@ private final class SelectionFixture: @unchecked Sendable {
             return .init(pageId: index + 1, bundlePath: count == 1 ? "main.lynx.bundle" : "bundle-\(index).lynx.bundle", bundleSha256: try SHA256ChecksumValidator().sha256(for: url), bundleURL: url, size: data.count)
         }
         return .init(env: .test, app: .capp, lynxAppId: appId ?? self.appId, releaseId: version, platform: .ios, status: .active,
-                     lynxSdkRange: .init(min: sdkMin, max: "4.1"), selectionSchemaVersion: metadata ? 1 : nil, releaseSequence: metadata ? version : nil,
+                     lynxSdkRange: .init(min: sdkMin, max: sdkMax), selectionSchemaVersion: metadata ? 1 : nil, releaseSequence: metadata ? version : nil,
                      selection: metadata ? .init(kind: kind, ruleId: kind == .gray ? "test-rule" : nil, policyRevision: revision, reason: reason ?? (kind == .gray ? "matched_gray" : "latest_full")) : nil,
                      versionCodeRange: .init(min: minCode, max: "29"), changedBundles: bundles)
     }

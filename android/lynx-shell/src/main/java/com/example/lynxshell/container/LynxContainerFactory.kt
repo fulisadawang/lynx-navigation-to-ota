@@ -28,7 +28,8 @@ object LynxContainerFactory {
             .setColorScheme(ShellGlobalPropsFactory.resolveColorScheme(activity))
             .setScreenSize(initialLayout.screenWidthPx, initialLayout.screenHeightPx)
 
-        // 全部页面统一安装 Lynx 4.0 Explorer 范围内的完整 XElement Behavior。
+        // 全部页面统一安装 Lynx 4.1 Explorer 范围内的完整 XElement Behavior，包含
+        // Video；不让业务页面自行注册，避免不同页面能力不一致。
         XElementRuntime.install(builder)
 
         if (request.widthPx != null && request.heightPx != null) {
@@ -40,7 +41,7 @@ object LynxContainerFactory {
         request.density?.let(builder::setDensity)
 
         return builder.build(activity).also { lynxView ->
-            // Lynx 4.0 没有 Builder.setLynxViewClient；必须在 build 后、render 前安装。
+            // Lynx 4.1 仍没有 Builder.setLynxViewClient；必须在 build 后、render 前安装。
             lynxViewClient?.let(lynxView::addLynxViewClient)
             val globalProps = ShellGlobalPropsFactory.create(
                 activity = activity,

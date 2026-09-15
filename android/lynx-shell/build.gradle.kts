@@ -58,28 +58,31 @@ dependencies {
     implementation("androidx.window:window:1.5.0")
     implementation("com.google.android.material:material:1.12.0")
 
-    // Lynx 4.0 核心与 JS Runtime。
-    implementation("org.lynxsdk.lynx:lynx:4.0.0")
-    implementation("org.lynxsdk.lynx:lynx-jssdk:4.0.0")
-    implementation("org.lynxsdk.lynx:lynx-trace:4.0.0")
-    implementation("org.lynxsdk.lynx:primjs:4.0.0")
+    // Lynx 4.1 核心与 JS Runtime；官方 4.1 组合使用 PrimJS 4.1.1。
+    implementation("org.lynxsdk.lynx:lynx:4.1.0")
+    implementation("org.lynxsdk.lynx:lynx-jssdk:4.1.0")
+    implementation("org.lynxsdk.lynx:lynx-trace:4.1.0")
+    implementation("org.lynxsdk.lynx:primjs:4.1.1")
 
     // Lynx Service 由 Module 内的 RuntimeInitializer 统一注册。
-    implementation("org.lynxsdk.lynx:lynx-service-image:4.0.0")
-    implementation("org.lynxsdk.lynx:lynx-service-log:4.0.0")
-    implementation("org.lynxsdk.lynx:lynx-service-http:4.0.0")
+    implementation("org.lynxsdk.lynx:lynx-service-image:4.1.0")
+    implementation("org.lynxsdk.lynx:lynx-service-log:4.1.0")
+    implementation("org.lynxsdk.lynx:lynx-service-http:4.1.0")
 
-    // release/4.0 Explorer 对应的 XElement 全量组件。
-    implementation("org.lynxsdk.lynx:xelement:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-input:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-overlay:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-viewpager:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-scroll-coordinator:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-svg:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-markdown:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-refresh:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-blur-view:4.0.0")
-    implementation("org.lynxsdk.lynx:xelement-webview:4.0.0")
+    // Lynx 4.1 Explorer 对应的 XElement 全量组件。
+    // xelement:4.1.0 的聚合 BehaviorGenerator 已包含 Video 注册入口；
+    // 升级主分支不显式接入 AnimaX；官方聚合器可能携带其传递依赖，专项分支再启用该组件。
+    implementation("org.lynxsdk.lynx:xelement:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-input:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-overlay:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-viewpager:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-scroll-coordinator:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-svg:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-markdown:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-refresh:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-blur-view:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-webview:4.1.0")
+    implementation("org.lynxsdk.lynx:xelement-video:4.1.0")
 
     implementation("org.lynxsdk.lynx:lynxtextra:0.1.1")
     implementation("org.lynxsdk.lynx:servalsvg:0.0.2")
@@ -94,7 +97,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.9.0")
 }
 
-// Lynx 4.0 AAR 的 getter 固定返回 0.0.1，Manifest 也不是 Maven semver。
+// Lynx AAR 的 getter 固定返回 0.0.1，Manifest 也不是 Maven semver。
 // 从当前 variant 实际解析到的 Runtime 组件生成版本，不使用业务默认值或声明文本。
 androidComponents {
     onVariants(selector().all()) { variant ->
@@ -130,7 +133,7 @@ afterEvaluate {
                 version = "1.0.0"
                 pom {
                     name.set("Lynx Shell Android")
-                description.set("Lynx 4.0 Runtime、NativeModules、Activity-first 路由、转场和内置 OTA Runtime")
+                description.set("Lynx 4.1 Runtime、NativeModules、Activity-first 路由、转场和内置 OTA Runtime")
                 }
             }
         }

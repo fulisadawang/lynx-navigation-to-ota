@@ -8,7 +8,7 @@ export default class ShellGlobalPropsFactory {
     const business = ShellJson.parseObject(businessJson) as Record<string, Object>;
     const currentDisplay = display.getDefaultDisplaySync();
     business['platform'] = 'harmony';
-    business['lynxVersion'] = '4.0';
+    business['lynxVersion'] = '4.1';
     business['hostAppVersion'] = ShellConstants.APP_VERSION;
     business['density'] = currentDisplay.densityPixels;
     business['screenWidthPx'] = currentDisplay.width;
