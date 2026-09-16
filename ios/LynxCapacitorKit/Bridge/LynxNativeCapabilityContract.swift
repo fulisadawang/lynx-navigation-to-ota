@@ -23,9 +23,24 @@ struct LynxNativeCapabilityCall {
             throw LynxNativeCapabilityError.invalidPayload
         }
 
-        callbackId = object["callbackId"] as? String ?? "-1"
-        pluginId = object["pluginId"] as? String ?? ""
-        methodName = object["methodName"] as? String ?? ""
+        if let rawCallbackId = object["callbackId"], !(rawCallbackId is NSNull) {
+            guard let callback = rawCallbackId as? String,
+                  !callback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw LynxNativeCapabilityError.invalidArgument("callbackId 必须是非空字符串，缺省或 null 才使用 -1")
+            }
+            callbackId = callback.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            callbackId = "-1"
+        }
+        guard let plugin = object["pluginId"] as? String, !plugin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let method = object["methodName"] as? String, !method.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw LynxNativeCapabilityError.invalidArgument("pluginId 和 methodName 必须是非空字符串")
+        }
+        pluginId = plugin.trimmingCharacters(in: .whitespacesAndNewlines)
+        methodName = method.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let rawOptions = object["options"], !(rawOptions is NSNull), !(rawOptions is [String: Any]) {
+            throw LynxNativeCapabilityError.invalidArgument("options 必须是 JSON 对象")
+        }
         options = object["options"] as? [String: Any] ?? [:]
         ownerID = nil
     }
@@ -81,17 +96,31 @@ struct LynxNativeCapabilityResult {
             "save": save,
         ]
         if let data { value["data"] = LynxNativeJSON.normalize(data) }
-        if let error { value["error"] = LynxNativeJSON.normalize(error) }
+        if var error {
+            if error["reasonCode"] == nil {
+                error["reasonCode"] = LynxCapabilitySemantics.errorReasonCode(for: String(error["code"] as? String ?? ""))
+            }
+            value["error"] = LynxNativeJSON.normalize(error)
+        }
         return LynxNativeJSON.encode(value) ?? "{}"
     }
 }
 
 enum LynxNativeCapabilityError: LocalizedError {
     case invalidPayload
+    case invalidArgument(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidPayload: return "Invalid bridge payload"
+        case let .invalidArgument(message): return message
+        }
+    }
+
+    var code: String {
+        switch self {
+        case .invalidPayload: return "INVALID_PAYLOAD"
+        case .invalidArgument: return "INVALID_ARGUMENT"
         }
     }
 }

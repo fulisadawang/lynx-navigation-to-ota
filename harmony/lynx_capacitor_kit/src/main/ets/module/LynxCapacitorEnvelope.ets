@@ -1,3 +1,5 @@
+import LynxCapacitorSemantics from './LynxCapacitorSemantics';
+
 /**
  * Lynx NativeModule 的统一返回 envelope。
  *
@@ -44,6 +46,7 @@ export default class LynxCapacitorEnvelope {
       ',"pluginId":' + JSON.stringify(pluginId) +
       ',"methodName":' + JSON.stringify(methodName) +
       ',"success":false,"error":{"code":' + JSON.stringify(code) +
+      ',"reasonCode":' + JSON.stringify(LynxCapacitorSemantics.errorReasonCode(code)) +
       ',"message":' + JSON.stringify(message) +
       '},"save":false}';
   }

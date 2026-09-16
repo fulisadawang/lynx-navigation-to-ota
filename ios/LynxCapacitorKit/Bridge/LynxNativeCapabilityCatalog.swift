@@ -11,6 +11,14 @@ struct LynxNativeCapabilitySpec {
         if implementedMethods.isEmpty { return "unsupported" }
         return implementedMethods.count == methods.count ? "native" : "partial"
     }
+
+    /** 对外暴露的 canonical 语义状态，兼容旧的 state 字段。 */
+    var semanticState: String { LynxCapabilitySemantics.semanticState(state) }
+    var reasonCode: String { LynxCapabilitySemantics.reasonCode(for: id, state: state) }
+    var reason: String { LynxCapabilitySemantics.reason(for: id, state: state) }
+    var methodStatus: [[String: Any]] {
+        LynxCapabilitySemantics.methodStatus(id: id, methods: methods, implementedMethods: implementedMethods)
+    }
 }
 
 /** Android 当前 Module 的协议目录；iOS 必须沿用同一组 pluginId/methodName。 */
@@ -79,6 +87,12 @@ enum LynxNativeCapabilityCatalog {
                 "methods": spec.methods,
                 "implementedMethods": spec.implementedMethods,
                 "state": spec.state,
+                "contractVersion": LynxCapabilitySemantics.contractVersion,
+                "semanticState": spec.semanticState,
+                "reasonCode": spec.reasonCode,
+                "reason": spec.reason,
+                "methodStatus": spec.methodStatus,
+                "verification": LynxCapabilitySemantics.verification(),
                 "platform": platform,
             ] as [String: Any]
         }

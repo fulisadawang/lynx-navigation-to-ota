@@ -30,6 +30,16 @@ object NativeCapabilityDispatcher {
             (pluginId == "CapacitorSQLite" && methodName !in setOf("echo", "isAvailable"))
 
     fun dispatch(activity: Activity, pluginId: String, methodName: String, options: JSONObject): JSONObject {
+        // 先经过协议目录闸门，确保所有能力域在进入平台 adapter 前拥有相同的未声明/未实现语义。
+        val spec = NativeCapabilityCatalog.find(pluginId)
+            ?: return failure("UNIMPLEMENTED", "Unknown native capability: $pluginId")
+        if (methodName !in spec.methods) {
+            return failure("UNIMPLEMENTED", "Method $methodName is not registered on $pluginId")
+        }
+        if (methodName !in spec.implementedMethods) {
+            return failure("UNSUPPORTED", "$pluginId.$methodName 尚未接入当前 Android Module")
+        }
+
         if (methodName == "checkPermissions") {
             NativePermissionCoordinator.check(activity, pluginId, options)?.let { return it }
         }
@@ -41,12 +51,6 @@ object NativeCapabilityDispatcher {
         NativeDatabaseCapabilities.dispatch(activity, pluginId, methodName, options)?.let { return it }
         if (pluginId == "Motion") {
             NativeMotionCapabilities.dispatch(activity, methodName, options)?.let { return it }
-        }
-
-        val spec = NativeCapabilityCatalog.find(pluginId)
-            ?: return failure("UNIMPLEMENTED", "Unknown native capability: $pluginId")
-        if (methodName !in spec.implementedMethods) {
-            return failure("UNSUPPORTED", "$pluginId.$methodName 尚未接入当前 Android Module")
         }
 
         return runCatching {

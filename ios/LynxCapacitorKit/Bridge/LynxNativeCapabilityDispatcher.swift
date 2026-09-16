@@ -13,6 +13,8 @@ final class LynxNativeCapabilityDispatcher {
 
     private let lock = NSLock()
     private var eventSender: EventSender?
+    private let eventSequenceLock = NSLock()
+    private var eventSequence = 0
 
     func setEventSender(_ sender: EventSender?) {
         lock.lock()
@@ -26,6 +28,20 @@ final class LynxNativeCapabilityDispatcher {
         completion: @escaping Completion
     ) {
         let run = {
+            // 先经过协议目录闸门，确保所有能力域在进入平台 adapter 前拥有相同的未声明/未实现语义。
+            guard let spec = LynxNativeCapabilityCatalog.find(call.pluginId) else {
+                completion(.failure("UNIMPLEMENTED", "Unknown native capability: \(call.pluginId)"))
+                return
+            }
+            guard spec.methods.contains(call.methodName) else {
+                completion(.failure("UNIMPLEMENTED", "Method \(call.methodName) is not registered on \(call.pluginId)"))
+                return
+            }
+            guard spec.implementedMethods.contains(call.methodName) else {
+                completion(.failure("UNSUPPORTED", "\(call.pluginId).\(call.methodName) 尚未接入当前 iOS Module"))
+                return
+            }
+
             if LynxNativeInteractiveCapabilities.dispatch(call, presenter: presenter, completion: completion) { return }
             if LynxNativeMediaCapabilities.dispatch(call, presenter: presenter, eventSender: self.currentEventSender(), completion: completion) { return }
             if LynxNativeBarcodeCapabilities.dispatch(call, presenter: presenter, completion: completion) { return }
@@ -35,14 +51,6 @@ final class LynxNativeCapabilityDispatcher {
             if LynxNativeProviderCapabilities.dispatch(call, presenter: presenter, eventSender: self.currentEventSender(), completion: completion) { return }
             if LynxNativeDatabaseCapabilities.dispatch(call, completion: completion) { return }
 
-            guard let spec = LynxNativeCapabilityCatalog.find(call.pluginId) else {
-                completion(.failure("UNIMPLEMENTED", "Unknown native capability: \(call.pluginId)"))
-                return
-            }
-            guard spec.methods.contains(call.methodName) else {
-                completion(.failure("UNIMPLEMENTED", "Method \(call.methodName) is not registered on \(call.pluginId)"))
-                return
-            }
             completion(.failure("UNSUPPORTED", "\(call.pluginId).\(call.methodName) 尚未接入当前 iOS Module"))
         }
 
@@ -54,7 +62,24 @@ final class LynxNativeCapabilityDispatcher {
     }
 
     func sendEvent(_ value: [String: Any]) {
-        guard let sender = currentEventSender(), let json = LynxNativeJSON.encode(value) else { return }
+        var envelope = value
+        if envelope["callbackId"] == nil { envelope["callbackId"] = "-1" }
+        if envelope["eventName"] == nil, let methodName = envelope["methodName"] as? String {
+            envelope["eventName"] = methodName
+        }
+        if envelope["success"] == nil { envelope["success"] = true }
+        if envelope["save"] == nil { envelope["save"] = true }
+        if var error = envelope["error"] as? [String: Any],
+           error["reasonCode"] == nil,
+           let code = error["code"] as? String {
+            error["reasonCode"] = LynxCapabilitySemantics.errorReasonCode(for: code)
+            envelope["error"] = error
+        }
+        eventSequenceLock.lock()
+        eventSequence += 1
+        envelope["sequence"] = eventSequence
+        eventSequenceLock.unlock()
+        guard let sender = currentEventSender(), let json = LynxNativeJSON.encode(envelope) else { return }
         sender(json)
     }
 

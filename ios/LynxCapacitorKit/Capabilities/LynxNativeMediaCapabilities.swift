@@ -516,7 +516,16 @@ enum LynxNativeMediaCapabilities {
         func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
             let progress = totalBytesExpectedToWrite > 0 ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite) : 0
             status = ["operationId": operationID, "state": "running", "progress": progress, "bytesWritten": totalBytesWritten, "totalBytes": totalBytesExpectedToWrite]
-            guard let eventSender, let raw = LynxNativeJSON.encode(["callbackId": operationID, "pluginId": "FileTransfer", "methodName": "progress", "success": true, "data": status, "save": true]) else { return }
+            guard let eventSender, let raw = LynxNativeJSON.encode([
+                "callbackId": operationID,
+                "pluginId": "FileTransfer",
+                "methodName": "progress",
+                "eventName": "progress",
+                "operationId": operationID,
+                "success": true,
+                "data": status,
+                "save": true,
+            ]) else { return }
             eventSender(raw)
             _ = session; _ = downloadTask; _ = bytesWritten
         }

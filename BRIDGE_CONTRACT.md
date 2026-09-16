@@ -253,6 +253,37 @@ saveDataURL(optionsJSON: string, callback: (result: MediaResult) => void): void
 
 HarmonyOS 当前实现是普通 Module，没有加 `@Sendable`。普通 Module 方法按 Lynx Harmony 的异步 Module 语义执行，需要结果的方法全部通过 callback 返回；存储写入方法本身不依赖 JS 返回值。Entry 模块仅兼容导出 HAR 的 Module，避免两份实现漂移。
 
+## LynxCapacitor 三端语义契约 v1.1
+
+Android、iOS、HarmonyOS 的自有 LynxCapacitorModule 以 Android
+NativeCapabilityCatalog 为事实源，冻结 40 个能力域、146 个方法、方法顺序和
+rtype: promise。三端在进入具体平台 adapter 前都执行相同的目录闸门：
+
+1. 未知 pluginId 或目录外 methodName 返回 UNIMPLEMENTED；
+2. 目录内但不在该平台 implementedMethods 的方法返回 UNSUPPORTED；
+3. 只有通过闸门后才进入权限、UI、网络、文件、传感器或宿主 Provider。
+
+getPluginHeaders() 保持旧形状；getCapabilityStatus() 在保留 state、methods
+和 implementedMethods 的基础上增加 contractVersion、semanticState、reasonCode、
+reason、methodStatus 和 verification。页面分支必须读取稳定的 semanticState/reasonCode，
+不能解析自然语言 reason。普通 callback、错误 callback、listener 和长任务进度都保留
+callbackId/pluginId/methodName/success/save 身份字段；需要 Lynx 保留的事件使用
+save: true，listener 使用 listenerId，长任务使用 operationId。
+
+payload 的 callbackId 缺失或为 null 时统一为 "-1"，显式空值或非字符串返回
+INVALID_ARGUMENT；pluginId、methodName 必须是非空字符串；options 缺失或为 null
+时视为空对象，其他非对象返回 INVALID_ARGUMENT。错误在原有 error.code 和
+error.message 之外增加稳定 error.reasonCode。
+
+完整字段、错误码、平台差异和验证层级见
+[docs/lynx-capacitor-semantics-v1/README.md](docs/lynx-capacitor-semantics-v1/README.md)；
+机器可读目录见
+[semantic-catalog.json](docs/lynx-capacitor-semantics-v1/semantic-catalog.json)；
+静态检查命令为 python3 scripts/verify_lynx_capacitor_semantics.py。
+
+本契约只收口三端 Module 源码，不代表默认 Android/iOS/HarmonyOS Shell 已完成依赖、
+注册、权限和生命周期接线；verification.host 当前为 not_integrated。
+
 ## 页面侧声明
 
 Android/iOS 见 `examples/lynx-shell-module.d.ts`；HarmonyOS 基础接口见

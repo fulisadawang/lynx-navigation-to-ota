@@ -36,17 +36,118 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
 
     fun handleCall(payload: String, callback: Callback) {
         val request = runCatching { JSONObject(payload) }.getOrElse { error ->
-            callback.invoke(errorEnvelope("-1", "Invalid bridge payload: ${error.message}", "INVALID_PAYLOAD").toString())
+            callback.invoke(
+                errorEnvelope(
+                    callbackId = "-1",
+                    pluginId = "",
+                    methodName = "",
+                    message = "Invalid bridge payload: ${error.message}",
+                    code = "INVALID_PAYLOAD",
+                ).toString(),
+            )
             return
         }
-        val callbackId = request.optString("callbackId", "-1")
-        val pluginId = request.optString("pluginId")
-        val methodName = request.optString("methodName")
-        val options = request.optJSONObject("options") ?: JSONObject()
+        val pluginValue = request.opt("pluginId")
+        val methodValue = request.opt("methodName")
+        val pluginId = (pluginValue as? String)?.trim().orEmpty()
+        val methodName = (methodValue as? String)?.trim().orEmpty()
+        val invalidIdentityType = (pluginValue != null && pluginValue !== JSONObject.NULL && pluginValue !is String) ||
+            (methodValue != null && methodValue !== JSONObject.NULL && methodValue !is String)
+        val callbackValue = request.opt("callbackId")
+        val callbackId = when {
+            !request.has("callbackId") || request.isNull("callbackId") -> "-1"
+            callbackValue is String && callbackValue.trim().isNotEmpty() -> callbackValue.trim()
+            else -> {
+                callback.invoke(
+                    errorEnvelope(
+                        callbackId = "-1",
+                        pluginId = pluginId,
+                        methodName = methodName,
+                        message = "callbackId 必须是非空字符串，缺省或 null 才使用 -1",
+                        code = "INVALID_ARGUMENT",
+                    ).toString(),
+                )
+                return
+            }
+        }
+        if (invalidIdentityType || pluginId.isEmpty() || methodName.isEmpty()) {
+            callback.invoke(
+                errorEnvelope(
+                    callbackId = callbackId,
+                    pluginId = pluginId,
+                    methodName = methodName,
+                    message = "pluginId 和 methodName 必须是非空字符串",
+                    code = "INVALID_ARGUMENT",
+                ).toString(),
+            )
+            return
+        }
+        val options = when {
+            !request.has("options") || request.isNull("options") -> JSONObject()
+            request.opt("options") is JSONObject -> request.getJSONObject("options")
+            else -> {
+                callback.invoke(
+                    errorEnvelope(
+                        callbackId = callbackId,
+                        pluginId = pluginId,
+                        methodName = methodName,
+                        message = "options 必须是 JSON 对象",
+                        code = "INVALID_ARGUMENT",
+                    ).toString(),
+                )
+                return
+            }
+        }
+        // 在读取 Activity 前先执行公共目录闸门，保证无宿主上下文时未知调用也不会伪装成可用能力。
+        val spec = NativeCapabilityCatalog.find(pluginId)
+        if (spec == null) {
+            callback.invoke(
+                errorEnvelope(
+                    callbackId = callbackId,
+                    pluginId = pluginId,
+                    methodName = methodName,
+                    message = "Unknown native capability: $pluginId",
+                    code = "UNIMPLEMENTED",
+                ).toString(),
+            )
+            return
+        }
+        if (methodName !in spec.methods) {
+            callback.invoke(
+                errorEnvelope(
+                    callbackId = callbackId,
+                    pluginId = pluginId,
+                    methodName = methodName,
+                    message = "Method $methodName is not registered on $pluginId",
+                    code = "UNIMPLEMENTED",
+                ).toString(),
+            )
+            return
+        }
+        if (methodName !in spec.implementedMethods) {
+            callback.invoke(
+                errorEnvelope(
+                    callbackId = callbackId,
+                    pluginId = pluginId,
+                    methodName = methodName,
+                    message = "$pluginId.$methodName 尚未接入当前 Android Module",
+                    code = "UNSUPPORTED",
+                ).toString(),
+            )
+            return
+        }
         val activity = currentActivity.get()
         Log.i(TAG, "HANDLE_CALL $pluginId.$methodName activity=${activity?.javaClass?.name}")
         if (activity == null) {
-            callback.invoke(errorEnvelope(callbackId, "No Android Activity is available", MODULE_ERROR).toString())
+            callback.invoke(
+                errorEnvelope(
+                    callbackId = callbackId,
+                    pluginId = pluginId,
+                    methodName = methodName,
+                    message = "No Android Activity is available",
+                    code = MODULE_ERROR,
+                ).toString(),
+            )
             return
         }
 
@@ -286,7 +387,13 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
     ) {
         val retained = dispatchResult.optBoolean("save", false)
         val result = if (dispatchResult.has("error")) {
-            dispatchResult.put("success", false)
+            dispatchResult.put("success", false).apply {
+                optJSONObject("error")?.let { error ->
+                    if (!error.has("reasonCode")) {
+                        error.put("reasonCode", LynxCapabilitySemantics.errorReasonCode(error.optString("code")))
+                    }
+                }
+            }
         } else if (dispatchResult.optBoolean("success", false)) {
             dispatchResult
         } else {
@@ -339,6 +446,12 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
                 put("methods", JSONArray(spec.methods))
                 put("implementedMethods", JSONArray(spec.implementedMethods))
                 put("state", spec.state)
+                put("contractVersion", LynxCapabilitySemantics.CONTRACT_VERSION)
+                put("semanticState", spec.semanticState)
+                put("reasonCode", spec.reasonCode)
+                put("reason", spec.reason)
+                put("methodStatus", spec.methodStatus())
+                put("verification", LynxCapabilitySemantics.verification())
                 put("platform", "android")
             })
         }
@@ -431,9 +544,23 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
         }
     }
 
-    private fun errorEnvelope(callbackId: String, message: String, code: String): JSONObject = JSONObject()
+    private fun errorEnvelope(
+        callbackId: String,
+        pluginId: String,
+        methodName: String,
+        message: String,
+        code: String,
+    ): JSONObject = JSONObject()
         .put("callbackId", callbackId)
+        .put("pluginId", pluginId)
+        .put("methodName", methodName)
         .put("success", false)
-        .put("error", JSONObject().put("code", code).put("message", message))
+        .put(
+            "error",
+            JSONObject()
+                .put("code", code)
+                .put("reasonCode", LynxCapabilitySemantics.errorReasonCode(code))
+                .put("message", message),
+        )
         .put("save", false)
 }

@@ -1,3 +1,5 @@
+import LynxCapacitorSemantics from './LynxCapacitorSemantics';
+
 /**
  * Android 自有 NativeModule 的 HarmonyOS 协议目录。
  *
@@ -68,49 +70,32 @@ export default class LynxCapacitorCatalog {
     return false;
   }
 
-  /** 状态只描述 Android 核心 40 域，不包含 Harmony 专属扩展。 */
+  /** 状态保留旧字段，同时输出三端统一的语义状态、原因和验证层级。 */
   public static status(): string {
-    return '[' +
-      '{"name":"Device","state":"implemented"},' +
-      '{"name":"Biometrics","state":"unsupported","reason":"Android 基线明确为 unsupported，Harmony 不返回假成功"},' +
-      '{"name":"App","state":"implemented"},' +
-      '{"name":"AppLauncher","state":"implemented"},' +
-      '{"name":"Contacts","state":"partial","reason":"CRUD、checkPermissions、requestPermissions 已接入；账户/系统 Provider 仍需设备验证"},' +
-      '{"name":"Preferences","state":"implemented"},' +
-      '{"name":"Dialog","state":"implemented"},' +
-      '{"name":"ActionSheet","state":"implemented"},' +
-      '{"name":"Toast","state":"partial","reason":"show/getCapabilities/cancel 已接入 UIContext openToast/closeToast；设备 UI 仍需验证"},' +
-      '{"name":"Haptics","state":"partial","reason":"impact/notification/selection/长振动/波形/预定义/能力查询/取消已接入；Composition 以 Harmony VibratorPattern 近似复刻，未承诺 Android primitive 硬件等价"},' +
-      '{"name":"Share","state":"partial","reason":"文本/URL 已接入，文件 URI 与系统回执仍需补齐"},' +
-      '{"name":"Clipboard","state":"implemented"},' +
-      '{"name":"Filesystem","state":"implemented"},' +
-      '{"name":"Camera","state":"partial","reason":"相册、拍照、录像和播放已有入口，权限拒绝/取消仍需设备验证"},' +
-      '{"name":"Audio","state":"partial","reason":"MediaKit AVRecorder/AVPlayer、MICROPHONE 权限、录音/播放/停止和销毁释放已接入；设备音频验证仍需补齐"},' +
-      '{"name":"FileTransfer","state":"partial","reason":"NetworkKit 下载已接入 operationId、progress、getStatus、cancel 和 Module 销毁清理；设备网络验证仍需补齐"},' +
-      '{"name":"FileViewer","state":"partial","reason":"本地文档打开已有 Want 入口，设备查看器仍需验证"},' +
-      '{"name":"Network","state":"implemented"},' +
-      '{"name":"CapacitorHttp","state":"implemented"},' +
-      '{"name":"CapacitorCookies","state":"partial","reason":"WebCookieManager 已接入，scope 与清理语义仍需对账"},' +
-      '{"name":"Browser","state":"partial","reason":"open 已接入，close 按 Android 基线返回 unsupported"},' +
-      '{"name":"InAppBrowser","state":"partial","reason":"WebView open/close 已接入，设备验证仍需补齐"},' +
-      '{"name":"Geolocation","state":"partial","reason":"权限与当前位置已有实现，设备定位服务仍需验证"},' +
-      '{"name":"Motion","state":"partial","reason":"监听和显式 start/stop 已接入 SensorServiceKit；权限/传感器设备验证仍需补齐"},' +
-      '{"name":"StatusBar","state":"implemented"},' +
-      '{"name":"SystemBars","state":"implemented"},' +
-      '{"name":"ScreenOrientation","state":"implemented"},' +
-      '{"name":"ScreenReader","state":"partial","reason":"状态查询与播报已接入，设备验证仍需补齐"},' +
-      '{"name":"TextZoom","state":"implemented"},' +
-      '{"name":"Keyboard","state":"partial","reason":"resize/hide 已接入，setStyle 按 Android 基线返回 unsupported"},' +
-      '{"name":"SplashScreen","state":"partial","reason":"overlay 已接入，冷启动时序仍需宿主验证"},' +
-      '{"name":"PrivacyScreen","state":"implemented"},' +
-      '{"name":"Calendar","state":"partial","reason":"CalendarKit CRUD 与权限 gate 已接入，设备账户权限仍需验证"},' +
-      '{"name":"LocalNotifications","state":"partial","reason":"排程、待处理、取消和 channel create/list 已接入 ReminderAgent slot；通知权限与设备送达仍需验证"},' +
-      '{"name":"PushNotifications","state":"partial","reason":"权限与宿主事件转发已接入，register 按 Android 基线返回 unsupported"},' +
-      '{"name":"CapacitorBarcodeScanner","state":"partial","reason":"ScanKit 已接入，权限、取消和设备验证仍需补齐"},' +
-      '{"name":"BackgroundRunner","state":"partial","reason":"权限方法可用，dispatchEvent 按 Android 基线返回 unsupported"},' +
-      '{"name":"KeepAwake","state":"implemented"},' +
-      '{"name":"SafeArea","state":"implemented"},' +
-      '{"name":"CapacitorSQLite","state":"partial","reason":"ArkData 基础 SQL、正式 ID 和 isAvailable 已接入；与 Android SQLite 字段/事务边界仍需设备对账"}' +
-      ']';
+    const rows = JSON.parse(LynxCapacitorCatalog.headers()) as Array<Record<string, Object>>;
+    const result: Array<Record<string, Object>> = [];
+    rows.forEach((row: Record<string, Object>): void => {
+      const name = String(row['name'] ?? '');
+      const methodsRows = row['methods'] as Array<Record<string, Object>>;
+      const methods: Array<string> = [];
+      methodsRows.forEach((method: Record<string, Object>): void => {
+        methods.push(String(method['name'] ?? ''));
+      });
+      const definition = LynxCapacitorSemantics.definition(name);
+      result.push({
+        name: name,
+        methods: methods,
+        implementedMethods: methods.filter((method: string): boolean => LynxCapacitorSemantics.unsupportedMethods(name).indexOf(method) < 0),
+        state: definition.state,
+        contractVersion: LynxCapacitorSemantics.contractVersion,
+        semanticState: LynxCapacitorSemantics.semanticState(definition.state),
+        reasonCode: definition.reasonCode,
+        reason: definition.reason,
+        methodStatus: LynxCapacitorSemantics.methodStatus(name, methods),
+        verification: LynxCapacitorSemantics.verification(),
+        platform: 'harmony'
+      });
+    });
+    return JSON.stringify(result);
   }
 }
