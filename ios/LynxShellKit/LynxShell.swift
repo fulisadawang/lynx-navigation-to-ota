@@ -194,6 +194,9 @@ public final class LynxTabViewController: UIViewController {
     private var userContextObserver: NSObjectProtocol?
     private var userSyncObserver: NSObjectProtocol?
     private var firstScreenObserver: LynxFirstScreenObserver?
+    private var monitorScope: LynxMonitorScope?
+    private var monitorObserver: LynxMonitorObserver?
+    private var monitorVisibility: LynxMonitorVisibility = .hidden
     private var firstScreenReached = false
 #if DEBUG
     private var debugLoadCount = 0
@@ -221,6 +224,7 @@ public final class LynxTabViewController: UIViewController {
     }
 
     deinit {
+        monitorScope?.close(reason: "tab_destroyed")
         if let userContextObserver { NotificationCenter.default.removeObserver(userContextObserver) }
         if let userSyncObserver { NotificationCenter.default.removeObserver(userSyncObserver) }
         loadTask?.cancel()
@@ -282,6 +286,8 @@ public final class LynxTabViewController: UIViewController {
 
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        monitorVisibility = .visible
+        monitorScope?.setVisibility(.visible)
         lynxView?.onEnterForeground()
         // 首次布局后再补一次完整 GlobalProps；创建前的注入用于初始引擎配置，
         // 这里确保 Lynx 页面 JS 已经能读到 theme 和 native_tab_id。
@@ -289,6 +295,8 @@ public final class LynxTabViewController: UIViewController {
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
+        monitorVisibility = .hidden
+        monitorScope?.setVisibility(.hidden)
         lynxView?.onEnterBackground()
         super.viewWillDisappear(animated)
     }
@@ -304,6 +312,7 @@ public final class LynxTabViewController: UIViewController {
 
     /** 用户主动刷新 OTA 后，销毁当前 LynxView 并重新读取已提交 current；不触发 Tab 网络请求。 */
     public func refreshFromCurrent() {
+        closeMonitoring(reason: "tab_refreshed")
         loadTask?.cancel()
         loadTask = nil
         layoutUpdateCoordinator.invalidate()
@@ -328,14 +337,18 @@ public final class LynxTabViewController: UIViewController {
            contentView.bounds.width > 0,
            contentView.bounds.height > 0 {
             didStartLoad = true
-            load()
+            load(monitorLoadKind: .reload)
         } else {
             view.setNeedsLayout()
         }
     }
 
-    private func load() {
+    private func load(monitorLoadKind: LynxMonitorLoadKind = .initial) {
         let generation = loadGeneration.begin()
+        monitorScope = LynxMonitor.beginView(kind: .tab, loadKind: monitorLoadKind, visibility: monitorVisibility)
+        let isOta = spec.lynxAppId?.isEmpty == false && spec.bundleName?.isEmpty == false
+        monitorScope?.setRequest(source: isOta ? .ota : (RemoteBundlePolicy.isRemote(spec.bundleURL) ? .directHTTPS : .directAsset),
+                                 appId: isOta ? spec.lynxAppId : nil, bundleName: isOta ? spec.bundleName : nil)
 #if DEBUG
         debugLoadCount += 1
         debugLastError = "loading"
@@ -401,6 +414,7 @@ public final class LynxTabViewController: UIViewController {
                 let accepted: Bool = await MainActor.run { [weak self] in
                     guard let self, self.loadGeneration.accepts(generation) else { return false }
                     if let epoch = prepared.userIdentityEpoch, epoch != LynxRouter.otaUserIdentityEpoch { return false }
+                    self.monitorScope?.setPreparedBundle(prepared)
 #if DEBUG
                     self.debugBundleIdentity = "release=\(prepared.releaseId ?? "none");source=\(prepared.source);kind=\(prepared.selectionKind ?? "embedded");sequence=\(prepared.releaseSequence ?? "none")"
 #endif
@@ -461,6 +475,8 @@ public final class LynxTabViewController: UIViewController {
                 heightInPhysicalPixels: nil
             ).validated()
             currentRequest = request
+            let monitoredScope = monitorScope
+            let monitoredURL = request.bundleURL
             let provider = ShellTemplateProvider(
                 allowHTTPInDebug: false,
                 onLoadError: { [weak self] _, error in
@@ -470,7 +486,10 @@ public final class LynxTabViewController: UIViewController {
                     }
                 },
                 prefetchedURL: request.bundleURL,
-                prefetchedData: prefetchedData
+                prefetchedData: prefetchedData,
+                onTemplateData: monitoredScope.map { scope in
+                    { url, data in if url == monitoredURL { scope.resolved(data) } }
+                }
             )
             templateProvider = provider
             var props = ShellGlobalPropsFactory.make(
@@ -484,6 +503,7 @@ public final class LynxTabViewController: UIViewController {
             props["__lynxRouterNavigationModel"] = "native_tab_host"
             props["__lynxRouterPlatformContainer"] = "uikit_tab_container"
             runtimeGlobalProps = props
+            let createStarted = ProcessInfo.processInfo.systemUptime
             let created = LynxNativeRuntime.makeView(
                 provider: provider,
                 screenSize: latestLayoutSnapshot?.screenSize
@@ -492,6 +512,13 @@ public final class LynxTabViewController: UIViewController {
                     ?? contentView.bounds.size,
                 globalProps: props
             )
+            if let monitoredScope {
+                let monitor = LynxMonitorObserver(scope: monitoredScope)
+                monitorObserver = monitor
+                created.addLifecycleClient(monitor)
+                monitoredScope.didCreate(durationMs: (ProcessInfo.processInfo.systemUptime - createStarted) * 1000)
+            }
+            let errorMonitor = monitorObserver
             let observer = LynxFirstScreenObserver(
                 generation: generation,
                 onFirstScreen: { [weak self] observedGeneration, view in
@@ -508,7 +535,8 @@ public final class LynxTabViewController: UIViewController {
                         guard let self, self.loadGeneration.accepts(observedGeneration), !self.firstScreenReached else { return }
                         self.showError("Tab 首屏失败：\(error.localizedDescription)")
                     }
-                }
+                },
+                onErrorObserved: errorMonitor.map { monitor in { error in monitor.receivedError(error) } }
             )
             firstScreenObserver = observer
             created.addLifecycleClient(observer)
@@ -547,6 +575,8 @@ public final class LynxTabViewController: UIViewController {
 
     private func showError(_ message: String) {
         guard isViewLoaded else { return }
+        monitorScope?.failed(reason: "tab_template_or_first_screen_failure")
+        closeMonitoring(reason: "tab_content_released")
         templateProvider?.cancel()
         templateProvider = nil
         firstScreenObserver = nil
@@ -572,6 +602,13 @@ public final class LynxTabViewController: UIViewController {
                 label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             ])
         }
+    }
+
+    private func closeMonitoring(reason: String) {
+        monitorScope?.close(reason: reason)
+        if let monitorObserver { lynxView?.removeLifecycleClient(monitorObserver) }
+        monitorObserver = nil
+        monitorScope = nil
     }
 
     /**

@@ -13,7 +13,9 @@
     "ota:v3:server": "node ../scripts/ota-store-v3/local-server.mjs --fixture fixtures/ota-store-v3-golden-100-v1-v2",
     "ota:publish": "node scripts/publish-ota-bundle.mjs",
     "ota:publish:dry-run": "node scripts/publish-ota-bundle.mjs --dry-run",
-    "ota:build-and-publish": "pnpm build && node scripts/publish-ota-bundle.mjs"
+    "ota:build-and-publish": "pnpm build && node scripts/publish-ota-bundle.mjs",
+    "monitor:artifacts": "node ../scripts/lynx-monitor-artifacts/cli.mjs",
+    "monitor:artifacts:selftest": "node ../scripts/lynx-monitor-artifacts/selftest.mjs"
   },
   "dependencies": {
     "@lynx-js/react": "0.126.0"

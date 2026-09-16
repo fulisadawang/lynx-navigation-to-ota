@@ -3,6 +3,7 @@ package com.example.lynxshell.container
 import android.app.Activity
 import android.view.View
 import com.example.lynxshell.model.LynxPageRequest
+import com.example.lynxshell.monitoring.LynxViewMonitor
 import com.example.lynxshell.resource.ShellTemplateProvider
 import com.example.lynxshell.runtime.ShellGlobalPropsFactory
 import com.example.lynxshell.runtime.XElementRuntime
@@ -20,6 +21,7 @@ object LynxContainerFactory {
         templateProvider: ShellTemplateProvider,
         lynxViewClient: LynxViewClient? = null,
         bundleMetadata: Map<String, Any>? = null,
+        monitoring: LynxViewMonitor? = null,
     ): LynxView {
         val initialLayout = ShellGlobalPropsFactory.captureLayout(activity)
         val builder = LynxViewBuilder()
@@ -40,7 +42,14 @@ object LynxContainerFactory {
         }
         request.density?.let(builder::setDensity)
 
-        return builder.build(activity).also { lynxView ->
+        val creationStart = System.nanoTime()
+        val created = try { builder.build(activity) } catch (error: Exception) {
+            monitoring?.createFailed()
+            throw error
+        }
+        return created.also { lynxView ->
+            // 观测先于已有错误处理安装；监控失败不能改变首屏与 OTA 的处理结果。
+            monitoring?.attach(lynxView, creationStart)
             // Lynx 4.1 仍没有 Builder.setLynxViewClient；必须在 build 后、render 前安装。
             lynxViewClient?.let(lynxView::addLynxViewClient)
             val globalProps = ShellGlobalPropsFactory.create(

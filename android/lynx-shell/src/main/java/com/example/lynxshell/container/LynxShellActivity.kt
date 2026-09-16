@@ -22,6 +22,12 @@ import com.example.lynxshell.LynxShell
 import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
+import com.example.lynxshell.monitoring.BundleIdentities
+import com.example.lynxshell.monitoring.ContainerKind
+import com.example.lynxshell.monitoring.LoadKind
+import com.example.lynxshell.monitoring.LynxMonitor
+import com.example.lynxshell.monitoring.LynxViewMonitor
+import com.example.lynxshell.monitoring.Visibility
 import com.example.lynxshell.model.PageOrientation
 import com.example.lynxshell.resource.ShellTemplateProvider
 import com.example.lynxshell.bridge.LynxRouterPageInfo
@@ -58,6 +64,8 @@ import java.util.concurrent.Future
  * Router、Bridge 均在独立类中，便于替换为业务 App 自己的实现。
  */
 class LynxShellActivity : AppCompatActivity() {
+    private var monitoringView: LynxViewMonitor? = null
+    private var monitoringVisible = false
     private lateinit var container: FrameLayout
     private lateinit var toolbar: MaterialToolbar
     private lateinit var errorView: ShellErrorView
@@ -330,6 +338,7 @@ class LynxShellActivity : AppCompatActivity() {
      * 释放再重建，因此不会让两个 Bundle 共用同一个 Runtime View。
      */
     fun replaceRequest(newRequest: LynxPageRequest) {
+        monitoringView?.close("replaced")
         bundleFuture?.cancel(true)
         request = newRequest.validated()
         request.writeTo(intent)
@@ -338,6 +347,7 @@ class LynxShellActivity : AppCompatActivity() {
     }
 
     private fun renderPage(resetOtaRecovery: Boolean = true) {
+        monitoringView?.close("replaced")
         bundleFuture?.cancel(true)
         bundleFuture = null
         if (resetOtaRecovery) otaRecoveryUsed = false
@@ -361,6 +371,12 @@ class LynxShellActivity : AppCompatActivity() {
         preparedRuntime = null
         contentGeneration += 1L
         val generation = contentGeneration
+        monitoringView = LynxMonitor.reserve(
+            ContainerKind.PAGE,
+            if (generation == 1L) LoadKind.INITIAL else LoadKind.RETRY,
+            BundleIdentities.attempted(request),
+            if (monitoringVisible) Visibility.VISIBLE else Visibility.HIDDEN,
+        )
 
         val preparedToken = intent.getStringExtra(
             LynxTransitionIntent.EXTRA_PREPARED_ROUTE_TOKEN,
@@ -411,12 +427,14 @@ class LynxShellActivity : AppCompatActivity() {
         preparedFile: File?,
         bundleMetadata: Map<String, Any>? = null,
     ) {
+        val monitoring = monitoringView
         val provider = ShellTemplateProvider(
             context = applicationContext,
             allowHttpInDebug = request.allowHttpInDebug,
             preparedUrl = request.bundleUrl,
             preparedBytes = preparedBytes,
             preparedFile = preparedFile,
+            monitoring = monitoring,
             onLoadError = { url, message ->
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed && url == request.bundleUrl) {
@@ -465,7 +483,7 @@ class LynxShellActivity : AppCompatActivity() {
 
                 override fun onReceivedError(error: LynxError) {
                     runOnUiThread {
-                        if (!isFinishing && !isDestroyed) {
+                        if (!isFinishing && !isDestroyed && firstScreenReadyGeneration != generation) {
                             handleTemplateLoadFailure(
                                 generation,
                                 "Lynx 首屏加载失败：$error",
@@ -480,6 +498,7 @@ class LynxShellActivity : AppCompatActivity() {
                 templateProvider = provider,
                 lynxViewClient = client,
                 bundleMetadata = bundleMetadata,
+                monitoring = monitoring,
             )
             // 错误 View 已经在容器中，因此 LynxView 插到最底层。
             container.addView(
@@ -595,6 +614,7 @@ class LynxShellActivity : AppCompatActivity() {
         }
         checked.fold(
             onSuccess = { value ->
+                monitoringView?.resolvePrepared(value)
                 replaceReleaseLease(value.releaseLease)
                 bundleRuntimeMetadata = mapOf(
                     "lynxAppId" to value.lynxAppId,
@@ -633,6 +653,9 @@ class LynxShellActivity : AppCompatActivity() {
     /** 根 Bundle prepare/首屏失败时按 appId 回滚一次并重新准备。 */
     private fun handleTemplateLoadFailure(generation: Long, message: String) {
         if (!isCurrentGeneration(generation)) return
+        monitoringView?.failed("bundle_or_first_screen_failed")
+        monitoringView?.close("load_failed")
+        monitoringView = null
         unregisterMessageEndpoint()
         templateProvider?.close()
         templateProvider = null
@@ -733,6 +756,8 @@ class LynxShellActivity : AppCompatActivity() {
      */
     internal fun releaseContentForRouteSnapshot(): Boolean {
         val view = lynxView ?: return false
+        monitoringView?.close("route_snapshot_released")
+        monitoringView = null
         templateProvider?.close()
         templateProvider = null
         LynxEnvironmentCoordinator.unbind(view)
@@ -793,6 +818,8 @@ class LynxShellActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        monitoringVisible = false
+        monitoringView?.visibility(Visibility.HIDDEN)
         routerPageId()?.let { pageId ->
             ShellMessageHub.sendLifecycle(pageId, "covered", "activity_on_pause")
         }
@@ -802,6 +829,8 @@ class LynxShellActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        monitoringVisible = true
+        monitoringView?.visibility(Visibility.VISIBLE)
         restoreContentReleasedForRouteSnapshot()
         syncColorScheme()
         routerPageId()?.let { pageId ->
@@ -823,6 +852,8 @@ class LynxShellActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        monitoringView?.close(if (isFinishing) "cancelled" else "activity_destroyed")
+        monitoringView = null
         LynxRouter.removeOtaUserContextListener(otaUserListener)
         bundleFuture?.cancel(true)
         bundleFuture = null

@@ -27,6 +27,11 @@
             android:label="原生 Tab 承载 Demo" />
 
         <activity
+            android:name=".MonitoringAcceptanceActivity"
+            android:exported="false"
+            android:label="Lynx 监控 G1 验收" />
+
+        <activity
             android:name=".OtaStorageInspectorActivity"
             android:exported="false"
             android:label="OTA 磁盘浏览器" />

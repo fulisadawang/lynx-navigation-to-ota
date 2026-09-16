@@ -114,7 +114,12 @@ Tab 普通切换 cache-only、后台不重建；身份变化和主动完成后�
 - 独立Server本地 npm pack Contracts 产物联编125/125、0 skipped；只读历史序号preview为44 scopes/372条本地记录。没有npm发布、远程DB操作或部署。
 - [OTA API 契约](OTA_SERVER_API_CONTRACT.md)；旧 `*-ota-store-v3-test-report.html` 仅为历史基础证据。
 
-本次 Android/Harmony 不运行设备测试，不用历史 HDC/ADB 记录替代当前验收。
+2026-09-15 当前分支已补充一轮设备冒烟：Android `LynxScreens_API35`（API 35）完成构建、安装、Page/Native Tab、中文切换和 Playground Bundle；iOS iPhone 18 Pro Max（iOS 27.0）完成临时 Simulator 构建、安装、OTA 首页和 Native Tab 启动；HarmonyOS DevEco `Pura 90`（HarmonyOS 6.1.1 API 24、HDC `127.0.0.1:5557`）完成 HAP 安装、OTA 首页和原生 ArkUI Tabs。三端 Sample 均未安装 LocalDiagnosticProvider，因此这些是宿主/Lynx 页面冒烟，不是监控事件 snapshot 或厂商云端验收；详细结果见 `docs/lynx-view-monitoring-v1/implementation.md`。
+
+## LynxView 可插拔监控 G1
+
+[研发方案 v1.0](docs/lynx-view-monitoring-v1/README.md) 定义三端 Page/Native Tab 性能、运行期 JS 异常、实际 Bundle 身份、可替换第三方 SDK 适配，以及构建调试材料归档和源码还原。
+[G1 实现说明](docs/lynx-view-monitoring-v1/implementation.md) 对应当前分支的 Android、iOS、HarmonyOS 接线和 Playground 归档工具；不依赖 OTA Server/Admin，G2 第三方平台 Provider 仍未接入。
 
 ## 关键验证
 

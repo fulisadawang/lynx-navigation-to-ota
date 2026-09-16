@@ -60,6 +60,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, NativeTabDemoActivity::class.java))
         }
 
+        findViewById<MaterialButton>(R.id.open_monitoring_acceptance_button).setOnClickListener {
+            startActivity(Intent(this, MonitoringAcceptanceActivity::class.java))
+        }
+
         findViewById<MaterialButton>(R.id.open_ota_storage_inspector_button).setOnClickListener {
             startActivity(Intent(this, OtaStorageInspectorActivity::class.java))
         }

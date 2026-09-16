@@ -17,6 +17,12 @@ import com.example.lynxshell.container.LynxContainerFactory
 import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.model.PageOrientation
+import com.example.lynxshell.monitoring.BundleIdentities
+import com.example.lynxshell.monitoring.ContainerKind
+import com.example.lynxshell.monitoring.LoadKind
+import com.example.lynxshell.monitoring.LynxMonitor
+import com.example.lynxshell.monitoring.LynxViewMonitor
+import com.example.lynxshell.monitoring.Visibility
 import com.example.lynxshell.resource.ShellTemplateProvider
 import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
 import com.example.lynxshell.util.JsonObjectCodec
@@ -34,6 +40,7 @@ import java.util.concurrent.Future
  * 组合它。OTA Tab 只调用 ActivityBundleRuntime.resolveCurrent，禁止在切 Tab 时联网。
  */
 class LynxTabFragment : Fragment() {
+    private var monitoringView: LynxViewMonitor? = null
     private lateinit var spec: LynxTabSpec
     private var lynxView: LynxView? = null
     private var templateProvider: ShellTemplateProvider? = null
@@ -92,6 +99,7 @@ class LynxTabFragment : Fragment() {
 
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
+        monitoringView?.visibility(if (hidden || !isResumed) Visibility.HIDDEN else Visibility.VISIBLE)
         if (hidden) {
             lynxView?.onEnterBackground()
         } else {
@@ -102,6 +110,7 @@ class LynxTabFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        monitoringView?.visibility(if (isHidden) Visibility.HIDDEN else Visibility.VISIBLE)
         if (!isHidden) {
             lynxView?.onEnterForeground()
             syncColorScheme()
@@ -109,6 +118,7 @@ class LynxTabFragment : Fragment() {
     }
 
     override fun onPause() {
+        monitoringView?.visibility(Visibility.HIDDEN)
         lynxView?.onEnterBackground()
         super.onPause()
     }
@@ -149,6 +159,13 @@ class LynxTabFragment : Fragment() {
         val epoch = runtime?.userIdentityEpoch
         val generation = ++loadGeneration
         loadCount += 1
+        monitoringView = LynxMonitor.reserve(
+            ContainerKind.TAB,
+            if (loadCount == 1) LoadKind.INITIAL else LoadKind.RELOAD,
+            BundleIdentities.attempted(spec.bundleUrl, spec.lynxAppId, spec.bundleName),
+            if (isResumed && !isHidden) Visibility.VISIBLE else Visibility.HIDDEN,
+        )
+        val monitoring = monitoringView
         debugError = "loading"
         loadFuture = loader.submit {
             val appId = spec.lynxAppId
@@ -170,6 +187,7 @@ class LynxTabFragment : Fragment() {
                 } else if (spec.lynxAppId != null && resolved == null) {
                     showError(host, "Tab ${spec.tabId} 没有可用的 active Bundle；Tab 加载不会联网")
                 } else {
+                    resolved?.let { monitoring?.resolvePrepared(it) }
                     debugIdentity = "release=${resolved?.releaseId ?: "none"};source=${resolved?.source ?: "direct_asset"};kind=${resolved?.selectionKind ?: "embedded"};sequence=${resolved?.releaseSequence ?: "none"};epoch=${resolved?.userIdentityEpoch ?: 0}"
                     render(
                         generation = generation,
@@ -199,6 +217,8 @@ class LynxTabFragment : Fragment() {
     }
 
     private fun releaseContent(host: ViewGroup?) {
+        monitoringView?.close("cancelled")
+        monitoringView = null
         loadGeneration += 1
         loadFuture?.cancel(true)
         loadFuture = null
@@ -250,6 +270,7 @@ class LynxTabFragment : Fragment() {
             preparedUrl = request.bundleUrl,
             preparedFile = preparedFile,
             preparedBytes = preparedBytes,
+            monitoring = monitoringView,
             onLoadError = { _, message ->
                 activity.runOnUiThread {
                     if (isAdded && view === host && generation == loadGeneration && !firstScreenReady) showError(host, message)
@@ -278,6 +299,7 @@ class LynxTabFragment : Fragment() {
             templateProvider = provider,
             lynxViewClient = client,
             bundleMetadata = bundleMetadata,
+            monitoring = monitoringView,
         )
         lynxView = created
         host.addView(
@@ -306,6 +328,9 @@ class LynxTabFragment : Fragment() {
     }
 
     private fun showError(host: ViewGroup, message: String) {
+        monitoringView?.failed("tab_load_failed")
+        monitoringView?.close("load_failed")
+        monitoringView = null
         debugError = message
         debugIdentity = ""
         templateProvider?.close()

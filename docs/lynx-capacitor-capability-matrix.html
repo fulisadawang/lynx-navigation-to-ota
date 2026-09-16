@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="LynxCapacitorModule 三端原生能力覆盖、状态和 Top10 落地优先级">
+  <title>Lynx 原生能力地图 · Capacitor Module Top10</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --bg-soft: #0b192a;
+      --panel: #102239;
+      --panel-strong: #152d49;
+      --line: #24415f;
+      --text: #edf5ff;
+      --muted: #9eb4cb;
+      --cyan: #47d7d0;
+      --blue: #78a9ff;
+      --yellow: #f5c96a;
+      --orange: #ff9c6b;
+      --red: #ff7d88;
+      --green: #65d5a3;
+      --shadow: 0 18px 48px rgba(0, 0, 0, .2);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 9% 0%, rgba(71, 215, 208, .15), transparent 30rem),
+        radial-gradient(circle at 91% 12%, rgba(120, 169, 255, .12), transparent 28rem),
+        var(--bg);
+      line-height: 1.55;
+    }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover, a:focus-visible { text-decoration: underline; }
+    button { font: inherit; }
+
+    .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 52px 0 72px; }
+    .eyebrow { color: var(--cyan); font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 900px; margin-bottom: 16px; font-size: clamp(34px, 5vw, 66px); line-height: 1.05; letter-spacing: -.045em; }
+    h2 { margin-bottom: 18px; font-size: clamp(24px, 3vw, 34px); line-height: 1.15; letter-spacing: -.025em; }
+    h3 { margin-bottom: 8px; font-size: 18px; line-height: 1.25; }
+    .lede { max-width: 760px; color: var(--muted); font-size: clamp(16px, 2vw, 20px); }
+    .notice { display: inline-flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 7px 11px; border: 1px solid rgba(245, 201, 106, .35); border-radius: 999px; color: #ffe7a7; background: rgba(245, 201, 106, .09); font-size: 13px; }
+    .notice strong { color: var(--yellow); }
+
+    .hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, .8fr); gap: 28px; align-items: end; margin-bottom: 38px; }
+    .hero-aside { padding: 22px; border: 1px solid var(--line); border-radius: 22px; background: rgba(16, 34, 57, .78); box-shadow: var(--shadow); }
+    .hero-aside p { margin-bottom: 0; color: var(--muted); font-size: 14px; }
+    .hero-aside .signal { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+    .signal-dot { width: 10px; height: 10px; margin-top: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 5px rgba(255, 156, 107, .12); }
+
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 46px; }
+    .stat { padding: 19px 20px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(145deg, rgba(21, 45, 73, .92), rgba(12, 28, 47, .92)); box-shadow: var(--shadow); }
+    .stat-label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 13px; }
+    .stat-value { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
+    .stat-note { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+    .stat--accent .stat-value { color: var(--cyan); }
+    .stat--warn .stat-value { color: var(--orange); }
+    .stat--danger .stat-value { color: var(--red); }
+
+    section { margin-top: 54px; }
+    .section-intro { display: flex; justify-content: space-between; gap: 22px; align-items: end; margin-bottom: 18px; }
+    .section-intro p { max-width: 640px; margin-bottom: 0; color: var(--muted); font-size: 14px; }
+
+    .priority-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .priority-card { position: relative; padding: 22px 22px 20px 62px; border: 1px solid var(--line); border-radius: 19px; background: var(--panel); box-shadow: var(--shadow); }
+    .priority-card::before { content: attr(data-rank); position: absolute; top: 21px; left: 20px; color: var(--cyan); font-size: 27px; font-weight: 800; line-height: 1; }
+    .priority-card p { margin-bottom: 0; color: var(--muted); font-size: 14px; }
+    .priority-card .why { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(36, 65, 95, .7); color: #c8d8e9; font-size: 13px; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 0; }
+    .tag { display: inline-flex; align-items: center; min-height: 25px; padding: 2px 8px; border-radius: 999px; color: #cfe0f4; background: #1b3858; font-size: 12px; font-weight: 650; }
+    .tag--now { color: #aaf3dc; background: rgba(101, 213, 163, .14); }
+    .tag--partial { color: #ffe1a5; background: rgba(245, 201, 106, .13); }
+    .tag--blocked { color: #ffc1c7; background: rgba(255, 125, 136, .13); }
+    .tag--foundation { color: #bcd1ff; background: rgba(120, 169, 255, .15); }
+
+    .callout-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .callout { min-height: 150px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: rgba(11, 25, 42, .82); }
+    .callout .kicker { color: var(--cyan); font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+    .callout p { margin-bottom: 0; color: var(--muted); font-size: 14px; }
+
+    .matrix-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
+    table { width: 100%; min-width: 820px; border-collapse: collapse; background: rgba(16, 34, 57, .82); }
+    caption { padding: 16px 18px 4px; color: var(--muted); text-align: left; font-size: 13px; }
+    th, td { padding: 11px 14px; border-bottom: 1px solid rgba(36, 65, 95, .7); text-align: left; vertical-align: top; }
+    th { color: #b9cee5; background: rgba(21, 45, 73, .8); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+    td { color: #dce9f7; font-size: 13px; }
+    tr:last-child td { border-bottom: 0; }
+    .domain { color: var(--text); font-weight: 700; white-space: nowrap; }
+    .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .status--native { color: var(--green); }
+    .status--partial { color: var(--yellow); }
+    .status--unsupported { color: var(--red); }
+    .status--notwired { color: var(--blue); }
+    .matrix-note { padding: 13px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; background: rgba(11, 25, 42, .9); }
+
+    .roadmap { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .phase { padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+    .phase-index { color: var(--cyan); font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .phase ul { margin: 12px 0 0; padding-left: 19px; color: var(--muted); font-size: 14px; }
+    .phase li + li { margin-top: 6px; }
+
+    .already { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 14px; }
+    .already-panel { padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: rgba(11, 25, 42, .82); }
+    .already-panel p { margin-bottom: 12px; color: var(--muted); font-size: 14px; }
+    .chip-cloud { display: flex; flex-wrap: wrap; gap: 7px; }
+    .chip { padding: 5px 9px; border: 1px solid rgba(101, 213, 163, .22); border-radius: 9px; color: #b5efd9; background: rgba(101, 213, 163, .08); font-size: 12px; }
+    .chip--gap { border-color: rgba(255, 201, 106, .25); color: #ffe0a2; background: rgba(245, 201, 106, .08); }
+
+    .sources { margin-top: 54px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .sources p { margin-bottom: 9px; }
+    .sources code { color: #d7e5f4; }
+    .footer-line { margin-top: 28px; color: #7189a2; font-size: 11px; }
+
+    @media (max-width: 860px) {
+      .hero, .already { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .callout-grid, .roadmap { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .shell { width: min(100% - 24px, 1180px); padding-top: 32px; }
+      .priority-grid { grid-template-columns: 1fr; }
+      .stats { gap: 9px; }
+      .stat { padding: 15px; }
+      .stat-value { font-size: 25px; }
+      .section-intro { display: block; }
+      .section-intro p { margin-top: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Lynx 4.1 · Native capability map</div>
+        <h1>先把已经写好的原生能力，真正接到业务页面。</h1>
+        <p class="lede">你现在的 Capacitor 兼容层已经覆盖 40 个能力域、146 个方法。当前最紧急的工作不是再从零复制 Expo，而是完成默认三端注册、权限闭环和设备验收，再收口跨端差异。</p>
+        <div class="notice"><strong>判断口径</strong><span>Module 源码状态 ≠ 默认 Shell 已可调用</span></div>
+      </div>
+      <aside class="hero-aside" aria-label="核心判断">
+        <div class="signal"><span class="signal-dot" aria-hidden="true"></span><div><strong>当前最大阻塞</strong><p>Android、iOS、HarmonyOS 的 `LynxCapacitorModule` 源码都已存在，但还没有全部进入默认 Shell 构建图、LynxView 注册和业务验收链。</p></div></div>
+        <p>因此 Top10 的第 1 项是“接通已有模块”，不是新增一个 API。</p>
+      </aside>
+    </header>
+
+    <section class="stats" aria-label="能力总览">
+      <div class="stat stat--accent"><span class="stat-label">能力域</span><span class="stat-value">40</span><span class="stat-note">Android catalog 事实源</span></div>
+      <div class="stat stat--accent"><span class="stat-label">方法总数</span><span class="stat-value">146</span><span class="stat-note">三端保持同一 pluginId / methodName</span></div>
+      <div class="stat stat--warn"><span class="stat-label">首批重点</span><span class="stat-value">10</span><span class="stat-note">按业务价值和接通成本排序</span></div>
+      <div class="stat stat--danger"><span class="stat-label">明确 unsupported</span><span class="stat-value">Biometrics</span><span class="stat-note">Android、HarmonyOS 当前目录状态</span></div>
+    </section>
+
+    <section aria-labelledby="priority-title">
+      <div class="section-intro"><div><div class="eyebrow">01 · Priority</div><h2 id="priority-title">你现在最急需做的 Top10</h2></div><p>这里的“做”包含接入默认宿主、补齐方法、统一协议和设备验收；已经有源代码的能力，不再重复造一套。</p></div>
+      <div id="priority-grid" class="priority-grid"></div>
+    </section>
+
+    <section aria-labelledby="decision-title">
+      <div class="section-intro"><div><div class="eyebrow">02 · Decision</div><h2 id="decision-title">四个先后判断</h2></div><p>这四个判断决定了后续工作是有效收口，还是继续堆没有进入业务链路的接口。</p></div>
+      <div class="callout-grid">
+        <article class="callout"><div class="kicker">先接通</div><h3>默认构建图和注册</h3><p>Capacitor Module 目前是独立能力层。Android、iOS、HarmonyOS 都需要宿主显式加入构建图，并在每个 LynxView 注册。</p></article>
+        <article class="callout"><div class="kicker">再收口</div><h3>权限、回调、销毁</h3><p>每个能力都要有 permission state、异步结果、取消、前后台变化和 Module destroy 清理，避免状态只在 catalog 里“看起来已实现”。</p></article>
+        <article class="callout"><div class="kicker">最后扩展</div><h3>高级体验和新场景</h3><p>PiP、后台视频、Widgets、Maps、Speech、Contacts 等放到核心设备能力稳定之后，按真实业务场景增加。</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="matrix-title">
+      <div class="section-intro"><div><div class="eyebrow">03 · Coverage</div><h2 id="matrix-title">三端重点能力矩阵</h2></div><p>这是 40 个能力域中的高价值分组；状态来自当前三端 catalog 和 dispatcher/adapter：<strong>Native</strong> 表示模块内有完整方法实现，<strong>Partial</strong> 表示存在方法或平台边界，<strong>Unsupported</strong> 表示明确不支持。</p></div>
+      <div class="matrix-wrap">
+        <table>
+          <caption>40 个能力域按业务相关性合并展示；源码状态不代表默认 Shell 已接通，也不代替真实设备验收。</caption>
+          <thead><tr><th scope="col">能力域</th><th scope="col">Android</th><th scope="col">iOS</th><th scope="col">HarmonyOS</th><th scope="col">对 Top10 的关系</th></tr></thead>
+          <tbody id="matrix-body"></tbody>
+        </table>
+        <div class="matrix-note">注意：HarmonyOS 的 `status()` 已明确区分 `implemented / partial / unsupported`；Android/iOS catalog 中的 partial 同样需要设备权限、系统 Provider、生命周期和错误分支验收。</div>
+      </div>
+    </section>
+
+    <section aria-labelledby="roadmap-title">
+      <div class="section-intro"><div><div class="eyebrow">04 · Roadmap</div><h2 id="roadmap-title">建议按三批推进</h2></div><p>每一批都应该形成可被业务页面调用的闭环，而不是只更新 catalog。</p></div>
+      <div class="roadmap">
+        <article class="phase"><div class="phase-index">Batch 01 · 接通基础</div><h3>让已有能力可调用</h3><ul><li>三端默认注册 `LynxCapacitorModule`。</li><li>统一权限状态、回调 envelope 和销毁清理。</li><li>完成 Camera、Barcode、MediaPicker、Filesystem、FileTransfer。</li><li>先用诊断 Bundle 验证页面调用。</li></ul></article>
+        <article class="phase"><div class="phase-index">Batch 02 · 业务闭环</div><h3>覆盖登录、消息和位置</h3><ul><li>LocalNotifications、Push Token、通知点击路由。</li><li>Secure Storage、Biometrics 的平台差异处理。</li><li>Deep Link、Browser、OAuth、Share、Clipboard。</li><li>Foreground Geolocation、Motion、Network。</li></ul></article>
+        <article class="phase"><div class="phase-index">Batch 03 · 体验增强</div><h3>补后台和系统级体验</h3><ul><li>Audio 录音/播放和中断恢复。</li><li>BackgroundRunner 与 OTA/网络恢复联动。</li><li>Screen Capture、屏幕方向、键盘和系统栏细节。</li><li>再按业务需要增加 Maps、Contacts、Calendar、Speech、Widgets。</li></ul></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="already-title">
+      <div class="section-intro"><div><div class="eyebrow">05 · Avoid duplicate work</div><h2 id="already-title">已经有的能力，不要再从零做一遍</h2></div><p>这些能力的正确动作是“接入默认宿主、补设备验证或补平台差异”，不是重新设计第二套 API。</p></div>
+      <div class="already">
+        <article class="already-panel"><h3>已有实现或接线</h3><p>Capacitor catalog 和 adapter 已经覆盖以下领域。</p><div class="chip-cloud" id="existing-cloud"></div></article>
+        <article class="already-panel"><h3>当前仍有真实缺口</h3><p>这些项目要么明确 unsupported，要么是 partial 的关键方法还没有跨端闭环。</p><div class="chip-cloud" id="gap-cloud"></div></article>
+      </div>
+    </section>
+
+    <footer class="sources">
+      <p><strong>当前工程依据：</strong><a href="/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/android/lynx-capacitor/src/main/java/com/example/lynxcapacitormodule/NativeCapabilityCatalog.kt">Android NativeCapabilityCatalog.kt</a> · <a href="/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/ios/LynxCapacitorKit/Bridge/LynxNativeCapabilityCatalog.swift">iOS LynxNativeCapabilityCatalog.swift</a> · <a href="/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/harmony/lynx_capacitor_kit/src/main/ets/module/LynxCapacitorCatalog.ets">HarmonyOS LynxCapacitorCatalog.ets</a> · <a href="/Users/nieyutan/Documents/hbc-git/codex/lynx-navigation-to-ota/BRIDGE_CONTRACT.md">BRIDGE_CONTRACT.md</a></p>
+      <p><strong>官方对照：</strong><a href="https://reactnative.dev/docs/components-and-apis">React Native Core Components and APIs</a> · <a href="https://reactnative.dev/docs/turbo-native-modules-introduction">React Native Turbo Native Modules</a> · <a href="https://docs.expo.dev/versions/latest/">Expo SDK Reference</a> · <a href="https://lynxjs.org/next/guide/use-native-modules.html?platform=harmony">Lynx Native Modules</a> · <a href="https://lynxjs.org/guide/autolink">Lynx Autolink</a></p>
+      <p class="footer-line">口径：2026-09-14；只展示能力盘点和优先级，不包含真实 OTA Token、生产发行环境或未接通的原生库动态加载。</p>
+    </footer>
+  </main>
+  <script>
+    const priorities = [
+      { rank: 1, title: '默认宿主接入 LynxCapacitorModule', tags: [['基础阻塞', 'foundation'], ['三端', 'now']], body: '把 Android Module 加入 Gradle graph，把 iOS Module 加入 Pod/Xcode，把 Harmony HAR 加入默认 build profile，并在每个 LynxView 注册。', why: '40 个能力域目前主要停留在独立 Module；不完成这一步，业务页面无法稳定调用。' },
+      { rank: 2, title: '权限与生命周期闭环', tags: [['基础契约', 'foundation'], ['权限', 'now']], body: '统一 check/request/limited/denied/cancel、前后台回调、页面销毁、监听移除和错误 envelope。', why: 'Camera、Location、Contacts、Audio、Notifications 的问题大多发生在权限和生命周期边界。' },
+      { rank: 3, title: 'Camera + Barcode Scanner', tags: [['已有代码', 'now'], ['设备验收', 'partial']], body: '补齐相机预览、扫码、拍照、录像、取消、权限拒绝和设备不可用分支。', why: 'Android/iOS/Harmony 都已有入口；现在最值钱的是把它从 partial 变成业务可用闭环。' },
+      { rank: 4, title: 'MediaPicker + Filesystem + FileTransfer', tags: [['已有代码', 'now'], ['URI/权限', 'partial']], body: '统一图片、视频、文档、批量选择、保存相册、FileProvider、下载进度、取消和本地查看。', why: '你已有上传下载和文件实现，但跨端 URI、Provider 和设备行为还需要收口。' },
+      { rank: 5, title: 'LocalNotifications + PushNotifications', tags: [['通知链路', 'now'], ['Push register', 'blocked']], body: '完成通知权限、APNs/FCM 注册、通知点击路由、冷启动参数、Badge、Channel 和送达验证。', why: '订单、消息、行程和 OTA 状态都需要可靠触达；当前 Android/Harmony Push register 仍是明确边界。' },
+      { rank: 6, title: 'Secure Storage + Biometrics', tags: [['安全', 'foundation'], ['跨端差异', 'blocked']], body: '新增 Keystore/Keychain/鸿蒙安全存储，补 Android/Harmony 生物识别，保留 iOS Face ID/Touch ID 实现。', why: 'Preferences 不是安全存储；登录和支付凭证不能依赖普通 Key-Value。' },
+      { rank: 7, title: 'Deep Link + Browser + OAuth + Share', tags: [['已有代码', 'now'], ['Partial 收口', 'partial']], body: '统一外部 App、系统浏览器、InAppBrowser、OAuth 回跳、文件分享和接收分享数据。', why: 'AppLauncher 已有，Browser/InAppBrowser/Share 仍有 close、文件 URI、回执或设备验证缺口。' },
+      { rank: 8, title: 'Geolocation + Motion', tags: [['已有代码', 'now'], ['前台优先', 'partial']], body: '先完成前台定位、位置监听、传感器 start/stop、权限和超时；后台位置/地理围栏另批处理。', why: '旅行、接送、签到、附近服务会用到；当前三端 catalog 都把它们标为 partial。' },
+      { rank: 9, title: 'Audio 录音 / 播放', tags: [['已有代码', 'now'], ['设备验证', 'partial']], body: '补麦克风权限、录音中断、播放中断、后台策略、输出文件、停止和 destroy 清理。', why: 'Android/iOS 已有实现，Harmony 也有 MediaKit 适配；先验证再决定是否提升为业务核心。' },
+      { rank: 10, title: 'BackgroundRunner + Network + OTA 联动', tags: [['OTA 相关', 'foundation'], ['后台任务', 'partial']], body: '把网络状态、恢复重试、后台任务和 OTA 预取策略分开建模，再通过明确事件联动。', why: '当前 OTA 有宿主生命周期检查，但 BackgroundRunner dispatch 在 Android/Harmony 仍未完成。' },
+    ];
+
+    const matrix = [
+      ['Device', 'native', 'native', 'native', '已具备；先接入默认宿主'],
+      ['App / AppLauncher', 'native', 'native', 'native', '已具备；补冷启动与外部回跳'],
+      ['Contacts', 'native', 'native', 'partial', 'P2；Harmony Provider 需设备验收'],
+      ['Preferences', 'native', 'native', 'native', '不是 Secure Storage'],
+      ['Dialog / ActionSheet / Toast', 'native', 'native', 'partial', '已有；补 Harmony UI 验证'],
+      ['Haptics', 'native', 'partial', 'partial', 'P1；平台触感能力不完全等价'],
+      ['Share', 'partial', 'native', 'partial', 'Top7；文件分享/接收需收口'],
+      ['Clipboard', 'native', 'native', 'native', '已有'],
+      ['Filesystem', 'partial', 'partial', 'native', 'Top4；统一 URI 与目录边界'],
+      ['Camera', 'partial', 'partial', 'partial', 'Top3；已有代码但需设备闭环'],
+      ['Audio', 'native', 'native', 'partial', 'Top9；Harmony 设备验证'],
+      ['FileTransfer / FileViewer', 'partial', 'partial', 'partial', 'Top4；进度、取消、查看器'],
+      ['Network / CapacitorHttp', 'partial', 'partial', 'native', 'Top10；通用网络状态仍要补'],
+      ['Browser / InAppBrowser', 'partial', 'partial', 'partial', 'Top7；close/回跳边界'],
+      ['Geolocation', 'partial', 'partial', 'partial', 'Top8；前台优先'],
+      ['Motion', 'partial', 'partial', 'partial', 'Top8；传感器权限和设备验证'],
+      ['StatusBar / SystemBars / SafeArea', 'native', 'native', 'native', '已有；按页面体验回归'],
+      ['ScreenOrientation / Keyboard', 'partial', 'partial', 'partial', 'P1；统一系统 UI 体验'],
+      ['ScreenReader / TextZoom', 'partial', 'partial', 'native', '已有方向；补可访问性回归'],
+      ['PrivacyScreen / KeepAwake', 'native', 'partial', 'native', '已有；补业务场景验收'],
+      ['Calendar / LocalNotifications', 'partial', 'partial', 'partial', 'P2/P1；权限与送达'],
+      ['PushNotifications', 'partial', 'partial', 'partial', 'Top5；register 和点击路由'],
+      ['CapacitorBarcodeScanner', 'partial', 'native', 'partial', 'Top3；真实扫码验收'],
+      ['BackgroundRunner', 'partial', 'partial', 'partial', 'Top10；dispatch 仍有边界'],
+      ['CapacitorSQLite', 'native', 'native', 'partial', 'P2；Harmony 字段/事务对账'],
+      ['Biometrics', 'unsupported', 'native', 'unsupported', 'Top6；Android/Harmony 需新增实现'],
+    ];
+
+    const existing = ['Device', 'AppLauncher', 'Contacts', 'Preferences', 'Dialog', 'ActionSheet', 'Toast', 'Haptics', 'Clipboard', 'Filesystem', 'Camera', 'Audio', 'FileTransfer', 'FileViewer', 'Network', 'HTTP', 'Cookies', 'Browser', 'InAppBrowser', 'Geolocation', 'Motion', 'StatusBar', 'SystemBars', 'ScreenOrientation', 'ScreenReader', 'TextZoom', 'Keyboard', 'SplashScreen', 'PrivacyScreen', 'Calendar', 'LocalNotifications', 'PushNotifications', 'Barcode Scanner', 'BackgroundRunner', 'KeepAwake', 'SafeArea', 'SQLite'];
+    const gaps = ['默认三端注册', '权限/生命周期统一', 'Push register', 'Secure Storage', 'Android Biometrics', 'Harmony Biometrics', 'Share 文件 URI', 'Browser close', '后台 Location', 'BackgroundRunner dispatch', 'Harmony 设备验收', '真实通知送达'];
+
+    function tagClass(kind) { return kind === 'partial' ? 'tag tag--partial' : kind === 'blocked' ? 'tag tag--blocked' : kind === 'foundation' ? 'tag tag--foundation' : 'tag tag--now'; }
+    function statusClass(status) { return status === 'native' ? 'status status--native' : status === 'partial' ? 'status status--partial' : status === 'unsupported' ? 'status status--unsupported' : 'status status--notwired'; }
+    function statusLabel(status) { return status === 'native' ? 'Native' : status === 'partial' ? 'Partial' : status === 'unsupported' ? 'Unsupported' : '未接默认宿主'; }
+
+    document.getElementById('priority-grid').innerHTML = priorities.map(item => `
+      <article class="priority-card" data-rank="${item.rank}">
+        <h3>${item.title}</h3>
+        <div class="tag-row">${item.tags.map(([label, kind]) => `<span class="${tagClass(kind)}">${label}</span>`).join('')}</div>
+        <p>${item.body}</p>
+        <p class="why"><strong>为什么现在做：</strong>${item.why}</p>
+      </article>
+    `).join('');
+
+    document.getElementById('matrix-body').innerHTML = matrix.map(([domain, android, ios, harmony, relation]) => `
+      <tr><td class="domain">${domain}</td><td><span class="${statusClass(android)}">${statusLabel(android)}</span></td><td><span class="${statusClass(ios)}">${statusLabel(ios)}</span></td><td><span class="${statusClass(harmony)}">${statusLabel(harmony)}</span></td><td>${relation}</td></tr>
+    `).join('');
+
+    document.getElementById('existing-cloud').innerHTML = existing.map(item => `<span class="chip">${item}</span>`).join('');
+    document.getElementById('gap-cloud').innerHTML = gaps.map(item => `<span class="chip chip--gap">${item}</span>`).join('');
+  </script>
+</body>
+</html>

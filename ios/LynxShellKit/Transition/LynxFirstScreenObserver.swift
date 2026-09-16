@@ -11,15 +11,18 @@ final class LynxFirstScreenObserver: NSObject, LynxViewLifecycle {
     private let generation: UUID
     private let onFirstScreen: (UUID, LynxView) -> Void
     private let onFirstScreenError: (UUID, LynxView, Error) -> Void
+    private let onErrorObserved: ((Error) -> Void)?
 
     init(
         generation: UUID,
         onFirstScreen: @escaping (UUID, LynxView) -> Void,
-        onFirstScreenError: @escaping (UUID, LynxView, Error) -> Void = { _, _, _ in }
+        onFirstScreenError: @escaping (UUID, LynxView, Error) -> Void = { _, _, _ in },
+        onErrorObserved: ((Error) -> Void)? = nil
     ) {
         self.generation = generation
         self.onFirstScreen = onFirstScreen
         self.onFirstScreenError = onFirstScreenError
+        self.onErrorObserved = onErrorObserved
         super.init()
     }
 
@@ -33,6 +36,8 @@ final class LynxFirstScreenObserver: NSObject, LynxViewLifecycle {
      */
     func lynxView(_ view: LynxView!, didRecieveError error: (any Error)!) {
         guard let view, let error else { return }
+        // SDK 使用无序 client 集合；在现有恢复处理前复制错误，防止回滚先关闭监控实例。
+        onErrorObserved?(error)
         let nsError = error as NSError
         guard nsError.code != LynxErrorCodeForResourceError else { return }
         onFirstScreenError(generation, view, error)

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "11111111-1111-4111-8111-111111111111",
+  "processSessionId": "22222222-2222-4222-8222-222222222222",
+  "eventType": "lynx.js_error",
+  "observedAtMs": 1789448400123,
+  "platform": "android",
+  "runtimeVersion": "4.1.0",
+  "hostBuild": "42",
+  "viewId": "33333333-3333-4333-8333-333333333333",
+  "nativeInstanceId": "17",
+  "containerKind": "tab",
+  "loadId": "44444444-4444-4444-8444-444444444444",
+  "loadKind": "initial",
+  "bundle": {
+    "source": "ota",
+    "lynxAppId": "example-app",
+    "bundleName": "example.lynx.bundle",
+    "releaseId": "example-r42",
+    "releaseSequence": "42",
+    "sha256": "37ab6496efecfb14f303f2e40c0f70163cfdac5c0de89b4b3bcd73ca9058f6bd",
+    "identityStatus": "verified",
+    "missingReason": null,
+    "buildId": "example-build-001"
+  },
+  "visibility": "visible",
+  "quality": {
+    "association": "exact_load",
+    "late": false,
+    "missingFields": [],
+    "invalidFields": [],
+    "truncatedFields": []
+  },
+  "sampling": {
+    "owner": "none",
+    "rate": 1
+  },
+  "payload": {
+    "errorCode": "1101",
+    "subCode": null,
+    "level": "error",
+    "realm": "main_thread",
+    "message": "示例主线程错误",
+    "rawStack": "Error: example\n    at handler (file:///main-thread.js:23:13)",
+    "frames": [
+      {
+        "file": "file:///main-thread.js",
+        "functionName": "handler",
+        "runtimeRelease": "debugmetadata:example-main-key",
+        "debugKey": "example-main-key",
+        "positionKind": "function_pc",
+        "functionId": 23,
+        "pc": 13
+      }
+    ],
+    "handled": "unknown",
+    "phase": "running"
+  }
+}

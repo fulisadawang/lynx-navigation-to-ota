@@ -2,6 +2,7 @@ package com.example.lynxshell.resource
 
 import android.content.Context
 import com.example.lynxshell.BuildConfig
+import com.example.lynxshell.monitoring.LynxViewMonitor
 import com.lynx.tasm.provider.AbsTemplateProvider
 import okhttp3.Call
 import okhttp3.OkHttpClient
@@ -33,6 +34,7 @@ class ShellTemplateProvider(
     private val preparedBytes: ByteArray? = null,
     /** ActivityBundleRuntime 返回的已校验文件；绝对路径不会从 Intent 进入。 */
     private val preparedFile: File? = null,
+    private val monitoring: LynxViewMonitor? = null,
 ) : AbsTemplateProvider(), AutoCloseable {
     private val appContext = context.applicationContext
     private val closed = AtomicBoolean(false)
@@ -41,6 +43,7 @@ class ShellTemplateProvider(
 
     override fun loadTemplate(uri: String, callback: Callback) {
         if (closed.get()) return
+        monitoring?.byteReadStarted()
         ioExecutor.execute {
             if (
                 (preparedBytes != null || preparedFile != null) &&
@@ -50,7 +53,10 @@ class ShellTemplateProvider(
                 runCatching {
                     preparedBytes ?: loadFile(requireNotNull(preparedFile))
                 }.onSuccess { bytes ->
-                    if (!closed.get()) callback.onSuccess(bytes)
+                    if (!closed.get()) {
+                        monitoring?.bytesResolved(bytes)
+                        callback.onSuccess(bytes)
+                    }
                 }.onFailure { error ->
                     if (!closed.get()) {
                         val message = error.message ?: "已准备 Bundle 读取失败"
@@ -62,7 +68,10 @@ class ShellTemplateProvider(
             }
             runCatching { load(uri) }
                 .onSuccess { bytes ->
-                    if (!closed.get()) callback.onSuccess(bytes)
+                    if (!closed.get()) {
+                        monitoring?.bytesResolved(bytes)
+                        callback.onSuccess(bytes)
+                    }
                 }
                 .onFailure { error ->
                     if (closed.get()) return@onFailure

@@ -1,0 +1,1 @@
+Android SDK built for arm64

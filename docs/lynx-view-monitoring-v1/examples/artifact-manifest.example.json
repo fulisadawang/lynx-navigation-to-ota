@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "1.0",
+  "buildId": "example-build-001",
+  "createdAt": "2026-09-15T05:00:00Z",
+  "source": {
+    "gitCommit": null,
+    "dirty": true,
+    "lockfileSha256": "4557253595019bfd69b8c3e083acc273dd25fa69411cdbdb4c829d1707583b90",
+    "sourceContext": "sources_content"
+  },
+  "toolchain": {
+    "engineTarget": "4.1.0",
+    "rspeedy": "0.17.0",
+    "reactLynx": "0.126.0",
+    "reactPlugin": "0.20.0",
+    "debugMetadataPlugin": "0.2.3"
+  },
+  "entries": [
+    {
+      "entryId": "example",
+      "bundleName": "example.lynx.bundle",
+      "lynxAppId": "example-app",
+      "targetPlatforms": [
+        "android",
+        "ios",
+        "harmony"
+      ],
+      "bundle": {
+        "path": "entries/example/bundle.lynx.bundle",
+        "sha256": "37ab6496efecfb14f303f2e40c0f70163cfdac5c0de89b4b3bcd73ca9058f6bd",
+        "sizeBytes": 1000
+      },
+      "debugMetadata": {
+        "path": "entries/example/debug-metadata.json",
+        "sha256": "e3a1de9646714bc7953642f4f1354b61c8d30efda10203aae6873a4bd9606f91",
+        "sizeBytes": 2000
+      },
+      "scripts": [
+        {
+          "artifactName": "main-thread.js",
+          "artifactKind": "main-thread",
+          "sourceMapKey": "example-main-key",
+          "runtimeRelease": "debugmetadata:example-main-key",
+          "sourceMapName": "main-thread.js.map",
+          "hasBytecodeDebugInfo": true
+        },
+        {
+          "artifactName": "background.js",
+          "artifactKind": "background",
+          "sourceMapKey": "example-background-key",
+          "runtimeRelease": "debugmetadata:example-background-key",
+          "sourceMapName": "background.js.map",
+          "hasBytecodeDebugInfo": false
+        }
+      ]
+    }
+  ]
+}
