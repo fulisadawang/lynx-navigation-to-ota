@@ -1,0 +1,684 @@
+--------- beginning of main
+09-15 20:54:17.792  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:17.895  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+--------- beginning of kernel
+09-15 20:54:17.911 20709 20709 W audit   : audit_lost=66443 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:54:17.911 20709 20709 E audit   : rate limit exceeded
+09-15 20:54:17.923  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:17.974  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:17.988  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:17.996 19847 19847 D AutofillManager: Fill dialog is enabled:false, hints=[]
+09-15 20:54:18.025  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+--------- beginning of system
+09-15 20:54:18.048   624   852 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE
+09-15 20:54:18.048   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:54:18.049   624   852 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10161, packageName = null, attributionTag = null, token = android.os.Binder@753e26a, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-15 20:54:18.049   624   852 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+09-15 20:54:18.049   624   852 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+09-15 20:54:18.052   407   699 D audioserver: logFgsApiBegin: FGS Logger Transaction failed, -129
+09-15 20:54:18.052   624  1201 W AS.PlaybackActivityMon: No piid assigned for invalid/internal port id 15
+09-15 20:54:18.063 19847 19926 D EGL_emulation: app_time_stats: avg=683.06ms min=12.01ms max=10680.99ms count=16
+09-15 20:54:18.066   624   852 I ActivityTaskManager: START u0 {cmp=com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity (has extras)} with LAUNCH_MULTIPLE from uid 10161 (BAL_ALLOW_VISIBLE_WINDOW) result code=0
+09-15 20:54:18.066   870   930 V WindowManagerShell: Transition requested (#46): android.os.BinderProxy@1ca61ae TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=241 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity } baseActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} topActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity} origActivity=null realActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} numActivities=3 lastActiveTime=3020630 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@782cb4f} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{abcd2dc com.example.lynxshell.container.LynxShellActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 46 }
+09-15 20:54:18.067   407   514 D AudioFlinger: mixer(0xb4000072df7848e0) throttle end: throttle time(34)
+09-15 20:54:18.079 19847 19847 D LynxError: Duplicated Behavior For Name: svg, [ - svg] will be override
+09-15 20:54:18.079 19847 19847 I LynxView: new lynxview detail com.lynx.tasm.LynxView{491a240 V.E...... ......I. 0,0-0,0}
+09-15 20:54:18.079 19847 19847 I LynxUIRenderer: lynxContext setUIBodyViewcom.lynx.tasm.LynxView{491a240 VFE...... ......I. 0,0-0,0}com.lynx.tasm.LynxTemplateRender$RenderLynxContext@ef1c579
+09-15 20:54:18.079 19847 19847 I LynxUIRenderer: lynxContext setUIBodyViewcom.lynx.tasm.LynxView{491a240 VFE...... ......I. 0,0-0,0}com.lynx.tasm.LynxTemplateRender$RenderLynxContext@ef1c579
+09-15 20:54:18.079 19847 19847 I LynxTemplateRender: mEnableGenericResourceFetcher: false render: com.lynx.tasm.LynxTemplateRender@10ea26c
+09-15 20:54:18.079 19847 19847 I lynx    : [7F71727D20:INFO:vsync_monitor.cc(23)] VSyncMonitor created with is_vsync_post_task_by_emergency_ true
+09-15 20:54:18.079 19847 19847 I lynx    : [7F71727D20:INFO:task_runner_manufactor.cc(296)] TaskRunnerManufactor setThreadStrategy:1, multi_tasm:true, async_thread_cache:true
+09-15 20:54:18.080   413   413 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+09-15 20:54:18.080 19847 19847 I lynx    : [7F71727D20:INFO:task_runner_manufactor.cc(125)] ThreadGroup for Lynx_TASM, max_count:2, new thread for index:0
+09-15 20:54:18.080 19847 19847 I lynx    : [7F71727D20:INFO:lynx_shell.cc(148)] LynxShell create, this:0xB400007D25161A30
+09-15 20:54:18.080 19847 19847 I lynx    : [7F71727D20:INFO:memory_monitor.h(83)] [memory_monitor.h] new MemoryMonitor, this:0xB400007E05135008, Enable:false, MemoryChangeThresholdMb:0
+09-15 20:54:18.080 19847 19847 I lynx    : [7F71727D20:INFO:timing_handler.cc(26)] [TimingHandler.cc] new TimingHandler, this:0xB400007E05135048
+09-15 20:54:18.080 19847 19847 I lynx    : [7F71727D20:INFO:template_assembler.h(524)] Lynx Set Enable Layout Only: true from LynxView,  this:0xB400007CC51742D0
+09-15 20:54:18.081 19847 19847 I LynxTemplateRender: force use quick js engine
+09-15 20:54:18.081 19847 19847 I lynx    : [7F71727D20:INFO:vsync_monitor.cc(23)] VSyncMonitor created with is_vsync_post_task_by_emergency_ true
+09-15 20:54:18.081 19847 19847 I LynxTemplateRender: set JSGroupThreadName to lynx context: 
+09-15 20:54:18.081 19847 19968 I lynx    : [7C0603B730:INFO:runtime_lifecycle_observer_impl.cc(32)] [Runtime] RuntimeLifecycleObserverImpl::OnRuntimeCreate with observer:0xB400007D85132EA8
+09-15 20:54:18.081 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(175)] Init LynxRuntime group_id: -1 runtime_id: 1 this:0xB400007E451081D0
+09-15 20:54:18.081 19847 19968 I lynx    : [7C0603B730:INFO:runtime_lifecycle_observer_impl.cc(48)] [Runtime] RuntimeLifecycleObserverImpl::OnRuntimeInit with runtime id: 1
+09-15 20:54:18.081 19847 19968 I lynx    : [7C0603B730:INFO:runtime_manager.cc(501)] make runtime with force_use_lightweight_js_engine = true
+09-15 20:54:18.081 19847 19968 I lynx    : [7C0603B730:INFO:runtime_manager.cc(508)] make QuickJS runtime
+09-15 20:54:18.081 19847 19847 I LynxTemplateRender: 1789476858081 create LynxView 
+09-15 20:54:18.082 19847 19924 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:54:18.082 19847 19924 I lynx    : [7C1835E730:INFO:quickjs_runtime_wrapper.cc(115)] lynx InitQuickjsRuntime success
+09-15 20:54:18.082 19847 20723 I lynx    : [7CABE16730:INFO:layout_context.cc(1104)] [Layout] UpdateViewport :size: 0.0, 0.0; mode: 0, 0
+09-15 20:54:18.083 19847 19968 I lynx    : [7C0603B730:INFO:runtime_manager.cc(199)] create single_context:0xB400007D050E4E08
+09-15 20:54:18.083 19847 19847 I LynxView: renderTemplateUrl assets://bundles/video-demo.lynx.bundlewith Map incom.lynx.tasm.LynxView{491a240 VFE...... ......I. 0,0-0,0}
+09-15 20:54:18.083 19847 19847 I LynxTemplateRender: LoadMeta with url, pre-painting: false ,pre-painting with draw:false url: assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.083 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(267)] UpdateGlobalProps 48 this: 0xB400007CC51742D0
+09-15 20:54:18.083 19847 19847 I LynxTemplateRender: dispatchOnPageStart url assets://bundles/video-demo.lynx.bundle in com.lynx.tasm.LynxTemplateRender@10ea26c
+09-15 20:54:18.083 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(866)] using new bytecode
+09-15 20:54:18.083 19847 19968 I lynx    : [7C0603B730:INFO:js_cache_manager.cc(194)] bytecode enable status: is_bytecode_enabled:true can_create_cache_:true final result:true
+09-15 20:54:18.083 19847 19968 I lynx    : [7C0603B730:INFO:js_cache_manager.cc(218)] bytecode enabled, url: '/lynx_core.js', template_url: '', file_content size:66373
+09-15 20:54:18.083 19847 19968 I lynx    : [7C0603B730:INFO:js_cache_manager.cc(234)] cache loaded from memory, size: 149667 bytes
+09-15 20:54:18.083 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(220)] QuickjsRuntime::evaluatePreparedJavaScript start: /lynx_core.js
+09-15 20:54:18.083 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(170)] QuickjsRuntime::evaluateJavaScriptBytecode: /lynx_core.js
+09-15 20:54:18.084 19847 19847 I LynxTemplateRender: 1789476858084 renderTemplate LynxView assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.085 19847 19970 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(184)] QuickjsRuntime::evaluateJavaScriptBytecode finished successfully.
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(211)] js_runtime_type :0 0xB400007E451081D0
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:napi_runtime_proxy.cc(65)] Creating napi proxy quickjs
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(380)] napi attaching with proxy: 0xB400007E950CD230, id: 1
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:napi_runtime_proxy.cc(124)] NAPI Setup Loader: napiLoaderOnRT1
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:napi_loader_js.cc(132)] napi OnAttach env: 0xB400007CC50DC170, ctx: 0xB400007CC50EDCB0, id: 1
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(422)] napi registering module
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:runtime_lifecycle_observer_impl.cc(86)] [Runtime] RuntimeLifecycleObserverImpl::OnRuntimeAttach:0xB400007CC50DC170, runtime_type: quickjs
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:napi_runtime_proxy.cc(65)] Creating napi proxy quickjs
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(414)] napi attaching with restricted proxy: 0xB400007D35235CD0, id: 1
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:napi_runtime_proxy.cc(300)] NAPI Setup Restricted Loader: napiRestrictedLoader1
+09-15 20:54:18.086 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(227)]  lynxRuntime:0xB400007E451081D0 create APP 0xB400007EA5253BE0
+09-15 20:54:18.086 19847 19970 I lynx    : [7C03E23730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:54:18.086 19847 19970 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:54:18.086 19847 19970 I lynx    : [7C03E23730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:54:18.086 19847 19970 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:54:18.087 19847 19847 I LynxTemplateRender: 1789476858087 renderTemplate LynxView assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.087 19847 19847 I LynxTemplateRender: retain TemplateData for lifecycle, url=assets://bundles/video-demo.lynx.bundle, data=com.lynx.tasm.TemplateData@1797958, listSize=1, bindContextEnabled=false
+09-15 20:54:18.092  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.092   624  1201 D CoreBackPreview: Window{8cb6011 u0 com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@3d2b777, mPriority=-1, mIsAnimationCallback=false}
+09-15 20:54:18.092 19847 19847 I Lynx    : onAttachedToWindow:76653120
+09-15 20:54:18.092 19847 19847 I LynxTemplateRender: lynxview onAttachedToWindow com.lynx.tasm.LynxTemplateRender@10ea26c
+09-15 20:54:18.092 19847 19847 I LynxTemplateRender: onEnterForeground. force: false
+09-15 20:54:18.098 19847 20723 I lynx    : [7CABE16730:INFO:layout_context.cc(1104)] [Layout] UpdateViewport :size: 1080.0, 2232.0; mode: 1, 1
+09-15 20:54:18.104 19847 19847 I LynxTemplateRender: updateViewport is unnecessary, because the size of the cache are the same as the size to be set.
+09-15 20:54:18.117 19847 19847 I LynxTemplateRender: updateViewport is unnecessary, because the size of the cache are the same as the size to be set.
+09-15 20:54:18.118 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(267)] UpdateGlobalProps 50 this: 0xB400007CC51742D0
+09-15 20:54:18.118 19847 19847 I LynxView: LynxView sendGlobalEvent lynxShellLayoutChanged with this: com.lynx.tasm.LynxView{491a240 VFE...... ........ 0,0-1080,2232}
+09-15 20:54:18.120 19847 19847 I LynxContext: LynxContext sendGlobalEvent lynxShellLayoutChanged with this: com.lynx.tasm.LynxTemplateRender$RenderLynxContext@ef1c579
+09-15 20:54:18.121   624   646 I ActivityTaskManager: Displayed com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity for user 0: +73ms
+09-15 20:54:18.121   870  1260 V WindowManagerShell: onTransitionReady(transaction=2680059594823)
+09-15 20:54:18.121 19847 19847 E LynxInfoReportHelper: LynxMonitorService is null
+09-15 20:54:18.121 19847 19847 I LynxTemplateRender: dispatchOnPageStart url assets://bundles/video-demo.lynx.bundle in com.lynx.tasm.LynxTemplateRender@10ea26c
+09-15 20:54:18.121 19847 19847 I LynxTemplateRender: LoadMeta with binary, pre-painting: false ,pre-painting with draw:false enableRecycleTemplateBundle: false
+09-15 20:54:18.122 19847 19970 E lynx    : [7C03E23730:ERROR:timing_map.cc(20)] Set duplicated timing_key, timing_key is pipelineStart
+09-15 20:54:18.122 19847 19970 E lynx    : [7C03E23730:ERROR:timing_map.cc(20)] Set duplicated timing_key, timing_key is pipeline_start
+09-15 20:54:18.122 19847 20723 E lynx    : [7CABE16730:ERROR:template_assembler.cc(953)] lynx_plugin: load original lynx so
+09-15 20:54:18.122 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(344)] start TemplateAssembler::LoadTemplate, url:assets://bundles/video-demo.lynx.bundle len: 110551 this:0xB400007CC51742D0
+09-15 20:54:18.122 19847 20723 I lynx    : [7CABE16730:INFO:lynx_binary_base_template_reader_impl.cc(163)] client version:0.2.0.0  ;binary_version:0.2.0.0
+09-15 20:54:18.122 19847 20723 I lynx    : [7CABE16730:INFO:lynx_binary_base_template_reader_impl.cc(113)] App Bundle's engine version: 4.1.0, lynx sdk version:4.1, min supported lynx version: 1.0
+09-15 20:54:18.122 19847 19847 I LynxView: LynxView sendGlobalEvent lynxRouterLifecycle with this: com.lynx.tasm.LynxView{491a240 VFE...... ........ 0,0-1080,2232}
+09-15 20:54:18.122 19847 20723 I lynx    : [7CABE16730:INFO:template_binary_reader.cc(245)] CSSLazyDecode options FE_OPTION_UNDEFINED ABSetting: 
+09-15 20:54:18.122 19847 19847 I LynxContext: LynxContext sendGlobalEvent lynxRouterLifecycle with this: com.lynx.tasm.LynxTemplateRender$RenderLynxContext@ef1c579
+09-15 20:54:18.123 19847 19924 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:54:18.124   870   930 V WindowManagerShell: onTransitionReady (#46) android.os.BinderProxy@1ca61ae: {id=46 t=OPEN f=0x0 trk=0 opt={t=FROM_STYLE} r=[0@Point(0, 0)] c=[{null m=OPEN f=FILLS_TASK leash=Surface(name=ActivityRecord{acb234c u0 com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity)/@0xcccffe5 sb=Rect(0, 0 - 0, 0) eb=Rect(0, 0 - 1080, 2400) d=-1->0 r=-1->0:-1 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity},{null m=TO_BACK f=FILLS_TASK leash=Surface(name=ActivityRecord{d6a7a51 u0 com.example.lynxshell.debug/com.example.lynxshell.sample.MonitoringAcceptanceActivity)/@0x95eeaba sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.sample.MonitoringAcceptanceActivity}]}
+09-15 20:54:18.124   870   930 V WindowManagerShell: Playing animation for (#46) android.os.BinderProxy@1ca61ae@0
+09-15 20:54:18.124   870   930 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultMixedHandler@616c095
+09-15 20:54:18.124   870   930 V WindowManagerShell:  try handler com.android.wm.shell.keyguard.KeyguardTransitionHandler@e9b95aa
+09-15 20:54:18.124   870   930 V WindowManagerShell:  try handler com.android.wm.shell.pip.PipTransition@b54b59b
+09-15 20:54:18.124   870   930 V WindowManagerShell:  try handler com.android.wm.shell.activityembedding.ActivityEmbeddingController@348bd38
+09-15 20:54:18.124   870   930 V WindowManagerShell:  try handler com.android.wm.shell.recents.RecentsTransitionHandler@efd111
+09-15 20:54:18.124   870   930 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+09-15 20:54:18.124   870   930 V WindowManagerShell:  try handler com.android.wm.shell.splitscreen.StageCoordinator@bf56276
+09-15 20:54:18.124   870   930 V WindowManagerShell:  try handler com.android.wm.shell.transition.RemoteTransitionHandler@8bf1077
+09-15 20:54:18.124   870   930 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=46 t=OPEN f=0x0 trk=0 opt={t=FROM_STYLE} r=[0@Point(0, 0)] c=[{null m=OPEN f=FILLS_TASK leash=Surface(name=ActivityRecord{acb234c u0 com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity)/@0xcccffe5 sb=Rect(0, 0 - 0, 0) eb=Rect(0, 0 - 1080, 2400) d=-1->0 r=-1->0:-1 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity},{null m=TO_BACK f=FILLS_TASK leash=Surface(name=ActivityRecord{d6a7a51 u0 com.example.lynxshell.debug/com.example.lynxshell.sample.MonitoringAcceptanceActivity)/@0x95eeaba sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.sample.MonitoringAcceptanceActivity}]}
+09-15 20:54:18.124   870   930 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher} launchCookie=null},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@36874e4, appThread = android.app.IApplicationThread$Stub$Proxy@36f6d4d, debugName = QuickstepLaunchHome }}
+09-15 20:54:18.124   870   930 V WindowManagerShell:  Delegate animation for (#46) to null
+09-15 20:54:18.124   870   930 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultTransitionHandler@4d3002
+09-15 20:54:18.124   870   930 V WindowManagerShell: start default transition animation, info = {id=46 t=OPEN f=0x0 trk=0 opt={t=FROM_STYLE} r=[0@Point(0, 0)] c=[{null m=OPEN f=FILLS_TASK leash=Surface(name=ActivityRecord{acb234c u0 com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity)/@0xcccffe5 sb=Rect(0, 0 - 0, 0) eb=Rect(0, 0 - 1080, 2400) d=-1->0 r=-1->0:-1 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity},{null m=TO_BACK f=FILLS_TASK leash=Surface(name=ActivityRecord{d6a7a51 u0 com.example.lynxshell.debug/com.example.lynxshell.sample.MonitoringAcceptanceActivity)/@0x95eeaba sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.sample.MonitoringAcceptanceActivity}]}
+09-15 20:54:18.124   870   930 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@846d547 animAttr=0x5 type=OPEN isEntrance=false
+09-15 20:54:18.126 19847 19847 I lynx    : [7F71727D20:INFO:tasm_platform_invoker_android.cc(281)] Trigger OnPageConfigDecoded on UIDelegate
+09-15 20:54:18.126 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(2604)] TemplateAssembler::OnScreenMetricsSet with width: 1080 height: 2400 device_pixel_ratio: 2.625
+09-15 20:54:18.126 19847 20723 I lynx    : [7CABE16730:INFO:element_manager.cc(682)] ElementManager::UpdateScreenMetrics width:1080,height:2400
+09-15 20:54:18.127 19847 20723 I lynx    : [7CABE16730:INFO:layout_context.cc(1104)] [Layout] UpdateViewport :size: 1080.0, 2232.0; mode: 1, 1
+09-15 20:54:18.127 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(725)] lynx runtime loadApp, napi id:1
+09-15 20:54:18.127 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(743)] [LynxRuntime] circular data check flag: true
+09-15 20:54:18.127 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2022)]  App::LoadApp start 0xB400007EA5253BE0
+09-15 20:54:18.128 19847 19968 I lynx    : [7C0603B730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxUIMethodModule
+09-15 20:54:18.128 19847 19968 I lynx    : [7C0603B730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxResourceModule
+09-15 20:54:18.128 19847 19968 I lynx    : [7C0603B730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxAccessibilityModule
+09-15 20:54:18.128 19847 19968 I lynx    : [7C0603B730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxSetModule
+09-15 20:54:18.128 19847 19968 I lynx    : [7C0603B730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxExposureModule
+09-15 20:54:18.128   624   646 V WindowManager: Sent Transition (#46) createdAt=09-15 20:54:18.050 via request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=241 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity } baseActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} topActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity} origActivity=null realActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} numActivities=3 lastActiveTime=3020630 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{a5beed1 Task{75a136b #241 type=standard A=10161:com.example.lynxshell.debug}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{be98d4e com.example.lynxshell.container.LynxShellActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 46 }
+09-15 20:54:18.128   624   646 V WindowManager:     startWCT=WindowContainerTransaction { changes = {} hops = [] errorCallbackToken=null taskFragmentOrganizer=null }
+09-15 20:54:18.128   624   646 V WindowManager:     info={id=46 t=OPEN f=0x0 trk=0 opt={t=FROM_STYLE} r=[0@Point(0, 0)] c=[
+09-15 20:54:18.128   624   646 V WindowManager:         {null m=OPEN f=FILLS_TASK leash=Surface(name=ActivityRecord{acb234c u0 com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity)/@0x950c650 sb=Rect(0, 0 - 0, 0) eb=Rect(0, 0 - 1080, 2400) d=-1->0 r=-1->0:-1 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity},
+09-15 20:54:18.128   624   646 V WindowManager:         {null m=TO_BACK f=FILLS_TASK leash=Surface(name=ActivityRecord{d6a7a51 u0 com.example.lynxshell.debug/com.example.lynxshell.sample.MonitoringAcceptanceActivity)/@0xda32ebc sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.sample.MonitoringAcceptanceActivity}
+09-15 20:54:18.128   624   646 V WindowManager:     ]}
+09-15 20:54:18.129 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2887)] LoadScript:app-service.js
+09-15 20:54:18.129 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(220)] QuickjsRuntime::evaluatePreparedJavaScript start: /app-service.js
+09-15 20:54:18.129 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(149)] QuickjsRuntime::evaluateJavaScript: /app-service.js
+09-15 20:54:18.129 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(162)] QuickjsRuntime::evaluateJavaScript finished successfully.
+09-15 20:54:18.129 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2887)] LoadScript:/.lynx/video-demo/background.bacaaf03.js
+09-15 20:54:18.129 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(220)] QuickjsRuntime::evaluatePreparedJavaScript start: /.lynx/video-demo/background.bacaaf03.js
+09-15 20:54:18.129 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(149)] QuickjsRuntime::evaluateJavaScript: /.lynx/video-demo/background.bacaaf03.js
+09-15 20:54:18.131 19847 20723 I lynx    : [7CABE16730:INFO:element_manager.cc(1704)] ElementManager::OnPatchFinishForFiber WithPatch!
+09-15 20:54:18.133   624  1201 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:54:18.137 19847 20723 I lynx    : [7CABE16730:INFO:touch_event_handler.cc(79)] TouchEventHandler init: support_component_js_: true; use_lepus_ng_: true
+09-15 20:54:18.137 19847 20723 I lynx    : [7CABE16730:INFO:touch_event_handler.cc(374)] SendCustomEvent event name:resize tag:10
+09-15 20:54:18.137 19847 20723 I lynx    : [7CABE16730:INFO:layout_context.cc(882)] [Layout] layout finish with result size: 1080, 2232 for viewport, size: 1080.0, 2232.0; mode: 1, 1 Time taken: 6242583 ns
+09-15 20:54:18.137 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(845)] end TemplateAssembler::LoadTemplate, url:assets://bundles/video-demo.lynx.bundle len: 110551
+09-15 20:54:18.139   870   930 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@12e60e0 animAttr=0x4 type=OPEN isEntrance=true
+09-15 20:54:18.139  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.140 19847 19970 E lynx    : [7C03E23730:ERROR:timing_map.cc(20)] Set duplicated timing_key, timing_key is loadBundleStart
+09-15 20:54:18.140 19847 19970 E lynx    : [7C03E23730:ERROR:timing_map.cc(20)] Set duplicated timing_key, timing_key is load_template_start
+09-15 20:54:18.141 19847 19968 I lynx    : [7C0603B730:INFO:quickjs_runtime.cc(162)] QuickjsRuntime::evaluateJavaScript finished successfully.
+09-15 20:54:18.142 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(355)] LYNX PageProxy get -> setCard
+09-15 20:54:18.142 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2166)]  App::LoadApp end 0xB400007EA5253BE0
+09-15 20:54:18.142 19847 19968 I lynx    : [7C0603B730:INFO:bts_runtime.cc(985)] lynx runtime ready
+09-15 20:54:18.142 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.lynxShellLayoutChanged 0xB400007EA5253BE0
+09-15 20:54:18.142 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.lynxRouterLifecycle 0xB400007EA5253BE0
+09-15 20:54:18.143 19847 19970 I lynx    : [7C03E23730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:54:18.143 19847 19970 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:54:18.143 19847 19970 I lynx    : [7C03E23730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:54:18.143 19847 19970 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:54:18.143 19847 19970 I lynx    : [7C03E23730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:54:18.143 19847 19970 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:54:18.143 19847 19970 I lynx    : [7C03E23730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:54:18.143 19847 19970 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:54:18.144 19847 19968 I lynx    : [7C0603B730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxShellModule
+09-15 20:54:18.144 19847 19968 I lynx    : [7C0603B730:INFO:method_invoker.cc(482)] NativeModule: LynxModuleAndroid MethodInvoker::InvokeMethod, method: (LynxShellModule.getLocale.) will fire 0xB400007CD517F7C8
+09-15 20:54:18.144 19847 19968 I lynx    : [7C0603B730:INFO:method_invoker.cc(565)] NativeModules: LynxModuleAndroid MethodInvoker::InvokeMethod, method: (LynxShellModule.getLocale.) call platform implementation0xB400007CD517F7C8
+09-15 20:54:18.144 19847 19968 I lynx    : [7C0603B730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __OnLifecycleEvent, phase: 2, target: 0, listener options: 0
+09-15 20:54:18.144 19847 19968 I lynx    : [7C0603B730:INFO:js_event_listener.cc(41)] JSClosureEventListener::Invoke name: __OnLifecycleEvent
+09-15 20:54:18.144 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1227)] LYNX PageProxy get -> GeneratePipelineOptions0xB400007D35232A28
+09-15 20:54:18.144 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1252)] LYNX PageProxy get -> OnPipelineStart0xB400007D35232A28
+09-15 20:54:18.144 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1332)] LYNX PageProxy get -> BindPipelineIdWithTimingFlag0xB400007D35232A28
+09-15 20:54:18.145 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:18.146 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:18.146 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:18.146 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:18.146 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1158)] LYNX PageProxy get -> callLepusMethod0xB400007D35232A28
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(3538)]  CallLepusMethod: rLynxChange 0xB400007EA5253BE0
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __OnAppFirstScreen, phase: 2, target: 0, listener options: 0
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:js_event_listener.cc(41)] JSClosureEventListener::Invoke name: __OnAppFirstScreen
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.onWindowResize 0xB400007EA5253BE0
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __OnNativeAppReady, phase: 2, target: 0, listener options: 0
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:js_event_listener.cc(41)] JSClosureEventListener::Invoke name: __OnNativeAppReady
+09-15 20:54:18.147 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.onFontScaleChanged 0xB400007EA5253BE0
+09-15 20:54:18.147 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(3534)] TemplateAssembler::CallLepusMethod. this:0xB400007CC51742D0 url:assets://bundles/video-demo.lynx.bundle method name: rLynxChange
+09-15 20:54:18.148 19847 20723 I lynx    : [7CABE16730:INFO:element_manager.cc(1683)] ElementManager::OnPatchFinishForFiber NoPatch!
+09-15 20:54:18.157   870   930 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@4d3002
+09-15 20:54:18.157   870   930 W Looper  : Slow dispatch took 34ms wmshell.main h=android.os.Handler c=com.android.wm.shell.transition.Transitions$TransitionPlayerImpl$$ExternalSyntheticLambda0@1c8ab0c m=0
+09-15 20:54:18.175 19847 19847 I ExoPlayerImpl: Init b46a906 [AndroidXMedia3/1.0.2] [emu64a, Android SDK built for arm64, unknown, 35]
+09-15 20:54:18.186 19847 19847 W lynxshell.debug: Accessing hidden method Landroid/media/AudioTrack;->getLatency()I (unsupported, reflection, allowed)
+09-15 20:54:18.199   624   926 D CompatChangeReporter: Compat change id reported: 297989574; UID 10161; state: ENABLED
+09-15 20:54:18.203  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.226   407   514 D audioserver: logFgsApiEnd: FGS Logger Transaction failed, -129
+09-15 20:54:18.232 19847 20723 I lynx    : [7CABE16730:INFO:touch_event_handler.cc(374)] SendCustomEvent event name:buffering tag:18
+09-15 20:54:18.234 19847 19847 I Lynx    : setVisibility:76653120 0
+09-15 20:54:18.234 19847 19847 I NativeFacade: native->java onPageChanged isFirstScreen:true instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.234 19847 19847 I LynxTemplateRender: TASMCallback.onPageChanged isFirstScreen:true instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.234 19847 19847 I LynxTemplateRender: onFirstScreen
+09-15 20:54:18.235 19847 19847 I NativeFacade: native->java dispatchOnLoaded templateSize:110551 instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.235 19847 19847 I LynxTemplateRender: TASMCallback.onLoaded templateSize:110551 instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.235 19847 19847 I LynxTemplateRender: dispatchLoadSuccess templateSize in com.lynx.tasm.LynxTemplateRender@10ea26c
+09-15 20:54:18.235 19847 19847 I NativeFacade: native->java onTASMFinishedByNative instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.239   364 20732 I resolv  : GetAddrInfoHandler::run: {103 103 103 983143 10161 0}
+09-15 20:54:18.239   364 20733 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+09-15 20:54:18.239   364 20734 I resolv  : res_nmkquery: (QUERY, IN, A)
+09-15 20:54:18.239   624   852 D MediaMetricsManagerService: failed to get player_metrics_app_blocklist from DeviceConfig
+09-15 20:54:18.240   624   852 V MediaMetricsManagerService: Logging level blocked: Failed to get PLAYER_METRICS_APP_BLOCKLIST.
+09-15 20:54:18.240 19847 19847 I NativeFacade: native->java onRuntimeReady instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.240 19847 19847 I LynxTemplateRender: TASMCallback.onRuntimeReady instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.240 19847 19847 I NativeFacade: native->java onUpdateDataWithoutChange instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.240 19847 19847 I LynxTemplateRender: TemplateRenderCallback.onUpdateDataWithoutChange instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.242 19847 19847 I LynxTemplateRender: updateViewport is unnecessary, because the size of the cache are the same as the size to be set.
+09-15 20:54:18.248 19847 19970 I lynx    : [7C03E23730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_setup_timing
+09-15 20:54:18.249 19847 19970 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:54:18.249 19847 19968 I lynx    : [7C0603B730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __SendGlobalEvent, phase: 2, target: 0, listener options: 0
+09-15 20:54:18.249 19847 19968 I lynx    : [7C0603B730:INFO:closure_event_listener.cc(38)] ClosureEventListener::Invoke name: __SendGlobalEvent, type: 0
+09-15 20:54:18.249 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.lynx.performance.timing.onSetup 0xB400007EA5253BE0
+09-15 20:54:18.250 19847 19968 I lynx    : [7C0603B730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __SendGlobalEvent, phase: 2, target: 0, listener options: 0
+09-15 20:54:18.250 19847 19968 I lynx    : [7C0603B730:INFO:closure_event_listener.cc(38)] ClosureEventListener::Invoke name: __SendGlobalEvent, type: 0
+09-15 20:54:18.250 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.lynx.performance.onPerformanceEvent 0xB400007EA5253BE0
+09-15 20:54:18.250 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1227)] LYNX PageProxy get -> GeneratePipelineOptions0xB400007D35232A28
+09-15 20:54:18.250 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1252)] LYNX PageProxy get -> OnPipelineStart0xB400007D35232A28
+09-15 20:54:18.252   624   852 D MediaMetricsManagerService: failed to get player_metrics_app_blocklist from DeviceConfig
+09-15 20:54:18.252   624   852 V MediaMetricsManagerService: Logging level blocked: Failed to get PLAYER_METRICS_APP_BLOCKLIST.
+09-15 20:54:18.252 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:18.252 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1158)] LYNX PageProxy get -> callLepusMethod0xB400007D35232A28
+09-15 20:54:18.252 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(3538)]  CallLepusMethod: rLynxChange 0xB400007EA5253BE0
+09-15 20:54:18.253 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1227)] LYNX PageProxy get -> GeneratePipelineOptions0xB400007D35232A28
+09-15 20:54:18.253 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1252)] LYNX PageProxy get -> OnPipelineStart0xB400007D35232A28
+09-15 20:54:18.254 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:18.255 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1158)] LYNX PageProxy get -> callLepusMethod0xB400007D35232A28
+09-15 20:54:18.255 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(3538)]  CallLepusMethod: rLynxChange 0xB400007EA5253BE0
+09-15 20:54:18.255 19847 19847 I Lynx.IntersectionObserver: onRootViewDraw ObserverHandler
+09-15 20:54:18.255 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(3534)] TemplateAssembler::CallLepusMethod. this:0xB400007CC51742D0 url:assets://bundles/video-demo.lynx.bundle method name: rLynxChange
+09-15 20:54:18.255 19847 20723 I lynx    : [7CABE16730:INFO:element_manager.cc(1683)] ElementManager::OnPatchFinishForFiber NoPatch!
+09-15 20:54:18.257 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(3534)] TemplateAssembler::CallLepusMethod. this:0xB400007CC51742D0 url:assets://bundles/video-demo.lynx.bundle method name: rLynxChange
+09-15 20:54:18.257 19847 20723 I lynx    : [7CABE16730:INFO:element_manager.cc(1683)] ElementManager::OnPatchFinishForFiber NoPatch!
+09-15 20:54:18.276 19847 19847 I NativeFacade: native->java onUpdateDataWithoutChange instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.279 19847 19847 I LynxTemplateRender: TemplateRenderCallback.onUpdateDataWithoutChange instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.280 19847 19847 I NativeFacade: native->java onUpdateDataWithoutChange instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.280 19847 19847 I LynxTemplateRender: TemplateRenderCallback.onUpdateDataWithoutChange instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:18.282   624   742 I ImeTracker: com.example.lynxshell.debug:8a35f617: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+09-15 20:54:18.282   624   742 I ImeTracker: com.example.lynxshell.debug:8a35f617: onCancelled at PHASE_SERVER_SHOULD_HIDE
+09-15 20:54:18.284  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.326  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.453  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.500  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.516  1692  1692 W amdp-conn-40636: type=1400 audit(0.0:72558): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/xt_quota/eth0" dev="proc" ino=4026532878 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:18.516  1692  1692 W amdp-conn-40636: type=1400 audit(0.0:72559): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/xt_quota/globalAlert" dev="proc" ino=4026532863 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:18.539  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.590  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.604  1692  1692 W amdp-conn-40638: type=1400 audit(0.0:72560): avc:  denied  { getattr } for  path="/sys/devices/platform/vhci_hcd.0/usb2/power/active_duration" dev="sysfs" ino=32651 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:54:18.604  1692  1692 W amdp-conn-40638: type=1400 audit(0.0:72561): avc:  denied  { getattr } for  path="/sys/devices/platform/vhci_hcd.0/usb2/power/async" dev="sysfs" ino=32627 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:54:18.604  1692  1692 W amdp-conn-40638: type=1400 audit(0.0:72562): avc:  denied  { getattr } for  path="/sys/devices/platform/vhci_hcd.0/usb2/power/autosuspend" dev="sysfs" ino=32648 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:54:18.615   870   930 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#46) android.os.BinderProxy@1ca61ae@0
+09-15 20:54:18.617   624   646 V WindowManager: Finish Transition (#46): created at 09-15 20:54:18.050 collect-started=0.031ms request-sent=16.298ms started=17.034ms ready=19.983ms sent=70.432ms finished=566.789ms
+09-15 20:54:18.617 19847 19847 D VRI[MonitoringAcceptanceActivity]: visibilityChanged oldVisibility=true newVisibility=false
+09-15 20:54:18.618   870   930 V WindowManagerShell: Track 0 became idle
+09-15 20:54:18.618   870   930 V WindowManagerShell: All active transition animations finished
+09-15 20:54:18.620   624   926 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:54:18.621   624   926 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:54:18.631 19847 19926 D HWUI    : endAllActiveAnimators on 0xb400007cc50f63e0 (RippleDrawable) with handle 0xb400007d951392a0
+09-15 20:54:18.635  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.722   364 20734 I resolv  : res_nsend: used send_dg 503 terrno: 0
+09-15 20:54:18.722   364 20733 I resolv  : res_nsend: used send_dg 447 terrno: 0
+09-15 20:54:18.722   364 20734 I resolv  : doQuery: rcode=0, ancount=2, return value=503
+09-15 20:54:18.723   364 20733 I resolv  : doQuery: rcode=0, ancount=2, return value=447
+09-15 20:54:18.723 19847 20731 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.749  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.797  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.839  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.872  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:18.905  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.007  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.018 20747 20747 W audit   : audit_lost=66467 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:54:19.018 20747 20747 E audit   : rate limit exceeded
+09-15 20:54:19.050  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.083  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.123  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.124   624   636 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+09-15 20:54:19.125   624   637 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~nous5Rl0RDYLyIaLAsZ3_w==/com.example.lynxshell.debug-ie-kLKf19fIfBoYzjvAw7A==/base.apk' with 1 weak references
+09-15 20:54:19.130   624   637 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /product/app/LatinIME/LatinIME.apk' with 1 weak references
+09-15 20:54:19.130   624   637 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /data/app/~~9FlzxaiWEFcBIzdmmdjt5Q==/com.catchingnow.andfiles.helper-D4ajhOvGuXIqJyAhJWd6RQ==/base.apk' with 1 weak references
+09-15 20:54:19.130   624   637 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /system/priv-app/InputDevices/InputDevices.apk' with 1 weak references
+09-15 20:54:19.130   624   637 W system_server: ApkAssets: Deleting an ApkAssets object '<empty> and /system_ext/app/AccessibilityMenu/AccessibilityMenu.apk' with 1 weak references
+09-15 20:54:19.156  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.253   364   364 I netd    : tetherGetStats() -> {[]} <0.34ms>
+09-15 20:54:19.254   364   364 I netd    : bandwidthSetGlobalAlert(2097152) <0.05ms>
+09-15 20:54:19.256   364   364 I netd    : bandwidthRemoveInterfaceQuota(eth0) <0.66ms>
+09-15 20:54:19.256   364   364 I netd    : bandwidthSetInterfaceQuota(eth0, 9223372036854775807) <0.17ms>
+09-15 20:54:19.256  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.308  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.343  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.399  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.442  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.480   856   856 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS 
+09-15 20:54:19.555  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.564  1692  1692 W amdp-conn-40655: type=1400 audit(0.0:72714): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/stat/arp_cache" dev="proc" ino=4026532007 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:19.564  1692  1692 W amdp-conn-40655: type=1400 audit(0.0:72715): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/stat/ndisc_cache" dev="proc" ino=4026532106 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:19.564  1692  1692 W amdp-conn-40655: type=1400 audit(0.0:72716): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/stat/nf_conntrack" dev="proc" ino=4026532090 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:19.564  1692  1692 W amdp-conn-40655: type=1400 audit(0.0:72717): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/stat/rt_cache" dev="proc" ino=4026532013 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:19.594  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.604  1692  1692 W amdp-conn-40656: type=1400 audit(0.0:72718): avc:  denied  { getattr } for  path="/sys/devices/platform/vhci_hcd.0/usb3/authorized" dev="sysfs" ino=32903 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:54:19.639  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.680  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.725  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.749 19847 19926 D EGL_emulation: app_time_stats: avg=147.23ms min=10.93ms max=1365.32ms count=11
+09-15 20:54:19.823  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.858  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.898  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.930 19847 20729 I DMCodecAdapterFactory: Creating an asynchronous MediaCodec adapter for track type video
+09-15 20:54:19.932   624   852 D MediaMetricsManagerService: failed to get player_metrics_app_blocklist from DeviceConfig
+09-15 20:54:19.932   624   852 V MediaMetricsManagerService: Logging level blocked: Failed to get PLAYER_METRICS_APP_BLOCKLIST.
+09-15 20:54:19.933 19847 20767 D CCodec  : allocate(c2.goldfish.h264.decoder)
+09-15 20:54:19.934 19847 20767 I Codec2Client: Available Codec2 services: "default" "software"
+09-15 20:54:19.935  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.935 19847 20767 I CCodec  : setting up 'default' as default (vendor) store
+09-15 20:54:19.936   379   379 I GoldfishComponentStore: in init
+09-15 20:54:19.936   379   379 I GoldfishComponentStore: loading dll of path libcodec2_goldfish_avcdec.so
+09-15 20:54:19.937   379   379 I GoldfishComponentStore: Create()
+09-15 20:54:19.937   379   379 I GoldfishComponentStore: created interface
+09-15 20:54:19.938   379   379 I GoldfishComponentStore: created component
+09-15 20:54:19.938 19847 20767 I CCodec  : Created component [c2.goldfish.h264.decoder]
+09-15 20:54:19.938 19847 20767 D CCodecConfig: read media type: video/avc
+09-15 20:54:19.939 19847 20767 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.max-count.values
+09-15 20:54:19.940 19847 20767 D ReflectedParamUpdater: extent() != 1 for single value type: output.subscribed-indices.values
+09-15 20:54:19.940 19847 20767 D ReflectedParamUpdater: extent() != 1 for single value type: input.buffers.allocator-ids.values
+09-15 20:54:19.940 19847 20767 D ReflectedParamUpdater: extent() != 1 for single value type: output.buffers.allocator-ids.values
+09-15 20:54:19.940 19847 20767 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.allocator-ids.values
+09-15 20:54:19.940 19847 20767 D ReflectedParamUpdater: extent() != 1 for single value type: output.buffers.pool-ids.values
+09-15 20:54:19.940 19847 20767 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.pool-ids.values
+09-15 20:54:19.941 19847 20767 D ReflectedParamUpdater: ignored struct field coded.color-format.locations
+09-15 20:54:19.941 19847 20767 D CCodecConfig: ignoring local param raw.size (0xd2001800) as it is already supported
+09-15 20:54:19.941 19847 20767 D CCodecConfig: ignoring local param default.color (0x5200180b) as it is already supported
+09-15 20:54:19.941 19847 20767 D ReflectedParamUpdater: ignored struct field raw.hdr-static-info.mastering
+09-15 20:54:19.941 19847 20767 I CCodecConfig: query failed after returning 12 values (BAD_INDEX)
+09-15 20:54:19.941 19847 20767 D CCodecConfig: c2 config diff is Dict {
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 coded.pl.level = 20496
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 coded.pl.profile = 20481
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 coded.vui.color.matrix = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 coded.vui.color.primaries = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 coded.vui.color.range = 2
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 coded.vui.color.transfer = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 default.color.matrix = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 default.color.primaries = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 default.color.range = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 default.color.transfer = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 input.buffers.max-size.value = 6291456
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 input.delay.value = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   string input.media-type.value = "video/avc"
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 output.delay.value = 8
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   string output.media-type.value = "video/raw"
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.color.matrix = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.color.primaries = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.color.range = 2
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.color.transfer = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.max-size.height = 240
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.max-size.width = 320
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.pixel-format.value = 35
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::i32 raw.rotation.flip = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::i32 raw.rotation.value = 0
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.sar.height = 1
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.sar.width = 1
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.size.height = 240
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2::u32 raw.size.width = 320
+09-15 20:54:19.941 19847 20767 D CCodecConfig:   c2:
+09-15 20:54:19.942 19847 20767 W ColorUtils: expected specified color aspects (2:0:0:0)
+09-15 20:54:19.945 19847 20766 I MediaCodec: MediaCodec will operate in async mode
+09-15 20:54:19.945 19847 20766 D SurfaceUtils: connecting to surface 0xb400007e15116110, reason connectToSurface
+09-15 20:54:19.945 19847 20766 I MediaCodec: [c2.goldfish.h264.decoder] setting surface generation to 20323329
+09-15 20:54:19.945 19847 20766 D SurfaceUtils: disconnecting from surface 0xb400007e15116110, reason connectToSurface(reconnect)
+09-15 20:54:19.945 19847 20766 D SurfaceUtils: connecting to surface 0xb400007e15116100, reason connectToSurface(reconnect-with-listener)
+09-15 20:54:19.946 19847 20767 I CCodecBufferChannel: Using latch times for frame rendered signals - present fences not supported
+09-15 20:54:19.946 19847 20767 D CCodec  : [c2.goldfish.h264.decoder] buffers are bound to CCodec for this session
+09-15 20:54:19.946 19847 20767 D CCodecConfig: no c2 equivalents for log-session-id
+09-15 20:54:19.946 19847 20767 D CCodecConfig: no c2 equivalents for color-standard
+09-15 20:54:19.946 19847 20767 D CCodecConfig: no c2 equivalents for csd-1
+09-15 20:54:19.946 19847 20767 D CCodecConfig: no c2 equivalents for native-window
+09-15 20:54:19.946 19847 20767 D CCodecConfig: no c2 equivalents for native-window-generation
+09-15 20:54:19.946 19847 20767 D CCodecConfig: no c2 equivalents for flags
+09-15 20:54:19.947 19847 20767 D CCodecConfig: config failed => CORRUPTED
+09-15 20:54:19.947 19847 20767 D CCodecConfig: c2 config diff is   c2::u32 default.color.matrix = 3
+09-15 20:54:19.947 19847 20767 D CCodecConfig:   c2::u32 default.color.primaries = 3
+09-15 20:54:19.947 19847 20767 D CCodecConfig:   c2::u32 default.color.range = 2
+09-15 20:54:19.947 19847 20767 D CCodecConfig:   c2::u32 default.color.transfer = 3
+09-15 20:54:19.947 19847 20767 D CCodecConfig:   c2::u32 raw.max-size.height = 540
+09-15 20:54:19.947 19847 20767 D CCodecConfig:   c2::u32 raw.max-size.width = 960
+09-15 20:54:19.947 19847 20767 D CCodecConfig:   c2::u32 raw.size.height = 540
+09-15 20:54:19.947 19847 20767 D CCodecConfig:   c2::u32 raw.size.width = 960
+09-15 20:54:19.947 19847 20767 W Codec2Client: query -- param skipped: index = 1107298332.
+09-15 20:54:19.947 19847 20767 D CCodec  : client requested max input size 87214, which is smaller than what component recommended (6291456); overriding with component recommendation.
+09-15 20:54:19.947 19847 20767 W CCodec  : This behavior is subject to change. It is recommended that app developers double check whether the requested max input size is in reasonable range.
+09-15 20:54:19.947 19847 20767 D CCodec  : encoding statistics level = 0
+09-15 20:54:19.947 19847 20767 D CCodec  : setup formats input: AMessage(what = 0x00000000) = {
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t height = 540
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t level = 65536
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t max-input-size = 6291456
+09-15 20:54:19.947 19847 20767 D CCodec  :   string mime = "video/avc"
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t profile = 65536
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t width = 960
+09-15 20:54:19.947 19847 20767 D CCodec  :   Rect crop(0, 0, 959, 539)
+09-15 20:54:19.947 19847 20767 D CCodec  : }
+09-15 20:54:19.947 19847 20767 D CCodec  : setup formats output: AMessage(what = 0x00000000) = {
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t android._color-format = 2135033992
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t android._video-scaling = 1
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t rotation-degrees = 0
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t color-standard = 1
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t color-range = 2
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t color-transfer = 3
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t sar-height = 1
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t sar-width = 1
+09-15 20:54:19.947 19847 20767 D CCodec  :   Rect crop(0, 0, 959, 539)
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t width = 960
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t height = 540
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t max-height = 540
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t max-width = 960
+09-15 20:54:19.947 19847 20767 D CCodec  :   string mime = "video/raw"
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t android._dataspace = 260
+09-15 20:54:19.947 19847 20767 D CCodec  :   int32_t color-format = 2130708361
+09-15 20:54:19.947 19847 20767 D CCodec  : }
+09-15 20:54:19.947 19847 20767 I CCodecConfig: query failed after returning 12 values (BAD_INDEX)
+09-15 20:54:19.948 19847 20767 D CCodecConfig: c2 config diff is   c2::u32 raw.color.matrix = 3
+09-15 20:54:19.948 19847 20767 D CCodecConfig:   c2::u32 raw.color.primaries = 3
+09-15 20:54:19.948 19847 20767 D CCodecConfig:   c2::u32 raw.color.transfer = 3
+09-15 20:54:19.949 19847 20729 D MediaCodec: keep callback message for reclaim
+09-15 20:54:19.950   379 20773 D C2GoldfishAvcDec: calling onInit
+09-15 20:54:19.950 19847 20767 W Codec2Client: query -- param skipped: index = 1342179345.
+09-15 20:54:19.950 19847 20767 W Codec2Client: query -- param skipped: index = 2415921170.
+09-15 20:54:19.950 19847 20767 W Codec2Client: query -- param skipped: index = 1610614798.
+09-15 20:54:19.950 19847 20767 W Codec2Client: query -- param skipped: index = 2684356609.
+09-15 20:54:19.950 19847 20767 D C2Store : Using DMABUF Heaps
+09-15 20:54:19.951 19847 20767 D CCodecBufferChannel: [c2.goldfish.h264.decoder#344] Created input block pool with allocatorID 16 => poolID 17 - OK (0)
+09-15 20:54:19.951 19847 20767 D CCodecBufferChannel: [c2.goldfish.h264.decoder#344] Query output surface allocator returned 0 params => BAD_INDEX (6)
+09-15 20:54:19.951 19847 20767 I CCodecBufferChannel: [c2.goldfish.h264.decoder#344] Created output block pool with allocatorID 18 => poolID 17 - OK
+09-15 20:54:19.951 19847 20767 D CCodecBufferChannel: [c2.goldfish.h264.decoder#344] Configured output block pool ids 17 => OK
+09-15 20:54:19.951 19847 20767 D Codec2-OutputBufferQueue: remote graphic buffer migration 0/0
+09-15 20:54:19.951 19847 20767 D Codec2Client: setOutputSurface -- failed to set consumer usage (6/BAD_INDEX)
+09-15 20:54:19.951 19847 20767 D Codec2Client: setOutputSurface -- generation=20323329 consumer usage=0x900
+09-15 20:54:19.957   161   161 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+09-15 20:54:19.957   379 20774 I Gralloc4: mapper 4.x is not supported
+09-15 20:54:19.959   379 20774 D C2BqBuffer: local generation change 20323329 , bqId: 85242215923716 migrated buffers # 0
+09-15 20:54:19.958   160   160 I servicemanager: Caller(pid=379,uid=1013,sid=u:r:mediacodec:s0) Could not find android.hardware.graphics.allocator.IAllocator/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-15 20:54:19.959 19847 20767 D Codec2Client: Surface configure completed
+09-15 20:54:19.959 19847 20767 I DMABUFHEAPS: Using DMA-BUF heap named: system
+09-15 20:54:19.964   464  1682 W ResourceManagerServiceUtils: Ignoring request to add new resource entry with value <= 0
+09-15 20:54:19.965   379 20774 D C2Store : Using DMABUF Heaps
+09-15 20:54:19.965 19847 20729 I DMCodecAdapterFactory: Creating an asynchronous MediaCodec adapter for track type audio
+09-15 20:54:19.965   379 20773 D SimpleC2Component: Using output block pool with poolID 17 => got 17 - 0
+09-15 20:54:19.965   379 20773 D android.hardware.media.c2@1.0-service-goldfish: isMinigbmFromProperty:codecs: minigbm query prop value is: ranchu
+09-15 20:54:19.965   379 20773 D android.hardware.media.c2@1.0-service-goldfish: isMinigbmFromProperty:codecs: Is not using minigbm, in goldfish mode.
+09-15 20:54:19.965   624   852 D MediaMetricsManagerService: failed to get player_metrics_app_blocklist from DeviceConfig
+09-15 20:54:19.965   624   852 V MediaMetricsManagerService: Logging level blocked: Failed to get PLAYER_METRICS_APP_BLOCKLIST.
+09-15 20:54:19.966 19847 20777 D CCodec  : allocate(c2.android.aac.decoder)
+09-15 20:54:19.967 19847 20777 I CCodec  : setting up 'default' as default (vendor) store
+09-15 20:54:19.967   379 20773 I android.hardware.media.c2@1.0-service-goldfish: successfully allocated 33558528 bytes in goldfish_address_block
+09-15 20:54:19.967   379 20773 I android.hardware.media.c2@1.0-service-goldfish: guest address is 0x739a061000
+09-15 20:54:19.967   379 20773 I android.hardware.media.c2@1.0-service-goldfish: successfully pinged host to allocate memory
+09-15 20:54:19.978   870  1253 D BufferPoolAccessor2.0: bufferpool2 0xb400007d650eae68 : 0(0 size) total buffers - 0(0 size) used buffers - 2/7 (recycle/alloc) - 5/38 (fetch/transfer)
+09-15 20:54:19.978   870  1253 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d650eae68 cached: 0/0M, 0/0% in use; allocs: 7, 29% recycled; transfers: 38, 87% unfetched
+09-15 20:54:19.978   870  1253 D BufferPoolAccessor2.0: bufferpool2 0xb400007d650e76e8 : 0(0 size) total buffers - 0(0 size) used buffers - 2/7 (recycle/alloc) - 5/36 (fetch/transfer)
+09-15 20:54:19.978   870  1253 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d650e76e8 cached: 0/0M, 0/0% in use; allocs: 7, 29% recycled; transfers: 36, 86% unfetched
+09-15 20:54:19.978   870  1253 D BufferPoolAccessor2.0: bufferpool2 0xb400007d650ea778 : 0(0 size) total buffers - 0(0 size) used buffers - 2/7 (recycle/alloc) - 5/18 (fetch/transfer)
+09-15 20:54:19.978   870  1253 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d650ea778 cached: 0/0M, 0/0% in use; allocs: 7, 29% recycled; transfers: 18, 72% unfetched
+09-15 20:54:19.979 19847 20777 I CCodec  : Created component [c2.android.aac.decoder]
+09-15 20:54:19.979 19847 20777 D CCodecConfig: read media type: audio/mp4a-latm
+09-15 20:54:19.980   624   979 D BufferPoolAccessor2.0: bufferpool2 0xb400007d65127e48 : 0(0 size) total buffers - 0(0 size) used buffers - 2/7 (recycle/alloc) - 5/24 (fetch/transfer)
+09-15 20:54:19.980 19847 20777 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.max-count.values
+09-15 20:54:19.980   624   979 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d65127e48 cached: 0/0M, 0/0% in use; allocs: 7, 29% recycled; transfers: 24, 79% unfetched
+09-15 20:54:19.980 19847 20777 D ReflectedParamUpdater: extent() != 1 for single value type: output.subscribed-indices.values
+09-15 20:54:19.980 19847 20777 D ReflectedParamUpdater: extent() != 1 for single value type: input.buffers.allocator-ids.values
+09-15 20:54:19.980 19847 20777 D ReflectedParamUpdater: extent() != 1 for single value type: output.buffers.allocator-ids.values
+09-15 20:54:19.980 19847 20777 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.allocator-ids.values
+09-15 20:54:19.981   624   979 D BufferPoolAccessor2.0: bufferpool2 0xb400007d65125b98 : 0(0 size) total buffers - 0(0 size) used buffers - 2/7 (recycle/alloc) - 8/34 (fetch/transfer)
+09-15 20:54:19.981   624   979 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d65125b98 cached: 0/0M, 0/0% in use; allocs: 7, 29% recycled; transfers: 34, 76% unfetched
+09-15 20:54:19.981 19847 20777 D ReflectedParamUpdater: extent() != 1 for single value type: output.buffers.pool-ids.values
+09-15 20:54:19.981 19847 20777 D ReflectedParamUpdater: extent() != 1 for single value type: algo.buffers.pool-ids.values
+09-15 20:54:19.981  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:19.981   624   739 D BufferPoolAccessor2.0: bufferpool2 0xb400007d65125258 : 0(0 size) total buffers - 0(0 size) used buffers - 2/7 (recycle/alloc) - 5/34 (fetch/transfer)
+09-15 20:54:19.981   624   739 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d65125258 cached: 0/0M, 0/0% in use; allocs: 7, 29% recycled; transfers: 34, 85% unfetched
+09-15 20:54:19.981   624   737 D BufferPoolAccessor2.0: bufferpool2 0xb400007d65126728 : 0(0 size) total buffers - 0(0 size) used buffers - 0/7 (recycle/alloc) - 6/24 (fetch/transfer)
+09-15 20:54:19.981   624   737 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d65126728 cached: 0/0M, 0/0% in use; allocs: 7, 0% recycled; transfers: 24, 75% unfetched
+09-15 20:54:19.981   624  1005 D BufferPoolAccessor2.0: bufferpool2 0xb400007d65124db8 : 0(0 size) total buffers - 0(0 size) used buffers - 1/7 (recycle/alloc) - 6/18 (fetch/transfer)
+09-15 20:54:19.981   624  1005 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d65124db8 cached: 0/0M, 0/0% in use; allocs: 7, 14% recycled; transfers: 18, 67% unfetched
+09-15 20:54:19.981   624  1005 D BufferPoolAccessor2.0: bufferpool2 0xb400007d65127758 : 0(0 size) total buffers - 0(0 size) used buffers - 2/7 (recycle/alloc) - 9/26 (fetch/transfer)
+09-15 20:54:19.981   624  1005 D BufferPoolAccessor2.0: Destruction - bufferpool2 0xb400007d65127758 cached: 0/0M, 0/0% in use; allocs: 7, 29% recycled; transfers: 26, 65% unfetched
+09-15 20:54:19.982 19847 20777 I CCodecConfig: query failed after returning 21 values (BAD_INDEX)
+09-15 20:54:19.982 19847 20777 D CCodecConfig: c2 config diff is Dict {
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 coded.aac-packaging.value = 0
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 coded.bitrate.value = 64000
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 coded.pl.level = 0
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 coded.pl.profile = 8192
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::i32 coding.drc.album-mode.value = 0
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::float coding.drc.attenuation-factor.value = 1
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::float coding.drc.boost-factor.value = 1
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::i32 coding.drc.compression-mode.value = 3
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::i32 coding.drc.effect-type.value = 3
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::float coding.drc.encoded-level.value = 0.25
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::float coding.drc.reference-level.value = -16
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 input.buffers.max-size.value = 8192
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 input.delay.value = 0
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   string input.media-type.value = "audio/mp4a-latm"
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 output.delay.value = 2
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::float output.drc.output-loudness.value = 0.25
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 output.large-frame.max-size = 0
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 output.large-frame.threshold-size = 0
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   string output.media-type.value = "audio/raw"
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 raw.channel-count.value = 1
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 raw.channel-mask.value = 0
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 raw.max-channel-count.value = 8
+09-15 20:54:19.982 19847 20777 D CCodecConfig:   c2::u32 raw.sample-rate.value = 44100
+09-15 20:54:19.982 19847 20777 D CCodecConfig: }
+09-15 20:54:19.983 19847 20777 I MediaCodec: MediaCodec will operate in async mode
+09-15 20:54:19.983 19847 20777 D CCodec  : [c2.android.aac.decoder] buffers are bound to CCodec for this session
+09-15 20:54:19.983 19847 20777 D CCodecConfig: no c2 equivalents for log-session-id
+09-15 20:54:19.983 19847 20777 D CCodecConfig: no c2 equivalents for flags
+09-15 20:54:19.983   468  1038 E Codec2-ComponentInterface: We have a failed config
+09-15 20:54:19.983 19847 20777 D CCodecConfig: config failed => CORRUPTED
+09-15 20:54:19.984 19847 20777 D CCodecConfig: c2 config diff is   c2::u32 raw.channel-count.value = 2
+09-15 20:54:19.984 19847 20777 D CCodecConfig:   c2::u32 raw.sample-rate.value = 48000
+09-15 20:54:19.984 19847 20777 W Codec2Client: query -- param skipped: index = 1107298332.
+09-15 20:54:19.984 19847 20777 D CCodec  : client requested max input size 713, which is smaller than what component recommended (8192); overriding with component recommendation.
+09-15 20:54:19.984 19847 20777 W CCodec  : This behavior is subject to change. It is recommended that app developers double check whether the requested max input size is in reasonable range.
+09-15 20:54:19.984 19847 20777 D CCodec  : encoding statistics level = 0
+09-15 20:54:19.984 19847 20777 D CCodec  : setup formats input: AMessage(what = 0x00000000) = {
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-album-mode = 0
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-boost-level = 127
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-cut-level = 127
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-effect-type = 3
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-encoded-target-level = -1
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-max-output-channel_count = 8
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-target-ref-level = 64
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t bitrate = 64000
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t channel-count = 2
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t channel-mask = 0
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t level = 0
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t max-input-size = 8192
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t max-output-channel-count = 8
+09-15 20:54:19.984 19847 20777 D CCodec  :   string mime = "audio/mp4a-latm"
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t profile = 2
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t sample-rate = 48000
+09-15 20:54:19.984 19847 20777 D CCodec  : }
+09-15 20:54:19.984 19847 20777 D CCodec  : setup formats output: AMessage(what = 0x00000000) = {
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-album-mode = 0
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-boost-level = 127
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-cut-level = 127
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-effect-type = 3
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-drc-output-loudness = -1
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-encoded-target-level = -1
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-max-output-channel_count = 8
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t aac-target-ref-level = 64
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t buffer-batch-max-output-size = 0
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t buffer-batch-threshold-output-size = 0
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t channel-count = 2
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t channel-mask = 0
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t max-output-channel-count = 8
+09-15 20:54:19.984 19847 20777 D CCodec  :   string mime = "audio/raw"
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t sample-rate = 48000
+09-15 20:54:19.984 19847 20777 D CCodec  :   int32_t android._config-pcm-encoding = 2
+09-15 20:54:19.984 19847 20777 D CCodec  : }
+09-15 20:54:19.984 19847 20777 I CCodecConfig: query failed after returning 21 values (BAD_INDEX)
+09-15 20:54:19.985 19847 20729 D MediaCodec: keep callback message for reclaim
+09-15 20:54:19.988 19847 20777 W Codec2Client: query -- param skipped: index = 1342179345.
+09-15 20:54:19.988 19847 20777 W Codec2Client: query -- param skipped: index = 2415921170.
+09-15 20:54:19.988 19847 20777 W Codec2Client: query -- param skipped: index = 1610614798.
+09-15 20:54:19.989 19847 20777 D CCodecBufferChannel: [c2.android.aac.decoder#247] Created input block pool with allocatorID 16 => poolID 18 - OK (0)
+09-15 20:54:19.989 19847 20777 I CCodecBufferChannel: [c2.android.aac.decoder#247] Created output block pool with allocatorID 16 => poolID 36 - OK
+09-15 20:54:19.989 19847 20777 D CCodecBufferChannel: [c2.android.aac.decoder#247] Configured output block pool ids 36 => OK
+09-15 20:54:19.989   468  1038 E Codec2-ComponentInterface: We have a failed config
+09-15 20:54:19.990   468 20778 D SimpleC2Component: Using output block pool with poolID 36 => got 36 - 0
+09-15 20:54:20.078  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.091 20782 20782 W audit   : audit_lost=66633 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:54:20.091 20782 20782 E audit   : rate limit exceeded
+09-15 20:54:20.111  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.146  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.181  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.213  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.333  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.358 19847 20767 D CCodecConfig: c2 config diff is   c2::u32 raw.color.primaries = 4
+09-15 20:54:20.358 19847 20767 D CCodecConfig:   c2::u32 raw.crop.height = 540
+09-15 20:54:20.358 19847 20767 D CCodecConfig:   c2::u32 raw.crop.left = 0
+09-15 20:54:20.358 19847 20767 D CCodecConfig:   c2::u32 raw.crop.top = 0
+09-15 20:54:20.358 19847 20767 D CCodecConfig:   c2::u32 raw.crop.width = 960
+09-15 20:54:20.358 19847 20767 D CCodecBuffers: [c2.goldfish.h264.decoder#344:2D-Output] popFromStashAndRegister: at 1000000000000us, output format changed to AMessage(what = 0x00000000) = {
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t android._color-format = 2135033992
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t android._video-scaling = 1
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t rotation-degrees = 0
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t color-standard = 4
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t color-range = 2
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t color-transfer = 3
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t sar-height = 1
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t sar-width = 1
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   Rect crop(0, 0, 959, 539)
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t width = 960
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t height = 540
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t max-height = 540
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t max-width = 960
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   string mime = "video/raw"
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t android._dataspace = 259
+09-15 20:54:20.358 19847 20767 D CCodecBuffers:   int32_t color-format = 2130708361
+09-15 20:54:20.358 19847 20767 D CCodecBuffers: }
+09-15 20:54:20.358  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.372 19847 20723 I lynx    : [7CABE16730:INFO:touch_event_handler.cc(374)] SendCustomEvent event name:firstframe tag:18
+09-15 20:54:20.372 19847 20723 I lynx    : [7CABE16730:INFO:touch_event_handler.cc(1334)] SendPageEvent CustomEvent: firstframe with function: -6:5:
+09-15 20:54:20.373 19847 19968 I lynx    : [7C0603B730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __SendPageEvent, phase: 2, target: 0, listener options: 0
+09-15 20:54:20.373 19847 19968 I lynx    : [7C0603B730:INFO:closure_event_listener.cc(38)] ClosureEventListener::Invoke name: __SendPageEvent, type: 0
+09-15 20:54:20.373 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(2309)] App::SendPageEvent, handler: -6:5: 0xB400007EA5253BE0
+09-15 20:54:20.373 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1227)] LYNX PageProxy get -> GeneratePipelineOptions0xB400007D35232A28
+09-15 20:54:20.373 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1252)] LYNX PageProxy get -> OnPipelineStart0xB400007D35232A28
+09-15 20:54:20.374 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D35232A28
+09-15 20:54:20.374 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(1158)] LYNX PageProxy get -> callLepusMethod0xB400007D35232A28
+09-15 20:54:20.374 19847 19968 I lynx    : [7C0603B730:INFO:js_app.cc(3538)]  CallLepusMethod: rLynxChange 0xB400007EA5253BE0
+09-15 20:54:20.374 19847 20723 I lynx    : [7CABE16730:INFO:template_assembler.cc(3534)] TemplateAssembler::CallLepusMethod. this:0xB400007CC51742D0 url:assets://bundles/video-demo.lynx.bundle method name: rLynxChange
+09-15 20:54:20.374 19847 20723 I lynx    : [7CABE16730:INFO:element_manager.cc(1704)] ElementManager::OnPatchFinishForFiber WithPatch!
+09-15 20:54:20.375 19847 20723 I lynx    : [7CABE16730:INFO:layout_context.cc(882)] [Layout] layout finish with result size: 1080, 2232 for viewport, size: 1080.0, 2232.0; mode: 1, 1 Time taken: 612917 ns
+09-15 20:54:20.375 19847 19847 I NativeFacade: native->java onPageChanged isFirstScreen:false instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:20.375 19847 19847 I LynxTemplateRender: TASMCallback.onPageChanged isFirstScreen:false instanceId:1 url:assets://bundles/video-demo.lynx.bundle
+09-15 20:54:20.375 19847 19847 I LynxTemplateRender: onPageUpdate
+09-15 20:54:20.380 19847 19847 I LynxTemplateRender: updateViewport is unnecessary, because the size of the cache are the same as the size to be set.
+09-15 20:54:20.391  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.424  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.464  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.481   468 20778 I C2SoftAacDec: Reconfiguring decoder: 0->48000 Hz, 0->2 channels
+09-15 20:54:20.487 19847 20777 D CCodecConfig: c2 config diff is   c2::u32 raw.channel-mask.value = 12
+09-15 20:54:20.487 19847 20777 D CCodecBuffers: [c2.android.aac.decoder#247:Output[N]] popFromStashAndRegister: at 1000000000000us, output format changed to AMessage(what = 0x00000000) = {
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t aac-drc-album-mode = 0
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t aac-drc-boost-level = 127
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t aac-drc-cut-level = 127
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t aac-drc-effect-type = 3
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t aac-drc-output-loudness = -1
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t aac-encoded-target-level = -1
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t aac-max-output-channel_count = 8
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t aac-target-ref-level = 64
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t buffer-batch-max-output-size = 0
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t buffer-batch-threshold-output-size = 0
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t channel-count = 2
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t channel-mask = 12
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t max-output-channel-count = 8
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   string mime = "audio/raw"
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t sample-rate = 48000
+09-15 20:54:20.487 19847 20777 D CCodecBuffers:   int32_t android._config-pcm-encoding = 2
+09-15 20:54:20.487 19847 20777 D CCodecBuffers: }
+09-15 20:54:20.495   407   699 W AudioFlinger: createTrack_l(): mismatch between requested flags (00000008) and output flags (00000002)
+09-15 20:54:20.495   407   699 D AudioFlinger: Client defaulted notificationFrames to 8720 for frameCount 17440
+09-15 20:54:20.579  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.614  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.620  1692  1692 W amdp-conn-40676: type=1400 audit(0.0:72768): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/netfilter/nf_log" dev="proc" ino=4026531969 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:20.620  1692  1692 W amdp-conn-40676: type=1400 audit(0.0:72769): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/netfilter/nfnetlink_log" dev="proc" ino=4026532088 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:20.620  1692  1692 W amdp-conn-40676: type=1400 audit(0.0:72770): avc:  denied  { getattr } for  path="/proc/1692/task/1738/net/netfilter/nfnetlink_queue" dev="proc" ino=4026532087 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:20.650  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.688  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.723  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.775   624   852 D MediaMetricsManagerService: failed to get player_metrics_app_blocklist from DeviceConfig
+09-15 20:54:20.775   624   852 V MediaMetricsManagerService: Logging level blocked: Failed to get PLAYER_METRICS_APP_BLOCKLIST.
+09-15 20:54:20.821  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.859  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.896  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.904  1692  1692 W amdp-conn-40682: type=1400 audit(0.0:72771): avc:  denied  { getattr } for  path="/proc/940/task/1149/net/xt_quota/eth0" dev="proc" ino=4026532878 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:20.904  1692  1692 W amdp-conn-40682: type=1400 audit(0.0:72772): avc:  denied  { getattr } for  path="/proc/940/task/1149/net/xt_quota/globalAlert" dev="proc" ino=4026532863 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:54:20.938  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:20.970  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:21.059   624  1404 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+09-15 20:54:21.071  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:21.094 20815 20815 W audit   : audit_lost=66646 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:54:21.094 20815 20815 E audit   : rate limit exceeded
+09-15 20:54:21.098 20808 20808 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-15 20:54:21.098 20808 20808 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+09-15 20:54:21.106   368  2676 D android.hardware.audio@7.1-impl.ranchu: threadLoop: entering standby, frames: 2233664
+09-15 20:54:21.112  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:21.123   161   161 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+09-15 20:54:21.123 20808 20821 I Gralloc4: mapper 4.x is not supported
+09-15 20:54:21.125   160   160 I servicemanager: Caller(pid=20808,uid=2000,sid=u:r:shell:s0) Could not find android.hardware.graphics.allocator.IAllocator/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-15 20:54:21.147  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:21.181  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:21.214  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:21.309  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:54:21.345  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1

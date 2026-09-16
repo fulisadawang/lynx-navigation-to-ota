@@ -50,6 +50,26 @@ export {
 } from './ota/EmbeddedBundleRegistry';
 export { default as PageBundleRuntimeRegistry, LynxOtaConfig, OtaPrepareSignal } from './ota/OtaModels';
 export { LynxTabContainer, LynxTabSpec } from './pages/LynxTabContainer';
+export { default as LynxMonitor, ViewMonitorBinding } from './monitoring/LynxMonitor';
+export { default as LocalDiagnosticProvider } from './monitoring/LocalDiagnosticProvider';
+export {
+  BundleIdentity,
+  BundleSource,
+  MonitorConfig,
+  MonitorEvent,
+  MonitorEventType,
+  MonitorMetric,
+  RuntimeProvider,
+  ProviderCapabilities,
+  HostContext,
+  ErrorFrame,
+  LifecyclePayload,
+  LoadPayload,
+  JsErrorPayload,
+  PerformancePayload,
+  ResourcePayload,
+  DiagnosticPayload
+} from './monitoring/MonitorTypes';
 export { default as ContentAddressedOtaStore } from './ota/ContentAddressedOtaStore';
 export {
   OtaBundleLease,

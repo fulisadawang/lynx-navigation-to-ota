@@ -89,6 +89,7 @@ export struct LynxTabContainer {
   private viewWidth: number | string = '100%';
   private viewHeight: number | string = '100%';
   private firstScreenReached: boolean = false;
+  private nextLoadKind: 'initial' | 'retry' | 'reload' = 'initial';
   private contextCreated: (context: LynxContext) => void = () => {};
   private readonly userListener: (epoch: number) => void = () => {
     if (this.initialized && this.request.isOtaRequest()) this.reloadFromCurrent();
@@ -98,6 +99,7 @@ export struct LynxTabContainer {
     this.consumedRefreshGeneration = this.refreshGeneration;
     if (this.initialized) {
       this.lynxContext?.onEnterForeground();
+      this.clients[0]?.markVisible();
       return;
     }
     this.initialized = true;
@@ -109,6 +111,7 @@ export struct LynxTabContainer {
 
   aboutToDisappear(): void {
     this.lynxContext?.onEnterBackground();
+    this.clients[0]?.markHidden();
     if (this.lynxContext !== null) {
       ShellMessageHub.sendLifecycle(this.request.entryID, 'covered', 'arkui_tab_disappear');
     }
@@ -130,9 +133,12 @@ export struct LynxTabContainer {
 
   private configureForLoad(): void {
     const generation = ++this.prepareGeneration;
+    let monitorClient: ShellLynxViewClient | null = null;
     this.contextCreated = (context: LynxContext) => {
       if (generation !== this.prepareGeneration) { context.onEnterBackground(); return; }
       this.lynxContext = context;
+      monitorClient?.markCreated();
+      monitorClient?.markVisible();
       // Harmony LynxView 的 colorScheme 字段由 SDK 保持私有；Context 建立后立即使用
       // 官方动态 API 设定首值，避免 Tab 首帧继续沿用旧主题。
       context.updateColorScheme(ShellThemeState.colorScheme());
@@ -153,11 +159,14 @@ export struct LynxTabContainer {
       new TemplateData(this.request.initDataJson),
       new TemplateData(this.buildTabGlobalProps())
     );
-    this.clients = [new ShellLynxViewClient(
+    monitorClient = new ShellLynxViewClient(
       () => { if (generation === this.prepareGeneration) this.handleLoadSuccess(); },
       (message: string) => { if (generation === this.prepareGeneration && !this.firstScreenReached) this.handleLoadError(message); },
-      () => { if (generation === this.prepareGeneration) this.handleFirstScreen(); }
-    )];
+      () => { if (generation === this.prepareGeneration) this.handleFirstScreen(); },
+      'tab'
+    );
+    monitorClient.setLoadKind(this.nextLoadKind);
+    this.clients = [monitorClient];
     this.templateFetcher = new ShellTemplateResourceFetcher(false);
     this.genericFetcher = new ShellGenericResourceFetcher();
     this.mediaFetcher = new ShellMediaResourceFetcher();
@@ -185,12 +194,15 @@ export struct LynxTabContainer {
       return;
     }
     this.extraTiming.prepareTemplateEnd = new Date().getTime();
+    this.clients[0]?.markBundleUnavailable('direct_bundle_identity_unavailable', this.request.bundleUrl);
+    this.clients[0]?.markLoadStarted();
     this.showLynxView = true;
   }
 
   private reloadFromCurrent(): void {
     PageBundleRuntimeRegistry.current()?.resetNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
     this.disposeCurrentView('arkui_tab_explicit_refresh');
+    this.nextLoadKind = 'reload';
     this.configureForLoad();
     const generation = this.prepareGeneration;
     setTimeout(() => { if (generation === this.prepareGeneration) this.startLoad(); }, 0);
@@ -200,6 +212,7 @@ export struct LynxTabContainer {
     this.prepareGeneration += 1;
     this.templateFetcher.cancelAll();
     this.genericFetcher.cancelAll();
+    this.clients[0]?.markDestroyed(reason);
     if (this.lynxContext !== null) {
       this.lynxContext.onEnterBackground();
       ShellMessageHub.sendLifecycle(this.request.entryID, 'destroyed', reason);
@@ -292,6 +305,12 @@ export struct LynxTabContainer {
           new TemplateData(this.request.initDataJson),
           new TemplateData(this.buildTabGlobalProps(bundleMetadata))
         );
+        this.clients[0]?.setPreparedBundle(
+          prepared.source ?? 'ota_current', prepared.lynxAppId, prepared.bundleName,
+          prepared.releaseId, prepared.releaseSequence ?? null, prepared.sha256
+        );
+        this.clients[0]?.markLoadResolved(null);
+        this.clients[0]?.markLoadStarted();
         this.extraTiming.prepareTemplateEnd = new Date().getTime();
         console.info(`[${ShellConstants.TAG}] tab prepared ${prepared.lynxAppId}/${prepared.bundleName}, release=${prepared.releaseId}, manifest=${prepared.manifestId ?? 'embedded'}, snapshot=${prepared.navigationSnapshotID ?? 'none'}`);
         this.releaseCurrentLease();
@@ -321,6 +340,7 @@ export struct LynxTabContainer {
   }
 
   private handleLoadError(message: string): void {
+    this.clients[0]?.markLoadFailed('lynx_load_error');
     this.disposeCurrentView('arkui_tab_load_failed');
     this.isLoading = false;
     this.errorMessage = message.length > 0 ? message : 'Lynx Tab 加载失败';

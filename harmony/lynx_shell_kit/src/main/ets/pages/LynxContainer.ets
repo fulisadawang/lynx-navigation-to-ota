@@ -69,6 +69,7 @@ export struct LynxContainer {
   private preparedEpoch: number | undefined = undefined;
   private preparedReleaseId: string | undefined = undefined;
   private firstScreenReached: boolean = false;
+  private nextLoadKind: 'initial' | 'retry' | 'reload' = 'initial';
   private contextCreated: (context: LynxContext) => void = () => {};
   private readonly userListener: (epoch: number) => void = () => {
     if (this.request.isOtaRequest() && this.preparedRuntime !== null && !this.firstScreenReached && !this.isPreparedUserCurrent()) {
@@ -92,13 +93,14 @@ export struct LynxContainer {
     if (this.lynxContext !== null) {
       this.lynxContext.onEnterForeground();
       this.lynxContext.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
+      this.clients[0]?.markVisible();
       ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_page_appear');
       return;
     }
 
     this.modules.set('LynxShellModule', { moduleClass: LynxShellModule });
     LLog.d(ShellConstants.TAG, 'registered LynxShellModule with full Harmony bridge contract');
-    this.configureClients(this.prepareGeneration);
+    if (!this.request.isOtaRequest()) this.configureClients(this.prepareGeneration);
 
     const density = display.getDefaultDisplaySync().densityPixels;
     if (this.request.widthPx > 0) {
@@ -117,6 +119,8 @@ export struct LynxContainer {
       this.prepareOtaBundle();
     } else {
       this.extraTiming.prepareTemplateEnd = new Date().getTime();
+      this.clients[0]?.markBundleUnavailable('direct_bundle_identity_unavailable', this.request.bundleUrl);
+      this.clients[0]?.markLoadStarted();
       this.showLynxView = true;
     }
   }
@@ -128,11 +132,14 @@ export struct LynxContainer {
   }
 
   private configureClients(generation: number): void {
+    let monitorClient: ShellLynxViewClient | null = null;
     this.contextCreated = (context: LynxContext) => {
       if (generation !== this.prepareGeneration || (this.request.isOtaRequest() && !this.isPreparedUserCurrent())) {
         context.onEnterBackground(); return;
       }
-      this.lynxContext = context;
+    this.lynxContext = context;
+    monitorClient?.markCreated();
+      monitorClient?.markVisible();
       // Harmony LynxView 的 colorScheme 字段由 SDK 保持私有；Context 建立后立即使用
       // 官方动态 API 设定首值，早于壳层登记和前台事件，不重载 Bundle。
       context.updateColorScheme(ShellThemeState.colorScheme());
@@ -147,11 +154,14 @@ export struct LynxContainer {
       context.updateViewport(layout.viewportWidth, 1, layout.viewportHeight, 1);
       context.setExtraTiming(this.extraTiming);
     };
-    this.clients = [new ShellLynxViewClient(
+    monitorClient = new ShellLynxViewClient(
       (url: string) => { if (generation === this.prepareGeneration) this.handleLoadSuccess(url); },
       (message: string) => { if (generation === this.prepareGeneration) this.handleLoadError(message); },
-      () => { if (generation === this.prepareGeneration) this.handleFirstScreen(); }
-    )];
+      () => { if (generation === this.prepareGeneration) this.handleFirstScreen(); },
+      'page'
+    );
+    monitorClient.setLoadKind(this.nextLoadKind);
+    this.clients = [monitorClient];
   }
 
   private isPreparedUserCurrent(): boolean {
@@ -162,6 +172,7 @@ export struct LynxContainer {
     const disappearingContext = this.lynxContext;
     if (disappearingContext !== null) {
       disappearingContext.onEnterBackground();
+      this.clients[0]?.markHidden();
       // aboutToDisappear 既可能表示被下一页覆盖，也可能表示从 NavPathStack 移除；先
       // 发 covered，下一轮根据逻辑栈是否还存在来决定是否真正销毁。被覆盖时
       // 不能取消 Provider 请求或丢弃 Context，否则返回后页面无法恢复。
@@ -174,6 +185,7 @@ export struct LynxContainer {
         return;
       }
       ShellMessageHub.sendLifecycle(this.request.entryID, 'destroyed', 'arkui_page_removed');
+      this.clients[0]?.markDestroyed('arkui_page_removed');
       ShellMessageHub.unregister(this.request.entryID);
       this.cancelPendingRequests();
       if (this.lynxContext === disappearingContext) {
@@ -223,6 +235,7 @@ export struct LynxContainer {
       this.attemptRollback(message.length > 0 ? message : 'Lynx 首屏加载失败');
       return;
     }
+    this.clients[0]?.markLoadFailed('lynx_load_error');
     this.cancelViewResources();
     this.isLoading = false;
     this.errorMessage = message.length > 0 ? message : 'Lynx 页面加载失败';
@@ -234,12 +247,16 @@ export struct LynxContainer {
     this.errorMessage = '';
     this.showLynxView = false;
     this.configureClients(this.prepareGeneration);
+    this.nextLoadKind = 'retry';
+    this.clients[0]?.setLoadKind(this.nextLoadKind);
     if (this.request.isOtaRequest()) {
       // 用户主动重试会重新检查 current/repair，但一次页面生命周期内仍不重复自动回滚。
       this.prepareOtaBundle();
       return;
     }
     setTimeout(() => {
+      this.clients[0]?.markBundleUnavailable('direct_bundle_identity_unavailable', this.request.bundleUrl);
+      this.clients[0]?.markLoadStarted();
       this.showLynxView = true;
     }, 0);
   }
@@ -326,6 +343,12 @@ export struct LynxContainer {
             bundleMetadata
           ))
         );
+        this.clients[0]?.setPreparedBundle(
+          prepared.source ?? 'ota_current', prepared.lynxAppId, prepared.bundleName,
+          prepared.releaseId, prepared.releaseSequence ?? null, prepared.sha256
+        );
+        this.clients[0]?.markLoadResolved(null);
+        this.clients[0]?.markLoadStarted();
         this.extraTiming.prepareTemplateEnd = new Date().getTime();
         console.info(`[${ShellConstants.TAG}] prepared ${prepared.lynxAppId}/${prepared.bundleName}, release=${prepared.releaseId}, manifest=${prepared.manifestId ?? 'embedded'}, snapshot=${prepared.navigationSnapshotID ?? 'none'}`);
         this.preparing = false;
@@ -395,6 +418,7 @@ export struct LynxContainer {
   private cancelViewResources(): void {
     this.templateFetcher.cancelAll();
     this.genericFetcher.cancelAll();
+    this.clients[0]?.markDestroyed('view_resources_cancelled');
     if (this.lynxContext !== null) {
       ShellMessageHub.unregister(this.request.entryID);
       this.lynxContext = null;

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "55555555-5555-4555-8555-555555555555",
+  "processSessionId": "22222222-2222-4222-8222-222222222222",
+  "eventType": "lynx.performance",
+  "observedAtMs": 1789448400500,
+  "platform": "android",
+  "runtimeVersion": "4.1.0",
+  "hostBuild": "42",
+  "viewId": "33333333-3333-4333-8333-333333333333",
+  "nativeInstanceId": "17",
+  "containerKind": "tab",
+  "loadId": "44444444-4444-4444-8444-444444444444",
+  "loadKind": "initial",
+  "bundle": {
+    "source": "ota",
+    "lynxAppId": "example-app",
+    "bundleName": "example.lynx.bundle",
+    "releaseId": "example-r42",
+    "releaseSequence": "42",
+    "sha256": "37ab6496efecfb14f303f2e40c0f70163cfdac5c0de89b4b3bcd73ca9058f6bd",
+    "identityStatus": "verified",
+    "missingReason": null,
+    "buildId": "example-build-001"
+  },
+  "visibility": "visible",
+  "quality": {
+    "association": "exact_load",
+    "late": false,
+    "missingFields": [],
+    "invalidFields": [],
+    "truncatedFields": []
+  },
+  "sampling": {
+    "owner": "core",
+    "rate": 1
+  },
+  "payload": {
+    "entryType": "pipeline",
+    "entryName": "loadBundle",
+    "identifier": null,
+    "metrics": [
+      {
+        "name": "lynx_fcp_ms",
+        "value": 420,
+        "unit": "ms",
+        "origin": "sdk_duration",
+        "sourceFields": [
+          "LoadBundleEntry.lynxFcp.duration"
+        ]
+      }
+    ],
+    "timing": {
+      "loadBundleStart": 1789448400000,
+      "paintEnd": 1789448400420
+    }
+  }
+}

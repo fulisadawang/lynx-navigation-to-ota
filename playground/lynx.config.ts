@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from '@lynx-js/rspeedy'
 import lynxSharedConfig from './lynx.shared.config.js'
+import { pluginLynxMonitoringArtifacts } from './plugins/lynx-monitoring-artifacts.js'
 
 function copyDirectory(source: string, destination: string) {
   if (!fs.existsSync(source)) {
@@ -34,6 +35,8 @@ export default defineConfig({
   },
   plugins: [
     ...(lynxSharedConfig.plugins ?? []),
+    // 在官方 Debug Metadata 清理前归档每个 entry 的调试材料，产物不进入 Bundle 发布目录。
+    pluginLynxMonitoringArtifacts(),
     {
       name: 'sync-manual-native-shell-bundles',
       setup(api) {

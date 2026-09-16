@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lynx-view-monitoring:event:1.0",
+  "title": "LynxView monitoring event v1.0 design contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "eventId", "processSessionId", "eventType", "observedAtMs", "platform", "runtimeVersion", "hostBuild", "viewId", "nativeInstanceId", "containerKind", "loadId", "loadKind", "bundle", "visibility", "quality", "sampling", "payload"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "eventId": {"$ref": "#/$defs/id"},
+    "processSessionId": {"$ref": "#/$defs/id"},
+    "eventType": {"enum": ["view.lifecycle", "view.load", "lynx.performance", "lynx.js_error", "lynx.resource", "monitor.diagnostic"]},
+    "observedAtMs": {"type": "number", "minimum": 0},
+    "platform": {"enum": ["android", "ios", "harmony"]},
+    "runtimeVersion": {"type": "string", "minLength": 1, "maxLength": 128},
+    "hostBuild": {"type": "string", "minLength": 1, "maxLength": 128},
+    "viewId": {"anyOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+    "nativeInstanceId": {"$ref": "#/$defs/nullableText"},
+    "containerKind": {"enum": ["page", "tab", "embedded", "unknown"]},
+    "loadId": {"anyOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+    "loadKind": {"enum": ["initial", "retry", "reload", null]},
+    "bundle": {"anyOf": [{"$ref": "#/$defs/bundle"}, {"type": "null"}]},
+    "visibility": {"enum": ["visible", "hidden", "background", "unknown"]},
+    "quality": {
+      "type": "object", "additionalProperties": false,
+      "required": ["association", "late", "missingFields", "invalidFields", "truncatedFields"],
+      "properties": {
+        "association": {"enum": ["exact_load", "exact_view", "unassigned"]},
+        "late": {"type": "boolean"},
+        "missingFields": {"$ref": "#/$defs/fieldList"},
+        "invalidFields": {"$ref": "#/$defs/fieldList"},
+        "truncatedFields": {"$ref": "#/$defs/fieldList"}
+      }
+    },
+    "sampling": {
+      "type": "object", "additionalProperties": false, "required": ["owner", "rate"],
+      "properties": {"owner": {"enum": ["core", "provider", "none"]}, "rate": {"type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 1}}
+    },
+    "payload": {"type": "object"}
+  },
+  "allOf": [
+    {"if": {"properties": {"eventType": {"const": "view.lifecycle"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/lifecycle"}}}},
+    {"if": {"properties": {"eventType": {"const": "view.load"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/load"}}}},
+    {"if": {"properties": {"eventType": {"const": "lynx.performance"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/performance"}}}},
+    {"if": {"properties": {"eventType": {"const": "lynx.js_error"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/jsError"}}}},
+    {"if": {"properties": {"eventType": {"const": "lynx.resource"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/resource"}}}},
+    {"if": {"properties": {"eventType": {"const": "monitor.diagnostic"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/diagnostic"}}}},
+    {
+      "if": {"properties": {"quality": {"properties": {"association": {"const": "exact_load"}}}}},
+      "then": {"properties": {"viewId": {"$ref": "#/$defs/id"}, "loadId": {"$ref": "#/$defs/id"}, "loadKind": {"enum": ["initial", "retry", "reload"]}, "bundle": {"$ref": "#/$defs/bundle"}}}
+    },
+    {
+      "if": {"properties": {"quality": {"properties": {"association": {"const": "exact_view"}}}}},
+      "then": {"properties": {"viewId": {"$ref": "#/$defs/id"}, "loadId": {"type": "null"}, "loadKind": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"quality": {"properties": {"association": {"const": "unassigned"}}}}},
+      "then": {"properties": {"viewId": {"type": "null"}, "loadId": {"type": "null"}, "loadKind": {"type": "null"}, "bundle": {"type": "null"}}}
+    }
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableText": {"type": ["string", "null"], "minLength": 1, "maxLength": 2048},
+    "fieldList": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+    "bundle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "lynxAppId", "bundleName", "releaseId", "releaseSequence", "sha256", "identityStatus", "missingReason", "buildId"],
+      "properties": {
+        "source": {"enum": ["ota", "embedded", "direct_https", "direct_asset"]},
+        "lynxAppId": {"$ref": "#/$defs/nullableText"},
+        "bundleName": {"$ref": "#/$defs/nullableText"},
+        "releaseId": {"$ref": "#/$defs/nullableText"},
+        "releaseSequence": {"type": ["string", "null"], "pattern": "^(0|[1-9][0-9]*)$"},
+        "sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "identityStatus": {"enum": ["verified", "computed", "unavailable"]},
+        "missingReason": {"$ref": "#/$defs/nullableText"},
+        "buildId": {"$ref": "#/$defs/nullableText"}
+      },
+      "allOf": [
+        {"if": {"properties": {"identityStatus": {"const": "unavailable"}}}, "then": {"properties": {"sha256": {"type": "null"}, "missingReason": {"type": "string", "minLength": 1}}}, "else": {"properties": {"sha256": {"$ref": "#/$defs/sha256"}, "missingReason": {"type": "null"}}}}
+      ]
+    },
+    "lifecycle": {
+      "type": "object", "additionalProperties": false, "required": ["state"],
+      "properties": {"state": {"enum": ["created", "visible", "hidden", "background", "destroyed", "create_failed"]}, "durationMs": {"type": ["number", "null"], "minimum": 0}}
+    },
+    "load": {
+      "type": "object", "additionalProperties": false, "required": ["phase"],
+      "properties": {"phase": {"enum": ["started", "resolved", "loaded_unconfirmed", "first_content", "failed", "cancelled", "incomplete"]}, "reasonCode": {"type": "string", "minLength": 1}, "durationMs": {"type": ["number", "null"], "minimum": 0}}
+    },
+    "metric": {
+      "type": "object", "additionalProperties": false, "required": ["name", "value", "unit", "origin", "sourceFields"],
+      "properties": {
+        "name": {"enum": ["lynx_fcp_ms", "prepare_to_fcp_ms", "open_to_fcp_ms", "parse_ms", "bts_load_ms", "mts_render_ms", "style_resolve_ms", "layout_ms", "paint_ui_ops_ms", "pipeline_ms"]},
+        "value": {"type": "number", "minimum": 0}, "unit": {"const": "ms"},
+        "origin": {"enum": ["sdk_duration", "sdk_timestamp_difference"]},
+        "sourceFields": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "performance": {
+      "type": "object", "additionalProperties": false, "required": ["entryType", "entryName", "identifier", "metrics", "timing"],
+      "properties": {
+        "entryType": {"enum": ["init", "metric", "pipeline", "resource"]}, "entryName": {"type": "string", "minLength": 1, "maxLength": 128},
+        "identifier": {"$ref": "#/$defs/nullableText"},
+        "metrics": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/metric"}},
+        "timing": {"type": "object", "maxProperties": 64, "additionalProperties": {"type": "number", "minimum": 0}}
+      }
+    },
+    "frame": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file", "functionName", "runtimeRelease", "debugKey", "positionKind"],
+      "properties": {
+        "file": {"$ref": "#/$defs/nullableText"}, "functionName": {"$ref": "#/$defs/nullableText"}, "runtimeRelease": {"$ref": "#/$defs/nullableText"}, "debugKey": {"$ref": "#/$defs/nullableText"},
+        "positionKind": {"enum": ["line_column", "function_pc", "unknown"]},
+        "line": {"type": "integer", "minimum": 1}, "column": {"type": "integer", "minimum": 0},
+        "functionId": {"type": "integer", "minimum": 0}, "pc": {"type": "integer", "minimum": 0}
+      },
+      "oneOf": [
+        {"properties": {"positionKind": {"const": "line_column"}}, "required": ["line", "column"], "not": {"anyOf": [{"required": ["functionId"]}, {"required": ["pc"]}]}},
+        {"properties": {"positionKind": {"const": "function_pc"}}, "required": ["functionId", "pc"], "not": {"anyOf": [{"required": ["line"]}, {"required": ["column"]}]}},
+        {"properties": {"positionKind": {"const": "unknown"}}, "not": {"anyOf": [{"required": ["line"]}, {"required": ["column"]}, {"required": ["functionId"]}, {"required": ["pc"]}]}}
+      ]
+    },
+    "jsError": {
+      "type": "object", "additionalProperties": false, "required": ["errorCode", "subCode", "level", "realm", "message", "rawStack", "frames", "handled", "phase"],
+      "properties": {
+        "errorCode": {"$ref": "#/$defs/nullableText"}, "subCode": {"$ref": "#/$defs/nullableText"},
+        "level": {"enum": ["fatal", "error", "warning", "unknown"]}, "realm": {"enum": ["background", "main_thread", "unknown"]},
+        "message": {"type": "string", "maxLength": 4096}, "rawStack": {"type": ["string", "null"], "maxLength": 16384},
+        "frames": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/frame"}},
+        "handled": {"enum": ["unhandled", "reported", "unknown"]}, "phase": {"enum": ["loading", "running", "unknown"]}
+      }
+    },
+    "resource": {
+      "type": "object", "additionalProperties": false, "required": ["resourceType", "outcome", "durationMs", "errorCode", "resourceKey"],
+      "properties": {"resourceType": {"type": "string", "minLength": 1, "maxLength": 128}, "outcome": {"enum": ["success", "failed"]}, "durationMs": {"type": ["number", "null"], "minimum": 0}, "errorCode": {"$ref": "#/$defs/nullableText"}, "resourceKey": {"$ref": "#/$defs/nullableText"}}
+    },
+    "diagnostic": {
+      "type": "object", "additionalProperties": false, "required": ["code", "count", "detail"],
+      "properties": {"code": {"type": "string", "minLength": 1, "maxLength": 128}, "count": {"type": "integer", "minimum": 1}, "detail": {"$ref": "#/$defs/nullableText"}}
+    }
+  }
+}

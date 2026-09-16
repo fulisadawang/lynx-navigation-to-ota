@@ -4,13 +4,25 @@ import UIAbility from '@ohos.app.ability.UIAbility';
 import Want from '@ohos.app.ability.Want';
 import { ConfigurationConstant } from '@kit.AbilityKit';
 import window from '@ohos.window';
-import { ShellConstants, LynxOtaConfig, LynxRouter } from '@lynx/lynx-shell-kit';
+import bundleManager from '@ohos.bundle.bundleManager';
+import {
+  HostContext,
+  LocalDiagnosticProvider,
+  LynxMonitor,
+  ShellConstants,
+  LynxOtaConfig,
+  LynxRouter
+} from '@lynx/lynx-shell-kit';
 
 /**
  * Stage 模型入口。
  * 只负责进程初始化、窗口管理和深链暂存；实际路由解析统一交给 LynxRouteParser。
  */
 export default class EntryAbility extends UIAbility {
+  private localMonitorProvider: LocalDiagnosticProvider | null = null;
+  private monitorSnapshotTimer: number = -1;
+  private lastMonitorSnapshot: string = '';
+
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     this.updateInitialRoute(want);
     const launchParameterKeys = want.parameters === undefined ? '' : Object.keys(want.parameters).join(',');
@@ -82,6 +94,7 @@ export default class EntryAbility extends UIAbility {
     } else {
       LynxRouter.install(this.context, otaConfig);
     }
+    this.installLocalMonitorIfRequested(want);
     console.info(`[${ShellConstants.TAG}] OTA base=${launchBaseUrl}, embeddedOnly=${embeddedOnly}, localHttp=${otaConfig.allowLocalHTTPForTest}, testFault=${otaConfig.testFaultPoint || 'none'}, capacityOverride=${otaConfig.testAvailableCapacityBytes}, testPause=${otaConfig.testPausePoint || 'none'}:${otaConfig.testPauseMillis}:${otaConfig.testPauseToken || 'none'}, wantKeys=${launchParameterKeys}`);
     AppStorage.setOrCreate(ShellConstants.STORAGE_COLOR_MODE, this.context.config.colorMode);
     this.applyTheme(this.context.config.colorMode);
@@ -110,6 +123,8 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageDestroy(): void {
+    this.stopLocalMonitorSnapshotLogging();
+    LynxMonitor.shared().close();
     LynxRouter.detachWindow();
     AppStorage.delete(ShellConstants.STORAGE_WINDOW_STAGE);
   }
@@ -143,5 +158,49 @@ export default class EntryAbility extends UIAbility {
 
     const previousVersion = AppStorage.get<number>(ShellConstants.STORAGE_INITIAL_URI_VERSION) ?? 0;
     AppStorage.setOrCreate(ShellConstants.STORAGE_INITIAL_URI_VERSION, previousVersion + 1);
+  }
+
+  /** 只在显式 Debug Want 中启用本地 Provider，避免业务默认启动监控或产生网络请求。 */
+  private installLocalMonitorIfRequested(want: Want): void {
+    const enabled = ((want.parameters?.lynx_monitor_local as string) ?? '').trim() === '1';
+    if (!enabled) return;
+    const nativeInfo = bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
+    const provider = new LocalDiagnosticProvider();
+    const monitor = LynxMonitor.shared();
+    const context: HostContext = {
+      platform: 'harmony',
+      hostAppId: nativeInfo.name,
+      hostBuild: nativeInfo.versionCode.toString(),
+      runtimeVersion: monitor.runtimeVersion,
+      processSessionId: monitor.sessionId
+    };
+    this.localMonitorProvider = provider;
+    LynxMonitor.install({ enabled: true, provider, performanceSampleRate: 1 }, context)
+      .then((result) => {
+        console.info(`[${ShellConstants.TAG}] LynxMonitor init state=${result.state}${result.state === 'failed' ? ` reason=${result.reason}` : ''}`);
+        if (result.state === 'ready') this.startLocalMonitorSnapshotLogging();
+      })
+      .catch((error: Error) => {
+        console.error(`[${ShellConstants.TAG}] LynxMonitor install failed: ${error.message}`);
+      });
+  }
+
+  private startLocalMonitorSnapshotLogging(): void {
+    this.stopLocalMonitorSnapshotLogging();
+    const logSnapshot = (): void => {
+      const summary = LynxMonitor.shared().snapshotSummary();
+      if (summary === this.lastMonitorSnapshot) return;
+      this.lastMonitorSnapshot = summary;
+      console.info(`[${ShellConstants.TAG}] monitor_snapshot ${summary}`);
+    };
+    logSnapshot();
+    this.monitorSnapshotTimer = setInterval(logSnapshot, 500);
+  }
+
+  private stopLocalMonitorSnapshotLogging(): void {
+    if (this.monitorSnapshotTimer < 0) return;
+    clearInterval(this.monitorSnapshotTimer);
+    this.monitorSnapshotTimer = -1;
+    this.lastMonitorSnapshot = '';
   }
 }

@@ -17,6 +17,7 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
     private static let maximumBundleBytes = 20 * 1024 * 1024
     private let allowHTTPInDebug: Bool
     private let onLoadError: ((String, Error) -> Void)?
+    private let onTemplateData: ((String, Data) -> Void)?
     /** prepareRoute 命中后只把一次性 Bundle 字节交给目标 Provider。 */
     private let prefetchedURL: String?
     private var prefetchedData: Data?
@@ -33,10 +34,12 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         allowHTTPInDebug: Bool,
         onLoadError: ((String, Error) -> Void)?,
         prefetchedURL: String? = nil,
-        prefetchedData: Data? = nil
+        prefetchedData: Data? = nil,
+        onTemplateData: ((String, Data) -> Void)? = nil
     ) {
         self.allowHTTPInDebug = allowHTTPInDebug
         self.onLoadError = onLoadError
+        self.onTemplateData = onTemplateData
         self.prefetchedURL = prefetchedURL
         self.prefetchedData = prefetchedData
         let configuration = URLSessionConfiguration.ephemeral
@@ -84,7 +87,7 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         }
         stateLock.unlock()
         if let prepared {
-            completeSuccess(prepared, callback: callback)
+            completeSuccess(prepared, url: url, callback: callback)
             return
         }
         if RemoteBundlePolicy.isRemote(url) {
@@ -103,7 +106,7 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
                 let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
                 guard !data.isEmpty else { throw TemplateError.emptyBundle }
                 guard data.count <= Self.maximumBundleBytes else { throw TemplateError.bundleTooLarge }
-                self.completeSuccess(data, callback: callback)
+                self.completeSuccess(data, url: rawURL, callback: callback)
             } catch {
                 self.completeFailure(url: rawURL, error: error, callback: callback)
             }
@@ -150,7 +153,7 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
                 guard secureFinalURL || permittedDebugHTTP else { throw TemplateError.insecureRedirect }
                 guard let data, !data.isEmpty else { throw TemplateError.emptyBundle }
                 guard data.count <= Self.maximumBundleBytes else { throw TemplateError.bundleTooLarge }
-                self.completeSuccess(data, callback: callback)
+                self.completeSuccess(data, url: rawURL, callback: callback)
             } catch {
                 self.completeFailure(url: rawURL, error: error, callback: callback)
             }
@@ -203,7 +206,16 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         return Bundle.main.url(forResource: name, withExtension: ext, subdirectory: directory)
     }
 
-    private func completeSuccess(_ data: Data, callback: @escaping LynxTemplateLoadBlock) {
+    private func completeSuccess(_ data: Data, url: String, callback: @escaping LynxTemplateLoadBlock) {
+        guard !isCancelled else { return }
+        if onTemplateData != nil, Thread.isMainThread {
+            // 预取字节原本可同步回调；开启监控后把一次性内容哈希放到资源线程，避免阻塞 UIKit。
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.completeSuccess(data, url: url, callback: callback)
+            }
+            return
+        }
+        onTemplateData?(url, data)
         guard !isCancelled else { return }
         callback(data, nil)
     }

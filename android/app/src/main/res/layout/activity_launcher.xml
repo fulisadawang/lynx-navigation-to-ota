@@ -58,6 +58,17 @@
             app:cornerRadius="12dp" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/open_monitoring_acceptance_button"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="52dp"
+            android:text="打开 Lynx 监控 G1 验收"
+            android:textSize="16sp"
+            app:cornerRadius="12dp" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/open_ota_storage_inspector_button"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"

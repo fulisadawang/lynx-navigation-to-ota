@@ -6,6 +6,9 @@ import android.content.Intent
 import android.os.Bundle
 import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.LynxShell
+import com.example.lynxshell.monitoring.DiagnosticProvider
+import com.example.lynxshell.monitoring.LynxMonitor
+import com.example.lynxshell.monitoring.MonitorConfig
 import com.example.lynxshell.ota.LynxOtaConfig
 import com.example.lynxshell.routing.AppHomeHandler
 import java.net.URI
@@ -17,11 +20,19 @@ import java.net.URI
  * 避免业务 Activity 重复注册 Service 或 Native Module。
  */
 class LynxShellSampleApplication : Application() {
+    companion object {
+        /** Debug Sample 的本地监控实例，供验收页读取快照；不会连接网络或厂商 SDK。 */
+        @Volatile
+        var diagnosticProvider: DiagnosticProvider? = null
+            private set
+    }
+
     private var startedActivityCount = 0
     private var hasCompletedInitialForeground = false
 
     override fun onCreate() {
         super.onCreate()
+        installLocalMonitoringForDebug()
         val userSelectionDebug = OtaUserSelectionDebug.prepareBeforeInstall(this)
         // 三端统一入口：Android 具体承载仍是 Activity-first；OTA 适配器只在宿主 App 注入。
         // Router 不依赖 OTA SDK，也不需要注册 Bundle route 映射。
@@ -91,5 +102,23 @@ class LynxShellSampleApplication : Application() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         LynxShell.onTrimMemory(level)
+    }
+
+    /**
+     * Debug Sample 必须在首个 LynxView 创建前安装本地 Provider，才能验收首屏事件。
+     * 这里故意只使用有界内存 Provider，不接厂商、HTTP、Token 或业务服务器。
+     */
+    private fun installLocalMonitoringForDebug() {
+        if (!BuildConfig.DEBUG) return
+        val provider = DiagnosticProvider()
+        val result = LynxMonitor.install(
+            this,
+            MonitorConfig(
+                provider = provider,
+                performanceSampleRate = 1.0,
+            ),
+        )
+        diagnosticProvider = provider
+        android.util.Log.i("LynxMonitorAcceptance", "install state=${result.state} reason=${result.reason ?: "none"}")
     }
 }

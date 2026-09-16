@@ -34,6 +34,9 @@ final class LynxContainerViewController: UIViewController {
     private let layoutUpdateCoordinator = ShellLayoutUpdateCoordinator()
     private var latestLayoutSnapshot: ShellLayoutSnapshot?
     private var firstScreenObserver: LynxFirstScreenObserver?
+    private var monitorScope: LynxMonitorScope?
+    private var monitorObserver: LynxMonitorObserver?
+    private var monitorVisibility: LynxMonitorVisibility = .hidden
     private var firstScreenReady = false
     private var firstScreenFailed = false
     private var readinessWaiters: [UUID: (Bool, String?) -> Void] = [:]
@@ -71,6 +74,7 @@ final class LynxContainerViewController: UIViewController {
     }
 
     deinit {
+        monitorScope?.close(reason: "page_destroyed")
         ShellMessageHub.unregister(pageId: navigationEntryID)
         otaPrepareTask?.cancel()
         templateProvider?.cancel()
@@ -108,7 +112,7 @@ final class LynxContainerViewController: UIViewController {
         view.addSubview(contentHostView)
 
         errorView.translatesAutoresizingMaskIntoConstraints = false
-        errorView.onRetry = { [weak self] in self?.rebuildLynxView(resetOtaRecovery: true) }
+        errorView.onRetry = { [weak self] in self?.rebuildLynxView(resetOtaRecovery: true, monitorLoadKind: .retry) }
         contentHostView.addSubview(errorView)
         NSLayoutConstraint.activate([
             errorView.leadingAnchor.constraint(equalTo: contentHostView.leadingAnchor),
@@ -156,6 +160,8 @@ final class LynxContainerViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        monitorVisibility = .hidden
+        monitorScope?.setVisibility(.hidden)
         // UIKit 的 VC 生命周期是 iOS 端 Native Page Stack 的事实源；这里同步 Lynx
         // Runtime，而不是让页面自己猜测“被覆盖”和“被销毁”的区别。
         lynxView?.onEnterBackground()
@@ -183,6 +189,8 @@ final class LynxContainerViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        monitorVisibility = .visible
+        monitorScope?.setVisibility(.visible)
         lynxView?.onEnterForeground()
         sendLifecycle(state: "active", reason: "uikit_view_did_appear")
         // viewWillAppear/didShow 可能仍处于 UIKit transitionCoordinator 生命周期内；
@@ -483,7 +491,8 @@ final class LynxContainerViewController: UIViewController {
         }
     }
 
-    private func rebuildLynxView(resetOtaRecovery: Bool) {
+    private func rebuildLynxView(resetOtaRecovery: Bool, monitorLoadKind: LynxMonitorLoadKind = .initial) {
+        closeMonitoring(reason: "view_rebuilt")
         finishReadiness(success: false, reason: "page_destroyed")
         otaPrepareTask?.cancel()
         otaPrepareTask = nil
@@ -505,6 +514,9 @@ final class LynxContainerViewController: UIViewController {
         lynxView = nil
         releaseCurrentLease()
 
+        monitorScope = LynxMonitor.beginView(kind: .page, loadKind: monitorLoadKind, visibility: monitorVisibility)
+        monitorScope?.setRequest(source: request.isOtaRequest ? .ota : (RemoteBundlePolicy.isRemote(request.bundleURL) ? .directHTTPS : .directAsset),
+                                 appId: request.lynxAppId, bundleName: request.bundleName)
         let generation = loadGeneration
         if request.isOtaRequest {
             prepareOtaBundle(generation: generation)
@@ -604,6 +616,7 @@ final class LynxContainerViewController: UIViewController {
                     self.releaseCurrentLease()
                     self.releaseLease = prepared.releaseLease
                     self.preparedBundleData = data
+                    self.monitorScope?.setPreparedBundle(prepared)
                     var metadata: [String: Any] = [
                         "lynxAppId": prepared.lynxAppId,
                         "releaseId": prepared.releaseId ?? "unknown",
@@ -652,6 +665,8 @@ final class LynxContainerViewController: UIViewController {
     private func renderLynxView(generation: UUID) {
         guard generation == loadGeneration else { return }
 
+        let monitoredScope = monitorScope
+        let monitoredURL = request.bundleURL
         let provider = ShellTemplateProvider(
             allowHTTPInDebug: request.allowHTTPInDebug,
             onLoadError: { [weak self] url, error in
@@ -662,7 +677,10 @@ final class LynxContainerViewController: UIViewController {
                 )
             },
             prefetchedURL: request.bundleURL,
-            prefetchedData: preparedBundleData
+            prefetchedData: preparedBundleData,
+            onTemplateData: monitoredScope.map { scope in
+                { url, data in if url == monitoredURL { scope.resolved(data) } }
+            }
         )
         preparedBundleData = nil
         templateProvider = provider
@@ -684,12 +702,20 @@ final class LynxContainerViewController: UIViewController {
             bundleMetadata: bundleRuntimeMetadata,
             layoutSnapshot: layoutSnapshot
         )
+        let createStarted = ProcessInfo.processInfo.systemUptime
         let createdView = LynxNativeRuntime.makeView(
             provider: provider,
             screenSize: layoutSnapshot.screenSize,
             viewportSize: layoutSnapshot.viewportSize,
             globalProps: globalProps
         )
+        if let monitoredScope {
+            let monitor = LynxMonitorObserver(scope: monitoredScope)
+            monitorObserver = monitor
+            createdView.addLifecycleClient(monitor)
+            monitoredScope.didCreate(durationMs: (ProcessInfo.processInfo.systemUptime - createStarted) * 1000)
+        }
+        let errorMonitor = monitorObserver
         let observer = LynxFirstScreenObserver(
             generation: generation,
             onFirstScreen: { [weak self] generation, view in
@@ -701,7 +727,8 @@ final class LynxContainerViewController: UIViewController {
                     view: view,
                     error: error
                 )
-            }
+            },
+            onErrorObserved: errorMonitor.map { monitor in { error in monitor.receivedError(error) } }
         )
         firstScreenObserver = observer
         createdView.addLifecycleClient(observer)
@@ -803,6 +830,7 @@ final class LynxContainerViewController: UIViewController {
     /** Provider/首屏错误时，OTA 页面只允许一次 previous/embedded 回滚。 */
     private func handleTemplateLoadFailure(generation: UUID, message: String) {
         guard generation == loadGeneration else { return }
+        monitorScope?.failed(reason: "template_or_first_screen_failure")
         destroyRuntimeContentAndReleaseLease()
 #if DEBUG
         updateDebugRuntimeState("failure:\(message)")
@@ -844,7 +872,7 @@ final class LynxContainerViewController: UIViewController {
 #if DEBUG
                         self.updateDebugRuntimeState("rollback_committed")
 #endif
-                        self.rebuildLynxView(resetOtaRecovery: false)
+                        self.rebuildLynxView(resetOtaRecovery: false, monitorLoadKind: .retry)
                     } else {
                         self.loadingView.hide()
                         self.errorView.show(message: "\(reason)；OTA 没有可回滚版本")
@@ -871,6 +899,7 @@ final class LynxContainerViewController: UIViewController {
     }
 
     private func cancelOtaPreparation() {
+        closeMonitoring(reason: "preparation_cancelled")
         otaPrepareTask?.cancel()
         otaPrepareTask = nil
         loadingView.hide()
@@ -971,6 +1000,7 @@ final class LynxContainerViewController: UIViewController {
 
     /** maintainState=false 离场后释放运行时内容，VC/路由元数据仍留在原生栈中。 */
     private func suspendLynxContent() {
+        closeMonitoring(reason: "view_suspended")
         finishReadiness(success: false, reason: "page_suspended")
         templateProvider?.cancel()
         templateProvider = nil
@@ -984,6 +1014,7 @@ final class LynxContainerViewController: UIViewController {
     }
 
     private func destroyRuntimeContentAndReleaseLease() {
+        closeMonitoring(reason: "runtime_content_released")
         templateProvider?.cancel()
         templateProvider = nil
         firstScreenObserver = nil
@@ -991,6 +1022,13 @@ final class LynxContainerViewController: UIViewController {
         lynxView?.removeFromSuperview()
         lynxView = nil
         releaseCurrentLease()
+    }
+
+    private func closeMonitoring(reason: String) {
+        monitorScope?.close(reason: reason)
+        if let monitorObserver { lynxView?.removeLifecycleClient(monitorObserver) }
+        monitorObserver = nil
+        monitorScope = nil
     }
 
     private func releaseCurrentLease() {

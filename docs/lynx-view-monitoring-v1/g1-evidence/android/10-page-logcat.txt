@@ -1,0 +1,1186 @@
+--------- beginning of main
+09-15 20:47:32.242  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.242  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.243  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.244  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.272  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+--------- beginning of kernel
+09-15 20:47:32.270  8909  8909 W audit   : audit_lost=47533 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:32.270  8909  8909 E audit   : rate limit exceeded
+09-15 20:47:32.292   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:32.324  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.326  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.332  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+--------- beginning of system
+09-15 20:47:32.332   624  2571 W ActivityTaskManager: callingPackage for (uid=2000, pid=8916) has no WPC
+09-15 20:47:32.333  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.334   624  2571 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE
+09-15 20:47:32.342   624  2571 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10161, packageName = null, attributionTag = null, token = android.os.Binder@753e26a, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-15 20:47:32.342   624  2571 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+09-15 20:47:32.342   624  2571 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+09-15 20:47:32.352   870   930 W Looper  : Drained
+09-15 20:47:32.361   624  2571 V SplashScreenExceptionList: SplashScreen checking exception for package com.example.lynxshell.debug (target sdk:35) -> false
+09-15 20:47:32.367   624  2571 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity (has extras)} with LAUNCH_MULTIPLE from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+09-15 20:47:32.373  1182  1182 W SplitSelectStateCtor: Missing session instanceIds
+09-15 20:47:32.373  1182  1182 D StatsLog: LAUNCHER_SPLIT_SELECTION_EXIT_INTERRUPTED
+09-15 20:47:32.374   624   649 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10161, packageName = null, attributionTag = null, token = android.os.Binder@753e26a, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-15 20:47:32.381   624   968 I AppsFilter: interaction: PackageSetting{2ab07db io.github.lynxrouter.demo/10149} -> PackageSetting{7dcdd0 com.example.lynxshell.debug/10161} BLOCKED
+09-15 20:47:32.381   624   968 I AppsFilter: interaction: PackageSetting{d520d51 com.hugboga.custom/10151} -> PackageSetting{7dcdd0 com.example.lynxshell.debug/10161} BLOCKED
+09-15 20:47:32.385   870   930 V WindowManagerShell: Transition requested (#28): android.os.BinderProxy@67eb6f9 TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=239 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity } baseActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} topActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} origActivity=null realActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} numActivities=1 lastActiveTime=2614929 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@d49f63e} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{378ec9f com.example.lynxshell.sample.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 28 }
+09-15 20:47:32.387  1182  1182 I TopTaskTracker: onTaskMovedToFront: (moved taskInfo to front) taskId=239, baseIntent=Intent { flg=0x10000000 cmp=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity }
+09-15 20:47:32.399   364   448 I netd    : tetherGetStats() -> {[]} <1.03ms>
+09-15 20:47:32.401   870   930 D WindowManagerShell: setLauncherKeepClearAreaHeight: visible=false, height=273
+09-15 20:47:32.408   413   413 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+09-15 20:47:32.408   624   642 D CompatChangeReporter: Compat change id reported: 309578419; UID 10161; state: ENABLED
+09-15 20:47:32.408   624   805 I AppWidgetServiceImpl: Received broadcast: android.intent.action.PACKAGE_UNSTOPPED on user 0
+09-15 20:47:32.408   624   805 I AppWidgetServiceImpl: Updating package stopped masked state for uid 10161 package com.example.lynxshell.debug isStopped false
+09-15 20:47:32.422   365   365 D Zygote  : Forked child process 8923
+09-15 20:47:32.432   624   658 W ActivityManager: Slow operation: 59ms so far, now at startProcess: returned from zygote!
+09-15 20:47:32.436   624   658 W ActivityManager: Slow operation: 63ms so far, now at startProcess: done updating battery stats
+09-15 20:47:32.436   624   658 W ActivityManager: Slow operation: 63ms so far, now at startProcess: building log message
+09-15 20:47:32.436   624   658 I ActivityManager: Start proc 8923:com.example.lynxshell.debug/u0a161 for next-top-activity {com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity}
+09-15 20:47:32.436   624   658 W ActivityManager: Slow operation: 63ms so far, now at startProcess: starting to update pids map
+09-15 20:47:32.436   624   658 W ActivityManager: Slow operation: 63ms so far, now at startProcess: done updating pids map
+09-15 20:47:32.445  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.450   870  1043 D SplashScreenView: Build android.window.SplashScreenView{15a86a2 V.E...... ......ID 0,0-0,0}
+09-15 20:47:32.450   870  1043 D SplashScreenView: Icon: view: android.widget.ImageView{bdcdf33 V.ED..... ......I. 0,0-0,0 #1020504 android:id/splashscreen_icon_view} drawable: com.android.wm.shell.startingsurface.SplashscreenIconDrawableFactory$ImmobileIconDrawable@d7ec2f0 size: 420
+09-15 20:47:32.450   870  1043 D SplashScreenView: Branding: view: android.view.View{3fe5069 G.ED..... ......I. 0,0-0,0 #1020503 android:id/splashscreen_branding_view} drawable: null size w: 0 h: 0
+09-15 20:47:32.462  8923  8923 I lynxshell.debug: Late-enabling -Xcheck:jni
+09-15 20:47:32.469  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.499  8923  8923 I lynxshell.debug: Using CollectorTypeCMC GC.
+09-15 20:47:32.556  1182  1425 D EGL_emulation: app_time_stats: avg=1483.38ms min=4.07ms max=8215.02ms count=6
+09-15 20:47:32.561   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:32.565   417   463 I adbd    : jdwp connection from 8923
+09-15 20:47:32.601   624   646 V WindowManager: Sent Transition (#28) createdAt=09-15 20:47:32.342 via request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=239 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity } baseActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} topActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} origActivity=null realActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} numActivities=1 lastActiveTime=2614929 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{8c82994 Task{b6c1f64 #239 type=standard A=10161:com.example.lynxshell.debug}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{65cfc3d com.example.lynxshell.sample.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 28 }
+09-15 20:47:32.601   624   646 V WindowManager:     startWCT=WindowContainerTransaction { changes = {} hops = [] errorCallbackToken=null taskFragmentOrganizer=null }
+09-15 20:47:32.601   624   646 V WindowManager:     info={id=28 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+09-15 20:47:32.601   624   646 V WindowManager:         {WCT{RemoteToken{8c82994 Task{b6c1f64 #239 type=standard A=10161:com.example.lynxshell.debug}}} m=OPEN f=NONE leash=Surface(name=Task=239)/@0x87ffba6 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},
+09-15 20:47:32.601   624   646 V WindowManager:         {WCT{RemoteToken{f31b9f7 Task{e07d67 #1 type=home}}} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0xbf01615 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}
+09-15 20:47:32.601   624   646 V WindowManager:     ]}
+09-15 20:47:32.601   870  2606 V WindowManagerShell: onTransitionReady(transaction=2680059594066)
+09-15 20:47:32.609  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.611  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.612  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.617   870   930 W Looper  : Slow dispatch took 42ms wmshell.main h=android.os.Handler c=com.android.wm.shell.common.ShellExecutor$$ExternalSyntheticLambda0@19bfb23 m=0
+09-15 20:47:32.617   870   930 V WindowManagerShell: onTransitionReady (#28) android.os.BinderProxy@67eb6f9: {id=28 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@600c820} m=OPEN f=NONE leash=Surface(name=Task=239)/@0x784e9c6 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@40f25d9} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x7f60d87 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+09-15 20:47:32.617   870   930 V WindowManagerShell: Playing animation for (#28) android.os.BinderProxy@67eb6f9@0
+09-15 20:47:32.617   870   930 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultMixedHandler@616c095
+09-15 20:47:32.617   870   930 V WindowManagerShell:  try handler com.android.wm.shell.keyguard.KeyguardTransitionHandler@e9b95aa
+09-15 20:47:32.617   870   930 V WindowManagerShell:  try handler com.android.wm.shell.pip.PipTransition@b54b59b
+09-15 20:47:32.617   870   930 V WindowManagerShell:  try handler com.android.wm.shell.activityembedding.ActivityEmbeddingController@348bd38
+09-15 20:47:32.617   870   930 V WindowManagerShell:  try handler com.android.wm.shell.recents.RecentsTransitionHandler@efd111
+09-15 20:47:32.617   870   930 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+09-15 20:47:32.617   870   930 V WindowManagerShell:  try handler com.android.wm.shell.splitscreen.StageCoordinator@bf56276
+09-15 20:47:32.617   870   930 V WindowManagerShell:  try handler com.android.wm.shell.transition.RemoteTransitionHandler@8bf1077
+09-15 20:47:32.617   870   930 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=28 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@600c820} m=OPEN f=NONE leash=Surface(name=Task=239)/@0x784e9c6 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@40f25d9} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x7f60d87 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+09-15 20:47:32.618   870   930 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher} launchCookie=null},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@36874e4, appThread = android.app.IApplicationThread$Stub$Proxy@36f6d4d, debugName = QuickstepLaunchHome }}
+09-15 20:47:32.620   870   930 V WindowManagerShell:  Delegate animation for (#28) to null
+09-15 20:47:32.620   870   930 V WindowManagerShell:  try handler com.android.wm.shell.transition.DefaultTransitionHandler@4d3002
+09-15 20:47:32.620   870   930 V WindowManagerShell: start default transition animation, info = {id=28 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{WCT{android.window.IWindowContainerToken$Stub$Proxy@600c820} m=OPEN f=NONE leash=Surface(name=Task=239)/@0x784e9c6 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1},{WCT{android.window.IWindowContainerToken$Stub$Proxy@40f25d9} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0x7f60d87 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 taskParent=-1}]}
+09-15 20:47:32.621   870   930 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@29267f animAttr=0x13 type=OPEN isEntrance=false
+09-15 20:47:32.622   870   930 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@c33ab9b animAttr=0x12 type=OPEN isEntrance=true
+09-15 20:47:32.638  8923  8923 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+09-15 20:47:32.642  1182  1182 D View    : ---- ST:requestLayout 
+09-15 20:47:32.643  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.644  1182  1182 D View    : requestLayout : getStackTrace(Thread.java:1841) <- printStackStrace(View.java:27969) <- requestLayout(View.java:27999) <- setLayoutParams(View.java:20530) <- updateViewLayout(WindowManagerGlobal.java:464) <- updateViewLayout(WindowManagerImpl.java:165) <- notifyUpdateLayoutParams(TaskbarActivityContext.java:1528) <- applyForciblyShownFlagWhileTransientTaskbarUnstashed(TaskbarActivityContext.java:1044) <- onStateChangeApplied(TaskbarStashController.java:1119) <- -$$Nest$monStateChangeApplied(null:0) <- createSetStateAnimator(TaskbarStashController.java:1284) <- createApplyStateAnimator(TaskbarStashController.java:967) <- applyState(TaskbarStashController.java:947) <- onAnimationStart(TaskbarLauncherStateController.java:491) <- onAnimationStart(Animator.java:692) <- call(D8$$SyntheticClass:0) <- callOnList(Animator.java:666) <- notifyListeners(Animator.java:609) <- notifyStartListeners(Animator.java:626) <- start(AnimatorSet.java:748) <- 
+09-15 20:47:32.645   624   642 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:47:32.659   870  1090 D EGL_emulation: app_time_stats: avg=2204.76ms min=27.41ms max=7912.96ms count=4
+09-15 20:47:32.661   870   930 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@4d3002
+09-15 20:47:32.663   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:32.663   870   930 W Looper  : Slow dispatch took 46ms wmshell.main h=android.os.Handler c=com.android.wm.shell.transition.Transitions$TransitionPlayerImpl$$ExternalSyntheticLambda0@7976677 m=0
+09-15 20:47:32.698  1182  1425 D EGL_emulation: app_time_stats: avg=1268.48ms min=4.16ms max=8322.91ms count=7
+09-15 20:47:32.804  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.808  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.809  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.810  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.812   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:32.831   870   987 W Looper  : Slow dispatch took 66ms wmshell.anim h=android.view.Choreographer$FrameHandler c=android.view.Choreographer$FrameDisplayEventReceiver@ce427d0 m=0
+09-15 20:47:32.833  8923  8923 D CompatChangeReporter: Compat change id reported: 291868760; UID 10161; state: ENABLED
+09-15 20:47:32.885  8923  8923 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+09-15 20:47:32.885  8923  8923 D ApplicationLoaders: Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+09-15 20:47:32.886  8923  8923 W ziparchive: Unable to open '/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.dm': No such file or directory
+09-15 20:47:32.886  8923  8923 W ziparchive: Unable to open '/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.dm': No such file or directory
+09-15 20:47:32.895  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.898   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:32.906  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.957   870   930 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#28) android.os.BinderProxy@67eb6f9@0
+09-15 20:47:32.958   624   646 V WindowManager: Finish Transition (#28): created at 09-15 20:47:32.342 collect-started=0.158ms request-sent=23.43ms started=56.185ms ready=226.753ms sent=255.112ms finished=615.15ms
+09-15 20:47:32.958  1182  1182 D VRI[QuickstepLauncher]: visibilityChanged oldVisibility=true newVisibility=false
+09-15 20:47:32.959   870   930 V WindowManagerShell: Track 0 became idle
+09-15 20:47:32.959   870   930 V WindowManagerShell: All active transition animations finished
+09-15 20:47:32.960   624   967 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:47:32.962   624   967 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:47:32.962  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.971  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.971  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.972  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:32.992   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.048  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.049  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.067   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.095  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.096  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.097  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.100  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.120  1692  1692 W amdp-conn-29772: type=1400 audit(0.0:52174): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc23/dev" dev="sysfs" ino=20939 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:33.124  1692  1692 W amdp-conn-29772: type=1400 audit(0.0:52175): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc23/uevent" dev="sysfs" ino=20926 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:33.126   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.151  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.180  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.182   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.220  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.221  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.221  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.229  1692  1871 D TrafficStats: tagSocket(89) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.335  1692  1871 D TrafficStats: tagSocket(72) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.339  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.339  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.339  1692  1871 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.360  8968  8968 W audit   : audit_lost=47587 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:33.360  8968  8968 E audit   : rate limit exceeded
+09-15 20:47:33.356  1692  1692 W amdp-conn-29785: type=1400 audit(0.0:52176): avc:  denied  { getattr } for  path="/proc/988/task/24905/net/anycast6" dev="proc" ino=4026532103 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:33.356  1692  1692 W amdp-conn-29785: type=1400 audit(0.0:52177): avc:  denied  { getattr } for  path="/proc/988/task/24905/net/arp" dev="proc" ino=4026532008 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:33.356  1692  1692 W amdp-conn-29785: type=1400 audit(0.0:52178): avc:  denied  { getattr } for  path="/proc/988/task/24905/net/arp_tables_matches" dev="proc" ino=4026532099 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:33.388   364   448 I netd    : tetherGetStats() -> {[]} <0.67ms>
+09-15 20:47:33.391   364   448 I netd    : bandwidthSetGlobalAlert(2097152) <0.09ms>
+09-15 20:47:33.433  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.435   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.492  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.504  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.508  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.514  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.531   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.630  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.633  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.643   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.729  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.730  8923  8923 D nativeloader: Configuring clns-7 for other apk /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64:/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.example.lynxshell.debug
+09-15 20:47:33.733  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.734  8923  8923 D CompatChangeReporter: Compat change id reported: 202956589; UID 10161; state: ENABLED
+09-15 20:47:33.738  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.741  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.751   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.771  8923  8923 V GraphicsEnvironment: Currently set values for:
+09-15 20:47:33.771  8923  8923 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+09-15 20:47:33.771  8923  8923 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+09-15 20:47:33.771  8923  8923 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+09-15 20:47:33.772  8923  8923 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+09-15 20:47:33.898  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.898   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.901  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.914  8923  8923 D CompatChangeReporter: Compat change id reported: 279646685; UID 10161; state: ENABLED
+09-15 20:47:33.938  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.940  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.942  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.946  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.957  8923  8923 I LynxMonitorAcceptance: install state=initializing reason=none
+09-15 20:47:33.968   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:33.993  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.995  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:33.998  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.020   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:34.047  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.051  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.056  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.058  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.126  8923  8923 D CompatChangeReporter: Compat change id reported: 312399441; UID 10161; state: ENABLED
+09-15 20:47:34.141  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.148  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.154  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.154  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.200  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.222   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:34.268  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.271  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.272  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.276  1692  1871 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.314  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.304  1692  1692 W amdp-conn-29817: type=1400 audit(0.0:52266): avc:  denied  { getattr } for  path="/proc/1699/task/1704/net/stat/arp_cache" dev="proc" ino=4026532007 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:34.320  1692  1692 W amdp-conn-29817: type=1400 audit(0.0:52267): avc:  denied  { getattr } for  path="/proc/1699/task/1704/net/stat/ndisc_cache" dev="proc" ino=4026532106 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:34.320  1692  1692 W amdp-conn-29817: type=1400 audit(0.0:52268): avc:  denied  { getattr } for  path="/proc/1699/task/1704/net/stat/nf_conntrack" dev="proc" ino=4026532090 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:34.320  1692  1692 W amdp-conn-29817: type=1400 audit(0.0:52269): avc:  denied  { getattr } for  path="/proc/1699/task/1704/net/stat/rt_cache" dev="proc" ino=4026532013 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:34.346   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:34.379  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.383  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.385  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.387  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.412  1692  1692 W amdp-conn-29821: type=1400 audit(0.0:52270): avc:  denied  { getattr } for  path="/proc/988/task/24905/net/xt_quota/eth0" dev="proc" ino=4026532878 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:34.418  9008  9008 W audit   : audit_lost=47674 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:34.418  9008  9008 E audit   : rate limit exceeded
+09-15 20:47:34.425  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.474   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:34.476   364   448 I netd    : tetherGetStats() -> {[]} <0.21ms>
+09-15 20:47:34.493  1022  1029 W ssioncontroller: Reducing the number of considered missed Gc histogram windows from 254 to 100
+09-15 20:47:34.509  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.510  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.514  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.517  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.542  1692  1871 D TrafficStats: tagSocket(72) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.586   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:34.607  8923  8923 D SoLoader: init start
+09-15 20:47:34.609  8923  8923 D SoLoader: adding system library source: /vendor/lib64
+09-15 20:47:34.609  8923  8923 D SoLoader: adding system library source: /system/lib64
+09-15 20:47:34.609  8923  8923 D SoLoader: adding application source: com.facebook.soloader.DirectorySoSource[root = /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64 flags = 0]
+09-15 20:47:34.610  8923  8923 D SoLoader: adding backup source from : com.facebook.soloader.ApkSoSource[root = /data/data/com.example.lynxshell.debug/lib-main flags = 1]
+09-15 20:47:34.610  8923  8923 D SoLoader: Preparing SO source: com.facebook.soloader.DirectorySoSource[root = /system/lib64 flags = 2]
+09-15 20:47:34.610  8923  8923 D SoLoader: Preparing SO source: com.facebook.soloader.DirectorySoSource[root = /vendor/lib64 flags = 2]
+09-15 20:47:34.610  8923  8923 D SoLoader: Preparing SO source: com.facebook.soloader.DirectorySoSource[root = /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64 flags = 0]
+09-15 20:47:34.611  8923  8923 D SoLoader: Preparing SO source: com.facebook.soloader.ApkSoSource[root = /data/data/com.example.lynxshell.debug/lib-main flags = 1]
+09-15 20:47:34.612  8923  8923 V fb-UnpackingSoSource: locked dso store /data/user/0/com.example.lynxshell.debug/lib-main
+09-15 20:47:34.613  8923  8923 V fb-UnpackingSoSource: deps mismatch on deps store: regenerating
+09-15 20:47:34.613  8923  8923 V fb-UnpackingSoSource: so store dirty: regenerating
+09-15 20:47:34.634  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.648  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.655  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.659  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.727  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.735   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:34.817  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.817  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.819  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.820  1692  1871 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.883  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libanimax.so: libanimax.so not in system lib dir
+09-15 20:47:34.883  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libanimax_napi.so: libanimax_napi.so not in system lib dir
+09-15 20:47:34.883  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libanimax_textra.so: libanimax_textra.so not in system lib dir
+09-15 20:47:34.885  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libc++_shared.so: libc++_shared.so not in system lib dir
+09-15 20:47:34.886  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libgifimage.so: libgifimage.so not in system lib dir
+09-15 20:47:34.886  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libharfbuzz.so: libharfbuzz.so not in system lib dir
+09-15 20:47:34.886  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libimagepipeline.so: libimagepipeline.so not in system lib dir
+09-15 20:47:34.886  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/liblynx.so: liblynx.so not in system lib dir
+09-15 20:47:34.886  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/liblynx_service_api.so: liblynx_service_api.so not in system lib dir
+09-15 20:47:34.886  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/liblynx_v8_bridge.so: liblynx_v8_bridge.so not in system lib dir
+09-15 20:47:34.886  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/liblynxbase.so: liblynxbase.so not in system lib dir
+09-15 20:47:34.886  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/liblynxgfx.so: liblynxgfx.so not in system lib dir
+09-15 20:47:34.887  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/liblynxtextra.so: liblynxtextra.so not in system lib dir
+09-15 20:47:34.887  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/liblynxtrace.so: liblynxtrace.so not in system lib dir
+09-15 20:47:34.887  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libnapi.so: libnapi.so not in system lib dir
+09-15 20:47:34.887  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libnapi_adapter.so: libnapi_adapter.so not in system lib dir
+09-15 20:47:34.888  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libnapi_v8.so: libnapi_v8.so not in system lib dir
+09-15 20:47:34.888  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libnative-filters.so: libnative-filters.so not in system lib dir
+09-15 20:47:34.888  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libnative-imagetranscoder.so: libnative-imagetranscoder.so not in system lib dir
+09-15 20:47:34.889  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libquick.so: libquick.so not in system lib dir
+09-15 20:47:34.889  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libserval_markdown.so: libserval_markdown.so not in system lib dir
+09-15 20:47:34.889  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libserval_svg.so: libserval_svg.so not in system lib dir
+09-15 20:47:34.889  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libskity-codec.so: libskity-codec.so not in system lib dir
+09-15 20:47:34.889  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libskity.so: libskity.so not in system lib dir
+09-15 20:47:34.889  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libstatic-webp.so: libstatic-webp.so not in system lib dir
+09-15 20:47:34.889  8923  8923 D ApkSoSource: allowing considering of lib/arm64-v8a/libwasm.so: libwasm.so not in system lib dir
+09-15 20:47:34.889  8923  8923 V fb-UnpackingSoSource: regenerating DSO store com.facebook.soloader.ApkSoSource
+09-15 20:47:34.889  8923  8923 I fb-UnpackingSoSource: extracting DSO libanimax.so
+09-15 20:47:34.936  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.937  8923  8923 I fb-UnpackingSoSource: extracting DSO libanimax_napi.so
+09-15 20:47:34.938  8923  8923 I fb-UnpackingSoSource: extracting DSO libanimax_textra.so
+09-15 20:47:34.938  8923  8923 I fb-UnpackingSoSource: extracting DSO libc++_shared.so
+09-15 20:47:34.939   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:34.939  8923  8923 I fb-UnpackingSoSource: extracting DSO libgifimage.so
+09-15 20:47:34.940  8923  8923 I fb-UnpackingSoSource: extracting DSO libharfbuzz.so
+09-15 20:47:34.949  8923  8923 I fb-UnpackingSoSource: extracting DSO libimagepipeline.so
+09-15 20:47:34.949  8923  8923 I fb-UnpackingSoSource: extracting DSO liblynx.so
+09-15 20:47:34.969  8923  8923 I fb-UnpackingSoSource: extracting DSO liblynx_service_api.so
+09-15 20:47:34.971  8923  8923 I fb-UnpackingSoSource: extracting DSO liblynx_v8_bridge.so
+09-15 20:47:34.972  8923  8923 I fb-UnpackingSoSource: extracting DSO liblynxbase.so
+09-15 20:47:34.974  8923  8923 I fb-UnpackingSoSource: extracting DSO liblynxgfx.so
+09-15 20:47:34.974  8923  8923 I fb-UnpackingSoSource: extracting DSO liblynxtextra.so
+09-15 20:47:34.975  8923  8923 I fb-UnpackingSoSource: extracting DSO liblynxtrace.so
+09-15 20:47:34.975  8923  8923 I fb-UnpackingSoSource: extracting DSO libnapi.so
+09-15 20:47:34.976  8923  8923 I fb-UnpackingSoSource: extracting DSO libnapi_adapter.so
+09-15 20:47:34.976  8923  8923 I fb-UnpackingSoSource: extracting DSO libnapi_v8.so
+09-15 20:47:34.977  8923  8923 I fb-UnpackingSoSource: extracting DSO libnative-filters.so
+09-15 20:47:34.977  8923  8923 I fb-UnpackingSoSource: extracting DSO libnative-imagetranscoder.so
+09-15 20:47:34.977  8923  8923 I fb-UnpackingSoSource: extracting DSO libquick.so
+09-15 20:47:34.982  8923  8923 I fb-UnpackingSoSource: extracting DSO libserval_markdown.so
+09-15 20:47:34.984  8923  8923 I fb-UnpackingSoSource: extracting DSO libserval_svg.so
+09-15 20:47:34.985  8923  8923 I fb-UnpackingSoSource: extracting DSO libskity-codec.so
+09-15 20:47:34.988  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.989  8923  8923 I fb-UnpackingSoSource: extracting DSO libskity.so
+09-15 20:47:34.992  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.993  8923  8923 I fb-UnpackingSoSource: extracting DSO libstatic-webp.so
+09-15 20:47:34.994  8923  8923 I fb-UnpackingSoSource: extracting DSO libwasm.so
+09-15 20:47:34.995  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:34.997  8923  8923 V fb-UnpackingSoSource: Finished regenerating DSO store com.facebook.soloader.ApkSoSource
+09-15 20:47:34.997  8923  8923 V fb-UnpackingSoSource: starting syncer worker
+09-15 20:47:35.001  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.075  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.099   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:35.135  8923  8923 V fb-UnpackingSoSource: releasing dso store lock for /data/user/0/com.example.lynxshell.debug/lib-main (from syncer thread)
+09-15 20:47:35.136  8923  8923 V fb-UnpackingSoSource: not releasing dso store lock for /data/user/0/com.example.lynxshell.debug/lib-main (syncer thread started)
+09-15 20:47:35.136  8923  8923 D SoLoader: init finish: 4 SO sources prepared
+09-15 20:47:35.136  8923  8923 D SoLoader: init exiting
+09-15 20:47:35.152  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.170  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.170  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.171  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.221  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.221   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:35.243  8923  8923 I LynxEnv : LynxEnv start init
+09-15 20:47:35.277  8923  8923 D nativeloader: Load /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!/lib/arm64-v8a/liblynxbase.so using ns clns-7 from class loader (caller=/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!classes13.dex): ok
+09-15 20:47:35.280  8923  8923 I LynxEnv : attachDevToolComponent: DevTool service is null.
+09-15 20:47:35.281  8923  9038 I lynx    : [7CABE14730:INFO:trace_event_utils.cc(32)] base trace init success, backend: 535461048660
+09-15 20:47:35.282  8923  9038 I LynxBaseTrace: LynxBaseTrace init successfully by itself.
+09-15 20:47:35.286  8923  8923 D nativeloader: Load /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!/lib/arm64-v8a/libquick.so using ns clns-7 from class loader (caller=/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!classes13.dex): ok
+09-15 20:47:35.288  8923  8923 D nativeloader: Load /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!/lib/arm64-v8a/liblynxgfx.so using ns clns-7 from class loader (caller=/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!classes13.dex): ok
+09-15 20:47:35.291  8923  8923 D nativeloader: Load /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!/lib/arm64-v8a/liblynx.so using ns clns-7 from class loader (caller=/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!classes13.dex): ok
+09-15 20:47:35.294  8923  8923 D nativeloader: Load /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!/lib/arm64-v8a/liblynxtrace.so using ns clns-7 from class loader (caller=/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!classes13.dex): ok
+09-15 20:47:35.294  8923  8923 I LynxEnv : Loading native libraries succeeded
+09-15 20:47:35.295  8923  8923 I primjs  : Loading libwasm.so ...
+09-15 20:47:35.314  8923  8923 D nativeloader: Load /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!/lib/arm64-v8a/libwasm.so using ns clns-7 from class loader (caller=/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk!classes13.dex): ok
+09-15 20:47:35.314  8923  8923 I lynx    : [7F71727D20:INFO:webassembly_bridge.cc(21)] Setting webassembly register function pointer from JAVA
+09-15 20:47:35.315  8923  8923 I lynx    : [7F71727D20:INFO:vsync_monitor.cc(23)] VSyncMonitor created with is_vsync_post_task_by_emergency_ true
+09-15 20:47:35.315  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.316  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.316  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.317  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.318  8923  8923 W LynxEnv : LynxEnv failed to get LynxExtensionService
+09-15 20:47:35.319  8923  9044 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:47:35.322  8923  9044 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:47:35.331  8923  9044 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:47:35.335   624   968 D CompatChangeReporter: Compat change id reported: 324203798; UID 10161; state: ENABLED
+09-15 20:47:35.340  8923  9044 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:47:35.332  1692  1692 W amdp-conn-29852: type=1400 audit(0.0:52337): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc40/power/async" dev="sysfs" ino=21202 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:35.356  1692  1692 W amdp-conn-29850: type=1400 audit(0.0:52338): avc:  denied  { getattr } for  path="/proc/262/task/262/net/dev_snmp6/dummy0" dev="proc" ino=4026532119 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:35.356  1692  1692 W amdp-conn-29850: type=1400 audit(0.0:52339): avc:  denied  { getattr } for  path="/proc/262/task/262/net/dev_snmp6/erspan0" dev="proc" ino=4026532125 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:35.356  1692  1692 W amdp-conn-29852: type=1400 audit(0.0:52340): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc40/power/autosuspend_delay_ms" dev="sysfs" ino=21210 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:35.356  1692  1692 W amdp-conn-29852: type=1400 audit(0.0:52341): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc40/power/control" dev="sysfs" ino=21207 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:35.370  8923  8923 I Choreographer: Skipped 86 frames!  The application may be doing too much work on its main thread.
+09-15 20:47:35.377  8923  9044 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:47:35.383  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.387   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:35.453  8923  8923 D AppCompatDelegate: Checking for metadata for AppLocalesMetadataHolderService : Service not found
+09-15 20:47:35.474  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.478  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.481  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.484  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.495  8923  8923 D CompatChangeReporter: Compat change id reported: 309578419; UID 10161; state: ENABLED
+09-15 20:47:35.507  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.508  8923  8923 W lynxshell.debug: Accessing hidden method Landroid/view/ViewGroup;->makeOptionalFitsSystemWindows()V (unsupported, reflection, allowed)
+09-15 20:47:35.545   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:35.548  8923  8923 D CompatChangeReporter: Compat change id reported: 63938206; UID 10161; state: ENABLED
+09-15 20:47:35.590  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.596  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.599  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.600  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.609   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:35.621   364  9059 I resolv  : GetAddrInfoHandler::run: {102 102 102 983142 10161 0}
+09-15 20:47:35.622   364  9060 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+09-15 20:47:35.622   364  9061 I resolv  : res_nmkquery: (QUERY, IN, A)
+09-15 20:47:35.622   364  9061 I resolv  : resolv_cache_lookup: FOUND IN CACHE entry=0xb400007ca77336d0
+09-15 20:47:35.622   364  9061 I resolv  : doQuery: rcode=0, ancount=1, return value=494
+09-15 20:47:35.655  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.663  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.681   624   968 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE
+09-15 20:47:35.681   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:35.682   624   968 V GrammaticalInflectionUtils: AttributionSource: AttributionSource { uid = 10161, packageName = null, attributionTag = null, token = android.os.Binder@753e26a, deviceId = 0, next = null } does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+09-15 20:47:35.682   624   968 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+09-15 20:47:35.682   624   968 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+09-15 20:47:35.690   870   930 V WindowManagerShell: Transition requested (#29): android.os.BinderProxy@c69fe02 TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=239 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity } baseActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} topActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity} origActivity=null realActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} numActivities=2 lastActiveTime=2618253 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@c11f313} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{f667950 com.example.lynxshell.container.LynxShellActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 29 }
+09-15 20:47:35.696   624   968 I ActivityTaskManager: START u0 {cmp=com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity (has extras)} with LAUNCH_MULTIPLE from uid 10161 (BAL_ALLOW_VISIBLE_WINDOW) result code=0
+09-15 20:47:35.722   870   930 W Looper  : Slow dispatch took 32ms wmshell.main h=android.os.Handler c=com.android.wm.shell.transition.Transitions$TransitionPlayerImpl$$ExternalSyntheticLambda1@b783749 m=0
+09-15 20:47:35.728  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.745   413   413 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+09-15 20:47:35.745  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.746  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.840  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.842   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:35.851  8923  8923 W HWUI    : Unknown dataspace 0
+09-15 20:47:35.898  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.925   624   646 V WindowManager: Sent Transition (#29) createdAt=09-15 20:47:35.682 via request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=239 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity } baseActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} topActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity} origActivity=null realActivity=ComponentInfo{com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity} numActivities=2 lastActiveTime=2618253 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{8c82994 Task{b6c1f64 #239 type=standard A=10161:com.example.lynxshell.debug}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{eb15d1d com.example.lynxshell.container.LynxShellActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= falseisLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false topActivityEligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=1080 topActivityLetterboxHeight=2400 isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatControlState=hidden freeformCameraCompatMode=inactive}}}, pipTask = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 29 }
+09-15 20:47:35.925   870  1260 V WindowManagerShell: onTransitionReady(transaction=2680059594087)
+09-15 20:47:35.925   624   646 V WindowManager:     startWCT=WindowContainerTransaction { changes = {} hops = [] errorCallbackToken=null taskFragmentOrganizer=null }
+09-15 20:47:35.925   624   646 V WindowManager:     info={id=29 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+09-15 20:47:35.925   624   646 V WindowManager:         {null m=OPEN f=STARTING_WINDOW_TRANSFER|FILLS_TASK|IS_BEHIND_STARTING_WINDOW leash=Surface(name=ActivityRecord{6d805e2 u0 com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity)/@0xff767c7 sb=Rect(0, 0 - 0, 0) eb=Rect(0, 0 - 1080, 2400) d=-1->0 r=-1->0:-1 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity},
+09-15 20:47:35.925   624   646 V WindowManager:         {null m=TO_BACK f=FILLS_TASK|IS_BEHIND_STARTING_WINDOW leash=Surface(name=ActivityRecord{634d4f7 u0 com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity)/@0x6264506 sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity}
+09-15 20:47:35.925   624   646 V WindowManager:     ]}
+09-15 20:47:35.926   870   930 V WindowManagerShell: onTransitionReady (#29) android.os.BinderProxy@c69fe02: {id=29 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{null m=OPEN f=STARTING_WINDOW_TRANSFER|FILLS_TASK|IS_BEHIND_STARTING_WINDOW leash=Surface(name=ActivityRecord{6d805e2 u0 com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity)/@0xe7df84e sb=Rect(0, 0 - 0, 0) eb=Rect(0, 0 - 1080, 2400) d=-1->0 r=-1->0:-1 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity},{null m=TO_BACK f=FILLS_TASK|IS_BEHIND_STARTING_WINDOW leash=Surface(name=ActivityRecord{634d4f7 u0 com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity)/@0x79ead6f sb=Rect(0, 0 - 1080, 2400) eb=Rect(0, 0 - 1080, 2400) d=0 bc=fffef7ff component=com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity}]}
+09-15 20:47:35.926   870   930 V WindowManagerShell: Non-visible anim so abort: (#29) android.os.BinderProxy@c69fe02@0
+09-15 20:47:35.937   624   967 D CoreBackPreview: Window{d5f37eb u0 com.example.lynxshell.debug/com.example.lynxshell.sample.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@d51ab92, mPriority=-1, mIsAnimationCallback=false}
+09-15 20:47:35.938   870   930 V WindowManagerShell: Transition animation finished (aborted=true), notifying core (#29) android.os.BinderProxy@c69fe02@0
+09-15 20:47:35.940   624   967 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:47:35.941   624   646 V WindowManager: Finish Transition (#29): created at 09-15 20:47:35.682 collect-started=0.019ms request-sent=7.781ms started=39.99ms ready=227.903ms sent=242.086ms finished=258.24ms
+09-15 20:47:35.941  1182  1182 D BaseDepthController: setSurface:
+09-15 20:47:35.941  1182  1182 D BaseDepthController: 	mWaitingOnSurfaceValidity: false
+09-15 20:47:35.941  1182  1182 D BaseDepthController: 	mSurface: null
+09-15 20:47:35.941  1182  1182 D BaseDepthController: mSurface is null and mCurrentBlur is: 0
+09-15 20:47:35.942  1182  1182 D StateManager: goToState - fromState: Normal, toState: Normal, partial trace:
+09-15 20:47:35.942  1182  1182 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(StateManager.java:453)
+09-15 20:47:35.942  1182  1182 D StateManager: 	at com.android.launcher3.statemanager.StateManager.moveToRestState(StateManager.java:444)
+09-15 20:47:35.942  1182  1182 D StateManager: 	at com.android.launcher3.statemanager.StatefulActivity.onStop(StatefulActivity.java:119)
+09-15 20:47:35.942  1182  1182 D StatsLog: LAUNCHER_ONSTOP
+09-15 20:47:35.942   624   642 I AppWidgetServiceImpl: setAppWidgetHidden() 0
+09-15 20:47:35.946   870   930 V WindowManagerShell: Track 0 became idle
+09-15 20:47:35.946   870   930 V WindowManagerShell: All active transition animations finished
+09-15 20:47:35.946   624 24904 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:47:35.961  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:35.989   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:35.991   870   930 W Looper  : Slow delivery took 30ms wmshell.main h=android.os.Handler c=com.android.wm.shell.pip.PinnedStackListenerForwarder$PinnedTaskListenerImpl$$ExternalSyntheticLambda1@683ff05 m=0
+09-15 20:47:36.056   870   930 W Looper  : Drained
+09-15 20:47:36.065   364   448 I netd    : tetherGetStats() -> {[]} <1.41ms>
+09-15 20:47:36.066   624   642 W UserManagerService: Requested status bar icon for non-badged user 0
+09-15 20:47:36.086  8923  8923 D VRI[MainActivity]: visibilityChanged oldVisibility=true newVisibility=false
+09-15 20:47:36.089  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.094  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.098  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.101  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.129  9071  9071 W audit   : audit_lost=47764 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:36.129  9071  9071 E audit   : rate limit exceeded
+09-15 20:47:36.149  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.172   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:36.215  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.219  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.221  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.229  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.251   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:36.289   856   856 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS 
+09-15 20:47:36.304  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.316  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.396   364  9060 I resolv  : res_nsend: used send_dg 54 terrno: 0
+09-15 20:47:36.397   364  9060 I resolv  : doQuery: rcode=0, ancount=0, return value=54
+09-15 20:47:36.399  8923  9045 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.404  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.407  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.409  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.410  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.411   624  1404 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+09-15 20:47:36.442   624   967 D CoreBackPreview: Window{f3388bf u0 com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@72012d5, mPriority=-1, mIsAnimationCallback=false}
+09-15 20:47:36.450  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.461  8923  9046 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+09-15 20:47:36.461  8923  9046 I EGL_emulation: Opening libGLESv2_emulation.so
+09-15 20:47:36.537  8923  9046 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+09-15 20:47:36.563  8923  9046 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+09-15 20:47:36.564  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.577  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.577  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.582  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.660   364   448 I netd    : tetherGetStats() -> {[]} <0.63ms>
+09-15 20:47:36.663   160   160 I servicemanager: Caller(pid=8923,uid=10161,sid=u:r:untrusted_app:s0:c161,c256,c512,c768) Could not find android.hardware.graphics.allocator.IAllocator/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-15 20:47:36.670   161   161 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+09-15 20:47:36.671  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.673  8923  9046 I Gralloc4: mapper 4.x is not supported
+09-15 20:47:36.683   364   448 I netd    : bandwidthSetGlobalAlert(2097152) <0.05ms>
+09-15 20:47:36.690   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:36.698   364   447 I netd    : bandwidthRemoveInterfaceQuota(eth0) <14.81ms>
+09-15 20:47:36.703   364   448 I netd    : bandwidthSetInterfaceQuota(eth0, 9223372036854775807) <4.65ms>
+09-15 20:47:36.742   624   646 W ziparchive: Unable to open '/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.dm': No such file or directory
+09-15 20:47:36.744   624   646 I ActivityTaskManager: Displayed com.example.lynxshell.debug/com.example.lynxshell.container.LynxShellActivity for user 0: +4s414ms
+09-15 20:47:36.760  8923  8939 I HWUI    : Davey! duration=789ms; Flags=1, FrameTimelineVsyncId=20684, IntendedVsync=2618510357743, Vsync=2618960357725, InputEventId=0, HandleInputStart=2618976718748, AnimationStart=2618976730665, PerformTraversalsStart=2618977190998, DrawStart=2619249100623, FrameDeadline=2618527024409, FrameInterval=2618973233206, FrameStartTime=16666666, SyncQueued=2619255210248, SyncStart=2619257154165, IssueDrawCommandsStart=2619257582498, SwapBuffers=2619293463706, FrameCompleted=2619302152081, DequeueBufferDuration=2667, QueueBufferDuration=413000, GpuCompleted=2619302114290, SwapBuffersCompleted=2619302152081, DisplayPresentTime=0, CommandSubmissionCompleted=2619293463706, 
+09-15 20:47:36.775  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.783  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.784  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.787  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.804  1692  1692 W amdp-conn-29893: type=1400 audit(0.0:52389): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc47/power/async" dev="sysfs" ino=21314 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:36.804  1692  1692 W amdp-conn-29894: type=1400 audit(0.0:52390): avc:  denied  { getattr } for  path="/proc/988/task/24905/net/dev_snmp6/dummy0" dev="proc" ino=4026532119 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:36.804  1692  1692 W amdp-conn-29894: type=1400 audit(0.0:52391): avc:  denied  { getattr } for  path="/proc/988/task/24905/net/dev_snmp6/erspan0" dev="proc" ino=4026532125 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:36.804  1692  1692 W amdp-conn-29894: type=1400 audit(0.0:52392): avc:  denied  { getattr } for  path="/proc/988/task/24905/net/dev_snmp6/eth0" dev="proc" ino=4026532579 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:36.804  1692  1692 W amdp-conn-29894: type=1400 audit(0.0:52393): avc:  denied  { getattr } for  path="/proc/988/task/24905/net/dev_snmp6/gre0" dev="proc" ino=4026532123 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:36.825  8923  8923 I WindowExtensionsImpl: Initializing Window Extensions, vendor API level=6, activity embedding enabled=true
+09-15 20:47:36.829  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.846   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:36.848  8923  8923 D LynxError: Duplicated Behavior For Name: svg, [ - svg] will be override
+09-15 20:47:36.850  8923  8923 I LynxView: new lynxview detail com.lynx.tasm.LynxView{f20b748 V.E...... ......I. 0,0-0,0}
+09-15 20:47:36.859  8923  8923 I LynxUIRenderer: lynxContext setUIBodyViewcom.lynx.tasm.LynxView{f20b748 VFE...... ......I. 0,0-0,0}com.lynx.tasm.LynxTemplateRender$RenderLynxContext@2189306
+09-15 20:47:36.867  8923  8933 I lynxshell.debug: Compiler allocated 4206KB to compile void android.widget.TextView.<init>(android.content.Context, android.util.AttributeSet, int, int)
+09-15 20:47:36.887  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.895  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.904  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.907  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:36.930   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:36.933  1692  1733 I com.catchingnow.andfiles.helper:device_agent: Background concurrent mark compact GC freed 2556KB AllocSpace bytes, 72(1440KB) LOS objects, 49% free, 4335KB/8671KB, paused 93us,8.459ms total 23.828ms
+09-15 20:47:36.934  8923  8923 I LynxUIRenderer: lynxContext setUIBodyViewcom.lynx.tasm.LynxView{f20b748 VFE...... ......I. 0,0-0,0}com.lynx.tasm.LynxTemplateRender$RenderLynxContext@2189306
+09-15 20:47:36.934  8923  8923 I LynxTemplateRender: mEnableGenericResourceFetcher: false render: com.lynx.tasm.LynxTemplateRender@84a831d
+09-15 20:47:36.943  8923  8923 I lynx    : [7F71727D20:INFO:vsync_monitor.cc(23)] VSyncMonitor created with is_vsync_post_task_by_emergency_ true
+09-15 20:47:36.945  8923  8923 I lynx    : [7F71727D20:INFO:task_runner_manufactor.cc(296)] TaskRunnerManufactor setThreadStrategy:1, multi_tasm:true, async_thread_cache:true
+09-15 20:47:36.989  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.006  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.030   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.034  8923  8923 I lynx    : [7F71727D20:INFO:task_runner_manufactor.cc(125)] ThreadGroup for Lynx_TASM, max_count:2, new thread for index:1
+09-15 20:47:37.037  8923  8923 I lynx    : [7F71727D20:INFO:lynx_shell.cc(148)] LynxShell create, this:0xB400007D250C5630
+09-15 20:47:37.041  8923  8923 I lynx    : [7F71727D20:INFO:memory_monitor.h(83)] [memory_monitor.h] new MemoryMonitor, this:0xB400007E050E21A8, Enable:false, MemoryChangeThresholdMb:0
+09-15 20:47:37.042  8923  8923 I lynx    : [7F71727D20:INFO:timing_handler.cc(26)] [TimingHandler.cc] new TimingHandler, this:0xB400007E050E21E8
+09-15 20:47:37.045  8923  8923 I lynx    : [7F71727D20:INFO:template_assembler.h(524)] Lynx Set Enable Layout Only: true from LynxView,  this:0xB400007CC50DAE20
+09-15 20:47:37.053  8923  8923 I LynxTemplateRender: force use quick js engine
+09-15 20:47:37.055  8923  8923 I lynx    : [7F71727D20:INFO:vsync_monitor.cc(23)] VSyncMonitor created with is_vsync_post_task_by_emergency_ true
+09-15 20:47:37.056  8923  9108 I lynx    : [7C0A602730:INFO:runtime_lifecycle_observer_impl.cc(32)] [Runtime] RuntimeLifecycleObserverImpl::OnRuntimeCreate with observer:0xB400007D8512CD88
+09-15 20:47:37.056  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(175)] Init LynxRuntime group_id: -1 runtime_id: 0 this:0xB400007E450DBB50
+09-15 20:47:37.056  8923  8923 I LynxTemplateRender: set JSGroupThreadName to lynx context: 
+09-15 20:47:37.056  8923  9108 I lynx    : [7C0A602730:INFO:runtime_lifecycle_observer_impl.cc(48)] [Runtime] RuntimeLifecycleObserverImpl::OnRuntimeInit with runtime id: 0
+09-15 20:47:37.061  8923  9108 I lynx    : [7C0A602730:INFO:runtime_manager.cc(501)] make runtime with force_use_lightweight_js_engine = true
+09-15 20:47:37.062  8923  9108 I lynx    : [7C0A602730:INFO:runtime_manager.cc(508)] make QuickJS runtime
+09-15 20:47:37.063  8923  9044 I lynx    : [7C16F7B730:INFO:js_cache_manager.cc(602)] bytecode_generate_generate_version: 3400532428
+09-15 20:47:37.063  8923  9044 I lynx    : [7C16F7B730:INFO:js_cache_manager.cc(194)] bytecode enable status: is_bytecode_enabled:true can_create_cache_:true final result:true
+09-15 20:47:37.066  8923  9108 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:47:37.066  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime_wrapper.cc(115)] lynx InitQuickjsRuntime success
+09-15 20:47:37.069  8923  9108 I lynx    : [7C0A602730:INFO:runtime_manager.cc(199)] create single_context:0xB400007D050B8328
+09-15 20:47:37.069  8923  9108 I LynxResourceLoader: loadJSSource with name assets://lynx_core.js
+09-15 20:47:37.071  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(866)] using new bytecode
+09-15 20:47:37.074  8923  9044 I lynx    : [7C16F7B730:INFO:js_cache_manager.cc(592)] ClearExpiredCache time spent: 12 ms
+09-15 20:47:37.074  8923  9108 I lynx    : [7C0A602730:INFO:js_cache_manager.cc(194)] bytecode enable status: is_bytecode_enabled:true can_create_cache_:true final result:true
+09-15 20:47:37.074  8923  9108 I lynx    : [7C0A602730:INFO:js_cache_manager.cc(218)] bytecode enabled, url: '/lynx_core.js', template_url: '', file_content size:66373
+09-15 20:47:37.074  8923  9108 I lynx    : [7C0A602730:INFO:js_cache_manager.cc(266)] cache loaded from storage, size: 149667 bytes
+09-15 20:47:37.074  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(220)] QuickjsRuntime::evaluatePreparedJavaScript start: /lynx_core.js
+09-15 20:47:37.074  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(170)] QuickjsRuntime::evaluateJavaScriptBytecode: /lynx_core.js
+09-15 20:47:37.075  8923  9044 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:47:37.075  8923  9044 I lynx    : [7C16F7B730:INFO:quickjs_runtime_wrapper.cc(115)] lynx InitQuickjsRuntime success
+09-15 20:47:37.075  8923  9112 I lynx    : [7C021EC730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:47:37.075  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(184)] QuickjsRuntime::evaluateJavaScriptBytecode finished successfully.
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(211)] js_runtime_type :-1794015904 0xB400007E450DBB50
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:napi_runtime_proxy.cc(65)] Creating napi proxy quickjs
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(380)] napi attaching with proxy: 0xB400007E950CB670, id: 0
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:napi_runtime_proxy.cc(124)] NAPI Setup Loader: napiLoaderOnRT0
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:napi_loader_js.cc(132)] napi OnAttach env: 0xB400007CC50D7430, ctx: 0xB400007CC50D60E0, id: 0
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(422)] napi registering module
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:runtime_lifecycle_observer_impl.cc(86)] [Runtime] RuntimeLifecycleObserverImpl::OnRuntimeAttach:0xB400007CC50D7430, runtime_type: quickjs
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:napi_runtime_proxy.cc(65)] Creating napi proxy quickjs
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(414)] napi attaching with restricted proxy: 0xB400007D35173AD0, id: 0
+09-15 20:47:37.075  8923  9108 I lynx    : [7C0A602730:INFO:napi_runtime_proxy.cc(300)] NAPI Setup Restricted Loader: napiRestrictedLoader0
+09-15 20:47:37.076  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(227)]  lynxRuntime:0xB400007E450DBB50 create APP 0xB400007EA51C2320
+09-15 20:47:37.078  8923  9112 I lynx    : [7C021EC730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:47:37.078  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.078  8923  9112 I lynx    : [7C021EC730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:47:37.078  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.081  8923  8923 I LynxTemplateRender: 1789476457081 create LynxView 
+09-15 20:47:37.084  8923  9109 I lynx    : [7C032F8730:INFO:layout_context.cc(1104)] [Layout] UpdateViewport :size: 0.0, 0.0; mode: 0, 0
+09-15 20:47:37.111  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.115  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.142  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.150  8923  9109 I lynx    : [7C032F8730:INFO:template_assembler.cc(267)] UpdateGlobalProps 49 this: 0xB400007CC50DAE20
+09-15 20:47:37.150  8923  8923 I Lynx    : onAttachedToWindow:253802312
+09-15 20:47:37.150  8923  8923 I LynxTemplateRender: lynxview onAttachedToWindow com.lynx.tasm.LynxTemplateRender@84a831d
+09-15 20:47:37.150  8923  8923 I LynxTemplateRender: onEnterForeground. force: false
+09-15 20:47:37.150  8923  8923 I LynxView: renderTemplateUrl assets://bundles/main.lynx.bundlewith Map incom.lynx.tasm.LynxView{f20b748 VFE...... ......I. 0,0-0,0}
+09-15 20:47:37.151  8923  8923 I LynxTemplateRender: LoadMeta with url, pre-painting: false ,pre-painting with draw:false url: assets://bundles/main.lynx.bundle
+09-15 20:47:37.151  8923  8923 I LynxTemplateRender: dispatchOnPageStart url assets://bundles/main.lynx.bundle in com.lynx.tasm.LynxTemplateRender@84a831d
+09-15 20:47:37.151  8923  8923 I LynxTemplateRender: 1789476457151 renderTemplate LynxView assets://bundles/main.lynx.bundle
+09-15 20:47:37.151  8923  8923 I LynxTemplateRender: 1789476457151 renderTemplate LynxView assets://bundles/main.lynx.bundle
+09-15 20:47:37.151  8923  8923 I LynxTemplateRender: retain TemplateData for lifecycle, url=assets://bundles/main.lynx.bundle, data=com.lynx.tasm.TemplateData@9f7f8d5, listSize=1, bindContextEnabled=false
+09-15 20:47:37.152  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.153   624   642 W InputManager-JNI: Input channel object '2d86e8 Splash Screen com.example.lynxshell.debug (client)' was disposed without first being removed with the input manager!
+09-15 20:47:37.154  8923  9109 I lynx    : [7C032F8730:INFO:layout_context.cc(1104)] [Layout] UpdateViewport :size: 1080.0, 2400.0; mode: 1, 1
+09-15 20:47:37.158  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.158   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.162  8923  8923 I LynxTemplateRender: updateViewport is unnecessary, because the size of the cache are the same as the size to be set.
+09-15 20:47:37.167  8923  9109 I lynx    : [7C032F8730:INFO:template_assembler.cc(267)] UpdateGlobalProps 51 this: 0xB400007CC50DAE20
+09-15 20:47:37.168  8923  8923 I LynxView: LynxView sendGlobalEvent lynxShellLayoutChanged with this: com.lynx.tasm.LynxView{f20b748 VFE...... ........ 0,0-1080,2400}
+09-15 20:47:37.168  8923  8923 I LynxContext: LynxContext sendGlobalEvent lynxShellLayoutChanged with this: com.lynx.tasm.LynxTemplateRender$RenderLynxContext@2189306
+09-15 20:47:37.174   364   448 I netd    : tetherGetStats() -> {[]} <5.98ms>
+09-15 20:47:37.212  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed App frame:UNKNOWN: 24, 20786, 17936954, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 24, 20786, 17936954, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed App frame:UNKNOWN: 24, 20808, 29551079, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 24, 20808, 29551079, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 80, 20837, 22312247, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 80, 20845, 34612831, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 80, 20853, 30278790, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed App frame:UNKNOWN: 72, 20861, 34797166, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 80, 20869, 34130375, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 80, 20877, 29970875, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 80, 20885, 0, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missing HWUI jank callback for vsyncId: 20885, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 80, 20893, 34561960, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 66, 20901, 0, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missing HWUI jank callback for vsyncId: 20901, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed App frame:UNKNOWN: 328, 20909, 112480878, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed App frame:UNKNOWN: 88, 20917, 108601962, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 88, 20917, 108601962, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 66, 20925, 0, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213   870  1042 W FrameTracker: Missing HWUI jank callback for vsyncId: 20925, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.213  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.221  8923  8923 E LynxInfoReportHelper: LynxMonitorService is null
+09-15 20:47:37.221  8923  8923 I LynxTemplateRender: dispatchOnPageStart url assets://bundles/main.lynx.bundle in com.lynx.tasm.LynxTemplateRender@84a831d
+09-15 20:47:37.221  8923  8923 I LynxTemplateRender: LoadMeta with binary, pre-painting: false ,pre-painting with draw:false enableRecycleTemplateBundle: false
+09-15 20:47:37.222  8923  9109 E lynx    : [7C032F8730:ERROR:template_assembler.cc(953)] lynx_plugin: load original lynx so
+09-15 20:47:37.222  8923  9109 I lynx    : [7C032F8730:INFO:template_assembler.cc(344)] start TemplateAssembler::LoadTemplate, url:assets://bundles/main.lynx.bundle len: 167542 this:0xB400007CC50DAE20
+09-15 20:47:37.213   870  1042 W FrameTracker: Missed SF frame:UNKNOWN: 66, 20933, 41078925, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+09-15 20:47:37.226   870   982 V PerfettoTrigger: Triggering /system/bin/trigger_perfetto com.android.telemetry.interaction-jank-monitor-39
+09-15 20:47:37.232   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.237  8923  9112 E lynx    : [7C021EC730:ERROR:timing_map.cc(20)] Set duplicated timing_key, timing_key is pipelineStart
+09-15 20:47:37.237  8923  9112 E lynx    : [7C021EC730:ERROR:timing_map.cc(20)] Set duplicated timing_key, timing_key is pipeline_start
+09-15 20:47:37.237  8923  9109 I lynx    : [7C032F8730:INFO:lynx_binary_base_template_reader_impl.cc(163)] client version:0.2.0.0  ;binary_version:0.2.0.0
+09-15 20:47:37.237  8923  9109 I lynx    : [7C032F8730:INFO:lynx_binary_base_template_reader_impl.cc(113)] App Bundle's engine version: 3.2, lynx sdk version:4.1, min supported lynx version: 1.0
+09-15 20:47:37.237  8923  9109 I lynx    : [7C032F8730:INFO:template_binary_reader.cc(245)] CSSLazyDecode options FE_OPTION_UNDEFINED ABSetting: 
+09-15 20:47:37.239   624   742 I ImeTracker: com.example.lynxshell.debug:7f118445: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+09-15 20:47:37.239   624   742 I ImeTracker: com.example.lynxshell.debug:7f118445: onCancelled at PHASE_SERVER_SHOULD_HIDE
+09-15 20:47:37.242  8923  9044 I primjs  : GC: HEAP_TAG_OUTER: 0xb400000000000000, HEAP_TAG_INNER: 0x0
+09-15 20:47:37.257  8923  9109 I lynx    : [7C032F8730:INFO:template_assembler.cc(2604)] TemplateAssembler::OnScreenMetricsSet with width: 1080 height: 2400 device_pixel_ratio: 2.625
+09-15 20:47:37.257  8923  9109 I lynx    : [7C032F8730:INFO:element_manager.cc(682)] ElementManager::UpdateScreenMetrics width:1080,height:2400
+09-15 20:47:37.261  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(725)] lynx runtime loadApp, napi id:0
+09-15 20:47:37.267  8923  8923 I lynx    : [7F71727D20:INFO:tasm_platform_invoker_android.cc(281)] Trigger OnPageConfigDecoded on UIDelegate
+09-15 20:47:37.268  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(743)] [LynxRuntime] circular data check flag: true
+09-15 20:47:37.268  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2022)]  App::LoadApp start 0xB400007EA51C2320
+09-15 20:47:37.284  8923  9109 I lynx    : [7C032F8730:INFO:layout_context.cc(1104)] [Layout] UpdateViewport :size: 1080.0, 2400.0; mode: 1, 1
+09-15 20:47:37.302  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.304  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.306  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.309  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.315  8923  9108 I lynx    : [7C0A602730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxUIMethodModule
+09-15 20:47:37.323  8923  9108 I lynx    : [7C0A602730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxResourceModule
+09-15 20:47:37.324  8923  9108 I lynx    : [7C0A602730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxAccessibilityModule
+09-15 20:47:37.324  8923  9108 I lynx    : [7C0A602730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxSetModule
+09-15 20:47:37.326  8923  9108 I lynx    : [7C0A602730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxExposureModule
+09-15 20:47:37.327  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2887)] LoadScript:app-service.js
+09-15 20:47:37.327  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(220)] QuickjsRuntime::evaluatePreparedJavaScript start: /app-service.js
+09-15 20:47:37.327  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(149)] QuickjsRuntime::evaluateJavaScript: /app-service.js
+09-15 20:47:37.327  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(162)] QuickjsRuntime::evaluateJavaScript finished successfully.
+09-15 20:47:37.327  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2887)] LoadScript:/.rspeedy/main/background.5d2b2a9d.js
+09-15 20:47:37.327  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(220)] QuickjsRuntime::evaluatePreparedJavaScript start: /.rspeedy/main/background.5d2b2a9d.js
+09-15 20:47:37.327  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(149)] QuickjsRuntime::evaluateJavaScript: /.rspeedy/main/background.5d2b2a9d.js
+09-15 20:47:37.332   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.343  9128  9128 W audit   : audit_lost=47811 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:37.343  9128  9128 E audit   : rate limit exceeded
+09-15 20:47:37.367  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.368  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.373  8923  9108 I lynx    : [7C0A602730:INFO:quickjs_runtime.cc(162)] QuickjsRuntime::evaluateJavaScript finished successfully.
+09-15 20:47:37.383  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(355)] LYNX PageProxy get -> setCard
+09-15 20:47:37.383  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2166)]  App::LoadApp end 0xB400007EA51C2320
+09-15 20:47:37.383  8923  9108 I lynx    : [7C0A602730:INFO:bts_runtime.cc(985)] lynx runtime ready
+09-15 20:47:37.385  8923  8923 I NativeFacade: native->java onRuntimeReady instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.385  8923  8923 I LynxTemplateRender: TASMCallback.onRuntimeReady instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.385  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.lynxShellLayoutChanged 0xB400007EA51C2320
+09-15 20:47:37.385  8923  9112 I lynx    : [7C021EC730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:47:37.385  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.385  8923  9112 I lynx    : [7C021EC730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:47:37.385  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.385  8923  9112 I lynx    : [7C021EC730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:47:37.385  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.385  8923  9112 I lynx    : [7C021EC730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_code_cache
+09-15 20:47:37.385  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.393  8923  9108 I lynx    : [7C0A602730:INFO:lynx_module_android.cc(61)] NativeModule: LynxModuleAndroid Create: LynxShellModule
+09-15 20:47:37.394  8923  9108 I lynx    : [7C0A602730:INFO:method_invoker.cc(482)] NativeModule: LynxModuleAndroid MethodInvoker::InvokeMethod, method: (LynxShellModule.getStorageItem.sparkling_recent_urls) will fire 0xB400007CD51716F8
+09-15 20:47:37.416  8923  9108 I lynx    : [7C0A602730:INFO:method_invoker.cc(565)] NativeModules: LynxModuleAndroid MethodInvoker::InvokeMethod, method: (LynxShellModule.getStorageItem.sparkling_recent_urls) call platform implementation0xB400007CD51716F8
+09-15 20:47:37.420  8923  9108 I lynx    : [7C0A602730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __OnLifecycleEvent, phase: 2, target: 0, listener options: 0
+09-15 20:47:37.420  8923  9108 I lynx    : [7C0A602730:INFO:js_event_listener.cc(41)] JSClosureEventListener::Invoke name: __OnLifecycleEvent
+09-15 20:47:37.424  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1227)] LYNX PageProxy get -> GeneratePipelineOptions0xB400007D351922E8
+09-15 20:47:37.424  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1252)] LYNX PageProxy get -> OnPipelineStart0xB400007D351922E8
+09-15 20:47:37.425  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1332)] LYNX PageProxy get -> BindPipelineIdWithTimingFlag0xB400007D351922E8
+09-15 20:47:37.425  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D351922E8
+09-15 20:47:37.425  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D351922E8
+09-15 20:47:37.426  8923  9109 I lynx    : [7C032F8730:INFO:element_manager.cc(1704)] ElementManager::OnPatchFinishForFiber WithPatch!
+09-15 20:47:37.426  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D351922E8
+09-15 20:47:37.432  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.433  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.433  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.433  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D351922E8
+09-15 20:47:37.433  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D351922E8
+09-15 20:47:37.434  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.434  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.434  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1302)] LYNX PageProxy get -> MarkPipelineTiming0xB400007D351922E8
+09-15 20:47:37.434  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.434  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.434  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(1158)] LYNX PageProxy get -> callLepusMethod0xB400007D351922E8
+09-15 20:47:37.434  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(3538)]  CallLepusMethod: rLynxChange 0xB400007EA51C2320
+09-15 20:47:37.435  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.435  8923  9109 W lynx    : [7C032F8730:WARNING:layout_computed_style.cc(97)] Unexpected display type:5!! Fall back to default display.
+09-15 20:47:37.458  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.462  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.472  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.489  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.526   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.599  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.600  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.617   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.668  8923  9108 I lynx    : [7C0A602730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __OnAppFirstScreen, phase: 2, target: 0, listener options: 0
+09-15 20:47:37.668  8923  9108 I lynx    : [7C0A602730:INFO:js_event_listener.cc(41)] JSClosureEventListener::Invoke name: __OnAppFirstScreen
+09-15 20:47:37.668  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.onWindowResize 0xB400007EA51C2320
+09-15 20:47:37.672  8923  9109 I lynx    : [7C032F8730:INFO:touch_event_handler.cc(79)] TouchEventHandler init: support_component_js_: true; use_lepus_ng_: true
+09-15 20:47:37.673  8923  9109 I lynx    : [7C032F8730:INFO:touch_event_handler.cc(374)] SendCustomEvent event name:resize tag:10
+09-15 20:47:37.673  8923  9109 I lynx    : [7C032F8730:INFO:layout_context.cc(882)] [Layout] layout finish with result size: 1080, 2400 for viewport, size: 1080.0, 2400.0; mode: 1, 1 Time taken: 247091792 ns
+09-15 20:47:37.674  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.676  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.681  8923  9108 I lynx    : [7C0A602730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __OnNativeAppReady, phase: 2, target: 0, listener options: 0
+09-15 20:47:37.681  8923  9109 I lynx    : [7C032F8730:INFO:template_assembler.cc(845)] end TemplateAssembler::LoadTemplate, url:assets://bundles/main.lynx.bundle len: 167542
+09-15 20:47:37.681  8923  9108 I lynx    : [7C0A602730:INFO:js_event_listener.cc(41)] JSClosureEventListener::Invoke name: __OnNativeAppReady
+09-15 20:47:37.681  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.onFontScaleChanged 0xB400007EA51C2320
+09-15 20:47:37.681  8923  9109 I lynx    : [7C032F8730:INFO:template_assembler.cc(3534)] TemplateAssembler::CallLepusMethod. this:0xB400007CC50DAE20 url:assets://bundles/main.lynx.bundle method name: rLynxChange
+09-15 20:47:37.682  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.682  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.712  8923  9109 I lynx    : [7C032F8730:INFO:element_manager.cc(1683)] ElementManager::OnPatchFinishForFiber NoPatch!
+09-15 20:47:37.712  8923  9112 E lynx    : [7C021EC730:ERROR:timing_map.cc(20)] Set duplicated timing_key, timing_key is loadBundleStart
+09-15 20:47:37.712  8923  9112 E lynx    : [7C021EC730:ERROR:timing_map.cc(20)] Set duplicated timing_key, timing_key is load_template_start
+09-15 20:47:37.714   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.757  8923  8923 D CompatChangeReporter: Compat change id reported: 303326708; UID 10161; state: ENABLED
+09-15 20:47:37.767  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.773  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.783  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.790  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.798  8923  9109 I lynx    : [7C032F8730:INFO:touch_event_handler.cc(374)] SendCustomEvent event name:selection tag:0
+09-15 20:47:37.798  8923  9109 I lynx    : [7C032F8730:INFO:touch_event_handler.cc(1176)] Lynx HandleEventInternal failed, response_chain empty & event_name isselection
+09-15 20:47:37.800  8923  9109 I lynx    : [7C032F8730:INFO:touch_event_handler.cc(374)] SendCustomEvent event name:selection tag:0
+09-15 20:47:37.800  8923  9109 I lynx    : [7C032F8730:INFO:touch_event_handler.cc(1176)] Lynx HandleEventInternal failed, response_chain empty & event_name isselection
+09-15 20:47:37.800   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.812  1692  1692 W amdp-conn-29927: type=1400 audit(0.0:52420): avc:  denied  { getattr } for  path="/proc/1857/task/1886/net/netfilter/nf_log" dev="proc" ino=4026531969 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:37.812  1692  1692 W amdp-conn-29927: type=1400 audit(0.0:52421): avc:  denied  { getattr } for  path="/proc/1857/task/1886/net/netfilter/nfnetlink_log" dev="proc" ino=4026532088 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:37.812  1692  1692 W amdp-conn-29927: type=1400 audit(0.0:52422): avc:  denied  { getattr } for  path="/proc/1857/task/1886/net/netfilter/nfnetlink_queue" dev="proc" ino=4026532087 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:37.819  8923  8923 I Lynx    : setVisibility:253802312 0
+09-15 20:47:37.836  1692  1692 W amdp-conn-29928: type=1400 audit(0.0:52423): avc:  denied  { getattr } for  path="/proc/940/task/945/net/anycast6" dev="proc" ino=4026532103 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:37.836  1692  1692 W amdp-conn-29928: type=1400 audit(0.0:52424): avc:  denied  { getattr } for  path="/proc/940/task/945/net/arp" dev="proc" ino=4026532008 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:37.859  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.873  8923  8923 I NativeFacade: native->java onPageChanged isFirstScreen:true instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.874  8923  8923 I LynxTemplateRender: TASMCallback.onPageChanged isFirstScreen:true instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.874  8923  8923 I LynxTemplateRender: onFirstScreen
+09-15 20:47:37.888  8923  8923 I NativeFacade: native->java dispatchOnLoaded templateSize:167542 instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.888  8923  8923 I LynxTemplateRender: TASMCallback.onLoaded templateSize:167542 instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.888  8923  8923 I LynxTemplateRender: dispatchLoadSuccess templateSize in com.lynx.tasm.LynxTemplateRender@84a831d
+09-15 20:47:37.889  8923  8923 I NativeFacade: native->java onTASMFinishedByNative instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.890  8923  8923 I NativeFacade: native->java onUpdateDataWithoutChange instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.891  8923  8923 I LynxTemplateRender: TemplateRenderCallback.onUpdateDataWithoutChange instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.891  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:37.895  8923  8923 I LynxTemplateRender: updateViewport is unnecessary, because the size of the cache are the same as the size to be set.
+09-15 20:47:37.896  8923  9109 I lynx    : [7C032F8730:INFO:layout_context.cc(882)] [Layout] layout finish with result size: 1080, 2400 for viewport, size: 1080.0, 2400.0; mode: 1, 1 Time taken: 4014333 ns
+09-15 20:47:37.898   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:37.901  8923  8923 D AutofillManager: notifyViewReadyInner:1073741824
+09-15 20:47:37.906  8923  9160 D SoLoader: About to load: libimagepipeline.so
+09-15 20:47:37.906  8923  9160 D SoLoader: libimagepipeline.so found on /data/data/com.example.lynxshell.debug/lib-main
+09-15 20:47:37.909  8923  9160 D SoLoader: Loading lib dependencies: [liblog.so, libjnigraphics.so, libc.so, libm.so, libstdc++.so, libdl.so]
+09-15 20:47:37.909  8923  9160 D SoLoader: About to load: liblog.so
+09-15 20:47:37.909  8923  9160 D SoLoader: liblog.so not found on /data/data/com.example.lynxshell.debug/lib-main
+09-15 20:47:37.909  8923  9160 D SoLoader: liblog.so not found on /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64
+09-15 20:47:37.910  8923  9160 D SoLoader: liblog.so not found on /vendor/lib64
+09-15 20:47:37.910  8923  9160 D SoLoader: liblog.so found on /system/lib64
+09-15 20:47:37.910  8923  9160 D SoLoader: liblog.so loaded implicitly
+09-15 20:47:37.910  8923  9160 D SoLoader: Loaded: liblog.so
+09-15 20:47:37.910  8923  9160 D SoLoader: About to load: libjnigraphics.so
+09-15 20:47:37.912  8923  9160 D SoLoader: libjnigraphics.so not found on /data/data/com.example.lynxshell.debug/lib-main
+09-15 20:47:37.912  8923  9160 D SoLoader: libjnigraphics.so not found on /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64
+09-15 20:47:37.912  8923  9160 D SoLoader: libjnigraphics.so not found on /vendor/lib64
+09-15 20:47:37.914  8923  9160 D SoLoader: libjnigraphics.so found on /system/lib64
+09-15 20:47:37.914  8923  9160 D SoLoader: libjnigraphics.so loaded implicitly
+09-15 20:47:37.914  8923  9160 D SoLoader: Loaded: libjnigraphics.so
+09-15 20:47:37.914  8923  9160 D SoLoader: About to load: libc.so
+09-15 20:47:37.914  8923  9160 D SoLoader: libc.so not found on /data/data/com.example.lynxshell.debug/lib-main
+09-15 20:47:37.914  8923  9160 D SoLoader: libc.so not found on /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64
+09-15 20:47:37.914  8923  9160 D SoLoader: libc.so not found on /vendor/lib64
+09-15 20:47:37.914  8923  9160 D SoLoader: libc.so found on /system/lib64
+09-15 20:47:37.915  8923  9160 D SoLoader: libc.so loaded implicitly
+09-15 20:47:37.915  8923  9160 D SoLoader: Loaded: libc.so
+09-15 20:47:37.915  8923  9160 D SoLoader: About to load: libm.so
+09-15 20:47:37.916  8923  9160 D SoLoader: libm.so not found on /data/data/com.example.lynxshell.debug/lib-main
+09-15 20:47:37.916  8923  9160 D SoLoader: libm.so not found on /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64
+09-15 20:47:37.916  8923  9160 D SoLoader: libm.so not found on /vendor/lib64
+09-15 20:47:37.916  8923  9160 D SoLoader: libm.so found on /system/lib64
+09-15 20:47:37.916  8923  9160 D SoLoader: libm.so loaded implicitly
+09-15 20:47:37.916  8923  9160 D SoLoader: Loaded: libm.so
+09-15 20:47:37.916  8923  9160 D SoLoader: About to load: libstdc++.so
+09-15 20:47:37.916  8923  9160 D SoLoader: libstdc++.so not found on /data/data/com.example.lynxshell.debug/lib-main
+09-15 20:47:37.916  8923  9160 D SoLoader: libstdc++.so not found on /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64
+09-15 20:47:37.916  8923  9160 D SoLoader: libstdc++.so not found on /vendor/lib64
+09-15 20:47:37.916  8923  9160 D SoLoader: libstdc++.so found on /system/lib64
+09-15 20:47:37.916  8923  9160 D SoLoader: libstdc++.so loaded implicitly
+09-15 20:47:37.916  8923  9160 D SoLoader: Loaded: libstdc++.so
+09-15 20:47:37.917  8923  9160 D SoLoader: About to load: libdl.so
+09-15 20:47:37.917  8923  9160 D SoLoader: libdl.so not found on /data/data/com.example.lynxshell.debug/lib-main
+09-15 20:47:37.917  8923  9160 D SoLoader: libdl.so not found on /data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/lib/arm64
+09-15 20:47:37.917  8923  9160 D SoLoader: libdl.so not found on /vendor/lib64
+09-15 20:47:37.918  8923  9160 D SoLoader: libdl.so found on /system/lib64
+09-15 20:47:37.918  8923  9160 D SoLoader: libdl.so loaded implicitly
+09-15 20:47:37.918  8923  9160 D SoLoader: Loaded: libdl.so
+09-15 20:47:37.919  8923  9160 D nativeloader: Load /data/user/0/com.example.lynxshell.debug/lib-main/libimagepipeline.so using ns clns-7 from class loader (caller=/data/app/~~So9xv-XDbrPijcTAkhBZvg==/com.example.lynxshell.debug-matDLwPnnzPw4LLofiXwgw==/base.apk): ok
+09-15 20:47:37.922  8923  9160 D SoLoader: Loaded: libimagepipeline.so
+09-15 20:47:37.948  8923  9112 I lynx    : [7C021EC730:INFO:event_tracker_platform_impl.cc(52)] EventTracker onEvent with name: lynxsdk_setup_timing
+09-15 20:47:37.948  8923  9112 E LynxEventReporter: eventReporter service not found or event name is null.
+09-15 20:47:37.953  8923  9108 I lynx    : [7C0A602730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __SendGlobalEvent, phase: 2, target: 0, listener options: 0
+09-15 20:47:37.953  8923  9108 I lynx    : [7C0A602730:INFO:closure_event_listener.cc(38)] ClosureEventListener::Invoke name: __SendGlobalEvent, type: 0
+09-15 20:47:37.953  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.lynx.performance.timing.onSetup 0xB400007EA51C2320
+09-15 20:47:37.958  8923  8923 I NativeFacade: native->java onPageChanged isFirstScreen:false instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.958  8923  8923 I LynxTemplateRender: TASMCallback.onPageChanged isFirstScreen:false instanceId:0 url:assets://bundles/main.lynx.bundle
+09-15 20:47:37.958  8923  8923 I LynxTemplateRender: onPageUpdate
+09-15 20:47:37.958  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.013  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.014  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.015   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.051  8923  9108 I lynx    : [7C0A602730:INFO:event_target.cc(98)] EventTarget::DispatchEvent name: __SendGlobalEvent, phase: 2, target: 0, listener options: 0
+09-15 20:47:38.051  8923  9108 I lynx    : [7C0A602730:INFO:closure_event_listener.cc(38)] ClosureEventListener::Invoke name: __SendGlobalEvent, type: 0
+09-15 20:47:38.051  8923  9108 I lynx    : [7C0A602730:INFO:js_app.cc(2513)] call jsmodule:GlobalEventEmitter.emit.lynx.performance.onPerformanceEvent 0xB400007EA51C2320
+09-15 20:47:38.051  8923  8923 I Lynx.IntersectionObserver: onRootViewDraw ObserverHandler
+09-15 20:47:38.053  8923  8923 I LynxTemplateRender: updateViewport is unnecessary, because the size of the cache are the same as the size to be set.
+09-15 20:47:38.088  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.089  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.092  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.113   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.189  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.190  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.190   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.191  1692  1871 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.194  1692  1733 I com.catchingnow.andfiles.helper:device_agent: Background concurrent mark compact GC freed 3140KB AllocSpace bytes, 76(1520KB) LOS objects, 49% free, 4155KB/8311KB, paused 405us,54.182ms total 73.448ms
+09-15 20:47:38.257  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.259  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.263  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.281  8923  9045 I LynxOtaRuntime: 全量 OTA 同步完成：收到 3 个 App ID
+09-15 20:47:38.288  8923  9046 D EGL_emulation: app_time_stats: avg=775.00ms min=426.92ms max=1123.07ms count=2
+09-15 20:47:38.298   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.348  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.351  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.353  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.359  1182  1425 D EGL_emulation: app_time_stats: avg=300.12ms min=1.14ms max=5254.95ms count=18
+09-15 20:47:38.407   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.492  9174  9174 W audit   : audit_lost=47935 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:38.492  9174  9174 E audit   : rate limit exceeded
+09-15 20:47:38.513  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.515  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.519  1692  1871 D TrafficStats: tagSocket(89) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.537   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.608  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.614  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.614  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.616   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.651  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.654  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.656  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.679   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.684  8923  8933 I lynxshell.debug: Compiler allocated 5250KB to compile void android.view.ViewRootImpl.performTraversals()
+09-15 20:47:38.711  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.711  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.715  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.814  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.814  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.814  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.814  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.817   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.901  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.916  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:38.936   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:38.998  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.001  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.001  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.003  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.053   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:39.054  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.098  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.099  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.100  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.105  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.116  1692  1692 W amdp-conn-29971: type=1400 audit(0.0:52565): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc22/power/async" dev="sysfs" ino=20914 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:39.116  1692  1692 W amdp-conn-29971: type=1400 audit(0.0:52566): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc22/power/autosuspend_delay_ms" dev="sysfs" ino=20922 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:39.116  1692  1692 W amdp-conn-29971: type=1400 audit(0.0:52567): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc22/power/control" dev="sysfs" ino=20919 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:39.116  1692  1692 W amdp-conn-29971: type=1400 audit(0.0:52568): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc22/power/runtime_active_kids" dev="sysfs" ino=20917 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:39.116  1692  1692 W amdp-conn-29971: type=1400 audit(0.0:52569): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc22/power/runtime_active_time" dev="sysfs" ino=20921 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:39.162  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.204   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:39.262  1692  1733 I com.catchingnow.andfiles.helper:device_agent: Background concurrent mark compact GC freed 2652KB AllocSpace bytes, 72(1440KB) LOS objects, 49% free, 4075KB/8151KB, paused 232us,12.196ms total 71.785ms
+09-15 20:47:39.274   364   448 I netd    : tetherGetStats() -> {[]} <1.29ms>
+09-15 20:47:39.292   364   448 I netd    : bandwidthSetGlobalAlert(2097152) <0.11ms>
+09-15 20:47:39.299  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.301  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.303  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.304  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.321  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.382  8923  9046 D EGL_emulation: app_time_stats: avg=547.12ms min=28.19ms max=1066.04ms count=2
+09-15 20:47:39.409  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.413  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.416  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.418  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.502  9210  9210 W audit   : audit_lost=47957 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:39.502  9210  9210 E audit   : rate limit exceeded
+09-15 20:47:39.518  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.589   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:39.635  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.639  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.647  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.679  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.767  1692  1871 D TrafficStats: tagSocket(89) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.770   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:39.826  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.832  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.834  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.834  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.891  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.916   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:39.989  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.992  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.995  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:39.997  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.083  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.084  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.086  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.089  1692  1871 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.106  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.152  1692  1692 W amdp-conn-30002: type=1400 audit(0.0:52585): avc:  denied  { getattr } for  path="/proc/940/task/945/net/stat/arp_cache" dev="proc" ino=4026532007 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:40.156  1692  1692 W amdp-conn-30002: type=1400 audit(0.0:52586): avc:  denied  { getattr } for  path="/proc/940/task/945/net/stat/ndisc_cache" dev="proc" ino=4026532106 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:40.156  1692  1692 W amdp-conn-30002: type=1400 audit(0.0:52587): avc:  denied  { getattr } for  path="/proc/940/task/945/net/stat/nf_conntrack" dev="proc" ino=4026532090 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:40.156  1692  1692 W amdp-conn-30002: type=1400 audit(0.0:52588): avc:  denied  { getattr } for  path="/proc/940/task/945/net/stat/rt_cache" dev="proc" ino=4026532013 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:40.158   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:40.195  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.198  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.201  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.205  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.216  1692  1692 W amdp-conn-30005: type=1400 audit(0.0:52589): avc:  denied  { getattr } for  path="/proc/821/task/827/net/stat/arp_cache" dev="proc" ino=4026532007 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:40.220  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.309  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.311  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.315  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.316  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.334  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.433  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.436  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.437  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.438  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.460  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.499  8923  9263 D ProfileInstaller: Installing profile for com.example.lynxshell.debug
+09-15 20:47:40.551  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.555  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.558  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.564  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.582  9264  9264 W audit   : audit_lost=47980 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:40.582  9264  9264 E audit   : rate limit exceeded
+09-15 20:47:40.613  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.638   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:40.687  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.690  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.693  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.694  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.790  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.791  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.793  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.794  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.889  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.978  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.982  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.983  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.985  1692  1871 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:40.999  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.078  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.082  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.085  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.087  1692  1871 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.105  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.140  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.141  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.141  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.165   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:41.172  1692  1692 W amdp-conn-30044: type=1400 audit(0.0:52667): avc:  denied  { getattr } for  path="/proc/940/task/945/net/dev_snmp6/dummy0" dev="proc" ino=4026532119 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:41.172  1692  1692 W amdp-conn-30044: type=1400 audit(0.0:52668): avc:  denied  { getattr } for  path="/proc/940/task/945/net/dev_snmp6/erspan0" dev="proc" ino=4026532125 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:41.172  1692  1692 W amdp-conn-30044: type=1400 audit(0.0:52669): avc:  denied  { getattr } for  path="/proc/940/task/945/net/dev_snmp6/eth0" dev="proc" ino=4026532579 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:41.172  1692  1692 W amdp-conn-30044: type=1400 audit(0.0:52670): avc:  denied  { getattr } for  path="/proc/940/task/945/net/dev_snmp6/gre0" dev="proc" ino=4026532123 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:41.172  1692  1692 W amdp-conn-30044: type=1400 audit(0.0:52671): avc:  denied  { getattr } for  path="/proc/940/task/945/net/dev_snmp6/gretap0" dev="proc" ino=4026532124 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:41.193  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.196  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.198  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.284  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.286  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.364  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.458  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.463  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.463  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.464  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.487  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.526   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:41.583  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.585  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.586  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.589  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.617  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.633   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:41.657  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.658  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.709  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.744  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.746  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.748  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.749  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.768  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.864  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.865  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.866  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.867  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.879  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.961  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.964  1692  1871 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.967  1692  1871 D TrafficStats: tagSocket(82) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.971  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:41.981  9320  9320 W audit   : audit_lost=48072 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:41.981  9320  9320 E audit   : rate limit exceeded
+09-15 20:47:41.987  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.073  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.075  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.079  1692  1871 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.082  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.105  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.187  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.192  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.195  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.199  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.209   364   448 I netd    : tetherGetStats() -> {[]} <0.46ms>
+09-15 20:47:42.214   364   448 I netd    : bandwidthSetGlobalAlert(2097152) <0.12ms>
+09-15 20:47:42.217  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.243   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:42.285  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.286  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.286  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.288  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.314  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.399  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.401  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.404  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.408  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.434  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.449   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:42.520  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.520  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.521  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.522  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.532  1692  1692 W amdp-conn-30103: type=1400 audit(0.0:52710): avc:  denied  { getattr } for  path="/proc/364/task/425/net/stat/arp_cache" dev="proc" ino=4026532007 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:42.536  1692  1692 W amdp-conn-30103: type=1400 audit(0.0:52711): avc:  denied  { getattr } for  path="/proc/364/task/425/net/stat/ndisc_cache" dev="proc" ino=4026532106 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:42.536  1692  1692 W amdp-conn-30103: type=1400 audit(0.0:52712): avc:  denied  { getattr } for  path="/proc/364/task/425/net/stat/nf_conntrack" dev="proc" ino=4026532090 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:42.536  1692  1692 W amdp-conn-30103: type=1400 audit(0.0:52713): avc:  denied  { getattr } for  path="/proc/364/task/425/net/stat/rt_cache" dev="proc" ino=4026532013 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:42.545  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.631  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.634  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.634  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.638  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.663  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.685   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:42.721  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.722  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.724  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.725  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.736  1692  1692 W amdp-conn-30111: type=1400 audit(0.0:52714): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc14/dev" dev="sysfs" ino=20795 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:42.741  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.837  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.839  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.842  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.843  1692  1871 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.867  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.959  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.963  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.966  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.969  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:42.982  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.079  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.082  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.085  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.089  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.108  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.191  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.193  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.197  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.205  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.211  9375  9375 W audit   : audit_lost=48084 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:43.211  9375  9375 E audit   : rate limit exceeded
+09-15 20:47:43.224  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.323  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.325  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.330  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.332  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.345  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.426  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.429  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.434  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.437  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.457  1692  1871 D TrafficStats: tagSocket(89) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.483   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:43.518  1692  1871 D TrafficStats: tagSocket(72) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.518  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.523  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.536  1692  1692 W amdp-conn-30142: type=1400 audit(0.0:52755): avc:  denied  { getattr } for  path="/proc/992/task/992/net/l2cap" dev="proc" ino=4026532315 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:43.536  1692  1692 W amdp-conn-30142: type=1400 audit(0.0:52756): avc:  denied  { getattr } for  path="/proc/992/task/992/net/mcfilter" dev="proc" ino=4026532016 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:43.540  1692  1692 W amdp-conn-30142: type=1400 audit(0.0:52757): avc:  denied  { getattr } for  path="/proc/992/task/992/net/mcfilter6" dev="proc" ino=4026532108 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:43.556  1692  1692 W amdp-conn-30142: type=1400 audit(0.0:52758): avc:  denied  { getattr } for  path="/proc/992/task/992/net/netlink" dev="proc" ino=4026531970 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:43.556  1692  1692 W amdp-conn-30142: type=1400 audit(0.0:52759): avc:  denied  { getattr } for  path="/proc/992/task/992/net/netstat" dev="proc" ino=4026532023 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+09-15 20:47:43.600  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.601  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.605  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.607  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.649  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.650  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.651  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.652  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.690  1692  1871 D TrafficStats: tagSocket(89) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.710   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:43.753  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.754  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.758  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.761  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.788  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.879  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.885  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.889  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.896  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.912  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:43.999  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.001  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.003  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.004  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.021  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.093   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:44.094  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.096  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.099  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.100  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.123  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.143   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:44.166  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.169  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.173  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.174  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.184  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.257   856   856 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS 
+09-15 20:47:44.269  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.273  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.273  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.276  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.286  9427  9427 W audit   : audit_lost=48175 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:44.286  9427  9427 E audit   : rate limit exceeded
+09-15 20:47:44.289  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.309   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:44.333  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.335  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.337  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.349  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.374   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:44.403  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.405  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.413  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.413  1692  1871 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.505   624   722 D ActivityManager: freezing 1022 com.android.permissioncontroller
+09-15 20:47:44.506  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.509   624   779 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+09-15 20:47:44.510   624   779 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+09-15 20:47:44.510   624   779 D InetDiagMessage: Destroyed live tcp sockets for uids={10140} in 2ms
+09-15 20:47:44.513  1692  1871 D TrafficStats: tagSocket(55) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.515  1692  1871 D TrafficStats: tagSocket(81) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.516  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.519   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:44.667  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.675  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.678   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:44.715  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.716  1692  1871 D TrafficStats: tagSocket(73) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.717  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.718  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.784  1692  1692 W amdp-conn-30201: type=1400 audit(0.0:52873): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc31/power/async" dev="sysfs" ino=21058 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:44.784  1692  1692 W amdp-conn-30201: type=1400 audit(0.0:52874): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc31/power/autosuspend_delay_ms" dev="sysfs" ino=21066 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:44.784  1692  1692 W amdp-conn-30201: type=1400 audit(0.0:52875): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc31/power/control" dev="sysfs" ino=21063 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:44.784  1692  1692 W amdp-conn-30201: type=1400 audit(0.0:52876): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc31/power/runtime_active_kids" dev="sysfs" ino=21061 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:44.788  1692  1692 W amdp-conn-30201: type=1400 audit(0.0:52877): avc:  denied  { getattr } for  path="/sys/devices/virtual/tty/hvc31/power/runtime_active_time" dev="sysfs" ino=21065 scontext=u:r:shell:s0 tcontext=u:object_r:sysfs:s0 tclass=file permissive=0
+09-15 20:47:44.794  1692  1871 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.858  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.890   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:44.935  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.938  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.951  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.958  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:44.963   364   448 I netd    : tetherGetStats() -> {[]} <1.25ms>
+09-15 20:47:44.963  9453  9453 W BpBinder: Linking to death on android.gui.ISurfaceComposer but there are no threads (yet?) listening to incoming transactions. See ProcessState::startThreadPool and ProcessState::setThreadPoolMaxThreadCount. Generally you should setup the binder threadpool before other initialization steps.
+09-15 20:47:44.967   364   448 I netd    : bandwidthSetGlobalAlert(2097152) <0.12ms>
+09-15 20:47:44.976  9453  9453 W ProcessState: Extra binder thread started, but 0 threads requested. Do not use *startThreadPool when zero threads are requested.
+09-15 20:47:45.061   160   160 I servicemanager: Caller(pid=9453,uid=2000,sid=u:r:shell:s0) Could not find android.hardware.graphics.allocator.IAllocator/default in the VINTF manifest. No alternative instances declared in VINTF.
+09-15 20:47:45.062   161   161 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+09-15 20:47:45.062  9453  9459 I Gralloc4: mapper 4.x is not supported
+09-15 20:47:45.090  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.103   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:45.135  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.140  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.142  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.148  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.172  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.198   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:45.224  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.284  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.297   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:45.348  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.352  1692  1871 D TrafficStats: tagSocket(77) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.353  1692  1871 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.353  1692  1871 D TrafficStats: tagSocket(86) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.365  9469  9469 W audit   : audit_lost=48244 audit_rate_limit=5 audit_backlog_limit=64
+09-15 20:47:45.365  9469  9469 E audit   : rate limit exceeded
+09-15 20:47:45.375  1692  1871 D TrafficStats: tagSocket(53) with statsTag=0xffffffff, statsUid=-1
+09-15 20:47:45.466   417   417 E adbd    : failed to connect to socket 'tcp:12969': Connection refused
+09-15 20:47:45.484   170   170 I logd    : logdr: UID=2000 GID=2000 PID=9473 n tail=0 logMask=99 pid=0 start=0ns deadline=0ns

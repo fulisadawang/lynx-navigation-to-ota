@@ -15,6 +15,11 @@
 **/.hvigor/
 **/.preview/
 
+# Lynx 监控调试材料只保留在本地或 CI artifact，不进入源码仓库。
+playground/.artifacts/
+android/app/src/main/assets/bundles/.lynx/
+ios/LynxShellSample/Resources/Bundles/.lynx/
+
 # 本地发布/验收产物与历史独立工程
 .release/
 .workflow/
