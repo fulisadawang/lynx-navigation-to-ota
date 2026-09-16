@@ -52,11 +52,13 @@ final class LynxNativeCapabilityRuntime: NSObject {
         do {
             parsedCall = try LynxNativeCapabilityCall(payload: payload)
         } catch {
+            let capabilityError = error as? LynxNativeCapabilityError
+            let identity = Self.identity(from: payload)
             let envelope = Self.errorEnvelope(
-                callbackId: "-1",
-                pluginId: "",
-                methodName: "",
-                code: "INVALID_PAYLOAD",
+                callbackId: identity.callbackID,
+                pluginId: identity.pluginID,
+                methodName: identity.methodName,
+                code: capabilityError?.code ?? "INVALID_PAYLOAD",
                 message: error.localizedDescription
             )
             DispatchQueue.main.async { callback(envelope) }
@@ -98,6 +100,7 @@ final class LynxNativeCapabilityRuntime: NSObject {
         dispatcher.sendEvent([
             "pluginId": "App",
             "methodName": "appUrlOpen",
+            "eventName": "appUrlOpen",
             "success": true,
             "data": ["url": url],
             "save": true,
@@ -108,6 +111,7 @@ final class LynxNativeCapabilityRuntime: NSObject {
         dispatcher.sendEvent([
             "pluginId": "PushNotifications",
             "methodName": "registration",
+            "eventName": "registration",
             "success": true,
             "data": ["value": token],
             "save": true,
@@ -118,8 +122,13 @@ final class LynxNativeCapabilityRuntime: NSObject {
         dispatcher.sendEvent([
             "pluginId": "PushNotifications",
             "methodName": "registrationError",
+            "eventName": "registrationError",
             "success": false,
-            "error": ["code": "PUSH_REGISTRATION_FAILED", "message": message],
+            "error": [
+                "code": "PUSH_REGISTRATION_FAILED",
+                "reasonCode": LynxCapabilitySemantics.errorReasonCode(for: "PUSH_REGISTRATION_FAILED"),
+                "message": message,
+            ],
             "save": true,
         ])
     }
@@ -128,6 +137,7 @@ final class LynxNativeCapabilityRuntime: NSObject {
         dispatcher.sendEvent([
             "pluginId": "PushNotifications",
             "methodName": "pushNotificationReceived",
+            "eventName": "pushNotificationReceived",
             "success": true,
             "data": LynxNativeJSON.normalize(userInfo),
             "save": true,
@@ -177,6 +187,23 @@ final class LynxNativeCapabilityRuntime: NSObject {
                 methodName: methodName,
                 options: [:]
             ))
+    }
+
+    /** 解析失败时尽量保留调用方的身份字段，便于页面归并错误。 */
+    private static func identity(from payload: String) -> (callbackID: String, pluginID: String, methodName: String) {
+        guard
+            let data = payload.data(using: .utf8),
+            let raw = try? JSONSerialization.jsonObject(with: data),
+            let object = raw as? [String: Any]
+        else { return ("-1", "", "") }
+        let callbackValue = (object["callbackId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let callbackID = callbackValue.isEmpty ? "-1" : callbackValue
+        let pluginID = (object["pluginId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let methodName = (object["methodName"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (callbackID, pluginID, methodName)
     }
 }
 

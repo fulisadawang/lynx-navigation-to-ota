@@ -1,0 +1,370 @@
+<div id="lynx-capacitor-gaps-v1">
+<style>
+#lynx-capacitor-gaps-v1 {
+  color: var(--foreground);
+  font-family: var(--font-family-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-size: var(--font-size-base, 14px);
+  line-height: 1.5;
+}
+#lynx-capacitor-gaps-v1 .gap-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+#lynx-capacitor-gaps-v1 h2,
+#lynx-capacitor-gaps-v1 h3,
+#lynx-capacitor-gaps-v1 p {
+  margin: 0;
+}
+#lynx-capacitor-gaps-v1 h2 {
+  font-size: 22px;
+  font-weight: 500;
+}
+#lynx-capacitor-gaps-v1 h3 {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+#lynx-capacitor-gaps-v1 .gap-subtitle {
+  color: var(--muted-foreground);
+  margin-top: 4px;
+  max-width: 720px;
+}
+#lynx-capacitor-gaps-v1 .gap-source {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+}
+#lynx-capacitor-gaps-v1 .nav {
+  margin-bottom: 16px;
+}
+#lynx-capacitor-gaps-v1 .viz-grid {
+  margin-bottom: 18px;
+}
+#lynx-capacitor-gaps-v1 .viz-stat {
+  min-height: 88px;
+}
+#lynx-capacitor-gaps-v1 .viz-stat-value {
+  font-variant-numeric: tabular-nums;
+}
+#lynx-capacitor-gaps-v1 .stat-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 3px;
+}
+#lynx-capacitor-gaps-v1 .section {
+  margin-top: 18px;
+}
+#lynx-capacitor-gaps-v1 .section-intro {
+  color: var(--muted-foreground);
+  margin-bottom: 12px;
+}
+#lynx-capacitor-gaps-v1 .status-line {
+  display: grid;
+  grid-template-columns: minmax(92px, 1fr) minmax(160px, 2fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin: 7px 0;
+}
+#lynx-capacitor-gaps-v1 .status-label,
+#lynx-capacitor-gaps-v1 .status-value {
+  font-size: 12px;
+}
+#lynx-capacitor-gaps-v1 .status-value {
+  color: var(--muted-foreground);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#lynx-capacitor-gaps-v1 .status-track {
+  height: 9px;
+  background: var(--muted);
+  overflow: hidden;
+}
+#lynx-capacitor-gaps-v1 .status-fill {
+  height: 100%;
+}
+#lynx-capacitor-gaps-v1 .native-fill {
+  background: var(--viz-series-1);
+}
+#lynx-capacitor-gaps-v1 .partial-fill {
+  background: var(--viz-series-2);
+}
+#lynx-capacitor-gaps-v1 .unsupported-fill {
+  background: var(--viz-series-4);
+}
+#lynx-capacitor-gaps-v1 .gap-list {
+  display: grid;
+  gap: 8px;
+}
+#lynx-capacitor-gaps-v1 .gap-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.2fr) minmax(190px, 2fr) minmax(150px, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+#lynx-capacitor-gaps-v1 .gap-row:last-child {
+  border-bottom: 0;
+}
+#lynx-capacitor-gaps-v1 .gap-method {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#lynx-capacitor-gaps-v1 .gap-reason {
+  color: var(--muted-foreground);
+}
+#lynx-capacitor-gaps-v1 .gap-when {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+#lynx-capacitor-gaps-v1 .reason-group {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+#lynx-capacitor-gaps-v1 .reason-group:last-child {
+  border-bottom: 0;
+}
+#lynx-capacitor-gaps-v1 .reason-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#lynx-capacitor-gaps-v1 .reason-code {
+  color: var(--muted-foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+#lynx-capacitor-gaps-v1 .reason-description {
+  color: var(--muted-foreground);
+  margin: 4px 0 8px;
+}
+#lynx-capacitor-gaps-v1 .domain-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#lynx-capacitor-gaps-v1 .domain-list code {
+  font-size: 12px;
+}
+#lynx-capacitor-gaps-v1 .gap-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-top: 14px;
+}
+#lynx-capacitor-gaps-v1 .common-strip {
+  padding: 12px 14px;
+  border-left: 3px solid var(--viz-series-3);
+  background: color-mix(in srgb, var(--viz-series-3) 9%, transparent);
+}
+#lynx-capacitor-gaps-v1 .common-strip strong {
+  font-weight: 500;
+}
+#lynx-capacitor-gaps-v1 .common-methods {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+@media (max-width: 620px) {
+  #lynx-capacitor-gaps-v1 .gap-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  #lynx-capacitor-gaps-v1 .status-line {
+    grid-template-columns: 92px minmax(90px, 1fr) auto;
+  }
+  #lynx-capacitor-gaps-v1 .gap-source {
+    white-space: normal;
+  }
+}
+</style>
+
+<div class="gap-header">
+  <div>
+    <h2>Capacitor 原生能力缺口</h2>
+    <p class="gap-subtitle">三端目录保持 40 个能力域、146 个方法；这里把“方法没实现”和“代码存在但需要宿主、设备或语义验收”分开。</p>
+  </div>
+  <div class="gap-source">源码契约 v1.1 · 当前分支静态证据</div>
+</div>
+
+<div class="nav nav-pills" role="tablist" aria-label="选择平台">
+  <button class="nav-link active" id="lynx-gaps-android-tab" role="tab" aria-controls="lynx-gaps-panel" aria-selected="true" type="button" data-platform="android">Android</button>
+  <button class="nav-link" id="lynx-gaps-ios-tab" role="tab" aria-controls="lynx-gaps-panel" aria-selected="false" type="button" data-platform="ios">iOS</button>
+  <button class="nav-link" id="lynx-gaps-harmony-tab" role="tab" aria-controls="lynx-gaps-panel" aria-selected="false" type="button" data-platform="harmony">HarmonyOS</button>
+</div>
+
+<div id="lynx-gaps-panel" role="tabpanel" aria-live="polite" aria-labelledby="lynx-gaps-android-tab">
+  <div class="viz-grid" id="lynx-gaps-stats"></div>
+
+  <div class="section">
+    <h3>三端共同缺失</h3>
+    <div class="common-strip">
+      <strong>这 4 组方法在三端都不能按当前公共 Module 承诺成功：</strong>
+      <div class="common-methods">
+        <code>Browser.close</code>
+        <code>Keyboard.setStyle</code>
+        <code>PushNotifications.register</code>
+        <code>BackgroundRunner.dispatchEvent</code>
+      </div>
+      <p class="gap-note">Biometrics 三个方法在 Android 和 HarmonyOS 缺失；iOS 有独立实现。iOS 另有 TextZoom.set 和两个通知 channel 方法缺失。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>当前平台明确缺失的方法</h3>
+    <p class="section-intro">调用会进入结构化失败路径；原因码是机器可读的，页面不要解析自然语言。</p>
+    <div class="gap-list" id="lynx-gaps-missing"></div>
+  </div>
+
+  <div class="section">
+    <h3>Partial 能力：代码存在，但仍有条件</h3>
+    <p class="section-intro">Partial 不等于每个方法都缺失。下面按源码给出的主因分组，通常需要宿主接线、权限/设备验收或跨端语义对账。</p>
+    <div id="lynx-gaps-partial"></div>
+  </div>
+
+  <p class="gap-note">状态层当前为 source=verified、build=not_run、host=not_integrated、device=not_run；默认 Shell 尚未注册这三个 Module。</p>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('lynx-capacitor-gaps-v1');
+  if (!root) return;
+
+  var platforms = {
+    android: {
+      label: 'Android',
+      counts: { native: 19, partial: 20, unsupported: 1 },
+      missing: [
+        { method: 'Biometrics.isAvailable', code: 'PLATFORM_UNSUPPORTED', reason: '没有可安全承诺的 Android 等价实现。', when: '当前调用直接返回 UNSUPPORTED' },
+        { method: 'Biometrics.getBiometryType', code: 'PLATFORM_UNSUPPORTED', reason: '没有可安全承诺的 Android 等价实现。', when: '当前调用直接返回 UNSUPPORTED' },
+        { method: 'Biometrics.authenticate', code: 'PLATFORM_UNSUPPORTED', reason: '没有可安全承诺的 Android 等价实现。', when: '当前调用直接返回 UNSUPPORTED' },
+        { method: 'Browser.close', code: 'EXTERNAL_OWNER', reason: '外部浏览器由系统或第三方应用管理。', when: '打开动作提交后，Module 不拥有关闭生命周期' },
+        { method: 'Keyboard.setStyle', code: 'PLATFORM_UNSUPPORTED', reason: '系统 IME 样式不由当前 Module 统一控制。', when: '当前调用直接返回 UNSUPPORTED' },
+        { method: 'PushNotifications.register', code: 'HOST_PROVIDER_REQUIRED', reason: '需要宿主接入推送厂商 Provider、权限和 token。', when: '保留宿主事件入口，不伪造注册成功' },
+        { method: 'BackgroundRunner.dispatchEvent', code: 'HOST_PROVIDER_REQUIRED', reason: '需要宿主后台执行能力。', when: '权限方法可用，dispatch 仍未承诺' }
+      ],
+      groups: [
+        { title: '设备与权限验收', code: 'DEVICE_FEATURE_REQUIRED', description: '方法分支存在，但相机、定位、传感器、无障碍、日历、通知或扫码需要设备与权限证据。', domains: ['Camera', 'Geolocation', 'Motion', 'ScreenReader', 'Calendar', 'LocalNotifications', 'CapacitorBarcodeScanner'] },
+        { title: '跨端语义差异', code: 'SEMANTIC_VARIANT', description: '作用范围、回执、进度或完成时机不保证与其他平台完全相同。', domains: ['Share', 'FileTransfer', 'CapacitorHttp'] },
+        { title: '宿主上下文或窗口', code: 'RUNTIME_CONTEXT_REQUIRED / HOST_INTEGRATION_REQUIRED', description: '需要有效 Activity、前台窗口、宿主生命周期或外部文档查看器。', domains: ['FileViewer', 'InAppBrowser', 'ScreenOrientation'] },
+        { title: '安全边界', code: 'SECURITY_SCOPE_RESTRICTED', description: '目录、URI、Cookie scope 或授权范围限制了公共语义。', domains: ['Filesystem', 'CapacitorCookies'] },
+        { title: '外部系统或 Provider', code: 'EXTERNAL_OWNER / HOST_PROVIDER_REQUIRED', description: '浏览器和推送/后台能力由外部系统或宿主 Provider 拥有。', domains: ['Browser', 'PushNotifications', 'BackgroundRunner'] }
+      ]
+    },
+    ios: {
+      label: 'iOS',
+      counts: { native: 19, partial: 21, unsupported: 0 },
+      missing: [
+        { method: 'Browser.close', code: 'EXTERNAL_OWNER', reason: '外部浏览器由系统或第三方应用管理。', when: '打开动作提交后，Module 不拥有关闭生命周期' },
+        { method: 'TextZoom.set', code: 'METHOD_GAP', reason: '当前没有可承诺的全局 Lynx 字体缩放写入接口。', when: '当前调用返回 UNSUPPORTED' },
+        { method: 'Keyboard.setStyle', code: 'PLATFORM_UNSUPPORTED', reason: '系统 IME 样式不由当前 Module 统一控制。', when: '当前调用返回 UNSUPPORTED' },
+        { method: 'LocalNotifications.createChannel', code: 'PLATFORM_UNSUPPORTED', reason: 'iOS 没有 Android NotificationChannel 的同等公共对象。', when: '当前调用返回 UNSUPPORTED' },
+        { method: 'LocalNotifications.listChannels', code: 'PLATFORM_UNSUPPORTED', reason: 'iOS 没有 Android NotificationChannel 的同等公共对象。', when: '当前调用返回 UNSUPPORTED' },
+        { method: 'PushNotifications.register', code: 'HOST_PROVIDER_REQUIRED', reason: '需要宿主接入 APNs 或厂商 Provider、权限和 token。', when: '保留宿主事件入口，不伪造注册成功' },
+        { method: 'BackgroundRunner.dispatchEvent', code: 'HOST_PROVIDER_REQUIRED', reason: '需要宿主后台执行能力。', when: '权限方法可用，dispatch 仍未承诺' }
+      ],
+      groups: [
+        { title: '设备与权限验收', code: 'DEVICE_FEATURE_REQUIRED', description: '方法分支存在，但相机、定位、传感器、无障碍、日历、通知或扫码需要设备与权限证据。', domains: ['Camera', 'Geolocation', 'Motion', 'ScreenReader', 'Calendar', 'LocalNotifications', 'CapacitorBarcodeScanner'] },
+        { title: '跨端语义差异', code: 'SEMANTIC_VARIANT', description: '作用范围、回执、进度或完成时机不保证与其他平台完全相同。', domains: ['FileTransfer', 'CapacitorHttp'] },
+        { title: '宿主上下文或窗口', code: 'RUNTIME_CONTEXT_REQUIRED / HOST_INTEGRATION_REQUIRED', description: '需要有效 UIViewController、前台 Scene、宿主生命周期或外部文档查看器。', domains: ['FileViewer', 'InAppBrowser', 'SplashScreen', 'ScreenOrientation'] },
+        { title: '安全边界', code: 'SECURITY_SCOPE_RESTRICTED', description: '目录、URI、Cookie scope 或授权范围限制了公共语义。', domains: ['Filesystem', 'CapacitorCookies'] },
+        { title: '近似实现', code: 'APPROXIMATE_IMPLEMENTATION', description: '使用系统近似机制，不能保证和其他平台的硬件或隐私行为完全等价。', domains: ['Haptics', 'PrivacyScreen'] },
+        { title: '外部系统或 Provider', code: 'EXTERNAL_OWNER / HOST_PROVIDER_REQUIRED', description: '浏览器和推送/后台能力由外部系统或宿主 Provider 拥有。', domains: ['Browser', 'PushNotifications', 'BackgroundRunner'] },
+        { title: '方法级缺口', code: 'METHOD_GAP', description: '域仍可用，但某个方法没有实现。', domains: ['TextZoom'] }
+      ]
+    },
+    harmony: {
+      label: 'HarmonyOS',
+      counts: { native: 17, partial: 22, unsupported: 1 },
+      missing: [
+        { method: 'Biometrics.isAvailable', code: 'PLATFORM_UNSUPPORTED', reason: '当前 HarmonyOS Module 没有可安全承诺的等价实现。', when: '当前调用直接返回 UNSUPPORTED' },
+        { method: 'Biometrics.getBiometryType', code: 'PLATFORM_UNSUPPORTED', reason: '当前 HarmonyOS Module 没有可安全承诺的等价实现。', when: '当前调用直接返回 UNSUPPORTED' },
+        { method: 'Biometrics.authenticate', code: 'PLATFORM_UNSUPPORTED', reason: '当前 HarmonyOS Module 没有可安全承诺的等价实现。', when: '当前调用直接返回 UNSUPPORTED' },
+        { method: 'Browser.close', code: 'EXTERNAL_OWNER', reason: '外部浏览器由系统或第三方应用管理。', when: '打开动作提交后，Module 不拥有关闭生命周期' },
+        { method: 'Keyboard.setStyle', code: 'PLATFORM_UNSUPPORTED', reason: '系统 IME 样式不由当前 Module 统一控制。', when: '当前调用直接返回 UNSUPPORTED' },
+        { method: 'PushNotifications.register', code: 'HOST_PROVIDER_REQUIRED', reason: '需要宿主接入推送厂商 Provider、权限和 token。', when: '保留宿主事件入口，不伪造注册成功' },
+        { method: 'BackgroundRunner.dispatchEvent', code: 'HOST_PROVIDER_REQUIRED', reason: '需要宿主后台执行能力。', when: '权限方法可用，dispatch 仍未承诺' }
+      ],
+      groups: [
+        { title: '设备与权限验收', code: 'DEVICE_FEATURE_REQUIRED', description: '方法分支存在，但联系人、相机、音频、定位、传感器、无障碍、日历、通知或扫码需要设备与权限证据。', domains: ['Contacts', 'Camera', 'Audio', 'Geolocation', 'Motion', 'ScreenReader', 'Calendar', 'LocalNotifications', 'CapacitorBarcodeScanner'] },
+        { title: '跨端语义差异', code: 'SEMANTIC_VARIANT', description: '文件传输、分享、SQLite 字段或事务边界不能只凭方法存在判定等价。', domains: ['Share', 'FileTransfer', 'CapacitorSQLite'] },
+        { title: '宿主上下文或窗口', code: 'RUNTIME_CONTEXT_REQUIRED', description: '需要有效 UIContext、前台窗口、文档查看器或冷启动时序证据。', domains: ['Toast', 'FileViewer', 'InAppBrowser', 'SplashScreen'] },
+        { title: '安全边界', code: 'SECURITY_SCOPE_RESTRICTED', description: 'Cookie scope、URI 或授权范围限制了公共语义。', domains: ['CapacitorCookies'] },
+        { title: '近似实现', code: 'APPROXIMATE_IMPLEMENTATION', description: '使用 HarmonyOS 系统近似机制，不能保证和其他平台硬件行为完全等价。', domains: ['Haptics'] },
+        { title: '外部系统或 Provider', code: 'EXTERNAL_OWNER / HOST_PROVIDER_REQUIRED', description: '浏览器和推送/后台能力由外部系统或宿主 Provider 拥有。', domains: ['Browser', 'PushNotifications', 'BackgroundRunner'] },
+        { title: '运行证据缺口', code: 'RUNTIME_VERIFICATION_REQUIRED', description: '源码分支存在，但当前还没有足够的设备或宿主运行证据。', domains: ['Toast'] }
+      ]
+    }
+  };
+
+  var stats = root.querySelector('#lynx-gaps-stats');
+  var missing = root.querySelector('#lynx-gaps-missing');
+  var partial = root.querySelector('#lynx-gaps-partial');
+  var panel = root.querySelector('#lynx-gaps-panel');
+  var tabs = root.querySelectorAll('[data-platform]');
+
+  function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, function (character) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character];
+    });
+  }
+
+  function statCard(label, value, note) {
+    return '<div class="card viz-stat"><div class="text-muted">' + escapeHTML(label) + '</div><div class="viz-stat-value">' + escapeHTML(value) + '</div><div class="stat-note">' + escapeHTML(note) + '</div></div>';
+  }
+
+  function render(platformId) {
+    var platform = platforms[platformId];
+    if (!platform) return;
+    var total = platform.counts.native + platform.counts.partial + platform.counts.unsupported;
+    var implemented = 146 - platform.missing.length;
+    stats.innerHTML =
+      statCard('能力域状态', platform.counts.native + ' / ' + platform.counts.partial + ' / ' + platform.counts.unsupported, 'native / partial / unsupported') +
+      statCard('明确缺失方法', platform.missing.length, '调用返回结构化失败') +
+      statCard('目录层已实现', implemented + ' / 146', '不代表宿主或设备已验收');
+    var statusRows = [
+      ['native', '源码完整', platform.counts.native],
+      ['partial', '部分条件', platform.counts.partial],
+      ['unsupported', '不承诺', platform.counts.unsupported]
+    ];
+    var statusHTML = '<div class="card"><h3>能力域分布</h3>';
+    statusRows.forEach(function (row) {
+      var percentage = Math.round(row[2] / total * 100);
+      statusHTML += '<div class="status-line"><div class="status-label">' + row[1] + '</div><div class="status-track" role="progressbar" aria-label="' + row[1] + '" aria-valuenow="' + row[2] + '" aria-valuemin="0" aria-valuemax="' + total + '"><div class="status-fill ' + row[0] + '-fill" style="width:' + percentage + '%"></div></div><div class="status-value">' + row[2] + ' / ' + total + '</div></div>';
+    });
+    statusHTML += '</div>';
+    stats.insertAdjacentHTML('beforeend', statusHTML);
+
+    missing.innerHTML = platform.missing.map(function (item) {
+      return '<div class="gap-row"><div class="gap-method">' + escapeHTML(item.method) + '</div><div><span class="viz-badge">' + escapeHTML(item.code) + '</span><div class="gap-reason">' + escapeHTML(item.reason) + '</div></div><div class="gap-when">' + escapeHTML(item.when) + '</div></div>';
+    }).join('');
+
+    partial.innerHTML = platform.groups.map(function (group) {
+      return '<div class="reason-group"><div class="reason-head"><h3>' + escapeHTML(group.title) + '</h3><span class="reason-code">' + escapeHTML(group.code) + '</span></div><p class="reason-description">' + escapeHTML(group.description) + '</p><div class="domain-list">' + group.domains.map(function (domain) { return '<code>' + escapeHTML(domain) + '</code>'; }).join('') + '</div></div>';
+    }).join('');
+
+    panel.setAttribute('aria-labelledby', 'lynx-gaps-' + platformId + '-tab');
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (candidate) {
+        var selected = candidate === tab;
+        candidate.classList.toggle('active', selected);
+        candidate.setAttribute('aria-selected', selected ? 'true' : 'false');
+      });
+      render(tab.getAttribute('data-platform'));
+    });
+  });
+
+  render('android');
+})();
+</script>
+</div>

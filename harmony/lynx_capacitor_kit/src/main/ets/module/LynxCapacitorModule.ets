@@ -468,6 +468,7 @@ export class LynxCapacitorModule extends LynxModule {
   private statusBarStyle: string = 'DEFAULT';
   private statusBarColor: string = '';
   private listeners: Map<string, LynxCapacitorListener> = new Map();
+  private eventSequence: number = 0;
   private networkConnection: connection.NetConnection | null = null;
   private networkCallback: ((info: connection.NetCapabilityInfo) => void) | null = null;
   private motionAccelerationCallback: ((event: sensor.AccelerometerResponse) => void) | null = null;
@@ -661,9 +662,25 @@ export class LynxCapacitorModule extends LynxModule {
       callback(this.failure('-1', '', '', 'INVALID_PAYLOAD', `Invalid Capacitor call payload: ${error}`));
       return;
     }
-    const callbackId = String(root['callbackId'] ?? '-1');
-    const pluginId = String(root['pluginId'] ?? '');
-    const methodName = String(root['methodName'] ?? '');
+    const pluginValue = root['pluginId'];
+    const methodValue = root['methodName'];
+    const pluginId = typeof pluginValue === 'string' ? pluginValue.trim() : '';
+    const methodName = typeof methodValue === 'string' ? methodValue.trim() : '';
+    const callbackValue = root['callbackId'];
+    let callbackId: string = '-1';
+    if (callbackValue !== undefined && callbackValue !== null) {
+      if (typeof callbackValue !== 'string' || callbackValue.trim().length === 0) {
+        callback(this.failure('-1', pluginId, methodName, 'INVALID_ARGUMENT', 'callbackId 必须是非空字符串，缺省或 null 才使用 -1'));
+        return;
+      }
+      callbackId = callbackValue.trim();
+    }
+    if ((pluginValue !== undefined && pluginValue !== null && typeof pluginValue !== 'string') ||
+      (methodValue !== undefined && methodValue !== null && typeof methodValue !== 'string') ||
+      pluginId.length === 0 || methodName.length === 0) {
+      callback(this.failure(callbackId, pluginId, methodName, 'INVALID_ARGUMENT', 'pluginId 和 methodName 必须是非空字符串'));
+      return;
+    }
     let options: Record<string, Object>;
     if (root['options'] === null || root['options'] === undefined) {
       options = JSON.parse('{}') as Record<string, Object>;
@@ -674,10 +691,10 @@ export class LynxCapacitorModule extends LynxModule {
       options = root['options'] as Record<string, Object>;
     }
 
-    // 先做 Android 核心目录 gate。这样目录外的 Harmony 扩展、旧别名和通用
+    // 先做三端公共目录闸门。这样目录外的 Harmony 扩展、旧别名和通用
     // listener 都不能绕过协议直接得到假成功。
     if (!LynxCapacitorCatalog.has(pluginId, methodName)) {
-      callback(this.failure(callbackId, pluginId, methodName, 'UNIMPLEMENTED', `${pluginId}.${methodName} is not declared by the Android NativeModule contract`));
+      callback(this.failure(callbackId, pluginId, methodName, 'UNIMPLEMENTED', `${pluginId}.${methodName} is not declared by the public NativeModule contract`));
       return;
     }
 
@@ -866,12 +883,23 @@ export class LynxCapacitorModule extends LynxModule {
   private emitEvent(pluginId: string, eventName: string, dataJSON: string): void {
     this.listeners.forEach((listener: LynxCapacitorListener, callbackId: string) => {
       if (listener.pluginId !== pluginId || listener.eventName !== eventName) return;
-      this.context.sendGlobalEvent('lynx-capacitor-result', [this.success(callbackId, pluginId, 'addListener', dataJSON, true)]);
+      this.context.sendGlobalEvent(
+        'lynx-capacitor-result',
+        [this.eventEnvelope(callbackId, pluginId, 'addListener', eventName, dataJSON)],
+      );
     });
   }
 
   /** NetworkKit 的文件传输进度统一转换为 Capacitor 风格的插件级 retained event。 */
-  private emitTransferProgress(pluginId: string, type: string, url: string, bytes: number, contentLength: number, operationId: string = ''): void {
+  private emitTransferProgress(
+    pluginId: string,
+    type: string,
+    url: string,
+    bytes: number,
+    contentLength: number,
+    operationId: string = '',
+    callbackId: string = '',
+  ): void {
     const total = Number(contentLength);
     const progress: Record<string, Object> = {};
     progress['type'] = type;
@@ -881,16 +909,31 @@ export class LynxCapacitorModule extends LynxModule {
     progress['lengthComputable'] = total >= 0;
     if (operationId.length > 0) progress['operationId'] = operationId;
     const dataJSON = JSON.stringify(progress);
-    // FileTransfer 的 Android 基线通过 runtime eventSender 发送插件级 retained progress，
-    // 不依赖目录外的 addListener；Harmony 同时保留 Module listener 路径供内部宿主使用。
-    this.context.sendGlobalEvent('lynx-capacitor-result', [JSON.stringify({
-      pluginId: pluginId,
-      methodName: 'progress',
-      eventName: 'progress',
-      save: true,
-      data: progress,
-    })]);
+    // FileTransfer 的进度事件也必须使用统一 retained envelope，不能发送裸 data 对象。
+    const eventCallbackId = callbackId.length > 0 ? callbackId : operationId;
+    this.context.sendGlobalEvent(
+      'lynx-capacitor-result',
+      [this.eventEnvelope(eventCallbackId, pluginId, 'progress', 'progress', dataJSON, operationId)],
+    );
     this.emitEvent(pluginId, 'progress', dataJSON);
+  }
+
+  /** 为 listener 和长任务生成相同字段集合的 retained event。 */
+  private eventEnvelope(
+    callbackId: string,
+    pluginId: string,
+    methodName: string,
+    eventName: string,
+    dataJSON: string,
+    operationId: string = '',
+  ): string {
+    const envelope = JSON.parse(this.success(callbackId, pluginId, methodName, dataJSON, true)) as Record<string, Object>;
+    envelope['eventName'] = eventName;
+    if (eventName !== 'progress') envelope['listenerId'] = callbackId;
+    if (operationId.length > 0) envelope['operationId'] = operationId;
+    this.eventSequence += 1;
+    envelope['sequence'] = this.eventSequence;
+    return JSON.stringify(envelope);
   }
 
   private startNetworkListener(): void {
@@ -5293,7 +5336,7 @@ export class LynxCapacitorModule extends LynxModule {
             const headerValue = options['headers'];
             if (headerValue !== null && headerValue !== undefined) requestOptions.header = headerValue;
             const onReceiveProgress = (info: http.DataReceiveProgressInfo): void => {
-              this.emitTransferProgress('Filesystem', 'download', url, info.receiveSize, info.totalSize);
+              this.emitTransferProgress('Filesystem', 'download', url, info.receiveSize, info.totalSize, '', callbackId);
             };
             request.on('dataReceiveProgress', onReceiveProgress);
             const cleanup = (): void => {
@@ -5418,7 +5461,7 @@ export class LynxCapacitorModule extends LynxModule {
         const onReceiveProgress = (info: http.DataReceiveProgressInfo): void => {
           if (task === null || task.completed) return;
           task.status = { operationId: operationId, state: 'running', bytes: info.receiveSize, total: info.totalSize } as LynxCapacitorFileTransferStatus;
-              this.emitTransferProgress('FileTransfer', 'download', url, info.receiveSize, info.totalSize, operationId);
+              this.emitTransferProgress('FileTransfer', 'download', url, info.receiveSize, info.totalSize, operationId, operationId);
         };
         transferRequest.on('dataReceiveProgress', onReceiveProgress);
         task.status = { operationId: operationId, state: 'running', bytes: 0, total: null } as LynxCapacitorFileTransferStatus;

@@ -105,13 +105,24 @@ export default function nativeCapabilityContractTest() {
       expect(LynxCapacitorCatalog.has('Audio', 'startRecording')).assertFalse();
     });
 
-    it('状态目录覆盖 40 个能力域并明确 Android gap', 0, () => {
+    it('状态目录覆盖 40 个能力域并明确三端语义字段', 0, () => {
       const actual = status();
       expect(actual.length).assertEqual(40);
       expect(String(actual[1]?.['state'] ?? '')).assertEqual('unsupported');
       expect(String(actual[20]?.['state'] ?? '')).assertEqual('partial');
       expect(String(actual[36]?.['name'] ?? '')).assertEqual('BackgroundRunner');
       expect(String(actual[39]?.['name'] ?? '')).assertEqual('CapacitorSQLite');
+      actual.forEach((row: Record<string, Object>) => {
+        const methods = row['methods'] as Array<string>;
+        const methodStatus = row['methodStatus'] as Array<Record<string, Object>>;
+        const verification = row['verification'] as Record<string, Object>;
+        expect(String(row['contractVersion'] ?? '')).assertEqual('1.1');
+        expect(String(row['semanticState'] ?? '').length > 0).assertTrue();
+        expect(String(row['reasonCode'] ?? '').length > 0).assertTrue();
+        expect(methodStatus.length).assertEqual(methods.length);
+        expect(String(verification['source'] ?? '')).assertEqual('verified');
+        expect(String(verification['host'] ?? '')).assertEqual('not_integrated');
+      });
     });
 
     it('成功 envelope 显式返回 save false 或 save true', 0, () => {
@@ -132,6 +143,7 @@ export default function nativeCapabilityContractTest() {
       expect(result['save']).assertFalse();
       expect(result['pluginId']).assertEqual('Biometrics');
       expect(error['code']).assertEqual('UNSUPPORTED');
+      expect(error['reasonCode']).assertEqual('PLATFORM_UNSUPPORTED');
       expect(error['message']).assertEqual('not supported');
     });
   });

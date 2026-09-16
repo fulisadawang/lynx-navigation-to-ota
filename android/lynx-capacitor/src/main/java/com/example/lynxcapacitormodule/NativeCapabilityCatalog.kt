@@ -1,5 +1,7 @@
 package com.example.lynxcapacitormodule
 
+import org.json.JSONArray
+
 /** 自有 Module 的能力目录；只描述协议，不依赖 Capacitor 的类或注册表。 */
 data class NativeCapabilitySpec(
     val id: String,
@@ -12,6 +14,18 @@ data class NativeCapabilitySpec(
         implementedMethods.size == methods.size -> "native"
         else -> "partial"
     }
+
+    /** 对外暴露的 canonical 语义状态，兼容旧的 state 字段。 */
+    val semanticState: String
+        get() = LynxCapabilitySemantics.semanticState(state)
+
+    val reasonCode: String
+        get() = LynxCapabilitySemantics.reasonCode(id, state)
+
+    val reason: String
+        get() = LynxCapabilitySemantics.reason(id, state)
+
+    fun methodStatus(): JSONArray = LynxCapabilitySemantics.methodStatus(id, methods, implementedMethods)
 }
 
 object NativeCapabilityCatalog {

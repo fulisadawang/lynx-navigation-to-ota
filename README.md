@@ -435,6 +435,11 @@ handleCall(payloadJSON, callback)
 
 能力目录以 Android 契约为基准，覆盖 40 个域、146 个方法，包括 Device、App、Preferences、Filesystem、Camera、Audio、Geolocation、Haptics、Notifications、StatusBar、SQLite 等。平台没有等价实现时返回结构化 `UNSUPPORTED` 或 `UNAVAILABLE`，不返回假成功。
 
+三端语义字段、方法级状态、错误原因码和 retained event 约束见
+[LynxCapacitor 三端语义契约 v1.1](docs/lynx-capacitor-semantics-v1/README.md)；
+使用 python3 scripts/verify_lynx_capacitor_semantics.py 可在不构建宿主的情况下校验
+40/146 目录和三端协议标记。
+
 当前边界：
 
 - 三端源码、能力目录和诊断 Bundle 已进入仓库。

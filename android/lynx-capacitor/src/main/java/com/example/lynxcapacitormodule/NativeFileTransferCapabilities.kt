@@ -318,9 +318,11 @@ object NativeFileTransferCapabilities {
         emitEvent(
             transfer,
             JSONObject()
+                .put("callbackId", transfer.operationId)
                 .put("pluginId", PLUGIN_ID)
                 .put("methodName", "progress")
                 .put("eventName", "progress")
+                .put("success", true)
                 .put("save", true)
                 .put("data", status),
         )
@@ -336,9 +338,11 @@ object NativeFileTransferCapabilities {
         emitEvent(
             transfer,
             JSONObject()
+                .put("callbackId", transfer.operationId)
                 .put("pluginId", PLUGIN_ID)
                 .put("methodName", "progress")
                 .put("eventName", "progress")
+                .put("success", true)
                 .put("save", true)
                 .put("data", progress),
         )
