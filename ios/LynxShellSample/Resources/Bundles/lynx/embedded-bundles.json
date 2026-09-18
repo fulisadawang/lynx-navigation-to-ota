@@ -105,129 +105,241 @@
           "pageId": 1113,
           "bundleName": "go-bundles.lynx.bundle",
           "bundlePath": "go-bundles.lynx.bundle",
-          "size": 192284,
-          "sha256": "sha256:0e86959f6e19ac0f77c5f0a44cded71431eae1eb8d4a79d5f2c20f1360d5b97e",
+          "size": 194718,
+          "sha256": "sha256:d2fff85b4e33cdfb474ef343ef306ac2913b005b522ba03f39a072e9c69f24ac",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/go-bundles.lynx.bundle"
         },
         {
           "pageId": 1114,
           "bundleName": "gp-container.lynx.bundle",
           "bundlePath": "gp-container.lynx.bundle",
-          "size": 112585,
-          "sha256": "sha256:123ff3544b5db635b324fe589ff9f9cf9017aeb0c4ff4c7ea8bee8539d3457d5",
+          "size": 117328,
+          "sha256": "sha256:6a86b81cd53bbf8f71638fddeec24ee1636218bae01885c8c97f477abe57edbb",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/gp-container.lynx.bundle"
         },
         {
           "pageId": 1115,
           "bundleName": "gp-device.lynx.bundle",
           "bundlePath": "gp-device.lynx.bundle",
-          "size": 111251,
-          "sha256": "sha256:9b79e790f5eaebc0c366d36ac52b3ade60521b28364eb995a5183889c5e07728",
+          "size": 114843,
+          "sha256": "sha256:997b0131e157ffcb5864351c0d3c5fa769e480d30e40305018b1ae5b6cf1187d",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/gp-device.lynx.bundle"
         },
         {
           "pageId": 1116,
           "bundleName": "gp-screen.lynx.bundle",
           "bundlePath": "gp-screen.lynx.bundle",
-          "size": 118754,
-          "sha256": "sha256:a6ce4d44785f21f81e9aeb934e3f0e9cf1a1dd2973dbf4ce04fcc227e78c8a2e",
+          "size": 121175,
+          "sha256": "sha256:4431444398f61b92783c2236a3adb61b35f8abba52f1f1dcb122ae7073acc096",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/gp-screen.lynx.bundle"
         },
         {
           "pageId": 1117,
           "bundleName": "main.lynx.bundle",
           "bundlePath": "main.lynx.bundle",
-          "size": 167542,
-          "sha256": "sha256:a40e5141a39f78a8c5e02597d990bc0695653c8dcd14d88d5ddeb4abc608f773",
-          "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/main.lynx.bundle"
+          "size": 170935,
+          "sha256": "sha256:1e87fb58def1c966c06a3dcdabfca541b43f1a401c211dc483b3f177ca61e63e",
+          "assetPath": "bundles/main.lynx.bundle"
         },
         {
           "pageId": 1118,
           "bundleName": "media-choose.lynx.bundle",
           "bundlePath": "media-choose.lynx.bundle",
-          "size": 134918,
-          "sha256": "sha256:8da143d8327999e1c61f6f15e87a6487e07e09fee4075996566137ca61d8e7fc",
+          "size": 136422,
+          "sha256": "sha256:1a5c0ca8ca11785822a72170e65fe18b3fa3b0c71e1e5c37a49471b2c59987f9",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/media-choose.lynx.bundle"
         },
         {
           "pageId": 1119,
           "bundleName": "media-download.lynx.bundle",
           "bundlePath": "media-download.lynx.bundle",
-          "size": 134618,
-          "sha256": "sha256:787e936cd2d9115ec281665c64762f9eb0640de1bb1c6a769588fff9e7e08746",
+          "size": 135785,
+          "sha256": "sha256:740b658bf226dcdda744e38abe3226b91187fc1d42dd158f0f2f0513bc7f9558",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/media-download.lynx.bundle"
         },
         {
           "pageId": 1120,
           "bundleName": "media-upload.lynx.bundle",
           "bundlePath": "media-upload.lynx.bundle",
-          "size": 136630,
-          "sha256": "sha256:f9a6384bc9a605d0cc2d3f367a0adfd12c457f1e4323288863b9adf76e382a6e",
+          "size": 137011,
+          "sha256": "sha256:405c5af490ee4b5d3066dcc4252a516d561536b36458d7eaf94087c0da8cf33a",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/media-upload.lynx.bundle"
         },
         {
           "pageId": 1121,
           "bundleName": "nav-basic.lynx.bundle",
           "bundlePath": "nav-basic.lynx.bundle",
-          "size": 125739,
-          "sha256": "sha256:2efbec2f549b05123375c6eedbf04467d26e7b6a28a04c782f9bfaf9185df8d5",
+          "size": 129323,
+          "sha256": "sha256:828b3fea37ae651cffd928e5b3062ef06a48c010263e858ec627051b55377985",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/nav-basic.lynx.bundle"
         },
         {
           "pageId": 1122,
           "bundleName": "nav-chain.lynx.bundle",
           "bundlePath": "nav-chain.lynx.bundle",
-          "size": 137415,
-          "sha256": "sha256:61f049157b61ce589dd6d820d21c32936ec29570cc619bebe55a6a0f40e73b51",
+          "size": 138284,
+          "sha256": "sha256:629e0513d4542ea8ddbfbb04deca53594e8112813ef9eb047d081c4ab19c5de1",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/nav-chain.lynx.bundle"
         },
         {
           "pageId": 1123,
           "bundleName": "scheme-builder.lynx.bundle",
           "bundlePath": "scheme-builder.lynx.bundle",
-          "size": 151693,
-          "sha256": "sha256:68c97a8a5125c62b3a66f29b4594d4a8f0d494ffca9ada60f32124e26166da53",
+          "size": 151929,
+          "sha256": "sha256:d786dad0b11e51e6ecb82ed564738f422151b2fe4f3bd126ec936a6d2dd834f3",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/scheme-builder.lynx.bundle"
         },
         {
           "pageId": 1124,
           "bundleName": "scheme-presets.lynx.bundle",
           "bundlePath": "scheme-presets.lynx.bundle",
-          "size": 108613,
-          "sha256": "sha256:ca018c74e3fde729669355d23cb8eb73f9a48cae331603de2a91e2430303c7fc",
+          "size": 112736,
+          "sha256": "sha256:f85f56a894f384b59aed542f1f34ec42df713cb5f0ea39b599c79b8cc88bc9fd",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/scheme-presets.lynx.bundle"
         },
         {
           "pageId": 1125,
           "bundleName": "showcase.lynx.bundle",
           "bundlePath": "showcase.lynx.bundle",
-          "size": 118415,
-          "sha256": "sha256:0c849f5a7a6f2be82a1ef157b33e690821ce1f38aace011c2aa7365c07b05052",
+          "size": 119807,
+          "sha256": "sha256:45850fde3bedd0e738382cb7883097f87dea7fc8857adfe860f3269ec17128b9",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/showcase.lynx.bundle"
         },
         {
           "pageId": 1126,
           "bundleName": "storage-demo.lynx.bundle",
           "bundlePath": "storage-demo.lynx.bundle",
-          "size": 136847,
-          "sha256": "sha256:7fc08a3c90b5598334a437b1f4078ef36f325a3233e0719441aa5c2847ccbfee",
+          "size": 137783,
+          "sha256": "sha256:f065442a758ad8e932bfce28f5f246e0dd2972588260b166f3c61d170360d322",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/storage-demo.lynx.bundle"
         },
         {
           "pageId": 1127,
           "bundleName": "transition-detail.lynx.bundle",
           "bundlePath": "transition-detail.lynx.bundle",
-          "size": 279227,
-          "sha256": "sha256:32304a479e0d361c85f22f2140f0d3ba2f4b2e912e3debdb83345c5da112adac",
+          "size": 277618,
+          "sha256": "sha256:fef6ed2d850def8ad026700cfa1c206eb648a3830ff831f7cbe37006cac5d0b2",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/transition-detail.lynx.bundle"
         },
         {
           "pageId": 1128,
           "bundleName": "transition-gallery.lynx.bundle",
           "bundlePath": "transition-gallery.lynx.bundle",
-          "size": 252646,
-          "sha256": "sha256:f03bdb64213fdd40940e74539270ebe79ec00526200145dbe66541fc92f56567",
+          "size": 256461,
+          "sha256": "sha256:81133df1e50d3acd0b13373be340ae7739e1f78e7ba71ec3e196960a129d7f15",
           "assetPath": "bundles/lynx/10000001/releases/r20260823_qc8ffc/transition-gallery.lynx.bundle"
+        },
+        {
+          "pageId": 1129,
+          "bundleName": "map-diagnostic.lynx.bundle",
+          "bundlePath": "map-diagnostic.lynx.bundle",
+          "size": 138072,
+          "sha256": "sha256:e0d863ccdde2e5fa75363012aa1da6ea67e003cbb3d996f8dc15957847d08a2c",
+          "assetPath": "bundles/map-diagnostic.lynx.bundle"
+        },
+        {
+          "pageId": 1130,
+          "bundleName": "map-layout.lynx.bundle",
+          "bundlePath": "map-layout.lynx.bundle",
+          "size": 134421,
+          "sha256": "sha256:89019667c795302a96da80e658d18b7621c015248cc56e7a7886a9bbc081fd15",
+          "assetPath": "bundles/map-layout.lynx.bundle"
+        },
+        {
+          "pageId": 1131,
+          "bundleName": "map-scenarios.lynx.bundle",
+          "bundlePath": "map-scenarios.lynx.bundle",
+          "size": 141770,
+          "sha256": "sha256:61d4e5fad011269a9d6459c16efc2a6952eac656ecc397050023b77f9ea8a9da",
+          "assetPath": "bundles/map-scenarios.lynx.bundle"
+        },
+        {
+          "pageId": 1132,
+          "bundleName": "map-performance.lynx.bundle",
+          "bundlePath": "map-performance.lynx.bundle",
+          "size": 139687,
+          "sha256": "sha256:78a21e54c69214d405051b75f9bef42d7bc8615aa65b7cf1271548d33f8f06f1",
+          "assetPath": "bundles/map-performance.lynx.bundle"
+        },
+        {
+          "pageId": 1133,
+          "bundleName": "map-location.lynx.bundle",
+          "bundlePath": "map-location.lynx.bundle",
+          "size": 138158,
+          "sha256": "sha256:a97bf3747574584132cac1173c3e65ee8ceb31016342640473444895d71b3728",
+          "assetPath": "bundles/map-location.lynx.bundle"
+        },
+        {
+          "pageId": 1134,
+          "bundleName": "map-scenario-detail.lynx.bundle",
+          "bundlePath": "map-scenario-detail.lynx.bundle",
+          "size": 136470,
+          "sha256": "sha256:46d3319d7024ce1771679b9733d1670ad7c43c1f37249bfe41398667299e9bc7",
+          "assetPath": "bundles/map-scenario-detail.lynx.bundle"
+        },
+        {
+          "pageId": 1142,
+          "bundleName": "map-bottom-sheet.lynx.bundle",
+          "bundlePath": "map-bottom-sheet.lynx.bundle",
+          "size": 154827,
+          "sha256": "sha256:9f9d9dc7dab9b82e1cf6e1600b47f583084e23fd21e5be7f172ad3e0550264cc",
+          "assetPath": "bundles/map-bottom-sheet.lynx.bundle"
+        },
+        {
+          "pageId": 1135,
+          "bundleName": "map-route-demo.lynx.bundle",
+          "bundlePath": "map-route-demo.lynx.bundle",
+          "size": 138229,
+          "sha256": "sha256:f6b7f647d339948f80fe7838b2c51399397a374bf834e460dcb4ab1d406133e6",
+          "assetPath": "bundles/map-route-demo.lynx.bundle"
+        },
+        {
+          "pageId": 1139,
+          "bundleName": "map-navigation-demo.lynx.bundle",
+          "bundlePath": "map-navigation-demo.lynx.bundle",
+          "size": 160236,
+          "sha256": "sha256:75d544b610d029605a28e66e1e1d1779133fe3b12dc0989564f6de3ab82a3269",
+          "assetPath": "bundles/map-navigation-demo.lynx.bundle"
+        },
+        {
+          "pageId": 1136,
+          "bundleName": "map-marker-demo.lynx.bundle",
+          "bundlePath": "map-marker-demo.lynx.bundle",
+          "size": 136166,
+          "sha256": "sha256:81391a17ea780b11137ce96b9d3b4490b5d20c7c12ec64089cd980bbfc9877bc",
+          "assetPath": "bundles/map-marker-demo.lynx.bundle"
+        },
+        {
+          "pageId": 1137,
+          "bundleName": "map-layer-demo.lynx.bundle",
+          "bundlePath": "map-layer-demo.lynx.bundle",
+          "size": 134433,
+          "sha256": "sha256:9a389bae285cca2547a594a6425b1f6ce101320e408e56dfaba7afdc06403be3",
+          "assetPath": "bundles/map-layer-demo.lynx.bundle"
+        },
+        {
+          "pageId": 1138,
+          "bundleName": "map-poi-demo.lynx.bundle",
+          "bundlePath": "map-poi-demo.lynx.bundle",
+          "size": 135197,
+          "sha256": "sha256:03e88f100454b468603e558e5e397674a75b0c6b8adea85c6f9f471571519ae5",
+          "assetPath": "bundles/map-poi-demo.lynx.bundle"
+        },
+        {
+          "pageId": 1140,
+          "bundleName": "map-marker-overlay-demo.lynx.bundle",
+          "bundlePath": "map-marker-overlay-demo.lynx.bundle",
+          "size": 132619,
+          "sha256": "sha256:bed247eb756703f4b6f6c2ec990d4ec42ee634ad7fbf00d433543fdc6c76d1fb",
+          "assetPath": "bundles/map-marker-overlay-demo.lynx.bundle"
+        },
+        {
+          "pageId": 1141,
+          "bundleName": "map-mass-points-demo.lynx.bundle",
+          "bundlePath": "map-mass-points-demo.lynx.bundle",
+          "size": 132936,
+          "sha256": "sha256:2a4fb344d0b7c433d9775f500007366b7926efbe6a2f04789af205beaac273ae",
+          "assetPath": "bundles/map-mass-points-demo.lynx.bundle"
         }
       ]
     },

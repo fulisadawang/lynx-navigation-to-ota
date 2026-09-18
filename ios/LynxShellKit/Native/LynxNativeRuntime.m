@@ -3,6 +3,7 @@
 #import <Lynx/LynxConfig.h>
 #import <Lynx/LynxEnv.h>
 #import <Lynx/LynxTemplateData.h>
+#import <LynxMapKit/LynxMapModuleRuntime.h>
 #import <SDWebImage/SDWebImage.h>
 #import <SDWebImageWebPCoder/SDWebImageWebPCoder.h>
 
@@ -45,6 +46,19 @@
 
 @implementation LynxNativeRuntime
 
+static NSString *LynxHostString(NSDictionary *info, NSString *key) {
+  id value = info[key];
+  if (![value isKindOfClass:[NSString class]]) {
+    return nil;
+  }
+  NSString *string = [(NSString *)value stringByTrimmingCharactersInSet:
+                                                    [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if (string.length == 0 || [string rangeOfString:@"$("].location != NSNotFound) {
+    return nil;
+  }
+  return string;
+}
+
 + (void)bootstrap {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
@@ -60,7 +74,19 @@
     LynxConfig *globalConfig =
         [[LynxConfig alloc] initWithProvider:[[ShellTemplateProvider alloc] init]];
     [globalConfig registerModule:LynxShellModule.class];
+    [LynxMapModuleRuntime registerModulesIntoConfig:globalConfig];
     [env prepareConfig:globalConfig];
+
+    // 地图 Key 可以由宿主构建配置提供；隐私同意状态必须由运行时授权结果提供，默认拒绝。
+    NSDictionary *info = [NSBundle mainBundle].infoDictionary ?: @{};
+    BOOL privacyAgreed = NO;
+#if DEBUG
+    // 模拟器验收必须显式带启动参数；Release 仍由宿主真实授权结果更新。
+    privacyAgreed = [NSProcessInfo.processInfo.arguments
+                        containsObject:@"--lynx-map-consent-granted"];
+#endif
+    [LynxMapModuleRuntime bootstrapWithAPIKey:LynxHostString(info, @"LynxMapAPIKey")
+                               privacyAgreed:privacyAgreed];
   });
 }
 
@@ -79,6 +105,9 @@
                        globalProps:(NSDictionary<NSString *, id> *)globalProps {
   LynxConfig *config = [[LynxConfig alloc] initWithProvider:provider];
   [config registerModule:LynxShellModule.class];
+  [LynxMapModuleRuntime registerModulesIntoConfig:config];
+  // 每个 LynxView 显式注册，保证普通 Page 与 Native Tab 不依赖静态链接器是否保留 lazy symbol。
+  [LynxMapModuleRuntime registerUIElementsIntoConfig:config];
 
   LynxView *lynxView = [[LynxView alloc] initWithBuilderBlock:^(LynxViewBuilder *builder) {
     builder.config = config;

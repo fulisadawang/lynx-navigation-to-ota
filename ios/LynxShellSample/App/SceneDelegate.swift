@@ -1,4 +1,5 @@
 import LynxShellKit
+import LynxMapKit
 import UIKit
 
 /**
@@ -13,6 +14,9 @@ final class DemoNavigationController: UINavigationController {}
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var hasEnteredForeground = false
+    private var didPresentAMapPrivacyPrompt = false
+
+    private static let amapPrivacyAgreedKey = "lynx.amap.privacyAgreed"
 
     func scene(
         _ scene: UIScene,
@@ -64,12 +68,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.window = window
 
         var shouldOpenBottomSheetDemo = false
+        var shouldOpenMapBottomSheetDemo = false
         var shouldOpenHeroSheetDemo = false
         var shouldOpenNativeTabDemo = false
         var shouldOpenEmbeddedDemo = false
 #if DEBUG
         shouldOpenBottomSheetDemo = ProcessInfo.processInfo.arguments.contains(
             "--bottom-sheet-demo"
+        )
+        shouldOpenMapBottomSheetDemo = ProcessInfo.processInfo.arguments.contains(
+            "--map-bottom-sheet-demo"
         )
         shouldOpenHeroSheetDemo = ProcessInfo.processInfo.arguments.contains(
             "--hero-sheet-demo"
@@ -81,30 +89,38 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             "--embedded-demo"
         )
 #endif
-        if let url = connectionOptions.urlContexts.first?.url {
-            // 根控制器完成显示后再执行 push / alert，避免冷启动深链出现层级告警。
-            DispatchQueue.main.async { [weak self] in self?.openDeepLink(url) }
-        } else if shouldOpenHeroSheetDemo {
+        let continueStartup: () -> Void = { [weak self] in
+            guard let self else { return }
+            if let url = connectionOptions.urlContexts.first?.url {
+                // 根控制器完成显示后再执行 push，避免冷启动深链出现层级告警。
+                DispatchQueue.main.async { [weak self] in self?.openDeepLink(url) }
+            } else if shouldOpenHeroSheetDemo {
 #if DEBUG
-            DispatchQueue.main.async { [weak self] in self?.openHeroSheetDemo() }
+                DispatchQueue.main.async { [weak self] in self?.openHeroSheetDemo() }
 #endif
-        } else if shouldOpenBottomSheetDemo {
+            } else if shouldOpenMapBottomSheetDemo {
 #if DEBUG
-            DispatchQueue.main.async { [weak self] in self?.openBottomSheetDemo() }
+                DispatchQueue.main.async { [weak self] in self?.openMapBottomSheetDemo() }
 #endif
-        } else if shouldOpenNativeTabDemo {
+            } else if shouldOpenBottomSheetDemo {
 #if DEBUG
-            DispatchQueue.main.async { [weak self] in self?.openNativeTabDemo() }
+                DispatchQueue.main.async { [weak self] in self?.openBottomSheetDemo() }
 #endif
-        } else if shouldOpenEmbeddedDemo {
+            } else if shouldOpenNativeTabDemo {
 #if DEBUG
-            DispatchQueue.main.async { [weak self] in self?.openEmbeddedDemo() }
+                DispatchQueue.main.async { [weak self] in self?.openNativeTabDemo() }
 #endif
-        } else if !ProcessInfo.processInfo.arguments.contains("--show-native-launcher") {
-            // 与 Android MainActivity 一致：冷启动默认进入 OTA 验收首页；
-            // Playground main 页面仍通过 Launcher 的独立按钮打开。
-            DispatchQueue.main.async { [weak self] in self?.openOtaAcceptanceHome() }
+            } else if shouldOpenEmbeddedDemo {
+#if DEBUG
+                DispatchQueue.main.async { [weak self] in self?.openEmbeddedDemo() }
+#endif
+            } else if !ProcessInfo.processInfo.arguments.contains("--show-native-launcher") {
+                // 与 Android MainActivity 一致：冷启动默认进入 OTA 验收首页；
+                // Playground main 页面仍通过 Launcher 的独立按钮打开。
+                DispatchQueue.main.async { [weak self] in self?.openOtaAcceptanceHome() }
+            }
         }
+        presentAMapPrivacyPromptIfNeeded(completion: continueStartup)
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
@@ -134,6 +150,56 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             (window?.rootViewController as? UINavigationController)?.topViewController?
                 .presentShellAlert(title: "无法打开 Lynx 页面", message: error.localizedDescription)
         }
+    }
+
+    /**
+     * 地图/定位 SDK 共用的宿主隐私同意入口。
+     *
+     * 真机手动启动不会携带模拟器的启动参数，因此首次启动必须由用户明确选择；
+     * 同意结果只保存布尔状态，Key 仍只从构建注入的 Info.plist 读取。
+     */
+    private func presentAMapPrivacyPromptIfNeeded(completion: @escaping () -> Void) {
+        guard !didPresentAMapPrivacyPrompt else {
+            completion()
+            return
+        }
+        guard let apiKey = Bundle.main.object(forInfoDictionaryKey: "LynxMapAPIKey") as? String,
+              !apiKey.isEmpty,
+              !apiKey.contains("$(") else {
+            completion()
+            return
+        }
+
+        let launchedWithConsentFlag = ProcessInfo.processInfo.arguments.contains(
+            "--lynx-map-consent-granted"
+        )
+        if launchedWithConsentFlag || UserDefaults.standard.bool(forKey: Self.amapPrivacyAgreedKey) {
+            LynxMapModuleRuntime.configureAMap(apiKey: apiKey, privacyAgreed: true)
+            completion()
+            return
+        }
+
+        guard let presenter = window?.rootViewController else {
+            completion()
+            return
+        }
+        didPresentAMapPrivacyPrompt = true
+        let alert = UIAlertController(
+            title: "高德地图隐私保护提示",
+            message: "地图和定位功能会使用设备位置信息。阅读并同意高德地图隐私协议后，才能加载地图和获取当前位置。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "暂不同意", style: .cancel) { _ in
+            LynxMapModuleRuntime.updateAMapPrivacyAgreed(false)
+            completion()
+        })
+        alert.addAction(UIAlertAction(title: "同意并继续", style: .default) { [weak self] _ in
+            UserDefaults.standard.set(true, forKey: Self.amapPrivacyAgreedKey)
+            LynxMapModuleRuntime.configureAMap(apiKey: apiKey, privacyAgreed: true)
+            self?.didPresentAMapPrivacyPrompt = true
+            completion()
+        })
+        presenter.present(alert, animated: true)
     }
 
     private func openPlaygroundHome() {
@@ -205,6 +271,23 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
 #if DEBUG
+    /** 自动化验收入口：直接打开全屏高德地图 + Lynx BottomSheet Demo。 */
+    private func openMapBottomSheetDemo() {
+        do {
+            _ = try LynxRouter.openEmbedded(
+                bundleName: "map-bottom-sheet.lynx.bundle",
+                params: ["source": "ios-map-bottom-sheet-demo"],
+                options: [
+                    "title": "滴滴式地图 BottomSheet",
+                    "fullscreen": true,
+                    "showNavigationBar": false,
+                ]
+            )
+        } catch {
+            presentLaunchError(error)
+        }
+    }
+
     /** 自动化验收入口：先建立来源页面，再由公开 Router 打开 iOS 系统 Page Sheet。 */
     private func openBottomSheetDemo() {
         do {

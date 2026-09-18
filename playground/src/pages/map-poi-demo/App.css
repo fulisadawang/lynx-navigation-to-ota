@@ -1,0 +1,29 @@
+.poi-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.poi-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+.poi-page { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.poi-page--light { background-color: #f0f2f5; }
+.poi-page--dark { background-color: #101114; }
+.poi-title { color: #111; font-size: 24px; font-weight: 800; }
+.poi-description { color: rgba(0, 0, 0, .64); font-size: 14px; line-height: 21px; }
+.poi-page--dark .poi-title { color: #fff; }
+.poi-page--dark .poi-description { color: rgba(255, 255, 255, .7); }
+.poi-search-row, .poi-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.poi-input { flex: 1; min-width: 180px; height: 38px; padding: 0 10px; border-radius: 8px; background-color: #fff; color: #111; font-size: 13px; }
+.poi-action { padding: 9px 11px; border-radius: 9px; background-color: #009995; }
+.poi-action--secondary { background-color: #3a6ee8; }
+.poi-action-text { color: #fff; font-size: 12px; font-weight: 700; }
+.poi-map-stage { position: relative; width: 100%; height: 280px; }
+.poi-map { position: absolute; left: 0; top: 0; width: 100%; height: 280px; }
+.poi-map-overlay { position: absolute; left: 12px; right: 12px; top: 12px; padding: 10px; border-radius: 10px; background-color: rgba(255, 255, 255, .9); }
+.poi-map-overlay-text { color: #111; font-size: 12px; font-weight: 700; }
+.poi-card, .poi-results { display: flex; flex-direction: column; gap: 6px; padding: 13px; border-radius: 12px; background-color: #fff; }
+.poi-card--notes { background-color: #eaf7f6; }
+.poi-page--dark .poi-card, .poi-page--dark .poi-results { background-color: #1c1d21; }
+.poi-page--dark .poi-card--notes { background-color: #163331; }
+.poi-card-title { color: #111; font-size: 15px; font-weight: 800; }
+.poi-card-copy, .poi-result-copy { color: rgba(0, 0, 0, .65); font-size: 12px; line-height: 18px; }
+.poi-card-status { color: #007f7a; font-size: 12px; line-height: 18px; }
+.poi-result-row { display: flex; flex-direction: column; gap: 2px; padding: 7px 0; border-bottom: 1px solid #e8eaee; }
+.poi-result-name { color: #111; font-size: 13px; font-weight: 700; }
+.poi-page--dark .poi-card-title, .poi-page--dark .poi-result-name { color: #fff; }
+.poi-page--dark .poi-card-copy, .poi-page--dark .poi-result-copy { color: rgba(255, 255, 255, .7); }

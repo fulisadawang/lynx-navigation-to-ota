@@ -1,6 +1,6 @@
 source 'https://cdn.cocoapods.org/'
 source 'https://github.com/lynx-family/Specs.git'
-platform :ios, '13.0'
+platform :ios, '14.0'
 
 use_modular_headers!
 use_frameworks! :linkage => :static
@@ -8,9 +8,11 @@ use_frameworks! :linkage => :static
 project 'LynxShell.xcodeproj'
 
 target 'LynxShell' do
-  # 业务方只显式引用一个本地 Router Module；Lynx/XElement/OTA 依赖全部由 Podspec 管理。
-  # 这是普通 CocoaPods Module 引用，不使用 Sparkling autolink/codegen。
+  # Shell 负责 Router/Runtime；地图实现由独立 LynxMapKit Module 提供。
   pod 'LynxShellKit', :path => '.'
+  pod 'LynxMapKit', :path => 'LynxMapKit'
+  # AMap 官方 CocoaPods CDN 尚未同步 2.12.3，使用官方下载包的本地 podspec 固定版本。
+  pod 'AMapLocation', :podspec => 'LocalPods/AMapLocation.podspec'
 end
 
 post_install do |installer|

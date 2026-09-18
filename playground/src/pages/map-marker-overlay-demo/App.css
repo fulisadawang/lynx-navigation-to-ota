@@ -1,0 +1,25 @@
+.overlay-demo-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.overlay-demo-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+.overlay-demo-page { display: flex; flex-direction: column; gap: 12px; padding: 20px; background-color: #f0f2f5; }
+.overlay-demo-page--dark { background-color: #101114; }
+.overlay-demo-title { color: #111; font-size: 24px; font-weight: 800; }
+.overlay-demo-description { color: rgba(0, 0, 0, .64); font-size: 14px; line-height: 21px; }
+.overlay-demo-page--dark .overlay-demo-title { color: #fff; }
+.overlay-demo-page--dark .overlay-demo-description { color: rgba(255, 255, 255, .7); }
+.overlay-demo-stage { position: relative; width: 100%; height: 380px; }
+.overlay-demo-map { position: absolute; left: 0; top: 0; width: 100%; height: 380px; }
+.overlay-demo-card { position: absolute; display: flex; flex-direction: column; width: 144px; min-height: 72px; padding: 10px; border-radius: 13px; background-color: #fff; box-shadow: 0 5px 16px rgba(0, 0, 0, .2); }
+.overlay-demo-card-title { color: #111; font-size: 14px; font-weight: 800; }
+.overlay-demo-card-copy { margin-top: 4px; color: #7a7e84; font-size: 11px; }
+.overlay-demo-card-action { margin-top: 7px; color: #087cf9; font-size: 11px; font-weight: 700; }
+.overlay-demo-actions { display: flex; }
+.overlay-demo-action { padding: 10px 16px; border-radius: 10px; background-color: #087cf9; }
+.overlay-demo-action-text { color: #fff; font-size: 13px; font-weight: 700; }
+.overlay-demo-card-panel { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 12px; background-color: #fff; }
+.overlay-demo-card-panel--note { background-color: #eaf7f6; }
+.overlay-demo-page--dark .overlay-demo-card-panel { background-color: #1c1d21; }
+.overlay-demo-page--dark .overlay-demo-card-panel--note { background-color: #163331; }
+.overlay-demo-panel-title { color: #111; font-size: 15px; font-weight: 800; }
+.overlay-demo-panel-copy { color: rgba(0, 0, 0, .65); font-size: 12px; line-height: 18px; }
+.overlay-demo-page--dark .overlay-demo-panel-title { color: #fff; }
+.overlay-demo-page--dark .overlay-demo-panel-copy { color: rgba(255, 255, 255, .7); }
