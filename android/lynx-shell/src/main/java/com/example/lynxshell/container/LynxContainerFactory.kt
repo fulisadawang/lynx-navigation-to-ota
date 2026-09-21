@@ -7,6 +7,7 @@ import com.example.lynxshell.monitoring.LynxViewMonitor
 import com.example.lynxshell.resource.ShellTemplateProvider
 import com.example.lynxshell.runtime.ShellGlobalPropsFactory
 import com.example.lynxshell.runtime.XElementRuntime
+import com.example.lynxmap.LynxMapRuntime
 import com.lynx.tasm.LynxView
 import com.lynx.tasm.LynxViewBuilder
 import com.lynx.tasm.LynxViewClient
@@ -33,6 +34,7 @@ object LynxContainerFactory {
         // 全部页面统一安装 Lynx 4.1 Explorer 范围内的完整 XElement Behavior，包含
         // Video；不让业务页面自行注册，避免不同页面能力不一致。
         XElementRuntime.install(builder)
+        LynxMapRuntime.install(builder)
 
         if (request.widthPx != null && request.heightPx != null) {
             builder.setPresetMeasuredSpec(

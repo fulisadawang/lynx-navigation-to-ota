@@ -21,6 +21,9 @@ typedef void (^LynxMapContainerLayoutObserver)(void);
 @interface LynxMapElementContainerView : UIView
 
 @property(nonatomic, copy, nullable) LynxMapContainerLayoutObserver layoutObserver;
+/// BottomSheet 等 Lynx sibling overlay 占据地图底部时，阻止 MapView 获得初始触摸。
+/// 该值是地图容器高度的归一化比例，范围为 [0, 1]；默认 1 表示不阻挡有效区域。
+@property(nonatomic, assign) CGFloat touchBlockTopRatio;
 
 - (BOOL)attachProviderMapView:(id<LynxMapProviderMapView>)providerMapView;
 - (void)detachProviderMapView;
@@ -79,6 +82,7 @@ typedef void (^LynxMapContainerLayoutObserver)(void);
     // 不裁剪外置 marker/callout，避免 provider 的 Metal 层造成空白或截断。
     self.clipsToBounds = NO;
     self.opaque = NO;
+    _touchBlockTopRatio = 1.0;
     _lastNotifiedSize = CGSizeZero;
   }
   return self;
@@ -140,6 +144,17 @@ typedef void (^LynxMapContainerLayoutObserver)(void);
   if (self.window != nil) {
     [self notifyLayoutIfNeededForce:YES];
   }
+}
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+  (void)event;
+  if (self.bounds.size.height > 0 &&
+      point.y >= self.bounds.size.height * self.touchBlockTopRatio) {
+    // 只让父级继续命中 sibling overlay。UIKit 会保留已经在地图区域命中的
+    // touch target，因此手势开始后移动到 Sheet 区域不会中途切走 MapView。
+    return nil;
+  }
+  return [super hitTest:point withEvent:event];
 }
 
 - (void)notifyLayoutIfNeededForce:(BOOL)force {
@@ -402,6 +417,7 @@ invalid:
 @interface LynxMapUI ()
 
 - (void)mapContainerDidLayout;
+- (void)updateTouchBlockTopRatio:(CGFloat)value;
 - (void)emitEvent:(NSString *)name params:(nullable NSDictionary *)params;
 - (void)emitError:(NSError *)error;
 - (void)emitErrorCode:(LynxMapProviderErrorCode)code message:(NSString *)message;
@@ -462,6 +478,7 @@ invalid:
   BOOL _applicationInBackground;
   BOOL _windowAttached;
   BOOL _observingApplicationLifecycle;
+  CGFloat _touchBlockTopRatio;
   NSUInteger _applyCount;
   NSUInteger _lastMarkerCount;
   NSUInteger _lastPolylineCount;
@@ -488,6 +505,7 @@ invalid:
     _polylines = @[];
     _massPoints = @[];
     _layerState = [[LynxMapLayerState alloc] initWithVisible:YES opacity:1.0 zIndex:0];
+    _touchBlockTopRatio = 1.0;
     _pendingOperations = [NSMutableSet setWithCapacity:LynxMapMaximumPendingOperationCount];
   }
   return self;
@@ -495,6 +513,7 @@ invalid:
 
 - (UIView *)createView {
   _mapContainer = [[LynxMapElementContainerView alloc] initWithFrame:CGRectZero];
+  _mapContainer.touchBlockTopRatio = _touchBlockTopRatio;
   __weak LynxMapUI *weakSelf = self;
   _mapContainer.layoutObserver = ^{
     LynxMapUI *strongSelf = weakSelf;
@@ -929,6 +948,16 @@ LYNX_PROP_SETTER("touch-poi-enabled", setTouchPOIEnabled, BOOL) {
                             showsLabels:_viewOptions.showsLabels
                          showsBuildings:_viewOptions.showsBuildings
                          touchPOIEnabled:requestReset ? NO : value];
+}
+
+LYNX_PROP_SETTER("touch-block-top-ratio", setTouchBlockTopRatio, CGFloat) {
+  CGFloat ratio = requestReset ? 1.0 : value;
+  if (!isfinite((double)ratio) || ratio < 0.0 || ratio > 1.0) {
+    [self emitErrorCode:LynxMapProviderErrorInvalidConfiguration
+                message:@"touch-block-top-ratio 必须在 0 到 1 之间。"];
+    return;
+  }
+  [self updateTouchBlockTopRatio:ratio];
 }
 
 LYNX_UI_METHOD(moveCamera) {
@@ -1500,6 +1529,11 @@ LYNX_UI_METHOD(getPerformanceSnapshot) {
            showsBuildings:showsBuildings
            touchPOIEnabled:touchPOIEnabled];
   [self scheduleRender];
+}
+
+- (void)updateTouchBlockTopRatio:(CGFloat)value {
+  _touchBlockTopRatio = value;
+  _mapContainer.touchBlockTopRatio = value;
 }
 
 - (LynxMapProviderConfiguration *)providerConfiguration {

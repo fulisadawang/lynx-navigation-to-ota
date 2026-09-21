@@ -1,3 +1,5 @@
+import 'background-only'
+
 export interface SearchCoordinate {
   latitude: number
   longitude: number

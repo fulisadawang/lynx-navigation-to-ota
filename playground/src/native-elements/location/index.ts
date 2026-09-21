@@ -1,3 +1,5 @@
+import 'background-only'
+
 export interface LynxLocationOptions {
   withReGeocode?: boolean
   desiredAccuracy?: number

@@ -53,11 +53,19 @@ function RouteContent() {
   const paths = remotePaths[mode] || fixturePaths[mode]
   const activePath = paths[0]
   const routePoints = useMemo(() => activePath.polyline, [activePath])
-  const markers = [
+  const markers = useMemo(() => [
     { id: 'route-origin', coordinate: origin, title: '起点', selected: true },
     ...waypoints.map((coordinate, index) => ({ id: `route-waypoint-${index}`, coordinate, title: `途经点 ${index + 1}` })),
     { id: 'route-destination', coordinate: destination, title: '终点' },
-  ]
+  ], [])
+  const renderedPolylines = useMemo(() => paths.map((path, index) => ({
+    id: `route-${mode}-${index}`,
+    points: path.polyline,
+    color: index === 0 ? routeColor[mode] : '#9ca3af',
+    width: index === 0 ? 8 : 4,
+    opacity: index === 0 ? 1 : .58,
+    zIndex: index === 0 ? 2 : 1,
+  })), [mode, paths])
 
   const selectMode = (next: RouteMode) => {
     'background only'
@@ -113,7 +121,7 @@ function RouteContent() {
               zoom={12}
               trafficEnabled={trafficEnabled}
               markers={markers}
-              polylines={paths.map((path, index) => ({ id: `route-${mode}-${index}`, points: path.polyline, color: index === 0 ? routeColor[mode] : '#9ca3af', width: index === 0 ? 8 : 4, opacity: index === 0 ? 1 : .58, zIndex: index === 0 ? 2 : 1 }))}
+              polylines={renderedPolylines}
               onReady={() => setStatus('地图 ready，路线 fixture 已渲染')}
               onError={(error) => setStatus(`${error.code}：${error.message}`)}
               onMapTap={() => setStatus('maptap：路线地图点击已触发')}

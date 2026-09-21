@@ -47,6 +47,12 @@ function ScenarioDetailContent() {
   }
   const [result, setResult] = useState('等待执行场景检查')
   const dark = resolved === 'dark'
+  const scenarioCenter = useMemo(() => ({ latitude: 39.9042, longitude: 116.4074 }), [])
+  const scenarioMarkers = useMemo(() => ([{
+    id: 'scenario-detail-center',
+    coordinate: scenarioCenter,
+    title: scenario.title,
+  }]), [scenario.title, scenarioCenter])
 
   const runCheck = () => {
     'background only'
@@ -82,9 +88,9 @@ function ScenarioDetailContent() {
             <LynxMap
               id="ios-amap-scenario-detail"
               className="scenario-detail-map"
-              center={{ latitude: 39.9042, longitude: 116.4074 }}
+              center={scenarioCenter}
               zoom={12}
-              markers={[{ id: 'scenario-detail-center', coordinate: { latitude: 39.9042, longitude: 116.4074 }, title: scenario.title }]}
+              markers={scenarioMarkers}
               onReady={() => setResult('地图预览 ready')}
               onError={(error) => setResult(`${error.code}：${error.message}`)}
             />

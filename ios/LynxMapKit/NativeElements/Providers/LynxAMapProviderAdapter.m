@@ -1201,6 +1201,7 @@ static void LynxAMapSendRegionEvent(LynxAMapProviderAdapter *adapter,
     view.zIndex = lynxAnnotation.lynxZIndex;
     view.hidden = !lynxAnnotation.lynxVisible;
     view.alpha = lynxAnnotation.lynxVisible ? lynxAnnotation.lynxOpacity : 0;
+    view.draggable = lynxAnnotation.lynxDraggable;
     [view applyIcon:lynxAnnotation.lynxIcon
                view:lynxAnnotation.lynxViewConfiguration
            selected:lynxAnnotation.lynxSelected];
@@ -1218,6 +1219,7 @@ static void LynxAMapSendRegionEvent(LynxAMapProviderAdapter *adapter,
   view.zIndex = lynxAnnotation.lynxZIndex;
   view.hidden = !lynxAnnotation.lynxVisible;
   view.alpha = lynxAnnotation.lynxVisible ? lynxAnnotation.lynxOpacity : 0;
+  view.draggable = lynxAnnotation.lynxDraggable;
   return view;
 }
 
@@ -1229,6 +1231,7 @@ static void LynxAMapSendRegionEvent(LynxAMapProviderAdapter *adapter,
     view.zIndex = annotation.lynxZIndex;
     view.hidden = !annotation.lynxVisible;
     view.alpha = annotation.lynxVisible ? annotation.lynxOpacity : 0;
+    view.draggable = annotation.lynxDraggable;
     if ([view isKindOfClass:[LynxAMapMarkerView class]]) {
       [(LynxAMapMarkerView *)view applyIcon:annotation.lynxIcon
                                         view:annotation.lynxViewConfiguration

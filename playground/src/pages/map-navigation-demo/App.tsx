@@ -121,11 +121,19 @@ function NavigationMap(props: {
   trafficEnabled: boolean
   onStatus: (message: string) => void
 }) {
-  const markers = [
+  const markers = useMemo(() => [
     { id: 'navigation-origin', coordinate: origin, title: '我的位置', selected: true },
     ...waypoints.map((coordinate, index) => ({ id: `navigation-waypoint-${index}`, coordinate, title: `途经点 ${index + 1}` })),
     { id: 'navigation-destination', coordinate: destination, title: '高楼金第' },
-  ]
+  ], [])
+  const polylines = useMemo(() => props.paths.map((path, index) => ({
+    id: `navigation-${props.mode}-${index}`,
+    points: path.polyline,
+    color: index === 0 ? routeColors[props.mode] : '#a5b4fc',
+    width: index === 0 ? 9 : 5,
+    opacity: index === 0 ? 1 : .55,
+    zIndex: index === 0 ? 2 : 1,
+  })), [props.mode, props.paths])
 
   return (
     <view className="navigation-map-stage">
@@ -137,7 +145,7 @@ function NavigationMap(props: {
         zoom={12}
         trafficEnabled={props.trafficEnabled}
         markers={markers}
-        polylines={props.paths.map((path, index) => ({ id: `navigation-${props.mode}-${index}`, points: path.polyline, color: index === 0 ? routeColors[props.mode] : '#a5b4fc', width: index === 0 ? 9 : 5, opacity: index === 0 ? 1 : .55, zIndex: index === 0 ? 2 : 1 }))}
+        polylines={polylines}
         onReady={() => props.onStatus('地图已 ready，当前路线可交互')}
         onError={(error) => props.onStatus(`${error.code}：${error.message}`)}
       />

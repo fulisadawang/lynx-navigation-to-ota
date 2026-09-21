@@ -1,4 +1,4 @@
-import { runOnBackground, runOnMainThread, useEffect, useMainThreadRef, useMemo, useRef, useState } from '@lynx-js/react'
+import { runOnMainThread, useEffect, useMemo, useMainThreadRef, useRef, useState } from '@lynx-js/react'
 import type { MainThread } from '@lynx-js/types'
 
 import { MapTopBar } from '../../components/MapTopBar/index.js'
@@ -14,6 +14,10 @@ interface SnapPoint {
   key: SheetSnap
   label: string
   height: number
+}
+
+interface SheetTouchEvent {
+  touches?: Array<{ pageY?: number }>
 }
 
 const routePoints = [
@@ -64,22 +68,36 @@ function BottomSheetMapContent() {
   const [snap, setSnap] = useState<SheetSnap>('peek')
   const [mapReady, setMapReady] = useState(false)
   const [status, setStatus] = useState('地图初始化中…')
+  const [dragStartY, setDragStartY] = useState<number | null>(null)
   const mapRef = useRef<LynxMapRef>(null)
   const surfaceRef = useMainThreadRef<MainThread.Element>(null)
-  const snapAnimationRef = useMainThreadRef<MainThread.Animation | null>(null)
-  const dragStartYRef = useMainThreadRef(0)
-  const dragStartOffsetRef = useMainThreadRef(offsetForHeight(metrics.expandedHeight, 132))
-  const dragOffsetRef = useMainThreadRef(offsetForHeight(metrics.expandedHeight, 132))
-  const draggingRef = useMainThreadRef(false)
-  const dragArmedRef = useMainThreadRef(false)
+  const dragStartYRef = useRef<number | null>(null)
+  const dragStartOffsetRef = useRef(0)
+  const dragOffsetRef = useRef(0)
+  const snapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const snapGenerationRef = useRef(0)
   const dark = resolved === 'dark'
   const selectedHeight = sheetHeightForSnap(snap, snapPoints)
   const selectedOffset = offsetForHeight(metrics.expandedHeight, selectedHeight)
+  const touchBlockTopRatio = Math.max(0, Math.min(1, 1 - selectedHeight / metrics.viewportHeight))
+  const sheetMarkers = useMemo(() => [
+    { id: 'bottom-sheet-origin', coordinate: origin, title: '上车点', selected: true },
+    { id: 'bottom-sheet-destination', coordinate: destination, title: '目的地' },
+  ], [])
+  const sheetPolylines = useMemo(() => [
+    { id: 'bottom-sheet-route', points: routePoints, color: '#087cf9', width: 8, zIndex: 2 },
+  ], [])
 
   useEffect(() => {
     dragStartOffsetRef.current = selectedOffset
     dragOffsetRef.current = selectedOffset
   }, [selectedOffset])
+
+  useEffect(() => () => {
+    if (snapTimerRef.current !== null) clearTimeout(snapTimerRef.current)
+    snapTimerRef.current = null
+    snapGenerationRef.current += 1
+  }, [])
 
   const applyMapViewport = (height: number, source: string) => {
     'background only'
@@ -101,37 +119,22 @@ function BottomSheetMapContent() {
   const commitSnap = (next: SnapPoint) => {
     'background only'
     setSnap(next.key)
+    setDragStartY(null)
     setStatus(`${next.label}：Sheet 高度 ${Math.round(next.height)}px，正在适配地图可视区域…`)
     applyMapViewport(next.height, next.label)
   }
 
   const commitSnapAfterAnimation = (next: SnapPoint) => {
     'background only'
+    if (snapTimerRef.current !== null) clearTimeout(snapTimerRef.current)
+    const generation = ++snapGenerationRef.current
     // 先让 main-thread transform 完成吸附，再触发 React 重渲染和高德 camera 动画，
     // 避免同一帧同时提交大面积 Lynx surface 与 MapView 的 fitBounds。
-    setTimeout(() => commitSnap(next), SHEET_SNAP_ANIMATION_MS)
-  }
-
-  function animateSheetToMainThread(targetOffset: number) {
-    'main thread'
-    const surface = surfaceRef.current
-    if (!surface) return
-    const currentOffset = dragOffsetRef.current
-    snapAnimationRef.current?.cancel()
-    surface.setStyleProperty('transform', `translateY(${currentOffset}px)`)
-    snapAnimationRef.current = surface.animate(
-      [
-        { transform: `translateY(${currentOffset}px)` },
-        { transform: `translateY(${targetOffset}px)` },
-      ],
-      {
-        duration: SHEET_SNAP_ANIMATION_MS,
-        easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)',
-        fill: 'forwards',
-        name: 'map-bottom-sheet-snap',
-      },
-    )
-    dragOffsetRef.current = targetOffset
+    snapTimerRef.current = setTimeout(() => {
+      if (generation !== snapGenerationRef.current) return
+      snapTimerRef.current = null
+      commitSnap(next)
+    }, SHEET_SNAP_ANIMATION_MS)
   }
 
   const handleMapReady = () => {
@@ -143,53 +146,60 @@ function BottomSheetMapContent() {
 
   const selectSnap = (next: SnapPoint) => {
     'background only'
+    if (snapTimerRef.current !== null) clearTimeout(snapTimerRef.current)
+    snapGenerationRef.current += 1
     void runOnMainThread(animateSheetToMainThread)(offsetForHeight(metrics.expandedHeight, next.height))
     commitSnapAfterAnimation(next)
   }
 
-  function handleTouchStartMainThread(event: MainThread.TouchEvent) {
+  function setSheetTransformOnMainThread(offset: number) {
     'main thread'
-    const touch = event.touches[0]
-    if (!touch) return
-    dragStartYRef.current = touch.pageY
-    snapAnimationRef.current?.cancel()
-    dragStartOffsetRef.current = dragOffsetRef.current
-    draggingRef.current = false
-    dragArmedRef.current = true
-    surfaceRef.current?.setStyleProperty('transform', `translateY(${dragStartOffsetRef.current}px)`)
+    const surface = surfaceRef.current
+    if (!surface) return
+    surface.setStyleProperty('transition', 'none')
+    surface.setStyleProperty('transform', `translateY(${offset}px)`)
   }
 
-  function handleTouchMoveMainThread(event: MainThread.TouchEvent) {
+  function animateSheetToMainThread(offset: number) {
     'main thread'
-    if (!dragArmedRef.current) return
-    const touch = event.touches[0]
-    if (!touch) return
-    const distance = touch.pageY - dragStartYRef.current
-    if (!draggingRef.current && Math.abs(distance) < 4) return
-    draggingRef.current = true
-    const minOffset = 0
+    const surface = surfaceRef.current
+    if (!surface) return
+    surface.setStyleProperty(
+      'transition',
+      `transform ${SHEET_SNAP_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`,
+    )
+    surface.setStyleProperty('transform', `translateY(${offset}px)`)
+  }
+
+  function handleTouchStart(event: SheetTouchEvent) {
+    const pageY = event.touches?.[0]?.pageY
+    if (pageY === undefined) return
+    if (snapTimerRef.current !== null) clearTimeout(snapTimerRef.current)
+    snapGenerationRef.current += 1
+    const startOffset = dragOffsetRef.current
+    dragStartYRef.current = pageY
+    dragStartOffsetRef.current = startOffset
+    dragOffsetRef.current = startOffset
+    setDragStartY(pageY)
+    void runOnMainThread(setSheetTransformOnMainThread)(startOffset)
+  }
+
+  function handleTouchMove(event: SheetTouchEvent) {
+    const pageY = event.touches?.[0]?.pageY
+    const dragStartYValue = dragStartYRef.current
+    if (dragStartYValue === null || dragStartYValue === undefined || pageY === undefined) return
     const maxOffset = metrics.expandedHeight - 132
-    const offset = Math.max(minOffset, Math.min(maxOffset, dragStartOffsetRef.current + distance))
+    const offset = Math.max(0, Math.min(maxOffset, dragStartOffsetRef.current + pageY - dragStartYValue))
     dragOffsetRef.current = offset
-    surfaceRef.current?.setStyleProperty('transform', `translateY(${offset}px)`)
+    void runOnMainThread(setSheetTransformOnMainThread)(offset)
   }
 
-  function handleTouchEndMainThread() {
-    'main thread'
-    if (!dragArmedRef.current) return
-    dragArmedRef.current = false
-    if (!draggingRef.current) return
-    draggingRef.current = false
+  function handleTouchEnd() {
+    if (dragStartYRef.current === null) return
     const next = snapForOffset(dragOffsetRef.current, snapPoints, metrics.expandedHeight)
-    animateSheetToMainThread(offsetForHeight(metrics.expandedHeight, next.height))
-    runOnBackground(commitSnapAfterAnimation)(next)
-  }
-
-  function handleTouchCancelMainThread() {
-    'main thread'
-    dragArmedRef.current = false
-    draggingRef.current = false
-    animateSheetToMainThread(dragStartOffsetRef.current)
+    dragStartYRef.current = null
+    void runOnMainThread(animateSheetToMainThread)(offsetForHeight(metrics.expandedHeight, next.height))
+    commitSnapAfterAnimation(next)
   }
 
   return (
@@ -200,11 +210,14 @@ function BottomSheetMapContent() {
         className="map-sheet-map"
         center={origin}
         zoom={12}
-        markers={[
-          { id: 'bottom-sheet-origin', coordinate: origin, title: '上车点', selected: true },
-          { id: 'bottom-sheet-destination', coordinate: destination, title: '目的地' },
-        ]}
-        polylines={[{ id: 'bottom-sheet-route', points: routePoints, color: '#087cf9', width: 8, zIndex: 2 }]}
+        markers={sheetMarkers}
+        polylines={sheetPolylines}
+        // Sheet 拖拽期间把地图从触摸链路中摘出，避免同一指针同时改变 Sheet 和 camera。
+        zoomEnabled={dragStartY === null}
+        scrollEnabled={dragStartY === null}
+        rotateEnabled={dragStartY === null}
+        rotateCameraEnabled={dragStartY === null}
+        touchBlockTopRatio={touchBlockTopRatio}
         showsCompass
         showsScale
         showsLabels
@@ -224,16 +237,17 @@ function BottomSheetMapContent() {
         style={{
           height: `${metrics.expandedHeight}px`,
           transform: `translateY(${selectedOffset}px)`,
+          transition: dragStartY === null ? `transform ${SHEET_SNAP_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)` : 'none',
         }}
         main-thread:ref={surfaceRef}
       >
         <view className="map-sheet-panel">
           <view
             className="map-sheet-drag-zone"
-            main-thread:bindtouchstart={handleTouchStartMainThread}
-            main-thread:bindtouchmove={handleTouchMoveMainThread}
-            main-thread:bindtouchend={handleTouchEndMainThread}
-            main-thread:bindtouchcancel={handleTouchCancelMainThread}
+            bindtouchstart={handleTouchStart}
+            bindtouchmove={handleTouchMove}
+            bindtouchend={handleTouchEnd}
+            bindtouchcancel={handleTouchEnd}
             accessibility-label="拖动底部面板调整地图可视区域"
             accessibility-traits="adjustable"
           >

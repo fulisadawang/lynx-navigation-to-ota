@@ -83,6 +83,8 @@ export interface LynxMapProps {
   scrollEnabled?: boolean
   rotateEnabled?: boolean
   rotateCameraEnabled?: boolean
+  /** Lynx 覆盖层从该比例位置开始遮挡地图触摸，供 BottomSheet 等场景使用。 */
+  touchBlockTopRatio?: number
   showsCompass?: boolean
   showsScale?: boolean
   showsLabels?: boolean
@@ -189,6 +191,7 @@ export const LynxMap = forwardRef<LynxMapRef, LynxMapProps>((props, ref) => {
       scroll-enabled={props.scrollEnabled}
       rotate-enabled={props.rotateEnabled}
       rotate-camera-enabled={props.rotateCameraEnabled}
+      touch-block-top-ratio={props.touchBlockTopRatio}
       shows-compass={props.showsCompass}
       shows-scale={props.showsScale}
       shows-labels={props.showsLabels}

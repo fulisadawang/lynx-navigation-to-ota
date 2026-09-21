@@ -201,6 +201,8 @@ export interface LynxMapNativeElementProps {
   'scroll-enabled'?: boolean
   'rotate-enabled'?: boolean
   'rotate-camera-enabled'?: boolean
+  /** BottomSheet 等 Lynx 覆盖层的触摸阻挡顶部比例，0..1；仅用于原生触摸仲裁。 */
+  'touch-block-top-ratio'?: number
   'shows-compass'?: boolean
   'shows-scale'?: boolean
   'shows-labels'?: boolean
