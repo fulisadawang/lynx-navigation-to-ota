@@ -4,7 +4,9 @@
 
 ## 模块定位
 
-`LynxShellKit` 是业务方唯一需要接入的 iOS CocoaPods Module。它拥有：
+`LynxShellKit` 是业务方接入 Router/Runtime 的 iOS CocoaPods Module。地图能力是用户明确要求拆出的
+sibling `LynxMapKit` Module，由 Shell 通过依赖和 `LynxMapModuleRuntime` 接入；地图实现不属于本目录。
+`LynxShellKit` 自身拥有：
 
 - UIKit Router、真实 `UINavigationController` 页面栈；
 - `LynxContainerViewController`、Provider、GlobalProps 和生命周期；
@@ -15,6 +17,8 @@
 `ios/OtaIOSSDK` 不是业务方需要额外声明的第二个 Pod；其 Sources 由 `LynxShellKit.podspec` 编入 Module，并保留独立 Swift Package 测试边界。`ios/LynxShellSample` 是 Sample App，不属于本目录。
 
 `ios/LynxCapacitorKit/` 是 sibling 原生能力源码，当前尚未加入 `LynxShellKit.podspec` 或默认 Xcode Target。它不属于 Shell/OTA 实现；任务明确涉及该模块时先读 `ios/LynxCapacitorKit/AGENTS.md`，再显式决定 Pod/Target、Module 注册、权限和宿主生命周期接线。
+
+`ios/LynxMapKit/` 是已显式接入的地图能力 sibling Module。地图 Element、AMap Provider、Search、Location、Key/隐私状态和地图性能边界都在该目录内；Shell 只能通过 `LynxMapModuleRuntime` 注册 Config 和更新宿主授权状态。
 
 ## 开工前必须读取
 
@@ -102,7 +106,8 @@ Native/       Objective-C 原生 Runtime 接线
 
 ### 5. Pod 与依赖
 
-- `LynxShellKit.podspec` 是业务接入事实源；未经明确授权不要创建第二个公开 Pod。
+- `LynxShellKit.podspec` 是 Shell/Router 接入事实源；未经明确授权不要创建第二个公开 Pod。
+  `LynxMapKit` 是用户明确要求的独立地图能力 Pod，保持为 Shell 的 sibling 依赖，不把地图源码重新放回 Shell。
 - Lynx/PrimJS/Service/XElement 版本保持项目冻结值，不自行升级或混入 nightly。
 - 保留 `-ObjC` 和 XElement AutoRegistry 所需链接参数。
 - 不直接修改 `Pods/`、DerivedData、`.build/` 或生成的 Xcode 文件来“修复”源码问题。

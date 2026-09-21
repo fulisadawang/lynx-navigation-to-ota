@@ -1,0 +1,85 @@
+.navigation-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.navigation-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+.navigation-page { display: flex; flex-direction: column; min-height: 100%; background-color: #f3f4f6; }
+.navigation-page--dark { background-color: #101114; }
+.navigation-map-wrapper { position: relative; display: flex; flex-direction: column; width: 100%; }
+.navigation-map-stage { position: relative; width: 100%; height: 520px; background-color: #dce8d5; }
+.navigation-map { position: absolute; left: 0; top: 0; width: 100%; height: 520px; }
+.navigation-input-panel { position: absolute; left: 16px; right: 16px; top: 16px; z-index: 4; display: flex; flex-direction: column; padding: 12px 14px 0; border-radius: 18px; background-color: rgba(255, 255, 255, .96); box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+.navigation-input-panel--dark { background-color: rgba(30, 31, 35, .96); }
+.navigation-input-row { display: flex; align-items: center; min-height: 90px; }
+.navigation-back { width: 30px; color: #111; font-size: 38px; line-height: 38px; }
+.navigation-input-panel--dark .navigation-back { color: #fff; }
+.navigation-input-points { flex: 1; display: flex; flex-direction: column; padding: 2px 12px; }
+.navigation-point-row { display: flex; align-items: center; min-height: 31px; }
+.navigation-point-dot { width: 12px; height: 12px; margin-right: 14px; border-radius: 50%; }
+.navigation-point-dot--start { background-color: #21b34b; }
+.navigation-point-dot--end { background-color: #ff3b30; }
+.navigation-point-line { width: 1px; height: 12px; margin-left: 5px; background-color: #c8c8c8; }
+.navigation-point-text { color: #202124; font-size: 18px; font-weight: 700; }
+.navigation-input-panel--dark .navigation-point-text { color: #fff; }
+.navigation-swap { color: #202124; font-size: 27px; font-weight: 700; }
+.navigation-input-panel--dark .navigation-swap { color: #fff; }
+.navigation-mode-tabs { display: flex; align-items: stretch; gap: 2px; min-height: 66px; }
+.navigation-mode-tabs--dark { border-top-color: rgba(255, 255, 255, .12); }
+.navigation-mode-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; border-radius: 10px 10px 0 0; }
+.navigation-mode-tab--active { background-color: #fff0e9; }
+.navigation-mode-label { color: #17181a; font-size: 16px; font-weight: 800; white-space: nowrap; }
+.navigation-mode-time { color: #8c8e93; font-size: 12px; margin-top: 4px; white-space: nowrap; }
+.navigation-mode-tab--active .navigation-mode-label, .navigation-mode-tab--active .navigation-mode-time { color: #ff613b; }
+.navigation-mode-tabs--dark .navigation-mode-label { color: #fff; }
+.navigation-mode-tabs--dark .navigation-mode-time { color: rgba(255, 255, 255, .58); }
+.navigation-map-controls { position: absolute; right: 14px; bottom: 88px; z-index: 3; display: flex; flex-direction: column; gap: 10px; }
+.navigation-map-control { display: flex; align-items: center; justify-content: center; width: 50px; height: 50px; border-radius: 15px; background-color: rgba(255, 255, 255, .96); box-shadow: 0 4px 12px rgba(0, 0, 0, .12); }
+.navigation-map-control-text { color: #161719; font-size: 28px; font-weight: 700; }
+.navigation-map-filter { position: absolute; left: 16px; bottom: 20px; z-index: 3; padding: 13px 18px; border-radius: 14px; background-color: rgba(255, 255, 255, .96); box-shadow: 0 4px 12px rgba(0, 0, 0, .12); }
+.navigation-map-filter-text { color: #18191b; font-size: 14px; font-weight: 700; }
+.navigation-switch-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px 0; }
+.navigation-switch { padding: 8px 12px; border-radius: 14px; background-color: #e1e4e8; }
+.navigation-switch--active { background-color: #d7f3e7; }
+.navigation-switch-text { color: #4e5359; font-size: 12px; font-weight: 700; }
+.navigation-switch--active .navigation-switch-text { color: #087b51; }
+.navigation-switch-note { color: #777c83; font-size: 12px; }
+.navigation-route-sheet { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 20px; }
+.navigation-route-options { display: flex; width: 100%; border-radius: 18px; background-color: #fff; overflow: hidden; }
+.navigation-route-option { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 14px 10px; border-right: 1px solid #eceef0; }
+.navigation-route-option:last-child { border-right: 0; }
+.navigation-route-option--selected { background-color: #fff2eb; }
+.navigation-route-option-title { color: #18191b; font-size: 12px; white-space: nowrap; }
+.navigation-route-option--selected .navigation-route-option-title { color: #ff613b; }
+.navigation-route-option-time { margin-top: 4px; color: #17181a; font-size: 20px; font-weight: 800; white-space: nowrap; }
+.navigation-route-option--selected .navigation-route-option-time { color: #ff613b; }
+.navigation-route-option-meta { margin-top: 4px; color: #8a8d92; font-size: 11px; white-space: nowrap; }
+.navigation-route-actions { display: flex; gap: 10px; }
+.navigation-secondary-action, .navigation-primary-action { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 25px; }
+.navigation-secondary-action { width: 35%; border: 1px solid #ff6a3d; background-color: #fff; }
+.navigation-secondary-action-text { color: #ff613b; font-size: 14px; font-weight: 700; }
+.navigation-primary-action { flex: 1; background-color: #ff632f; }
+.navigation-primary-action-text { color: #fff; font-size: 15px; font-weight: 800; }
+.navigation-route-status { color: #008c82; font-size: 13px; font-weight: 800; }
+.navigation-route-hint { color: #81858b; font-size: 12px; line-height: 18px; }
+.navigation-transit-shell { display: flex; flex-direction: column; min-height: 100%; padding-bottom: 20px; }
+.navigation-transit-shell .navigation-input-panel { position: relative; left: auto; right: auto; top: auto; margin: 16px; padding-bottom: 0; }
+.navigation-transit-filter-row { display: flex; align-items: center; gap: 18px; padding: 6px 20px 14px; overflow: hidden; white-space: nowrap; }
+.navigation-transit-filter, .navigation-transit-filter-active { font-size: 14px; white-space: nowrap; }
+.navigation-transit-filter { color: #898d93; }
+.navigation-transit-filter-active { color: #202124; font-weight: 800; }
+.navigation-transit-filter-active:last-child { padding-bottom: 7px; border-bottom: 3px solid #ff6a3d; }
+.navigation-transit-card { display: flex; flex-direction: column; gap: 12px; margin: 0 14px 12px; padding: 18px; border-radius: 16px; background-color: #fff; }
+.navigation-transit-card-head { display: flex; align-items: baseline; gap: 8px; }
+.navigation-transit-duration { color: #202124; font-size: 22px; font-weight: 800; }
+.navigation-transit-walk { color: #777b82; font-size: 14px; }
+.navigation-transit-tag { margin-left: auto; padding: 5px 7px; border-radius: 5px; color: #147ef5; background-color: #edf5ff; font-size: 12px; }
+.navigation-transit-legs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.navigation-transit-leg { padding: 7px 9px; border-radius: 7px; }
+.navigation-transit-leg-text { color: #72767d; font-size: 12px; }
+.navigation-transit-leg-text--colored { color: #fff; font-weight: 700; }
+.navigation-transit-meta { color: #8c9096; font-size: 12px; }
+.navigation-fixture-note { margin: 4px 14px; padding: 12px 14px; border-radius: 12px; background-color: #e6f7f4; }
+.navigation-fixture-note-text { color: #007f77; font-size: 12px; line-height: 18px; }
+.navigation-transit-request { display: flex; align-items: center; justify-content: center; margin: 0 14px 4px; min-height: 46px; border-radius: 24px; background-color: #ff632f; }
+.navigation-transit-request-text { color: #fff; font-size: 14px; font-weight: 800; }
+.navigation-page--dark .navigation-route-option, .navigation-page--dark .navigation-transit-card { background-color: #1c1d21; }
+.navigation-page--dark .navigation-route-option-title, .navigation-page--dark .navigation-route-option-time, .navigation-page--dark .navigation-transit-duration { color: #fff; }
+.navigation-page--dark .navigation-route-option-meta, .navigation-page--dark .navigation-transit-walk, .navigation-page--dark .navigation-transit-meta { color: rgba(255, 255, 255, .65); }
+.navigation-page--dark .navigation-transit-filter-active { color: #fff; }

@@ -1,0 +1,31 @@
+.scenario-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.scenario-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+
+.scenario-page { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.scenario-page--light { background-color: #f0f2f5; }
+.scenario-page--dark { background-color: #101114; }
+.scenario-title { color: #111; font-size: 24px; font-weight: 800; }
+.scenario-description { color: rgba(0, 0, 0, .62); font-size: 14px; line-height: 21px; }
+.scenario-page--dark .scenario-title, .scenario-page--dark .scenario-description { color: #fff; }
+.scenario-page--dark .scenario-description { color: rgba(255, 255, 255, .7); }
+.scenario-preview { position: relative; width: 100%; height: 240px; }
+.scenario-map { position: absolute; left: 0; top: 0; width: 100%; height: 240px; }
+.scenario-overlay { position: absolute; left: 12px; right: 12px; top: 12px; padding: 10px; border-radius: 10px; background-color: rgba(255, 255, 255, .88); }
+.scenario-overlay-text { color: #111; font-size: 12px; font-weight: 700; }
+.scenario-log { padding: 10px 12px; border-radius: 10px; background-color: #dff7f5; color: #075f5b; font-size: 12px; }
+.scenario-capability-row { display: flex; align-items: center; gap: 8px; }
+.scenario-capability-button { padding: 8px 10px; border-radius: 8px; background-color: #009995; }
+.scenario-capability-button-text { color: #fff; font-size: 11px; font-weight: 700; }
+.scenario-capability-copy { flex: 1; color: rgba(0, 0, 0, .65); font-size: 11px; }
+.scenario-list { display: flex; flex-direction: column; gap: 8px; }
+.scenario-card { padding: 12px; border-radius: 12px; background-color: #fff; }
+.scenario-card--selected { border: 2px solid #009995; }
+.scenario-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.scenario-card-title { color: #111; font-size: 15px; font-weight: 800; }
+.scenario-card-summary { display: block; margin-top: 6px; color: rgba(0, 0, 0, .64); font-size: 12px; line-height: 18px; }
+.scenario-card-api { display: block; margin-top: 8px; color: #007f7a; font-size: 11px; }
+.scenario-status { padding: 4px 6px; border-radius: 6px; color: #fff; font-size: 10px; font-weight: 700; }
+.scenario-status--ready { background-color: #009995; }
+.scenario-status--api { background-color: #af52de; }
+.scenario-status--service { background-color: #ff9500; }
+.scenario-status--native { background-color: #3a6ee8; }

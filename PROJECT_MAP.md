@@ -11,7 +11,7 @@
 
 ```text
 android/                  lynx-shell AAR、lynx-capacitor 源码 + 可运行 Sample
-ios/                      LynxShellKit Pod、LynxCapacitorKit 源码 + 可运行 Sample
+ios/                      LynxShellKit/LynxMapKit Pods、LynxCapacitorKit 源码 + 可运行 Sample
 harmony/                  lynx_shell_kit、lynx_capacitor_kit 源码 + Entry Demo
 playground/               ReactLynx 多 Bundle 示例与 typed NativeModules wrapper
 examples/                 页面侧 NativeModules 类型声明
@@ -52,13 +52,17 @@ Runtime 接线还位于 `src/main/kotlin/com/example/lynxshell/ota/`，含 `Lynx
 
 ```text
 ios/
-├── LynxShellKit.podspec                唯一业务 CocoaPods Module
-├── LynxShellKit/                       Router、容器、Bridge、Provider、转场
+├── LynxShellKit.podspec                Router、容器、Bridge、Provider、转场 Module
+├── LynxShellKit/                       Shell Runtime、Router、容器、Bridge、转场
+├── LynxMapKit/LynxMapKit.podspec       独立地图能力 Module
+├── LynxMapKit/                         lynx-map、AMap Provider、Search、Location
 └── OtaIOSSDK/Sources/OtaIOSSDK/         编进 LynxShellKit 的内部 OTA 源码
 ```
 
-业务方只声明 `pod 'LynxShellKit'`。`OtaIOSSDK/Sources` 保留 Swift 单测边界，
-不是业务方的第二个 Pod。
+业务方接入 `LynxShellKit` 时会通过 Pod 依赖带入 `LynxMapKit`；需要单独使用地图能力的宿主
+也可以显式声明 `pod 'LynxMapKit', :path => 'LynxMapKit'`。Shell 只调用
+`LynxMapModuleRuntime` 做 Config 注册和隐私配置，不编译地图实现或直接声明高德 SDK。
+`OtaIOSSDK/Sources` 保留 Swift 单测边界，不是业务方的第二个 OTA Pod。
 `LynxShellKit/OTA/LynxSDKVersionResolver.swift` 解析可信 Lynx 资源/framework metadata；Core 只接收结果，不依赖 UIKit。
 `ios/LynxCapacitorKit` 尚未加入默认 Podspec/Xcode Target，当前只交付原生能力源码。
 

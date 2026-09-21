@@ -1,0 +1,134 @@
+.map-diagnostic-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+
+.map-diagnostic-scroll {
+  flex: 1;
+  height: 0;
+  min-height: 0;
+  width: 100%;
+}
+
+.map-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.map-title {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.map-title--light,
+.map-description--light,
+.map-overlay-title--light,
+.map-overlay-copy--light,
+.map-status-title--light,
+.map-status-copy--light {
+  color: #111111;
+}
+
+.map-title--dark,
+.map-description--dark,
+.map-overlay-title--dark,
+.map-overlay-copy--dark,
+.map-status-title--dark,
+.map-status-copy--dark {
+  color: #ffffff;
+}
+
+.map-description {
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.map-description--light {
+  color: rgba(0, 0, 0, 0.62);
+}
+
+.map-description--dark {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.map-stage {
+  position: relative;
+  width: 100%;
+  height: 320px;
+}
+
+.map-fixed {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 320px;
+}
+
+.map-overlay {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.map-overlay-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.map-overlay-copy {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.map-action {
+  min-height: 40px;
+  padding-left: 14px;
+  padding-right: 14px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #009995;
+}
+
+.map-action-text {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.map-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 12px;
+}
+
+.map-status--light {
+  background-color: #f0f2f5;
+}
+
+.map-status--dark {
+  background-color: #2a2a2a;
+}
+
+.map-status-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.map-status-copy {
+  font-size: 12px;
+  line-height: 18px;
+}

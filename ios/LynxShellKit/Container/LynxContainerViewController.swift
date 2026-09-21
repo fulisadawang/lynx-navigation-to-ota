@@ -894,6 +894,13 @@ final class LynxContainerViewController: UIViewController {
     }
 
     private func didFailBeforeFirstScreen(generation: UUID, view: LynxView, error: Error) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let view else { return }
+                self?.didFailBeforeFirstScreen(generation: generation, view: view, error: error)
+            }
+            return
+        }
         guard generation == loadGeneration, view === lynxView, !firstScreenReady else { return }
         handleTemplateLoadFailure(generation: generation, message: error.localizedDescription)
     }

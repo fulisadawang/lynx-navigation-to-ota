@@ -242,16 +242,20 @@ LynxRouter.queryMemoryUsage { snapshot ->
 
 ```text
 ios/
-├── LynxShellKit/          CocoaPods Module 源码
-├── LynxShellKit.podspec   Lynx 4.1、Service、全量 XElement 依赖
+├── LynxShellKit/          Shell Runtime、Router、Container、Bridge、转场
+├── LynxShellKit.podspec   Lynx 4.1、Service、全量 XElement、LynxMapKit 依赖
+├── LynxMapKit/            地图 Element、AMap Provider、Search、Location
+├── LynxMapKit/LynxMapKit.podspec
 └── LynxShellSample/       可运行 App，仅保留 App/Scene/Launcher/Bundles
 ```
 
-当前 Sample 的 Podfile 只有一条直接业务依赖：
+当前 Sample 显式声明 Shell 和地图两个本地 Pod；Shell 仍然是 Router/OTA 的业务入口，地图实现由
+`LynxMapKit` 独立拥有：
 
 ```ruby
 target 'LynxShell' do
   pod 'LynxShellKit', :path => '.'
+  pod 'LynxMapKit', :path => 'LynxMapKit'
 end
 ```
 
@@ -261,6 +265,7 @@ end
 target 'MyApp' do
   use_frameworks! :linkage => :static
   pod 'LynxShellKit', :path => '../lynx-navigation-to-ota/ios'
+  pod 'LynxMapKit', :path => '../lynx-navigation-to-ota/ios/LynxMapKit'
 end
 ```
 
@@ -270,8 +275,9 @@ end
 pod install
 ```
 
-`LynxShellKit.podspec` 自己携带 Lynx、PrimJS、LynxService、SDWebImage 与 XElement
-10 个 subspec。业务 App 不再逐项复制这些 Pod 声明。由于 XElement AutoRegistry 位于
+`LynxShellKit.podspec` 自己携带 Lynx、PrimJS、LynxService、SDWebImage、XElement 和
+`LynxMapKit` 依赖；`LynxMapKit.podspec` 自己携带 AMap3DMap、AMapSearch、AMapLocation。
+业务 App 不再逐项复制这些 Pod 声明。由于 XElement AutoRegistry 位于
 Objective-C 静态 Framework，最终 App Target 仍需：
 
 ```text
@@ -506,6 +512,8 @@ module.emitToNative('log', { action: 'pay' }, callback)
 
 - Module 负责：Lynx Runtime、Service、XElement、Container、NativeModules、资源加载、
   路由状态机、页面转场、媒体桥和 consumer keep rules。
+- `LynxMapKit` 负责：`lynx-map` Native Element、AMap Provider、Search、Location、地图生命周期
+  和地图隐私配置。Shell 仅通过 `LynxMapModuleRuntime` 注册地图 UI/Module，不直接依赖地图实现。
 - 业务 App 负责：Application/Scene 生命周期入口、真实首页/TabBar Router、Bundle
   资源、Release 域名、权限文案、签名和发布配置。
 - Android `Application` 与 iOS `AppDelegate/SceneDelegate` 不进入 Module，避免 SDK

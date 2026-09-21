@@ -1,19 +1,21 @@
 name: LynxShell
 options:
-  bundleIdPrefix: com.example
+  bundleIdPrefix: com.huangbaoche.client
   deploymentTarget:
-    iOS: '13.0'
+    iOS: '14.0'
 settings:
   base:
     SWIFT_VERSION: '5.0'
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     CLANG_ENABLE_MODULES: YES
-    IPHONEOS_DEPLOYMENT_TARGET: '13.0'
+    CLANG_ENABLE_EXPLICIT_MODULES: NO
+    SWIFT_ENABLE_EXPLICIT_MODULES: NO
+    IPHONEOS_DEPLOYMENT_TARGET: '14.0'
 targets:
   LynxShell:
     type: application
     platform: iOS
-    deploymentTarget: '13.0'
+    deploymentTarget: '14.0'
     sources:
       # App Target 只编译 Sample 宿主；Lynx 实现由 Podfile 中的 LynxShellKit 提供。
       - path: LynxShellSample
@@ -26,8 +28,13 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.lynxshell
-        TARGETED_DEVICE_FAMILY: '1,2'
+        PRODUCT_BUNDLE_IDENTIFIER: com.huangbaoche.client.store
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: Apple Development
+        DEVELOPMENT_TEAM: J6SYSM2AHQ
+        TARGETED_DEVICE_FAMILY: '1'
+        CURRENT_PROJECT_VERSION: '1'
+        MARKETING_VERSION: '1.0.0'
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         # XElement Behavior/AutoRegistry 位于 Objective-C 静态 Framework 中。
         OTHER_LDFLAGS:
@@ -41,14 +48,14 @@ targets:
   LynxShellUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: '13.0'
+    deploymentTarget: '14.0'
     sources:
       - path: Tests/UITests
     dependencies:
       - target: LynxShell
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.lynxshell.uitests
-        TARGETED_DEVICE_FAMILY: '1,2'
+        PRODUCT_BUNDLE_IDENTIFIER: com.huangbaoche.client.store.uitests
+        TARGETED_DEVICE_FAMILY: '1'
         TEST_TARGET_NAME: LynxShell
         GENERATE_INFOPLIST_FILE: YES

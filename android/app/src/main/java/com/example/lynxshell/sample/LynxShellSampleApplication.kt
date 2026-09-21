@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.LynxShell
+import com.example.lynxmap.LynxMapRuntime
 import com.example.lynxshell.monitoring.DiagnosticProvider
 import com.example.lynxshell.monitoring.LynxMonitor
 import com.example.lynxshell.monitoring.MonitorConfig
@@ -32,6 +33,7 @@ class LynxShellSampleApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        LynxMapRuntime.configure(this, BuildConfig.AMAP_API_KEY, privacyAgreed = true)
         installLocalMonitoringForDebug()
         val userSelectionDebug = OtaUserSelectionDebug.prepareBeforeInstall(this)
         // 三端统一入口：Android 具体承载仍是 Activity-first；OTA 适配器只在宿主 App 注入。

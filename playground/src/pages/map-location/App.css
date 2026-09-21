@@ -1,0 +1,28 @@
+.location-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.location-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+.location-page { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.location-page--light { background-color: #f0f2f5; }
+.location-page--dark { background-color: #101114; }
+.location-title { color: #111; font-size: 24px; font-weight: 800; }
+.location-description { color: rgba(0, 0, 0, .64); font-size: 14px; line-height: 21px; }
+.location-page--dark .location-title { color: #fff; }
+.location-page--dark .location-description { color: rgba(255, 255, 255, .7); }
+.location-map-stage { position: relative; width: 100%; height: 280px; }
+.location-map { position: absolute; left: 0; top: 0; width: 100%; height: 280px; }
+.location-map-overlay { position: absolute; left: 12px; right: 12px; top: 12px; padding: 10px; border-radius: 10px; background-color: rgba(255, 255, 255, .9); }
+.location-map-overlay-title { color: #111; font-size: 13px; font-weight: 800; }
+.location-map-overlay-copy { margin-top: 4px; color: #333; font-size: 11px; }
+.location-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.location-action { padding: 9px 11px; border-radius: 9px; background-color: #009995; }
+.location-action--secondary { background-color: #3a6ee8; }
+.location-action-text { color: #fff; font-size: 12px; font-weight: 700; }
+.location-card { display: flex; flex-direction: column; gap: 5px; padding: 13px; border-radius: 12px; background-color: #fff; }
+.location-card--notes { background-color: #eaf7f6; }
+.location-card-title { color: #111; font-size: 15px; font-weight: 800; }
+.location-card-copy { color: rgba(0, 0, 0, .65); font-size: 12px; line-height: 18px; }
+.location-status { color: #007f7a; font-size: 12px; font-weight: 700; }
+.location-page--dark .location-card { background-color: #1c1d21; }
+.location-page--dark .location-card--notes { background-color: #163331; }
+.location-page--dark .location-card-title { color: #fff; }
+.location-page--dark .location-card-copy { color: rgba(255, 255, 255, .7); }
+.location-page--dark .location-status { color: #c8f8f5; }

@@ -50,6 +50,8 @@ OTA Runtime current/SHA 热路径
 - Objective-C 薄层保留 Lynx 4.1 API 的直接调用形态，Swift 处理业务壳职责。
 - OTA 源码随 `LynxShellKit.podspec` 一起编译进同一个业务 Module；`LynxOtaRuntime` 只向容器
   交付已经校验过的 current 文件，不把 staging/previous 路径暴露给页面。
+- 地图能力位于独立 `LynxMapKit` Module；`LynxShellKit` 只通过 `LynxMapModuleRuntime`
+  注册 `lynx-map`、Search、Location 和隐私配置，不直接持有高德 Provider 实现。
 
 ### HarmonyOS
 
