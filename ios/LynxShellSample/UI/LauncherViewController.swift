@@ -1,4 +1,7 @@
 import LynxShellKit
+#if DEBUG
+import LynxShellDebugKit
+#endif
 import UIKit
 
 /**
@@ -89,6 +92,16 @@ final class LauncherViewController: UIViewController {
         contentStack.addArrangedSubview(otaHomeButton)
 
 #if DEBUG
+        let debugToolButton = makeButton(
+            title: "打开 Lynx 调试面板",
+            filled: false,
+            action: #selector(openLynxDebugTool)
+        )
+        contentStack.setCustomSpacing(12, after: otaHomeButton)
+        contentStack.addArrangedSubview(debugToolButton)
+#endif
+
+#if DEBUG
         if ProcessInfo.processInfo.environment["LYNX_TEST_PAUSE_AFTER_ROLLBACK_COMMIT"] == "1" {
             let prepareRollbackButton = makeButton(
                 title: "准备 F12 回滚进程测试",
@@ -138,6 +151,12 @@ final class LauncherViewController: UIViewController {
         contentStack.setCustomSpacing(16, after: embeddedButton)
         contentStack.addArrangedSubview(card)
     }
+
+#if DEBUG
+    @objc private func openLynxDebugTool() {
+        LynxDebugTool.present(from: self)
+    }
+#endif
 
     private func makeOtaCard() -> UIView {
         let card = UIView()

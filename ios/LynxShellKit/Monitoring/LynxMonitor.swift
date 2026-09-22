@@ -254,6 +254,9 @@ final class LynxMonitorRuntime {
                 let encoded = try JSONEncoder().encode(event)
                 guard encoded.count <= 32 * 1024 else { counts("event_too_large"); continue }
                 guard canCapture else { counts("discarded_inactive"); continue }
+#if DEBUG
+                LynxDebugBridge.record(event)
+#endif
                 switch try provider.record(event: event) {
                 case .acceptedBySDK: counts("accepted_by_sdk")
                 case .recordedLocally: counts("recorded_locally")

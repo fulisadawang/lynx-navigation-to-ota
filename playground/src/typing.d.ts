@@ -156,6 +156,12 @@ declare let NativeModules: {
       callback: (result: { code: number; message?: string; data?: any }) => void,
     ): void;
   };
+  /** 仅 Debug 构建注册；Release 页面中该字段不存在。 */
+  LynxDebugModule?: {
+    getSnapshot(callback: (snapshotJSON: string) => void): void;
+    clear(callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void): void;
+    open(callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void): void;
+  };
 };
 
 declare module '@lynx-js/types' {

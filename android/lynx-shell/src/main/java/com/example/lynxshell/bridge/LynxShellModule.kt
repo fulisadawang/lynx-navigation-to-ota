@@ -52,7 +52,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
             LynxRouteParser.fromBridge(url, optionsJSON) to
                 LynxNavigationOptions.fromJson(optionsJSON)
         }.onSuccess { (request, options) ->
-            postResult(callback) { LynxNavigator.open(hostContext(), request, options) }
+            postResult(
+                // LYNX_DEBUG_TOOL_BEGIN
+                "open",
+                // LYNX_DEBUG_TOOL_END
+                callback,
+            ) { LynxNavigator.open(hostContext(), request, options) }
         }.onFailure { callback.invoke(result(1001, it.message ?: "页面参数不合法")) }
     }
 
@@ -63,7 +68,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
      */
     @LynxMethod
     fun close(callback: Callback) {
-        postResult(callback) { LynxNavigator.close(hostContext()) }
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "close",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) { LynxNavigator.close(hostContext()) }
     }
 
     /**
@@ -76,7 +86,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     fun back(delta: Int, optionsJSON: String, callback: Callback) {
         runCatching { LynxNavigationOptions.fromJson(optionsJSON) }
             .onSuccess { options ->
-                postResult(callback) { LynxNavigator.back(hostContext(), delta, options) }
+                postResult(
+                    // LYNX_DEBUG_TOOL_BEGIN
+                    "back",
+                    // LYNX_DEBUG_TOOL_END
+                    callback,
+                ) { LynxNavigator.back(hostContext(), delta, options) }
             }
             .onFailure { callback.invoke(result(1001, it.message ?: "back options 不合法")) }
     }
@@ -84,7 +99,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     /** 保留兼容签名：使用默认动画回到当前 session 已存在的 routeKey。 */
     @LynxMethod
     fun popTo(routeKey: String, callback: Callback) {
-        postResult(callback) { LynxNavigator.popTo(hostContext(), routeKey) }
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "popTo",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) { LynxNavigator.popTo(hostContext(), routeKey) }
     }
 
     /** `popTo` 的可配置版本，支持 animated、result 和防重复参数。 */
@@ -92,7 +112,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     fun popToWithOptions(routeKey: String, optionsJSON: String, callback: Callback) {
         runCatching { LynxNavigationOptions.fromJson(optionsJSON) }
             .onSuccess { options ->
-                postResult(callback) {
+                postResult(
+                    // LYNX_DEBUG_TOOL_BEGIN
+                    "popToWithOptions",
+                    // LYNX_DEBUG_TOOL_END
+                    callback,
+                ) {
                     LynxNavigator.popTo(hostContext(), routeKey, options)
                 }
             }
@@ -102,7 +127,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     /** 保留兼容签名：关闭当前 session 的全部 Lynx 页面并返回进入前宿主页。 */
     @LynxMethod
     fun closeAll(callback: Callback) {
-        postResult(callback) { LynxNavigator.closeAll(hostContext()) }
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "closeAll",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) { LynxNavigator.closeAll(hostContext()) }
     }
 
     /** `closeAll` 的可配置版本，主要用于控制动画和重复操作窗口。 */
@@ -110,7 +140,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     fun closeAllWithOptions(optionsJSON: String, callback: Callback) {
         runCatching { LynxNavigationOptions.fromJson(optionsJSON) }
             .onSuccess { options ->
-                postResult(callback) { LynxNavigator.closeAll(hostContext(), options) }
+                postResult(
+                    // LYNX_DEBUG_TOOL_BEGIN
+                    "closeAllWithOptions",
+                    // LYNX_DEBUG_TOOL_END
+                    callback,
+                ) { LynxNavigator.closeAll(hostContext(), options) }
             }
             .onFailure { callback.invoke(result(1001, it.message ?: "closeAll options 不合法")) }
     }
@@ -124,7 +159,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     fun reLaunch(optionsJSON: String, callback: Callback) {
         runCatching { LynxNavigationOptions.fromJson(optionsJSON) }
             .onSuccess { options ->
-                postResult(callback) {
+                postResult(
+                    // LYNX_DEBUG_TOOL_BEGIN
+                    "reLaunch",
+                    // LYNX_DEBUG_TOOL_END
+                    callback,
+                ) {
                     LynxNavigator.reLaunch(hostContext(), optionsJSON, options)
                 }
             }
@@ -142,7 +182,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
             LynxRouteParser.fromBridge(url, optionsJSON) to
                 LynxNavigationOptions.fromJson(optionsJSON)
         }.onSuccess { (request, options) ->
-            postResult(callback) {
+            postResult(
+                // LYNX_DEBUG_TOOL_BEGIN
+                "redirect",
+                // LYNX_DEBUG_TOOL_END
+                callback,
+            ) {
                 LynxNavigator.redirect(hostContext(), request, options)
             }
         }.onFailure { callback.invoke(result(1001, it.message ?: "页面参数不合法")) }
@@ -151,7 +196,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     /** 查询当前 session 的 route、stack、depth、canGoBack 和宿主锚点状态。 */
     @LynxMethod
     fun getNavigationState(callback: Callback) {
-        postResult(callback) { LynxNavigator.getNavigationState(hostContext()) }
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "getNavigationState",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) { LynxNavigator.getNavigationState(hostContext()) }
     }
 
     /**
@@ -165,7 +215,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
             // Navigator 会再次解析；这里提前校验，确保参数错误稳定返回 1001。
             LynxNavigationOptions.withResult(resultJSON)
         }.onSuccess {
-            postResult(callback) {
+            postResult(
+                // LYNX_DEBUG_TOOL_BEGIN
+                "closeWithResult",
+                // LYNX_DEBUG_TOOL_END
+                callback,
+            ) {
                 LynxNavigator.closeWithResult(hostContext(), resultJSON)
             }
         }.onFailure {
@@ -176,7 +231,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     /** 一次性读取发给当前 entry 的页面结果；没有结果时成功返回 hasResult=false。 */
     @LynxMethod
     fun consumeNavigationResult(callback: Callback) {
-        postResult(callback) { LynxNavigator.consumeNavigationResult(hostContext()) }
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "consumeNavigationResult",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) { LynxNavigator.consumeNavigationResult(hostContext()) }
     }
 
     /** 页面向宿主发送同步消息；处理器返回值会通过同一 callback 回到 Lynx。 */
@@ -319,7 +379,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     /** 取消尚未消费的 prepared route；不存在、过期或已消费统一返回 1003。 */
     @LynxMethod
     fun cancelPreparedRoute(token: String, callback: Callback) {
-        postResult(callback) {
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "cancelPreparedRoute",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) {
             when {
                 token.isBlank() -> LynxNavigationResult(1001, "prepared route token 不能为空")
                 PreparedRouteStore.cancel(token) ->
@@ -336,7 +401,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
      */
     @LynxMethod
     fun markTransitionReady(transactionID: String, callback: Callback) {
-        postResult(callback) {
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "markTransitionReady",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) {
             when {
                 transactionID.isBlank() ->
                     LynxNavigationResult(1001, "transactionID 不能为空")
@@ -350,7 +420,12 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     /** 低频诊断当前原生事务；页面不得据此轮询并把 progress 再写回原生。 */
     @LynxMethod
     fun getTransitionState(callback: Callback) {
-        postResult(callback) {
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "getTransitionState",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) {
             val activity = hostContext().findActivity()
             LynxNavigationResult(
                 code = 0,
@@ -497,7 +572,16 @@ class LynxShellModule(context: Context) : LynxModule(context) {
      *
      * 参数解析错误在投递前返回 1001；平台调用中的意外异常统一返回 1500。
      */
-    private fun postResult(callback: Callback, operation: () -> LynxNavigationResult) {
+    private fun postResult(
+        // LYNX_DEBUG_TOOL_BEGIN
+        method: String,
+        // LYNX_DEBUG_TOOL_END
+        callback: Callback,
+        operation: () -> LynxNavigationResult,
+    ) {
+        // LYNX_DEBUG_TOOL_BEGIN
+        val token = com.example.lynxshell.debug.LynxDebugBridge.beginMethod(method, context = mContext)
+        // LYNX_DEBUG_TOOL_END
         mainHandler.post {
             val value = runCatching(operation)
                 .getOrElse {
@@ -506,6 +590,14 @@ class LynxShellModule(context: Context) : LynxModule(context) {
                         message = it.message ?: "原生 Module 调用异常",
                     )
                 }
+            // LYNX_DEBUG_TOOL_BEGIN
+            com.example.lynxshell.debug.LynxDebugBridge.finishMethod(
+                token = token,
+                code = value.code,
+                success = value.code == 0,
+                result = value.message,
+            )
+            // LYNX_DEBUG_TOOL_END
             callback.invoke(result(value))
         }
     }

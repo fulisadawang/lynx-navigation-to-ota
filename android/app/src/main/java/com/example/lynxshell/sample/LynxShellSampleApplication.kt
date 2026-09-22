@@ -20,7 +20,7 @@ import java.net.URI
  * LynxEnv 必须早于任何 LynxView 创建；初始化顺序集中在 RuntimeInitializer，
  * 避免业务 Activity 重复注册 Service 或 Native Module。
  */
-class LynxShellSampleApplication : Application() {
+open class LynxShellSampleApplication : Application() {
     companion object {
         /** Debug Sample 的本地监控实例，供验收页读取快照；不会连接网络或厂商 SDK。 */
         @Volatile

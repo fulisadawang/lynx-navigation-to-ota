@@ -224,6 +224,9 @@ public final class LynxTabViewController: UIViewController {
     }
 
     deinit {
+#if DEBUG
+        LynxDebugBridge.detach(view: lynxView)
+#endif
         monitorScope?.close(reason: "tab_destroyed")
         if let userContextObserver { NotificationCenter.default.removeObserver(userContextObserver) }
         if let userSyncObserver { NotificationCenter.default.removeObserver(userSyncObserver) }
@@ -288,6 +291,9 @@ public final class LynxTabViewController: UIViewController {
         super.viewDidAppear(animated)
         monitorVisibility = .visible
         monitorScope?.setVisibility(.visible)
+#if DEBUG
+        LynxDebugBridge.updateVisibility(view: lynxView, visibility: "visible")
+#endif
         lynxView?.onEnterForeground()
         // 首次布局后再补一次完整 GlobalProps；创建前的注入用于初始引擎配置，
         // 这里确保 Lynx 页面 JS 已经能读到 theme 和 native_tab_id。
@@ -297,6 +303,9 @@ public final class LynxTabViewController: UIViewController {
     public override func viewWillDisappear(_ animated: Bool) {
         monitorVisibility = .hidden
         monitorScope?.setVisibility(.hidden)
+#if DEBUG
+        LynxDebugBridge.updateVisibility(view: lynxView, visibility: "hidden")
+#endif
         lynxView?.onEnterBackground()
         super.viewWillDisappear(animated)
     }
@@ -555,6 +564,20 @@ public final class LynxTabViewController: UIViewController {
                 created.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             ])
             lynxView = created
+#if DEBUG
+            LynxDebugBridge.attach(
+                view: created,
+                viewId: monitorScope?.viewId,
+                containerKind: "tab",
+                pageId: pageID,
+                routeKey: request.resolvedRouteKey,
+                title: request.title,
+                bundleURL: request.bundleURL,
+                bundleMetadata: bundleMetadata,
+                globalProps: props,
+                visibility: monitorVisibility == .visible ? "visible" : "hidden"
+            )
+#endif
             ShellMessageHub.register(
                 info: LynxRouterPageInfo(
                     pageId: pageID,
@@ -605,6 +628,9 @@ public final class LynxTabViewController: UIViewController {
     }
 
     private func closeMonitoring(reason: String) {
+#if DEBUG
+        LynxDebugBridge.detach(view: lynxView)
+#endif
         monitorScope?.close(reason: reason)
         if let monitorObserver { lynxView?.removeLifecycleClient(monitorObserver) }
         monitorObserver = nil
@@ -624,6 +650,9 @@ public final class LynxTabViewController: UIViewController {
         props["theme"] = darkMode ? "Dark" : "Light"
         runtimeGlobalProps = props
         LynxNativeRuntime.updateGlobalProps(props, in: lynxView)
+#if DEBUG
+        LynxDebugBridge.updateGlobalProps(view: lynxView, globalProps: props)
+#endif
     }
 
     /** 语言状态由宿主统一提交；Tab 只原位更新完整 GlobalProps，不重新加载 Bundle。 */
@@ -642,6 +671,9 @@ public final class LynxTabViewController: UIViewController {
         props["__lynxRouterPlatformContainer"] = "uikit_tab_container"
         runtimeGlobalProps = props
         LynxNativeRuntime.updateGlobalProps(props, in: lynxView)
+#if DEBUG
+        LynxDebugBridge.updateGlobalProps(view: lynxView, globalProps: props)
+#endif
     }
 
     private func scheduleLayoutUpdate() {
@@ -674,6 +706,9 @@ public final class LynxTabViewController: UIViewController {
         props["__lynxRouterPlatformContainer"] = "uikit_tab_container"
         runtimeGlobalProps = props
         LynxNativeRuntime.updateGlobalProps(props, in: lynxView)
+#if DEBUG
+        LynxDebugBridge.updateGlobalProps(view: lynxView, globalProps: props)
+#endif
     }
 
     private func releaseCurrentLease() {

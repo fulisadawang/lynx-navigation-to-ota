@@ -1,5 +1,8 @@
 import LynxShellKit
 import LynxMapKit
+#if DEBUG
+import LynxShellDebugKit
+#endif
 import UIKit
 
 /**
@@ -66,6 +69,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = navigationController
         window.makeKeyAndVisible()
         self.window = window
+#if DEBUG
+        LynxDebugTool.attach(to: windowScene)
+#endif
 
         var shouldOpenBottomSheetDemo = false
         var shouldOpenMapBottomSheetDemo = false
@@ -114,6 +120,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 #if DEBUG
                 DispatchQueue.main.async { [weak self] in self?.openEmbeddedDemo() }
 #endif
+            } else if self.presentDebugToolIfRequested(from: rootController) {
             } else if !ProcessInfo.processInfo.arguments.contains("--show-native-launcher") {
                 // 与 Android MainActivity 一致：冷启动默认进入 OTA 验收首页；
                 // Playground main 页面仍通过 Launcher 的独立按钮打开。
@@ -121,6 +128,20 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
         }
         presentAMapPrivacyPromptIfNeeded(completion: continueStartup)
+    }
+
+    private func presentDebugToolIfRequested(from rootController: UIViewController) -> Bool {
+#if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("--show-lynx-debug-tool") else {
+            return false
+        }
+        DispatchQueue.main.async {
+            LynxDebugTool.present(from: rootController)
+        }
+        return true
+#else
+        return false
+#endif
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {

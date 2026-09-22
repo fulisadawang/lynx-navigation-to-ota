@@ -4,6 +4,9 @@ import android.app.Activity
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+// LYNX_DEBUG_TOOL_BEGIN
+import com.example.lynxshell.debug.LynxDebugBridge
+// LYNX_DEBUG_TOOL_END
 import com.lynx.jsbridge.Arguments
 import com.lynx.react.bridge.JavaOnlyArray
 import com.lynx.tasm.LynxView
@@ -105,6 +108,9 @@ object LynxEnvironmentCoordinator {
             )
         }
         binding.view.updateGlobalProps(TemplateData.fromMap(props))
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.updateGlobalProps(binding.view, props)
+        // LYNX_DEBUG_TOOL_END
         binding.view.updateColorScheme(ShellGlobalPropsFactory.resolveColorScheme(binding.activity))
         binding.lastLocaleRevision = locale.revision
         if (forcedLocale != null || localeChanged) {

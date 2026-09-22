@@ -74,6 +74,9 @@ final class LynxContainerViewController: UIViewController {
     }
 
     deinit {
+#if DEBUG
+        LynxDebugBridge.detach(view: lynxView)
+#endif
         monitorScope?.close(reason: "page_destroyed")
         ShellMessageHub.unregister(pageId: navigationEntryID)
         otaPrepareTask?.cancel()
@@ -162,6 +165,9 @@ final class LynxContainerViewController: UIViewController {
         super.viewWillDisappear(animated)
         monitorVisibility = .hidden
         monitorScope?.setVisibility(.hidden)
+#if DEBUG
+        LynxDebugBridge.updateVisibility(view: lynxView, visibility: "hidden")
+#endif
         // UIKit 的 VC 生命周期是 iOS 端 Native Page Stack 的事实源；这里同步 Lynx
         // Runtime，而不是让页面自己猜测“被覆盖”和“被销毁”的区别。
         lynxView?.onEnterBackground()
@@ -191,6 +197,9 @@ final class LynxContainerViewController: UIViewController {
         super.viewDidAppear(animated)
         monitorVisibility = .visible
         monitorScope?.setVisibility(.visible)
+#if DEBUG
+        LynxDebugBridge.updateVisibility(view: lynxView, visibility: "visible")
+#endif
         lynxView?.onEnterForeground()
         sendLifecycle(state: "active", reason: "uikit_view_did_appear")
         // viewWillAppear/didShow 可能仍处于 UIKit transitionCoordinator 生命周期内；
@@ -351,17 +360,18 @@ final class LynxContainerViewController: UIViewController {
     func updateNativeTransition(_ metadata: ShellNativeTransitionMetadata) {
         request = request.withNativeTransition(metadata)
         guard isViewLoaded, let lynxView else { return }
-        LynxNativeRuntime.updateGlobalProps(
-            ShellGlobalPropsFactory.make(
-                for: contentHostView,
-                request: request,
-                pageId: navigationEntryID,
-                sessionId: navigationSessionID,
-                bundleMetadata: bundleRuntimeMetadata,
-                layoutSnapshot: latestLayoutSnapshot
-            ),
-            in: lynxView
+        let globalProps = ShellGlobalPropsFactory.make(
+            for: contentHostView,
+            request: request,
+            pageId: navigationEntryID,
+            sessionId: navigationSessionID,
+            bundleMetadata: bundleRuntimeMetadata,
+            layoutSnapshot: latestLayoutSnapshot
         )
+        LynxNativeRuntime.updateGlobalProps(globalProps, in: lynxView)
+#if DEBUG
+        LynxDebugBridge.updateGlobalProps(view: lynxView, globalProps: globalProps)
+#endif
     }
 
     /**
@@ -735,6 +745,20 @@ final class LynxContainerViewController: UIViewController {
         createdView.backgroundColor = contentHostView.backgroundColor
         contentHostView.insertSubview(createdView, belowSubview: errorView)
         lynxView = createdView
+#if DEBUG
+        LynxDebugBridge.attach(
+            view: createdView,
+            viewId: monitorScope?.viewId,
+            containerKind: "page",
+            pageId: navigationEntryID,
+            routeKey: request.resolvedRouteKey,
+            title: request.title,
+            bundleURL: request.bundleURL,
+            bundleMetadata: bundleRuntimeMetadata,
+            globalProps: globalProps,
+            visibility: monitorVisibility == .visible ? "visible" : "hidden"
+        )
+#endif
         ShellMessageHub.register(
             info: LynxRouterPageInfo(
                 pageId: navigationEntryID,
@@ -770,17 +794,18 @@ final class LynxContainerViewController: UIViewController {
         guard Thread.isMainThread, isViewLoaded, let lynxView else { return }
         let darkMode = traitCollection.userInterfaceStyle == .dark
         LynxNativeRuntime.updateColorScheme(for: lynxView, darkMode: darkMode)
-        LynxNativeRuntime.updateGlobalProps(
-            ShellGlobalPropsFactory.make(
-                for: contentHostView,
-                request: request,
-                pageId: navigationEntryID,
-                sessionId: navigationSessionID,
-                bundleMetadata: bundleRuntimeMetadata,
-                layoutSnapshot: latestLayoutSnapshot
-            ),
-            in: lynxView
+        let globalProps = ShellGlobalPropsFactory.make(
+            for: contentHostView,
+            request: request,
+            pageId: navigationEntryID,
+            sessionId: navigationSessionID,
+            bundleMetadata: bundleRuntimeMetadata,
+            layoutSnapshot: latestLayoutSnapshot
         )
+        LynxNativeRuntime.updateGlobalProps(globalProps, in: lynxView)
+#if DEBUG
+        LynxDebugBridge.updateGlobalProps(view: lynxView, globalProps: globalProps)
+#endif
     }
 
     /** 语言状态由宿主统一提交；页面原位接收完整 GlobalProps，不重建 OTA 内容。 */
@@ -796,6 +821,9 @@ final class LynxContainerViewController: UIViewController {
             layoutSnapshot: latestLayoutSnapshot
         )
         LynxNativeRuntime.updateGlobalProps(globalProps, in: lynxView)
+#if DEBUG
+        LynxDebugBridge.updateGlobalProps(view: lynxView, globalProps: globalProps)
+#endif
     }
 
     private func scheduleLayoutUpdate() {
@@ -825,6 +853,9 @@ final class LynxContainerViewController: UIViewController {
             layoutSnapshot: snapshot
         )
         LynxNativeRuntime.updateGlobalProps(globalProps, in: lynxView)
+#if DEBUG
+        LynxDebugBridge.updateGlobalProps(view: lynxView, globalProps: globalProps)
+#endif
     }
 
     /** Provider/首屏错误时，OTA 页面只允许一次 previous/embedded 回滚。 */
@@ -1032,6 +1063,9 @@ final class LynxContainerViewController: UIViewController {
     }
 
     private func closeMonitoring(reason: String) {
+#if DEBUG
+        LynxDebugBridge.detach(view: lynxView)
+#endif
         monitorScope?.close(reason: reason)
         if let monitorObserver { lynxView?.removeLifecycleClient(monitorObserver) }
         monitorObserver = nil
