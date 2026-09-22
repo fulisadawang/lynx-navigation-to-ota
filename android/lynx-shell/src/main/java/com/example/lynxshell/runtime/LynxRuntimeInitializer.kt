@@ -32,6 +32,7 @@ object LynxRuntimeInitializer {
         LynxServiceCenter.inst().registerService(LynxImageService.getInstance())
         LynxServiceCenter.inst().registerService(LynxLogService)
         LynxServiceCenter.inst().registerService(LynxHttpService)
+        LynxDevToolRuntime.beforeInitialize(application)
 
         // 全局 Provider 作为兜底；每个页面仍会注入带错误监听的 Provider。
         LynxEnv.inst().init(
@@ -40,6 +41,7 @@ object LynxRuntimeInitializer {
             ShellTemplateProvider(application),
             null,
         )
+        LynxDevToolRuntime.afterInitialize(application)
 
         // 模块名必须与 Lynx 页面侧 NativeModules 声明完全一致。
         LynxEnv.inst().registerModule(LynxShellModule.MODULE_NAME, LynxShellModule::class.java)

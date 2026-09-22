@@ -2,6 +2,14 @@
   "apiType": "stageMode",
   "buildOptionSet": [
     {
+      "name": "debug",
+      "arkOptions": {
+        "runtimeOnly": {
+          "packages": ["@lynx/lynx_devtool"]
+        }
+      }
+    },
+    {
       "name": "release",
       "arkOptions": {
         "obfuscation": {

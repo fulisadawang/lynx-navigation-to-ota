@@ -64,6 +64,10 @@ dependencies {
     implementation("org.lynxsdk.lynx:lynx-trace:4.1.0")
     implementation("org.lynxsdk.lynx:primjs:4.1.1")
 
+    // 调试实现只进入 Debug variant，发布的 Release AAR 不携带 DevTool。
+    debugImplementation("org.lynxsdk.lynx:lynx-devtool:4.1.0")
+    debugImplementation("org.lynxsdk.lynx:lynx-service-devtool:4.1.0")
+
     // Lynx Service 由 Module 内的 RuntimeInitializer 统一注册。
     implementation("org.lynxsdk.lynx:lynx-service-image:4.1.0")
     implementation("org.lynxsdk.lynx:lynx-service-log:4.1.0")

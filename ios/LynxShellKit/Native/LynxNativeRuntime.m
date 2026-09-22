@@ -2,9 +2,17 @@
 
 #import <Lynx/LynxConfig.h>
 #import <Lynx/LynxEnv.h>
+#import <Lynx/DevToolSettings.h>
+#import <Lynx/LynxService.h>
+#import <Lynx/LynxServiceDevToolProtocol.h>
 #import <Lynx/LynxTemplateData.h>
 #import <SDWebImage/SDWebImage.h>
 #import <SDWebImageWebPCoder/SDWebImageWebPCoder.h>
+
+// 同根 Pod 的调试 subspec 会合并；禁止用开发 Pods 构建生产 Release。
+#if !DEBUG && __has_include(<LynxDevtool/LynxDevtoolEnv.h>)
+#error "Release 必须先使用 LYNX_DEVTOOLS=0 pod install 解析不含 DevTool 的依赖"
+#endif
 
 // XElement 4.1 全量组件的公开头文件。
 // 这些 import 是编译期哨兵：Pod 缺少任一 subspec 时，真实 Xcode 编译会立即失败，
@@ -55,8 +63,29 @@
     // XElement/Behavior 使用 LYNX_LAZY_REGISTER_* 宏完成全量懒注册。
     // Podfile 已显式包含 Behavior、Video 及现有组件 subspec，宿主无需重复注册 UI 类。
 
-    // 与 Lynx 4.1 Explorer 一致：先拿到 LynxEnv，再准备全局 Config。
+    DevToolSettings *settings = [DevToolSettings sharedInstance];
+#if DEBUG
+    [settings.bootstrap applyDevelopmentDefaultsIfUnset];
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    // 仅首次写入默认值，保留官方设置页的持久化选择。
+    if ([defaults objectForKey:SP_KEY_ENABLE_DEVTOOL] == nil) settings.devToolEnabled = YES;
+    if ([defaults objectForKey:SP_KEY_ENABLE_LOGBOX] == nil) settings.logBoxEnabled = YES;
+    if ([defaults objectForKey:SP_KEY_ENABLE_DOM_TREE] == nil) settings.domTreeEnabled = YES;
+    if ([defaults objectForKey:SP_KEY_ENABLE_LONG_PRESS_MENU] == nil) settings.longPressMenuEnabled = YES;
+    // 默认保留 iOS 的生产引擎选择；需要 JS 断点时由开发者开启 PrimJS 调试并重启。
+    if ([defaults objectForKey:SP_KEY_ENABLE_QUICKJS_DEBUG] == nil) settings.quickjsDebugEnabled = NO;
+#else
+    settings.bootstrap.lynxDebugEnabled = NO;
+    settings.bootstrap.logBoxEnabled = NO;
+#endif
+
+    // bootstrap 必须早于首次获取 LynxEnv，业务 Config 和页面加载保持原有顺序。
     LynxEnv *env = [LynxEnv sharedInstance];
+#if DEBUG
+    [LynxService(LynxServiceDevToolProtocol) enableAllSessions];
+#else
+    env.lynxDebugEnabled = NO;
+#endif
     LynxConfig *globalConfig =
         [[LynxConfig alloc] initWithProvider:[[ShellTemplateProvider alloc] init]];
     [globalConfig registerModule:LynxShellModule.class];

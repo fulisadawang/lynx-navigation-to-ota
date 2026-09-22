@@ -21,6 +21,8 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
     /** prepareRoute 命中后只把一次性 Bundle 字节交给目标 Provider。 */
     private let prefetchedURL: String?
     private var prefetchedData: Data?
+    /** OTA 的逻辑 URL 不一定对应 App Bundle 根路径；重载继续读取当前页面已固定的文件。 */
+    private let prefetchedFileURL: URL?
     private let stateLock = NSLock()
     private var cancelled = false
     private var activeTasks: [Int: URLSessionTask] = [:]
@@ -35,6 +37,7 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         onLoadError: ((String, Error) -> Void)?,
         prefetchedURL: String? = nil,
         prefetchedData: Data? = nil,
+        prefetchedFileURL: URL? = nil,
         onTemplateData: ((String, Data) -> Void)? = nil
     ) {
         self.allowHTTPInDebug = allowHTTPInDebug
@@ -42,6 +45,7 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         self.onTemplateData = onTemplateData
         self.prefetchedURL = prefetchedURL
         self.prefetchedData = prefetchedData
+        self.prefetchedFileURL = prefetchedFileURL
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 10
         configuration.timeoutIntervalForResource = 30
@@ -62,6 +66,7 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
             return
         }
         cancelled = true
+        prefetchedData = nil
         let tasks = Array(activeTasks.values)
         activeTasks.removeAll()
         stateLock.unlock()
@@ -82,12 +87,16 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         stateLock.lock()
         let prepared = prefetchedURL == url ? prefetchedData : nil
         if prepared != nil {
-            // 单个 Provider 也只消费一次，重试时回到正常安全加载链路。
+            // 首次字节仍只消费一次；OTA 重载使用固定文件，普通预取仍回到原加载链路。
             prefetchedData = nil
         }
         stateLock.unlock()
         if let prepared {
             completeSuccess(prepared, url: url, callback: callback)
+            return
+        }
+        if prefetchedURL == url, let prefetchedFileURL {
+            loadLocal(url, preparedFileURL: prefetchedFileURL, callback: callback)
             return
         }
         if RemoteBundlePolicy.isRemote(url) {
@@ -97,12 +106,21 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         }
     }
 
-    private func loadLocal(_ rawURL: String, callback: @escaping LynxTemplateLoadBlock) {
+    private func loadLocal(
+        _ rawURL: String,
+        preparedFileURL: URL? = nil,
+        callback: @escaping LynxTemplateLoadBlock
+    ) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self, !self.isCancelled else { return }
             do {
-                let path = try self.normalizedAssetPath(rawURL)
-                let fileURL = try self.resolveLocalBundle(path)
+                let fileURL: URL
+                if let preparedFileURL {
+                    fileURL = preparedFileURL
+                } else {
+                    let path = try self.normalizedAssetPath(rawURL)
+                    fileURL = try self.resolveLocalBundle(path)
+                }
                 let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
                 guard !data.isEmpty else { throw TemplateError.emptyBundle }
                 guard data.count <= Self.maximumBundleBytes else { throw TemplateError.bundleTooLarge }
@@ -354,7 +372,15 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         }
         onTemplateData?(url, data)
         guard !isCancelled else { return }
-        callback(data, nil)
+        // SDK 会在这个回调中重置并重建 UIKit 渲染树；读文件和哈希可在后台，交付必须回主线程。
+        if Thread.isMainThread {
+            callback(data, nil)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.isCancelled else { return }
+                callback(data, nil)
+            }
+        }
     }
 
     private func completeFailure(
@@ -363,6 +389,12 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         callback: @escaping LynxTemplateLoadBlock
     ) {
         guard !isCancelled else { return }
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.completeFailure(url: url, error: error, callback: callback)
+            }
+            return
+        }
         callback(nil, error)
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.isCancelled else { return }

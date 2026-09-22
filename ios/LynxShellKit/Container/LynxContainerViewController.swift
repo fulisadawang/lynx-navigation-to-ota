@@ -28,6 +28,7 @@ final class LynxContainerViewController: UIViewController {
     private var templateProvider: ShellTemplateProvider?
     private var releaseLease: OtaBundleLease?
     private var preparedBundleData: Data?
+    private var preparedBundleFileURL: URL?
     private var bundleRuntimeMetadata: [String: Any]?
     private var preparedUserIdentityEpoch: UInt64?
     private var loadGeneration = UUID()
@@ -616,6 +617,7 @@ final class LynxContainerViewController: UIViewController {
                     self.releaseCurrentLease()
                     self.releaseLease = prepared.releaseLease
                     self.preparedBundleData = data
+                    self.preparedBundleFileURL = prepared.fileURL
                     self.monitorScope?.setPreparedBundle(prepared)
                     var metadata: [String: Any] = [
                         "lynxAppId": prepared.lynxAppId,
@@ -678,6 +680,7 @@ final class LynxContainerViewController: UIViewController {
             },
             prefetchedURL: request.bundleURL,
             prefetchedData: preparedBundleData,
+            prefetchedFileURL: preparedBundleFileURL,
             onTemplateData: monitoredScope.map { scope in
                 { url, data in if url == monitoredURL { scope.resolved(data) } }
             }
@@ -1032,6 +1035,7 @@ final class LynxContainerViewController: UIViewController {
     }
 
     private func releaseCurrentLease() {
+        preparedBundleFileURL = nil
         guard let lease = releaseLease else { return }
         releaseLease = nil
         Task { await lease.close() }

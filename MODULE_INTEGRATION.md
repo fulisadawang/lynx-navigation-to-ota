@@ -28,6 +28,47 @@ GlobalProps，并发送 `lynxShellLayoutChanged`。`screen` 是 Window/Scene 尺
 resolve。没有官方折叠数据的平台只报告 capability，不推导双栏；HarmonyOS 共享元素转场
 暂不在本批次接入。
 
+## 非生产 DevTool 默认能力
+
+调试能力由原生构建控制，不取决于业务服务器环境、OTA Bundle 来源或 JavaScript 的 `__DEV__`。
+当前源码工程的 Debug 构建默认提供 DevTool、DOM 检查、LogBox 和长按菜单开关；Release 不启用
+调试会话。首次配置默认值后保留 SDK 设置页中的用户选择，切换需要重启的选项不会在下次启动被覆盖。
+
+- Android：`lynx-shell` 的 Debug variant 独占 `lynx-devtool` / `lynx-service-devtool` 4.1.0，
+  在 Runtime 初始化前注册服务及 PrimJS 调试桥，初始化后启用默认开关；额外检查宿主
+  `ApplicationInfo.FLAG_DEBUGGABLE`。Release variant 不依赖调试组件并关闭 bootstrap。
+  当前 Maven 发布仍只交付 Release AAR；外部宿主消费该 AAR 时不会因为自身是 Debug 就获得调试实现。
+- iOS：源码 Pod 的 `DEBUG` 条件内配置 bootstrap 与默认开关；PrimJS 调试首次默认关闭，保留默认
+  生产引擎选择，需要 JS 断点时通过 DevTool 开关开启并重启。此配置不强制设置页面的 JS 引擎参数。
+  CocoaPods 会合并同根 Pod 的 subspec，不能用顶层 `:configurations` 当作依赖闭包隔离。
+  本仓库 `Podfile` 默认安装开发调试依赖；生产构建前必须执行 `LYNX_DEVTOOLS=0 pod install`，
+  回到开发时执行 `LYNX_DEVTOOLS=1 pod install`。Release 检测到可见的 DevTool 头文件会报错，
+  防止误用开发 Pods；公共 `LynxShellKit.podspec` 不强绑 DevTool，其他宿主需按同样方式隔离依赖。
+- HarmonyOS：按宿主 HAP 的 `applicationInfo.debug` 注册 DevTool Service，Release 不注册，
+  避免异步加载完成后重新打开 lifecycle。Debug 使用 SDK `DevToolSettings` 预置开关，避免
+  Env setter 在异步加载前被忽略；Entry 的 Debug 构建通过 `runtimeOnly` 保留动态调试包。
+  不修改 HAR 的 `BuildProfile.ets`。长按开关存在，但当前 SDK 的长按菜单消费者未确认，不能
+  将开关预置等同于 Harmony 菜单已可用；桌面连接和官方设置页入口仍需设备验收。
+
+本轮只接入原生能力及 SDK 长按菜单开关，未挂接截图中的独立官方设置页。Android/iOS 的 SDK
+长按菜单不等于完整设置界面；设置页资源虽然随 DevTool 组件提供，仍需宿主单独承载并提供入口。
+本轮不增加业务 Bridge 方法。生产 Bundle 的 Preact 组件调试支持仍由 Bundle 构建决定，原生 DevTool
+可用不代表生产 Bundle 自动包含 ReactLynx 开发钩子。本次不修改“开发服务器”配置或页面入口。
+
+2026-09-22 已完成 Android API 35 与 iOS 27.0 模拟器的 Debug 构建、覆盖安装和启动，
+DevTool 能识别两端应用及页面会话；通过现有深链打开了 SDK 内置官方设置页，未新增常驻设置入口。
+iOS 已执行开发模式 `pod install` 并更新锁文件。Xcode 27.1 本次模拟器构建临时使用
+`IPHONEOS_DEPLOYMENT_TARGET=15.0` 和 `OTHER_CPLUSPLUSFLAGS=$(inherited) -Wno-error=unused-result`，
+处理 SDK 部署版本与 Lynx 源码告警兼容问题，未改工程最低部署版本或 Pods 源码。
+同日补充 iOS Reload 修复与验收：OTA 页面将本代已准备的真实文件绑定到 Provider，首次字节消费后
+仍能按相同逻辑 URL 重读该文件，不重新选择 current、不回退到 App Bundle 根目录。文件读取及
+监控哈希保持后台执行，交给 Lynx SDK 的成功/失败回调统一回主线程，避免 Reload 在后台重建 UIKit
+渲染树而白屏。iOS 27.0 模拟器通过真实长按菜单执行 OTA 首页 3 次、原生 Tab 首页 3 次及设置 Tab
+1 次 Reload，页面均恢复显示；对应新包日志未出现 `10203` 或 `LoadTemplate on other thread`。
+这不等于 DOM/CSS 编辑、JS 断点、开关重启读回和 Release 产物隔离已全部验收；
+Harmony 本轮未构建运行。参考官方 [接入文档](https://lynxjs.org/guide/start/integrate-lynx-devtool)
+和 [设置页说明](https://lynxjs.org/guide/start/integrate-lynx-devtool-advanced)。
+
 ## Android
 
 ### 目录与依赖

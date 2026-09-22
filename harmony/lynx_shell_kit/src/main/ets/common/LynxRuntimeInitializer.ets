@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
-import { LLog, LynxEnv, LynxServiceCenter, LynxServiceType } from '@lynx/lynx';
+import { DevToolSettings, LLog, LynxEnv, LynxServiceCenter, LynxServiceType } from '@lynx/lynx';
+import { preferences } from '@kit.ArkData';
 import { LynxBaseServiceCenter, LynxBaseServiceType } from '@lynx/lynx_base';
 import { LynxDevToolService } from '@lynx/lynx_devtool_service';
 import { LynxHttpService } from '@lynx/lynx_http_service';
@@ -26,8 +27,11 @@ export default class LynxRuntimeInitializer {
     // ImageKnife 是 HAR 的传递实现依赖；由 HAR 初始化，Entry 不需要直接声明第二个依赖。
     ImageKnife.getInstance().initFileCache(context);
     LLog.useSysLog(true);
-    LynxRuntimeInitializer.registerServices();
+    // 读取宿主 HAP 的调试属性，不能使用预编译 HAR 自身的 BuildProfile。
+    const debug = context.applicationInfo.debug;
+    LynxRuntimeInitializer.registerServices(debug);
     LynxEnv.initialize(context);
+    LynxRuntimeInitializer.configureDevTools(context, debug);
 
     const appInfo = new Map<string, string>();
     appInfo.set('App', ShellConstants.APP_NAME);
@@ -41,11 +45,30 @@ export default class LynxRuntimeInitializer {
     LLog.d(ShellConstants.TAG, 'Lynx Runtime initialized');
   }
 
-  private static registerServices(): void {
+  private static registerServices(debug: boolean): void {
     LynxBaseServiceCenter.registerService(LynxBaseServiceType.Log, LynxLogService.instance);
-    LynxServiceCenter.registerService(LynxServiceType.DevTool, LynxDevToolService.instance);
+    // Release 不注册，避免 SDK 异步加载完成后重新启用 DevTool lifecycle。
+    if (debug) {
+      LynxServiceCenter.registerService(LynxServiceType.DevTool, LynxDevToolService.instance);
+    }
     LynxServiceCenter.registerService(LynxServiceType.Http, LynxHttpService.instance);
     LynxServiceCenter.registerService(LynxServiceType.Image, LynxImageService.instance);
+  }
+
+  private static configureDevTools(context: common.UIAbilityContext, debug: boolean): void {
+    if (!debug) {
+      LynxEnv.enableLynxDebug(false);
+      return;
+    }
+    const store = preferences.getPreferencesSync(context, { name: 'lynx_shell_devtool_defaults' });
+    if (store.hasSync('initialized')) return;
+    // Service 异步加载期间 Env setter 会被忽略，使用 SDK Settings 预置默认值。
+    DevToolSettings.setDevToolEnabled(true);
+    DevToolSettings.setLogBoxEnabled(true);
+    DevToolSettings.setDOMTreeEnabled(true);
+    DevToolSettings.setLongPressMenuEnabled(true);
+    store.putSync('initialized', true);
+    store.flushSync();
   }
 
   private constructor() {

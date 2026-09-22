@@ -7,10 +7,23 @@ use_frameworks! :linkage => :static
 
 project 'LynxShell.xcodeproj'
 
+# CocoaPods 的配置过滤不会隔离共享 Pod 的调试 subspec，开发/生产必须分别解析。
+# 开发默认包含调试依赖；生产构建前执行 LYNX_DEVTOOLS=0 pod install。
+devtools_mode = ENV.fetch('LYNX_DEVTOOLS', '1')
+raise 'LYNX_DEVTOOLS 只能为 0 或 1' unless ['0', '1'].include?(devtools_mode)
+devtools_enabled = devtools_mode == '1'
+
 target 'LynxShell' do
   # 业务方只显式引用一个本地 Router Module；Lynx/XElement/OTA 依赖全部由 Podspec 管理。
   # 这是普通 CocoaPods Module 引用，不使用 Sparkling autolink/codegen。
   pod 'LynxShellKit', :path => '.'
+
+  if devtools_enabled
+    pod 'LynxService/Devtool', '4.1.0'
+    pod 'LynxDevtool', '4.1.0'
+    pod 'DebugRouter', '5.0.15'
+    pod 'DebugRouter/MessageTransceiverEnable', '5.0.15'
+  end
 end
 
 post_install do |installer|

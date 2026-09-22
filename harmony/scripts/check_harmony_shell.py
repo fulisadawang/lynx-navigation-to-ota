@@ -264,7 +264,7 @@ def xelement_full() -> None:
 
 def runtime_and_container() -> None:
     initializer = shell_read("src/main/ets/common/LynxRuntimeInitializer.ets")
-    service_index = initializer.find("LynxRuntimeInitializer.registerServices();")
+    service_index = initializer.find("LynxRuntimeInitializer.registerServices(debug);")
     env_index = initializer.find("LynxEnv.initialize(context);")
     require(service_index >= 0 and env_index > service_index, "HarmonyOS Service 在 LynxEnv.initialize 之前注册")
     require(all(marker in initializer for marker in ["LynxLogService", "LynxDevToolService", "LynxHttpService", "LynxImageService"]), "HarmonyOS Log/DevTool/HTTP/Image Service 完整")

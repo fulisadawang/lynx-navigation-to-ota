@@ -1,4 +1,22 @@
 PODS:
+  - BaseDevtool (4.1.0):
+    - BaseDevtool/framework (= 4.1.0)
+  - BaseDevtool/framework (4.1.0):
+    - DebugRouter (>= 5.0.15)
+    - Lynx (= 4.1.0)
+    - LynxBase (= 4.1.0)
+  - DebugRouter (5.0.15):
+    - DebugRouter/Framework (= 5.0.15)
+    - DebugRouter/Native (= 5.0.15)
+    - DebugRouter/third_party (= 5.0.15)
+  - DebugRouter/Framework (5.0.15):
+    - DebugRouter/Native
+  - DebugRouter/MessageTransceiverEnable (5.0.15)
+  - DebugRouter/Native (5.0.15):
+    - DebugRouter/third_party
+  - DebugRouter/third_party (5.0.15):
+    - DebugRouter/third_party/jsoncpp (= 5.0.15)
+  - DebugRouter/third_party/jsoncpp (5.0.15)
   - libwebp (1.6.0):
     - libwebp/demux (= 1.6.0)
     - libwebp/mux (= 1.6.0)
@@ -29,6 +47,38 @@ PODS:
     - LynxBase/Framework (= 4.1.0)
   - LynxBase/Framework (4.1.0):
     - LynxServiceAPI/Core
+  - LynxDevtool (4.1.0):
+    - LynxDevtool/Framework (= 4.1.0)
+    - LynxDevtool/LynxCore (= 4.1.0)
+    - LynxDevtool/LynxRecorder (= 4.1.0)
+  - LynxDevtool/Framework (4.1.0):
+    - BaseDevtool (= 4.1.0)
+    - DebugRouter (>= 5.0.15)
+    - Lynx (= 4.1.0)
+    - LynxBase (= 4.1.0)
+    - LynxDevtool/Framework/zlib (= 4.1.0)
+    - LynxDevtool/LynxCore
+    - PrimJS/quickjs_debugger
+    - PrimJS/quickjs_heapprofiler
+    - PrimJS/quickjs_profiler
+    - SocketRocket
+  - LynxDevtool/Framework/zlib (4.1.0):
+    - BaseDevtool (= 4.1.0)
+    - DebugRouter (>= 5.0.15)
+    - Lynx (= 4.1.0)
+    - LynxBase (= 4.1.0)
+    - LynxDevtool/LynxCore
+    - PrimJS/quickjs_debugger
+    - PrimJS/quickjs_heapprofiler
+    - PrimJS/quickjs_profiler
+    - SocketRocket
+  - LynxDevtool/LynxCore (4.1.0)
+  - LynxDevtool/LynxRecorder (4.1.0):
+    - LynxDevtool/Framework
+  - LynxService/Devtool (4.1.0):
+    - Lynx (= 4.1.0)
+    - LynxDevtool (= 4.1.0)
+    - LynxServiceAPI (= 4.1.0)
   - LynxService/Http (4.1.0):
     - Lynx (= 4.1.0)
     - LynxServiceAPI (= 4.1.0)
@@ -91,6 +141,12 @@ PODS:
     - PrimJS/quickjs
   - PrimJS/quickjs (4.1.1):
     - PrimJS/log
+  - PrimJS/quickjs_debugger (4.1.1):
+    - PrimJS/quickjs
+  - PrimJS/quickjs_heapprofiler (4.1.1):
+    - PrimJS/quickjs_debugger
+  - PrimJS/quickjs_profiler (4.1.1):
+    - PrimJS/quickjs_debugger
   - SDWebImage (5.15.5):
     - SDWebImage/Core (= 5.15.5)
   - SDWebImage/Core (5.15.5)
@@ -100,6 +156,7 @@ PODS:
   - ServalMarkdown (0.1.1):
     - LynxTextra
   - ServalSVG (0.2.4)
+  - SocketRocket (0.7.1)
   - XElement/Behavior (4.1.0):
     - Lynx (= 4.1.0)
     - XElement/BlurView
@@ -138,16 +195,23 @@ PODS:
     - Lynx (= 4.1.0)
 
 DEPENDENCIES:
+  - DebugRouter (= 5.0.15)
+  - DebugRouter/MessageTransceiverEnable (= 5.0.15)
+  - LynxDevtool (= 4.1.0)
+  - LynxService/Devtool (= 4.1.0)
   - LynxShellKit (from `.`)
 
 SPEC REPOS:
   https://github.com/lynx-family/Specs.git:
+    - BaseDevtool
     - Lynx
     - LynxBase
+    - LynxDevtool
     - LynxService
     - LynxServiceAPI
     - XElement
   trunk:
+    - DebugRouter
     - libwebp
     - LynxTextra
     - MJRefresh
@@ -156,15 +220,19 @@ SPEC REPOS:
     - SDWebImageWebPCoder
     - ServalMarkdown
     - ServalSVG
+    - SocketRocket
 
 EXTERNAL SOURCES:
   LynxShellKit:
     :path: "."
 
 SPEC CHECKSUMS:
+  BaseDevtool: 6f1625a8d8f99dcc0b5d3b798b75c03e00fd5e46
+  DebugRouter: f0323a03519feabd12f553f0da7ac7931873a0ea
   libwebp: af5937a13536ef73f3784d69cc342b98961acf33
   Lynx: b9a0812cb5b0f1ff6efba8cc1d1d5c094a23f632
   LynxBase: 4d2fdb403f161e8fce8af3db8bddee50c8f1fe3e
+  LynxDevtool: 45d2c62996dc5435010a020341d70fade6b219f5
   LynxService: 4e390c8080eff4bc3d3f4e2133379c2942191c1b
   LynxServiceAPI: 79446ba6dcea4353b8e2e5b77ec9f34603c0a054
   LynxShellKit: 89a2a1c9c3e1698b9c792864af90618e4b76b527
@@ -175,8 +243,9 @@ SPEC CHECKSUMS:
   SDWebImageWebPCoder: 295a6573c512f54ad2dd58098e64e17dcf008499
   ServalMarkdown: 4e0401818bc34bbb7659270e2df775119ccc029f
   ServalSVG: 19bf88f72dae928c28a744c9b91475a3691ded42
+  SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   XElement: 81b11cf09c9b2c773bfc3b9b631811502328016b
 
-PODFILE CHECKSUM: 6ffd1e860eaa3f498a9ba0638d84e49582b5d948
+PODFILE CHECKSUM: e9574d028b0a0a0dad55d9c44117487c8991e054
 
 COCOAPODS: 1.17.0
