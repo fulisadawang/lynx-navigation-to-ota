@@ -15,11 +15,24 @@ import com.google.android.material.card.MaterialCardView
 import com.ota.android.sdk.OtaStorageAppSnapshot
 import com.ota.android.sdk.OtaStorageReleaseRole
 import com.ota.android.sdk.OtaStorageSnapshot
+import java.io.File
 import java.util.Locale
 import java.util.concurrent.Executors
 
-/** Demo-only 原生只读 OTA Store 浏览器。 */
+/** Demo-only 原生只读 OTA Store 与 Direct HTTPS 缓存浏览器。 */
 class OtaStorageInspectorActivity : AppCompatActivity() {
+    private data class DirectHttpsCacheFileSnapshot(
+        val name: String,
+        val byteCount: Long,
+        val temporary: Boolean,
+    )
+
+    private data class DirectHttpsCacheSnapshot(
+        val rootPath: String,
+        val files: List<DirectHttpsCacheFileSnapshot>,
+        val totalBytes: Long,
+    )
+
     private lateinit var rootPath: TextView
     private lateinit var summary: TextView
     private lateinit var content: LinearLayout
@@ -64,14 +77,13 @@ class OtaStorageInspectorActivity : AppCompatActivity() {
         summary.text = "正在读取一致性快照；不会联网或修改文件…"
         scanner.execute {
             val result = runCatching {
-                LynxRouter.otaStorageSnapshot()
-                    ?: error("当前没有安装 Router OTA Runtime")
+                LynxRouter.otaStorageSnapshot() to scanDirectHttpsCache()
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed || generation != requestGeneration) return@runOnUiThread
                 progress.visibility = View.GONE
                 refresh.isEnabled = true
-                result.fold(::renderSnapshot) { error ->
+                result.fold({ (snapshot, httpsCache) -> renderSnapshot(snapshot, httpsCache) }) { error ->
                     rootPath.text = "Store 不可用"
                     summary.text = error.message ?: "OTA 磁盘快照读取失败"
                     content.removeAllViews()
@@ -80,15 +92,91 @@ class OtaStorageInspectorActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderSnapshot(snapshot: OtaStorageSnapshot) {
-        rootPath.text = snapshot.rootPath
-        summary.text = "${snapshot.apps.size} 个 App ID · ${snapshot.fileCount} 个文件 · ${formatBytes(snapshot.totalBytes)} · Store v3 CAS · 只读"
+    private fun renderSnapshot(snapshot: OtaStorageSnapshot?, httpsCache: DirectHttpsCacheSnapshot) {
+        rootPath.text = buildString {
+            append("OTA Store: ")
+            append(snapshot?.rootPath ?: "不可用")
+            append("\nDirect HTTPS: ")
+            append(httpsCache.rootPath)
+        }
+        val otaSummary = snapshot?.let {
+            "${it.apps.size} 个 App ID · ${it.fileCount} 个文件 · ${formatBytes(it.totalBytes)} · Store v3 CAS"
+        } ?: "OTA Store 不可用"
+        summary.text = "$otaSummary · HTTPS 缓存 ${httpsCache.files.size} 个文件 / ${formatBytes(httpsCache.totalBytes)} · 只读"
         content.removeAllViews()
+        content.addView(httpsCacheCard(httpsCache))
+        if (snapshot == null) {
+            content.addView(bodyText("当前无法读取 OTA Store；Direct HTTPS 缓存仍可单独查看。"))
+            return
+        }
         if (snapshot.apps.isEmpty()) {
             content.addView(bodyText("当前没有远程 OTA Bundle；页面会直接使用 APK embedded baseline。"))
             return
         }
         snapshot.apps.forEach { content.addView(appCard(it)) }
+    }
+
+    private fun scanDirectHttpsCache(): DirectHttpsCacheSnapshot {
+        val root = File(applicationContext.filesDir, DIRECT_HTTPS_CACHE_DIRECTORY)
+        val files = root.listFiles()
+            .orEmpty()
+            .filter { it.isFile }
+            .sortedBy { it.name }
+            .map { file ->
+                DirectHttpsCacheFileSnapshot(
+                    name = file.name,
+                    byteCount = file.length(),
+                    temporary = file.name.contains(".part-"),
+                )
+            }
+        return DirectHttpsCacheSnapshot(
+            rootPath = root.absolutePath,
+            files = files,
+            totalBytes = files.sumOf { it.byteCount },
+        )
+    }
+
+    private fun httpsCacheCard(snapshot: DirectHttpsCacheSnapshot): MaterialCardView {
+        val card = MaterialCardView(this).apply {
+            radius = dp(16).toFloat()
+            cardElevation = dp(1).toFloat()
+            setCardBackgroundColor(android.graphics.Color.WHITE)
+            strokeWidth = dp(1)
+            strokeColor = android.graphics.Color.rgb(222, 225, 230)
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+            params.bottomMargin = dp(14)
+            layoutParams = params
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18))
+        }
+        box.addView(titleText("Direct HTTPS Bundle 缓存"))
+        box.addView(
+            bodyText(
+                "路径: ${snapshot.rootPath}\n" +
+                    "文件: ${snapshot.files.size} · 占用: ${formatBytes(snapshot.totalBytes)}\n" +
+                    "缓存文件名使用 URL 定位摘要；此区域不会读取或展示原始 URL。",
+            ),
+        )
+        if (snapshot.files.isEmpty()) {
+            box.addView(sectionText("当前没有 HTTPS Bundle 缓存文件"))
+        } else {
+            box.addView(sectionText("缓存文件"))
+            box.addView(
+                codeText(
+                    snapshot.files.joinToString("\n") { file ->
+                        val kind = if (file.temporary) "临时" else "正式"
+                        "├─ [$kind] ${file.name}  ${formatBytes(file.byteCount)}"
+                    },
+                ),
+            )
+        }
+        card.addView(box)
+        return card
     }
 
     private fun appCard(app: OtaStorageAppSnapshot): MaterialCardView {
@@ -205,4 +293,8 @@ class OtaStorageInspectorActivity : AppCompatActivity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val DIRECT_HTTPS_CACHE_DIRECTORY = "lynx-https-bundles"
+    }
 }

@@ -6,9 +6,9 @@ import Lynx
  * Lynx Bundle 加载器。
  *
  * 本地路径拒绝 `..`，远程默认仅 HTTPS，不限制 Host。
- * 直接 HTTPS 使用临时 URLSession，只承担本次页面加载和进程内 HTTP 缓存协商；不会写入
- * OTA 磁盘 Store，也不执行 Manifest、SHA、current/previous 或回滚。OTA 页面应先由 OTA SDK
- * 解析并校验本地 current，再把已确认的 Bundle 交给容器，两条链路不可隐式混用。
+ * 直接 HTTPS 优先读取应用私有的 URL 级 Bundle 缓存，并在命中后后台重新下载；不会写入
+ * OTA 磁盘 Store，也不执行内容 SHA、Manifest、current/previous 或回滚。OTA 页面应先由
+ * OTA SDK 解析并校验本地 current，再把已确认的 Bundle 交给容器，两条链路不可隐式混用。
  * 任何失败都会同时通知 Lynx 与原生错误页。容器重建或销毁时调用 [cancel]，
  * 旧任务不会再回调已经失效的 LynxView。
  */
@@ -45,7 +45,7 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 10
         configuration.timeoutIntervalForResource = 30
-        configuration.requestCachePolicy = .reloadRevalidatingCacheData
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.session = URLSession(configuration: configuration)
         super.init()
     }
@@ -130,6 +130,27 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
             #endif
         }
 
+        let isHTTPS = url.scheme?.lowercased() == "https"
+        if isHTTPS, let cached = Self.readRemoteCache(rawURL) {
+            completeSuccess(cached, url: rawURL, callback: callback)
+            Self.scheduleRemoteRefresh(rawURL, allowHTTPInDebug: allowHTTPInDebug)
+            return
+        }
+
+        loadRemoteFromNetwork(
+            rawURL: rawURL,
+            url: url,
+            persistToCache: isHTTPS,
+            callback: callback
+        )
+    }
+
+    private func loadRemoteFromNetwork(
+        rawURL: String,
+        url: URL,
+        persistToCache: Bool,
+        callback: @escaping LynxTemplateLoadBlock
+    ) {
         var task: URLSessionDataTask?
         task = session.dataTask(with: url) { [weak self] data, response, error in
             guard let self else { return }
@@ -138,22 +159,15 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
 
             do {
                 if let error { throw error }
-                guard let http = response as? HTTPURLResponse else { throw TemplateError.invalidResponse }
-                guard (200 ... 299).contains(http.statusCode) else {
-                    throw TemplateError.httpStatus(http.statusCode)
+                let bundleData = try Self.validateRemoteData(
+                    data,
+                    response: response,
+                    allowHTTPInDebug: self.allowHTTPInDebug
+                )
+                if persistToCache {
+                    _ = Self.writeRemoteCache(rawURL, data: bundleData)
                 }
-                guard let finalURL = http.url else { throw TemplateError.invalidResponse }
-                let finalScheme = finalURL.scheme?.lowercased()
-                let secureFinalURL = finalScheme == "https"
-                #if DEBUG
-                let permittedDebugHTTP = self.allowHTTPInDebug && finalScheme == "http"
-                #else
-                let permittedDebugHTTP = false
-                #endif
-                guard secureFinalURL || permittedDebugHTTP else { throw TemplateError.insecureRedirect }
-                guard let data, !data.isEmpty else { throw TemplateError.emptyBundle }
-                guard data.count <= Self.maximumBundleBytes else { throw TemplateError.bundleTooLarge }
-                self.completeSuccess(data, url: rawURL, callback: callback)
+                self.completeSuccess(bundleData, url: rawURL, callback: callback)
             } catch {
                 self.completeFailure(url: rawURL, error: error, callback: callback)
             }
@@ -161,6 +175,129 @@ public final class ShellTemplateProvider: NSObject, LynxTemplateProvider {
         guard let task else { return }
         trackTask(task)
         task.resume()
+    }
+
+    private static func validateRemoteData(
+        _ data: Data?,
+        response: URLResponse?,
+        allowHTTPInDebug: Bool
+    ) throws -> Data {
+        guard let http = response as? HTTPURLResponse else { throw TemplateError.invalidResponse }
+        guard (200 ... 299).contains(http.statusCode) else {
+            throw TemplateError.httpStatus(http.statusCode)
+        }
+        guard let finalURL = http.url else { throw TemplateError.invalidResponse }
+        let finalScheme = finalURL.scheme?.lowercased()
+        let secureFinalURL = finalScheme == "https"
+        #if DEBUG
+        let permittedDebugHTTP = allowHTTPInDebug && finalScheme == "http"
+        #else
+        let permittedDebugHTTP = false
+        #endif
+        guard secureFinalURL || permittedDebugHTTP else { throw TemplateError.insecureRedirect }
+        guard let data, !data.isEmpty else { throw TemplateError.emptyBundle }
+        guard data.count <= maximumBundleBytes else { throw TemplateError.bundleTooLarge }
+        return data
+    }
+
+    private static let remoteRefreshQueue = DispatchQueue(
+        label: "com.example.lynxshell.direct-https-refresh",
+        qos: .utility
+    )
+    private static let remoteRefreshLock = NSLock()
+    private static var refreshingRemoteURLs = Set<String>()
+    private static let remoteRefreshSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 10
+        configuration.timeoutIntervalForResource = 30
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }()
+
+    private static func scheduleRemoteRefresh(_ rawURL: String, allowHTTPInDebug: Bool) {
+        remoteRefreshLock.lock()
+        guard refreshingRemoteURLs.insert(rawURL).inserted else {
+            remoteRefreshLock.unlock()
+            return
+        }
+        remoteRefreshLock.unlock()
+
+        remoteRefreshQueue.async {
+            guard let url = URL(string: rawURL) else {
+                Self.finishRemoteRefresh(rawURL)
+                return
+            }
+            let task = Self.remoteRefreshSession.dataTask(with: url) { data, response, error in
+                defer { Self.finishRemoteRefresh(rawURL) }
+                guard error == nil else { return }
+                guard let bundleData = try? Self.validateRemoteData(
+                    data,
+                    response: response,
+                    allowHTTPInDebug: allowHTTPInDebug
+                ) else { return }
+                _ = Self.writeRemoteCache(rawURL, data: bundleData)
+            }
+            task.resume()
+        }
+    }
+
+    private static func finishRemoteRefresh(_ rawURL: String) {
+        remoteRefreshLock.lock()
+        refreshingRemoteURLs.remove(rawURL)
+        remoteRefreshLock.unlock()
+    }
+
+    private static func readRemoteCache(_ rawURL: String) -> Data? {
+        let fileURL = remoteCacheFileURL(rawURL)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
+              !data.isEmpty,
+              data.count <= maximumBundleBytes else {
+            return nil
+        }
+        return data
+    }
+
+    /** 只用 URL 生成文件名；这里不计算、不校验 Bundle 内容 SHA-256。 */
+    private static func remoteCacheFileURL(_ rawURL: String) -> URL {
+        let key = SHA256.hash(data: Data(rawURL.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        let directory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0].appendingPathComponent("LynxShell/https-bundles", isDirectory: true)
+        return directory.appendingPathComponent("\(key).lynx.bundle", isDirectory: false)
+    }
+
+    /** 临时文件写完后再替换正式缓存；缓存失败不能阻断在线页面加载。 */
+    private static func writeRemoteCache(_ rawURL: String, data: Data) -> Bool {
+        guard !data.isEmpty, data.count <= maximumBundleBytes else { return false }
+        let fileManager = FileManager.default
+        let target = remoteCacheFileURL(rawURL)
+        let directory = target.deletingLastPathComponent()
+        let temporary = directory.appendingPathComponent(
+            ".\(target.lastPathComponent).\(UUID().uuidString).part",
+            isDirectory: false
+        )
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: temporary, options: .atomic)
+            if fileManager.fileExists(atPath: target.path) {
+                try fileManager.replaceItemAt(
+                    target,
+                    withItemAt: temporary,
+                    backupItemName: nil,
+                    options: []
+                )
+            } else {
+                try fileManager.moveItem(at: temporary, to: target)
+            }
+            return true
+        } catch {
+            try? fileManager.removeItem(at: temporary)
+            return false
+        }
     }
 
     private func normalizedAssetPath(_ rawURL: String) throws -> String {
