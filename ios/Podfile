@@ -13,15 +13,28 @@ target 'LynxShell' do
   pod 'LynxMapKit', :path => 'LynxMapKit'
   # AMap 官方 CocoaPods CDN 尚未同步 2.12.3，使用官方下载包的本地 podspec 固定版本。
   pod 'AMapLocation', :podspec => 'LocalPods/AMapLocation.podspec'
+  # 仅 Debug 构建链接端内调试工具；Release 不包含 DebugKit、面板或诊断缓存。
+  pod 'LynxShellDebugKit', :path => '.', :configurations => ['Debug']
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
+      if ['LynxShellKit', 'LynxShellDebugKit'].include?(target.name)
+        if config.name == 'Debug'
+          # Pod 与 App 分别编译，显式保证诊断源码只在 Pod 的 Debug 配置可用。
+          config.build_settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) DEBUG'
+        else
+          # 生产编译任务不读取真实诊断源码；公共调用点另由 #if DEBUG 一并移除。
+          excluded = target.name == 'LynxShellKit' ? ['LynxDebugBridge.swift'] : ['*.swift', 'LynxDebugHttpCapture.m']
+          config.build_settings['EXCLUDED_SOURCE_FILE_NAMES'] = ['$(inherited)'] + excluded
+        end
+      end
       config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
       config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
       disable = ['-Wno-error', '-Wno-c99-designator',
-                 '-Wno-deprecated-declarations', '-Wno-deprecated-implementations']
+                 '-Wno-deprecated-declarations', '-Wno-deprecated-implementations',
+                 '-Wno-error=unused-result']
       ['OTHER_CPLUSPLUSFLAGS', 'OTHER_CFLAGS'].each do |key|
         flags = config.build_settings[key] || ['$(inherited)']
         flags = [flags] unless flags.is_a?(Array)

@@ -1,5 +1,8 @@
 import LynxShellKit
 import LynxMapKit
+#if DEBUG
+import LynxShellDebugKit
+#endif
 import UIKit
 
 /** Sample 启动时通过显式 Module Interface 准备 Lynx Runtime。 */
@@ -24,6 +27,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
            !apiKey.contains("$(") {
             LynxMapModuleRuntime.configureAMap(apiKey: apiKey, privacyAgreed: true)
         }
+        LynxDebugTool.install()
         if ProcessInfo.processInfo.arguments.contains("--lynx-monitor-diagnostic") {
             let provider = LynxMonitorDiagnosticProvider()
             diagnosticProvider = provider

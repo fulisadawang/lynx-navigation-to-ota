@@ -20,6 +20,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.example.lynxshell.R
 import com.example.lynxshell.LynxShell
 import com.example.lynxshell.LynxRouter
+// LYNX_DEBUG_TOOL_BEGIN
+import com.example.lynxshell.debug.LynxDebugBridge
+// LYNX_DEBUG_TOOL_END
 import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.monitoring.BundleIdentities
@@ -362,6 +365,9 @@ class LynxShellActivity : AppCompatActivity() {
         templateProvider = null
         lynxView?.let { oldView ->
             LynxEnvironmentCoordinator.unbind(oldView)
+            // LYNX_DEBUG_TOOL_BEGIN
+            LynxDebugBridge.detach(oldView)
+            // LYNX_DEBUG_TOOL_END
             lynxViewClient?.let(oldView::removeLynxViewClient)
             container.removeView(oldView)
             oldView.destroy()
@@ -665,6 +671,9 @@ class LynxShellActivity : AppCompatActivity() {
         templateProvider = null
         lynxView?.let { view ->
             LynxEnvironmentCoordinator.unbind(view)
+            // LYNX_DEBUG_TOOL_BEGIN
+            LynxDebugBridge.detach(view)
+            // LYNX_DEBUG_TOOL_END
             lynxViewClient?.let(view::removeLynxViewClient)
             container.removeView(view)
             view.destroy()
@@ -765,6 +774,9 @@ class LynxShellActivity : AppCompatActivity() {
         templateProvider?.close()
         templateProvider = null
         LynxEnvironmentCoordinator.unbind(view)
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.detach(view)
+        // LYNX_DEBUG_TOOL_END
         lynxViewClient?.let(view::removeLynxViewClient)
         container.removeView(view)
         view.destroy()
@@ -827,6 +839,9 @@ class LynxShellActivity : AppCompatActivity() {
     override fun onPause() {
         monitoringVisible = false
         monitoringView?.visibility(Visibility.HIDDEN)
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.updateVisibility(lynxView, "hidden")
+        // LYNX_DEBUG_TOOL_END
         routerPageId()?.let { pageId ->
             ShellMessageHub.sendLifecycle(pageId, "covered", "activity_on_pause")
         }
@@ -838,6 +853,9 @@ class LynxShellActivity : AppCompatActivity() {
         super.onResume()
         monitoringVisible = true
         monitoringView?.visibility(Visibility.VISIBLE)
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.updateVisibility(lynxView, "visible")
+        // LYNX_DEBUG_TOOL_END
         restoreContentReleasedForRouteSnapshot()
         syncColorScheme()
         routerPageId()?.let { pageId ->
@@ -881,6 +899,9 @@ class LynxShellActivity : AppCompatActivity() {
         templateProvider = null
         lynxView?.let { view ->
             LynxEnvironmentCoordinator.unbind(view)
+            // LYNX_DEBUG_TOOL_BEGIN
+            LynxDebugBridge.detach(view)
+            // LYNX_DEBUG_TOOL_END
             lynxViewClient?.let(view::removeLynxViewClient)
             view.destroy()
         }

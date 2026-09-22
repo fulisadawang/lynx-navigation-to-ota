@@ -135,7 +135,11 @@ def expected_files() -> None:
 
 
 def parse_xml_and_plist() -> None:
-    xml_files = list((ROOT / "android").rglob("*.xml"))
+    # Gradle/Lint 的生成目录可能包含扩展名为 XML 的二进制缓存，仅校验受维护的配置。
+    xml_files = [
+        path for path in (ROOT / "android").rglob("*.xml")
+        if not {"build", ".gradle"}.intersection(path.relative_to(ROOT / "android").parts)
+    ]
     xml_files.append(ROOT / "ios/LynxShellSample/Supporting/LaunchScreen.storyboard")
     errors: list[str] = []
     for path in xml_files:

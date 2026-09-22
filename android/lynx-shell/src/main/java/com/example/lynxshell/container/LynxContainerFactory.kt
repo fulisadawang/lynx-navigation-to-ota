@@ -2,6 +2,9 @@ package com.example.lynxshell.container
 
 import android.app.Activity
 import android.view.View
+// LYNX_DEBUG_TOOL_BEGIN
+import com.example.lynxshell.debug.LynxDebugBridge
+// LYNX_DEBUG_TOOL_END
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.monitoring.LynxViewMonitor
 import com.example.lynxshell.resource.ShellTemplateProvider
@@ -23,6 +26,9 @@ object LynxContainerFactory {
         lynxViewClient: LynxViewClient? = null,
         bundleMetadata: Map<String, Any>? = null,
         monitoring: LynxViewMonitor? = null,
+        // LYNX_DEBUG_TOOL_BEGIN
+        containerKind: String = "page",
+        // LYNX_DEBUG_TOOL_END
     ): LynxView {
         val initialLayout = ShellGlobalPropsFactory.captureLayout(activity)
         val builder = LynxViewBuilder()
@@ -61,6 +67,16 @@ object LynxContainerFactory {
                 initialLayout = initialLayout,
             )
             lynxView.updateGlobalProps(TemplateData.fromMap(globalProps))
+            // LYNX_DEBUG_TOOL_BEGIN
+            LynxDebugBridge.attach(
+                view = lynxView,
+                viewId = monitoring?.viewId,
+                containerKind = containerKind,
+                request = request,
+                bundleMetadata = bundleMetadata,
+                globalProps = globalProps,
+            )
+            // LYNX_DEBUG_TOOL_END
         }
     }
 }

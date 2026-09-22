@@ -165,6 +165,8 @@ dependencies {
     // 示例 App 只显式依赖可复用 Lynx Android Library。
     implementation(project(":lynx-shell"))
     implementation(project(":lynx-map"))
+    // Debug 入口、NativeModule 和面板不进入 Release 依赖图。
+    debugImplementation(project(":lynx-debug-tool"))
 
     // 下面仅是示例启动页自身使用的 Android UI 依赖，不属于 Lynx Runtime。
     implementation("androidx.core:core-ktx:1.15.0")

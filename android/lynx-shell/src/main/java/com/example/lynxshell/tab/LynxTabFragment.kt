@@ -11,6 +11,9 @@ import androidx.core.view.setPadding
 import androidx.fragment.app.Fragment
 import com.example.lynxshell.LynxShell
 import com.example.lynxshell.LynxRouter
+// LYNX_DEBUG_TOOL_BEGIN
+import com.example.lynxshell.debug.LynxDebugBridge
+// LYNX_DEBUG_TOOL_END
 import com.example.lynxshell.bridge.LynxRouterPageInfo
 import com.example.lynxshell.bridge.ShellMessageHub
 import com.example.lynxshell.container.LynxContainerFactory
@@ -100,6 +103,9 @@ class LynxTabFragment : Fragment() {
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
         monitoringView?.visibility(if (hidden || !isResumed) Visibility.HIDDEN else Visibility.VISIBLE)
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.updateVisibility(lynxView, if (hidden || !isResumed) "hidden" else "visible")
+        // LYNX_DEBUG_TOOL_END
         if (hidden) {
             lynxView?.onEnterBackground()
         } else {
@@ -111,6 +117,9 @@ class LynxTabFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         monitoringView?.visibility(if (isHidden) Visibility.HIDDEN else Visibility.VISIBLE)
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.updateVisibility(lynxView, if (isHidden) "hidden" else "visible")
+        // LYNX_DEBUG_TOOL_END
         if (!isHidden) {
             lynxView?.onEnterForeground()
             syncColorScheme()
@@ -119,6 +128,9 @@ class LynxTabFragment : Fragment() {
 
     override fun onPause() {
         monitoringView?.visibility(Visibility.HIDDEN)
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.updateVisibility(lynxView, "hidden")
+        // LYNX_DEBUG_TOOL_END
         lynxView?.onEnterBackground()
         super.onPause()
     }
@@ -228,6 +240,9 @@ class LynxTabFragment : Fragment() {
         templateProvider?.close()
         templateProvider = null
         LynxEnvironmentCoordinator.unbind(lynxView)
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.detach(lynxView)
+        // LYNX_DEBUG_TOOL_END
         lynxView?.destroy()
         lynxView = null
         releaseCurrentLease()
@@ -300,6 +315,9 @@ class LynxTabFragment : Fragment() {
             lynxViewClient = client,
             bundleMetadata = bundleMetadata,
             monitoring = monitoringView,
+            // LYNX_DEBUG_TOOL_BEGIN
+            containerKind = "tab",
+            // LYNX_DEBUG_TOOL_END
         )
         lynxView = created
         host.addView(
@@ -336,6 +354,9 @@ class LynxTabFragment : Fragment() {
         templateProvider?.close()
         templateProvider = null
         LynxEnvironmentCoordinator.unbind(lynxView)
+        // LYNX_DEBUG_TOOL_BEGIN
+        LynxDebugBridge.detach(lynxView)
+        // LYNX_DEBUG_TOOL_END
         lynxView?.destroy()
         lynxView = null
         releaseCurrentLease()

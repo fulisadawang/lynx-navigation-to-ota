@@ -4,6 +4,9 @@ import android.app.Activity
 import android.app.Application
 import android.os.Build
 import android.os.Bundle
+// LYNX_DEBUG_TOOL_BEGIN
+import com.example.lynxshell.debug.LynxDebugBridge
+// LYNX_DEBUG_TOOL_END
 import com.example.lynxshell.BuildConfig
 import java.util.ArrayDeque
 import java.util.UUID
@@ -220,6 +223,9 @@ internal class MonitorRuntime(val host: HostContext, val config: MonitorConfig) 
             }
             val event = try { item.materialize() } catch (_: Exception) { count("projection_error"); continue }
             if (event.wireBytes() > MAX_EVENT_BYTES) { count("oversize.${event.eventType.wire}"); continue }
+            // LYNX_DEBUG_TOOL_BEGIN
+            LynxDebugBridge.record(event)
+            // LYNX_DEBUG_TOOL_END
             val result = try {
                 if (event.eventType !in provider.capabilities.supportedEvents) HandoffResult.UNSUPPORTED else provider.record(event)
             } catch (_: Exception) { HandoffResult.PROVIDER_ERROR }

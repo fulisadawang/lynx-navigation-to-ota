@@ -60,6 +60,9 @@ PODS:
   - LynxServiceAPI/Core (4.1.0):
     - LynxServiceAPI/Native
   - LynxServiceAPI/Native (4.1.0)
+  - LynxShellDebugKit (1.0.0):
+    - LynxService/Http (= 4.1.0)
+    - LynxShellKit
   - LynxShellKit (1.0.0):
     - Lynx/Framework (= 4.1.0)
     - LynxMapKit (= 1.0.0)
@@ -154,6 +157,7 @@ PODS:
 DEPENDENCIES:
   - AMapLocation (from `LocalPods/AMapLocation.podspec`)
   - LynxMapKit (from `LynxMapKit`)
+  - LynxShellDebugKit (from `.`)
   - LynxShellKit (from `.`)
 
 SPEC REPOS:
@@ -181,6 +185,8 @@ EXTERNAL SOURCES:
     :podspec: LocalPods/AMapLocation.podspec
   LynxMapKit:
     :path: LynxMapKit
+  LynxShellDebugKit:
+    :path: "."
   LynxShellKit:
     :path: "."
 
@@ -195,6 +201,7 @@ SPEC CHECKSUMS:
   LynxMapKit: 6c977c839cd9d53a81d148e59d8defafc6f22dc7
   LynxService: 4e390c8080eff4bc3d3f4e2133379c2942191c1b
   LynxServiceAPI: 79446ba6dcea4353b8e2e5b77ec9f34603c0a054
+  LynxShellDebugKit: 10349253672a9bc52fbafe0c3a5f807dd2e807f1
   LynxShellKit: e9585351441f5301a98b6a50f0ae695c2c38fd0d
   LynxTextra: 82539791caa56e964cde427f05cff24ed3736d36
   MJRefresh: ff9e531227924c84ce459338414550a05d2aea78
@@ -205,6 +212,6 @@ SPEC CHECKSUMS:
   ServalSVG: 19bf88f72dae928c28a744c9b91475a3691ded42
   XElement: 81b11cf09c9b2c773bfc3b9b631811502328016b
 
-PODFILE CHECKSUM: 238a6353b088090e8c5526613cd97b574fb8024f
+PODFILE CHECKSUM: 01ea626fdff3ece1a02edc0fb9d3f0d517702325
 
 COCOAPODS: 1.17.0
