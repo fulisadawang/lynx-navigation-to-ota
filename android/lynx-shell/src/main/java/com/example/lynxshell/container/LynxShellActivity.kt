@@ -184,7 +184,7 @@ class LynxShellActivity : AppCompatActivity() {
             overlay = transitionOverlay,
             targetContent = container,
             restoredAfterRecreation = savedInstanceState != null,
-            onSystemBackCommit = { LynxNavigator.commitSystemBack(this) },
+            onSystemBackCommit = { animated -> LynxNavigator.commitSystemBack(this, animated) },
         )
         transitionCoordinator.setBackGestureEnabled(request.backGestureEnabled)
         errorView.onRetry = { renderPage(resetOtaRecovery = true) }
@@ -199,13 +199,17 @@ class LynxShellActivity : AppCompatActivity() {
      */
     @Suppress("DEPRECATION")
     private fun configureTransitionWindowAnimations() {
-        if (LynxTransitionIntent.transactionID(intent) == null) return
+        val customTransition = LynxTransitionIntent.transactionID(intent) != null
+        val instantOpen = intent.flags and android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION != 0
+        if (!customTransition && !instantOpen) return
         if (Build.VERSION.SDK_INT >= 34) {
-            overrideActivityTransition(
-                OVERRIDE_TRANSITION_CLOSE,
-                R.anim.lynx_no_animation,
-                R.anim.lynx_no_animation,
-            )
+            if (customTransition) {
+                overrideActivityTransition(
+                    OVERRIDE_TRANSITION_CLOSE,
+                    R.anim.lynx_no_animation,
+                    R.anim.lynx_no_animation,
+                )
+            }
             overrideActivityTransition(
                 OVERRIDE_TRANSITION_OPEN,
                 R.anim.lynx_no_animation,
@@ -789,7 +793,7 @@ class LynxShellActivity : AppCompatActivity() {
         forceTransaction: Boolean = false,
         routeKey: String? = null,
         transactionReason: String? = null,
-        commit: () -> Unit,
+        commit: (animated: Boolean) -> Unit,
     ): Boolean = transitionCoordinator.requestBack(
         animated = animated,
         useStoredTransition = useStoredTransition,
@@ -805,14 +809,17 @@ class LynxShellActivity : AppCompatActivity() {
         if (!::transitionCoordinator.isInitialized) {
             // 路由解析失败等极早期错误页也复用 Navigator 的 finish 前后 suppress，
             // 避免显式 ticket 在异常分支重新出现系统 close 动画。
-            LynxNavigator.commitSystemBack(this)
+            LynxNavigator.commitSystemBack(
+                this,
+                animated = LynxTransitionIntent.transactionID(intent) == null,
+            )
             return
         }
         val accepted = transitionCoordinator.requestBack(
             animated = true,
             useStoredTransition = true,
-        ) {
-            LynxNavigator.commitSystemBack(this)
+        ) { animated ->
+            LynxNavigator.commitSystemBack(this, animated)
         }
         if (!accepted) return
     }

@@ -50,7 +50,7 @@ class LynxTransitionCoordinator(
     private val overlay: FrameLayout,
     private val targetContent: View,
     restoredAfterRecreation: Boolean,
-    private val onSystemBackCommit: () -> Unit,
+    private val onSystemBackCommit: (animated: Boolean) -> Unit,
 ) : LynxCompatEdgeGestureDelegate {
     private enum class PopRenderer {
         BASIC,
@@ -130,7 +130,7 @@ class LynxTransitionCoordinator(
             if (canStartInteractiveSystemBack()) {
                 compatTouchDriving = false
                 beginPop(
-                    commit = onSystemBackCommit,
+                    commit = { onSystemBackCommit(false) },
                     useStoredTransition = true,
                     gestureDriven = true,
                 )
@@ -236,8 +236,8 @@ class LynxTransitionCoordinator(
     /**
      * Toolbar、NativeModules.close/back、批量 pop 共用这一入口。
      *
-     * 即使快照缺失或 useStoredTransition=false，也只播放本地内容层 fallback；不会把事件
-     * 交回 Activity 默认 Window 动画。
+     * 普通页面由系统 Window 执行 POP；显式自定义转场及其 fallback 由内容层独占。
+     * commit 的参数仅控制最终 Activity Window 动画，不改变页面栈语义。
      */
     fun requestBack(
         animated: Boolean,
@@ -247,7 +247,7 @@ class LynxTransitionCoordinator(
         forceTransaction: Boolean = false,
         routeKey: String? = null,
         transactionReason: String? = null,
-        commit: () -> Unit,
+        commit: (animated: Boolean) -> Unit,
     ): Boolean {
         if (destroyed || animator != null || interactiveActive) {
             Log.w(
@@ -261,14 +261,23 @@ class LynxTransitionCoordinator(
         val invocationSpec = transitionSpecOverride ?: storedTicket?.spec?.copy(
             // 旧 push 如果已经降级，未显式覆盖的 pop 延续其 effective style，不能重新
             // 尝试一遍已经失败的 shared/open renderer。
-            style = storedTicket.effectiveTransition,
-        ) ?: LynxTransitionSpec(
-            style = LynxTransitionStyle.FADE,
-            fallbackStyle = LynxTransitionStyle.FADE,
-            explicitlyRequested = true,
-        )
+            style = if (
+                storedTicket.effectiveTransition == LynxTransitionStyle.NONE &&
+                storedTicket.spec.durationMs == 0L
+            ) {
+                storedTicket.spec.style
+            } else {
+                storedTicket.effectiveTransition
+            },
+        ) ?: LynxTransitionSpec()
 
-        if (forceTransaction || transitionSpecOverride != null) {
+        if (!invocationSpec.explicitlyRequested && invocationSpec.style == LynxTransitionStyle.DEFAULT) {
+            // 普通关闭直接 finish，由系统合成两个 Window；不先把当前内容淡到空底色。
+            commit(animated)
+            return true
+        }
+
+        if (forceTransaction || transitionSpecOverride != null || storedTicket?.direction == LynxTransitionDirection.PUSH) {
             val oldTransactionID = transactionID
             val popTicket = LynxTransitionRuntime.beginPopTransaction(
                 context = activity,
@@ -297,7 +306,7 @@ class LynxTransitionCoordinator(
         )
         if (motion.style == LynxTransitionStyle.NONE) {
             val reason = currentTicket?.reason ?: motion.reason
-            val commitFailure = runCatching(commit).exceptionOrNull()
+            val commitFailure = runCatching { commit(false) }.exceptionOrNull()
             if (commitFailure != null) {
                 terminal(
                     status = LynxTransitionStatus.FAILED,
@@ -319,7 +328,7 @@ class LynxTransitionCoordinator(
         if (
             currentTicket != null &&
             beginPop(
-                commit = commit,
+                commit = { commit(false) },
                 useStoredTransition = useStoredTransition,
                 gestureDriven = false,
             )
@@ -328,8 +337,7 @@ class LynxTransitionCoordinator(
             return true
         }
 
-        // 无 ticket 的普通 Toolbar 返回也保持内容层可控；显式 ticket 不会落到这里。
-        runFallbackPop(motion.style, motion.durationMs, commit)
+        runFallbackPop(motion.style, motion.durationMs) { commit(false) }
         return true
     }
 
@@ -355,7 +363,7 @@ class LynxTransitionCoordinator(
                 commit = onSystemBackCommit,
             )
         ) {
-            onSystemBackCommit()
+            onSystemBackCommit(false)
         }
     }
 
@@ -420,7 +428,7 @@ class LynxTransitionCoordinator(
             return true
         }
         val accepted = beginPop(
-            commit = onSystemBackCommit,
+            commit = { onSystemBackCommit(false) },
             useStoredTransition = true,
             gestureDriven = true,
         )
@@ -573,7 +581,7 @@ class LynxTransitionCoordinator(
             sheetDragActive = false
             compatTouchDriving = true
             if (beginPop(
-                    commit = onSystemBackCommit,
+                    commit = { onSystemBackCommit(false) },
                     useStoredTransition = true,
                     gestureDriven = true,
                 )
