@@ -2,18 +2,22 @@
 
 技术栈：Swift、UIKit、CocoaPods、Lynx 4.1。
 
-主工程使用 Swift + UIKit；Lynx 能力已经收进显式 CocoaPods Module
-`LynxShellKit`，Sample App 不再直接编译壳源码。`Native/LynxNativeRuntime.m` 是薄
-Objective-C 包装层，保留官方 Lynx 4.1 API 形态。
+主工程使用 Swift + UIKit；Shell Runtime 与地图能力分别收进显式 CocoaPods Module
+`LynxShellKit` 和 `LynxMapKit`，Sample App 不再直接编译壳源码。`Native/LynxNativeRuntime.m`
+是薄 Objective-C 包装层，保留官方 Lynx 4.1 API 形态；地图由 `LynxMapModuleRuntime`
+完成 Config 注册和隐私状态接入。
 
 ## 主要结构
 
-- `LynxShellKit.podspec`：唯一业务接入 Module，统一声明 Lynx 4.1、Service、全量 XElement
-  和内置 OTA 源码。
+- `LynxShellKit.podspec`：Shell/Router 业务接入 Module，统一声明 Lynx 4.1、Service、全量 XElement
+- `LynxMapKit/LynxMapKit.podspec`：独立地图 Module，声明 `lynx-map`、AMap Provider、
+  Search、Location 和高德 SDK 依赖。
 - `OtaIOSSDK/Sources/OtaIOSSDK`：Router 内部 OTA 实现源码；不需要在业务 Podfile 中单独引用。
 - `LynxShell`：业务 App 使用的公开 Interface。
 - `LynxShellSample/AppDelegate / SceneDelegate`：Sample 生命周期与导航器接线。
 - `LynxNativeRuntime`：封装 `LynxEnv`、`LynxConfig`、`LynxView`、globalProps、initData 和布局更新。
+- `LynxMapModuleRuntime`：地图 Module 的宿主接入面，负责 Key/隐私状态、Search/Location Module
+  和 `lynx-map` Native Element 注册；地图实现不回流到 Shell。
 - `LynxContainerViewController`：一个页面一个原生容器；默认隐藏原生导航栏并让
   `LynxView` 延伸到透明状态栏后方，显式自定义路由由壳 animator 与 edge gesture 独占。
 - `ShellTemplateProvider`：本地 / HTTPS Bundle、协议校验、重定向、体积限制、任务取消与错误回传。
@@ -25,7 +29,8 @@ Objective-C 包装层，保留官方 Lynx 4.1 API 形态。
 
 `LynxShellKit.podspec` 已显式声明 `Input`、`BlurView`、`Overlay`、
 `ScrollCoordinator`、`ViewPager`、`WebView`、`SVG`、`Refresh`、`Markdown` 与
-`Behavior` 十一个 subspec（包含 Lynx 4.1 新增的 `Video`）。Sample 的 Podfile 只直接引用本地 `LynxShellKit`。
+`Behavior` 十一个 subspec（包含 Lynx 4.1 新增的 `Video`）。Sample 的 Podfile 同时引用本地
+`LynxShellKit` 和 `LynxMapKit`，Shell 通过依赖关系完成地图接入。
 
 `Behavior` 通过官方 `LYNX_LAZY_REGISTER_*` 机制自动完成组件映射，宿主不重复手工注册。`Native/LynxNativeRuntime.m` 还导入了全部组件公开头和 AutoRegistry 头，作为真实编译时的缺失检测哨兵。`project.yml` 与 Debug/Release Target 均加入 `-ObjC`，保证静态 Framework 内的自动注册类被链接。
 
@@ -40,6 +45,28 @@ cd ios
 pod install
 open LynxShell.xcworkspace
 ```
+
+地图 Debug 构建不会把 Key 写进仓库。需要运行高德地图 Demo 时，从 KMP `capp-iOS` 的
+`Sources/Data/Constants.m` 读取 `AMAP_APPKEY`，通过 `LYNX_AMAP_API_KEY` 注入 Xcode Build
+Setting；Bundle ID 继续使用 KMP Sample 的 `com.huangbaoche.client.store`。例如：
+
+```bash
+KMP_CONSTANTS=/path/to/kmp-hbc-app/capp-iOS/cclx-mpaas-capp/Sources/Data/Constants.m
+export LYNX_AMAP_API_KEY="$(python3 - "$KMP_CONSTANTS" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(r'AMAP_APPKEY\s*=\s*@"([^"\\]+)"', text)
+if not match:
+    raise SystemExit("AMAP_APPKEY not found")
+print(match.group(1))
+PY
+)"
+xcodebuild -workspace LynxShell.xcworkspace -scheme LynxShell \
+  -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
+unset LYNX_AMAP_API_KEY
+```
+
+Key 只进入构建产物的 `LynxMapAPIKey`，不进入 Lynx Bundle、Element props、事件或日志。
 
 重新生成工程：
 
@@ -62,6 +89,7 @@ LynxShellSample/Resources/Bundles
 
 ```ruby
 pod 'LynxShellKit', :path => '../lynx-navigation-to-ota/ios'
+pod 'LynxMapKit', :path => '../lynx-navigation-to-ota/ios/LynxMapKit'
 ```
 
 然后在业务 Scene/Coordinator 中调用 `LynxRouter.install(to:)`；它会同时完成

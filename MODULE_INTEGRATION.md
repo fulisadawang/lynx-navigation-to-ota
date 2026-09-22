@@ -34,6 +34,11 @@ resolve。没有官方折叠数据的平台只报告 capability，不推导双�
 当前源码工程的 Debug 构建默认提供 DevTool、DOM 检查、LogBox 和长按菜单开关；Release 不启用
 调试会话。首次配置默认值后保留 SDK 设置页中的用户选择，切换需要重启的选项不会在下次启动被覆盖。
 
+官方 SDK 的 Inspector 与端内 Console/Network 面板分别管理：Core Debug 初始化器负责官方服务与
+默认开关，端内 Debug Tool 在 Runtime 初始化后安装诊断 SPI、HTTP 观察层和浮球，不重复强开
+DevTool。显式 `activateRuntimeFlags()` 兼容入口仍可由 Android 宿主主动调用。iOS 同样由 Shell
+bootstrap 管理官方开关，DebugKit 仅安装端内诊断能力；两者与主分支地图 Module 同时保留。
+
 - Android：`lynx-shell` 的 Debug variant 独占 `lynx-devtool` / `lynx-service-devtool` 4.1.0，
   在 Runtime 初始化前注册服务及 PrimJS 调试桥，初始化后启用默认开关；额外检查宿主
   `ApplicationInfo.FLAG_DEBUGGABLE`。Release variant 不依赖调试组件并关闭 bootstrap。
@@ -68,6 +73,10 @@ iOS 已执行开发模式 `pod install` 并更新锁文件。Xcode 27.1 本次�
 这不等于 DOM/CSS 编辑、JS 断点、开关重启读回和 Release 产物隔离已全部验收；
 Harmony 本轮未构建运行。参考官方 [接入文档](https://lynxjs.org/guide/start/integrate-lynx-devtool)
 和 [设置页说明](https://lynxjs.org/guide/start/integrate-lynx-devtool-advanced)。
+
+随后与主分支 `386762c`（含地图与端内调试面板）整合时，保留双方接线并重新生成包含 24 个 Pod 的
+开发锁文件；Android/iOS 静态检查 113 项、Harmony 静态检查 95 项通过。该次冲突整合未重新编译或
+执行设备回归，上述模拟器与 Reload 记录对应合并前的 `49a8506` 验收版本，不等同于合并版设备证明。
 
 ## Android
 
@@ -283,16 +292,20 @@ LynxRouter.queryMemoryUsage { snapshot ->
 
 ```text
 ios/
-├── LynxShellKit/          CocoaPods Module 源码
-├── LynxShellKit.podspec   Lynx 4.1、Service、全量 XElement 依赖
+├── LynxShellKit/          Shell Runtime、Router、Container、Bridge、转场
+├── LynxShellKit.podspec   Lynx 4.1、Service、全量 XElement、LynxMapKit 依赖
+├── LynxMapKit/            地图 Element、AMap Provider、Search、Location
+├── LynxMapKit/LynxMapKit.podspec
 └── LynxShellSample/       可运行 App，仅保留 App/Scene/Launcher/Bundles
 ```
 
-当前 Sample 的 Podfile 只有一条直接业务依赖：
+当前 Sample 显式声明 Shell 和地图两个本地 Pod；Shell 仍然是 Router/OTA 的业务入口，地图实现由
+`LynxMapKit` 独立拥有：
 
 ```ruby
 target 'LynxShell' do
   pod 'LynxShellKit', :path => '.'
+  pod 'LynxMapKit', :path => 'LynxMapKit'
 end
 ```
 
@@ -302,6 +315,7 @@ end
 target 'MyApp' do
   use_frameworks! :linkage => :static
   pod 'LynxShellKit', :path => '../lynx-navigation-to-ota/ios'
+  pod 'LynxMapKit', :path => '../lynx-navigation-to-ota/ios/LynxMapKit'
 end
 ```
 
@@ -311,8 +325,9 @@ end
 pod install
 ```
 
-`LynxShellKit.podspec` 自己携带 Lynx、PrimJS、LynxService、SDWebImage 与 XElement
-10 个 subspec。业务 App 不再逐项复制这些 Pod 声明。由于 XElement AutoRegistry 位于
+`LynxShellKit.podspec` 自己携带 Lynx、PrimJS、LynxService、SDWebImage、XElement 和
+`LynxMapKit` 依赖；`LynxMapKit.podspec` 自己携带 AMap3DMap、AMapSearch、AMapLocation。
+业务 App 不再逐项复制这些 Pod 声明。由于 XElement AutoRegistry 位于
 Objective-C 静态 Framework，最终 App Target 仍需：
 
 ```text
@@ -547,6 +562,8 @@ module.emitToNative('log', { action: 'pay' }, callback)
 
 - Module 负责：Lynx Runtime、Service、XElement、Container、NativeModules、资源加载、
   路由状态机、页面转场、媒体桥和 consumer keep rules。
+- `LynxMapKit` 负责：`lynx-map` Native Element、AMap Provider、Search、Location、地图生命周期
+  和地图隐私配置。Shell 仅通过 `LynxMapModuleRuntime` 注册地图 UI/Module，不直接依赖地图实现。
 - 业务 App 负责：Application/Scene 生命周期入口、真实首页/TabBar Router、Bundle
   资源、Release 域名、权限文案、签名和发布配置。
 - Android `Application` 与 iOS `AppDelegate/SceneDelegate` 不进入 Module，避免 SDK

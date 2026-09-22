@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.LynxShell
+import com.example.lynxmap.LynxMapRuntime
 import com.example.lynxshell.monitoring.DiagnosticProvider
 import com.example.lynxshell.monitoring.LynxMonitor
 import com.example.lynxshell.monitoring.MonitorConfig
@@ -19,7 +20,7 @@ import java.net.URI
  * LynxEnv 必须早于任何 LynxView 创建；初始化顺序集中在 RuntimeInitializer，
  * 避免业务 Activity 重复注册 Service 或 Native Module。
  */
-class LynxShellSampleApplication : Application() {
+open class LynxShellSampleApplication : Application() {
     companion object {
         /** Debug Sample 的本地监控实例，供验收页读取快照；不会连接网络或厂商 SDK。 */
         @Volatile
@@ -32,6 +33,7 @@ class LynxShellSampleApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        LynxMapRuntime.configure(this, BuildConfig.AMAP_API_KEY, privacyAgreed = true)
         installLocalMonitoringForDebug()
         val userSelectionDebug = OtaUserSelectionDebug.prepareBeforeInstall(this)
         // 三端统一入口：Android 具体承载仍是 Activity-first；OTA 适配器只在宿主 App 注入。

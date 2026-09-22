@@ -12,7 +12,8 @@ Pod::Spec.new do |spec|
   # 开发 Pod 由 Podfile 的 :path 指定本地源码；该 source 仅满足 Podspec 元数据。
   spec.source = { :git => 'https://github.com/lynx-family/lynx.git', :tag => '4.1.0' }
 
-  spec.platform = :ios, '13.0'
+  # 与 KMP capp-iOS 主 target 的最低系统版本保持一致；高德 11.2.100 也在此边界内接入。
+  spec.platform = :ios, '14.0'
   spec.swift_version = '5.0'
   spec.module_name = 'LynxShellKit'
   spec.static_framework = true
@@ -50,4 +51,6 @@ Pod::Spec.new do |spec|
   spec.dependency 'XElement/Markdown', '4.1.0'
   spec.dependency 'XElement/Video', '4.1.0'
   spec.dependency 'XElement/Behavior', '4.1.0'
+  # 地图能力由独立 LynxMapKit Module 提供；Shell 只负责容器/runtime 接入与 Config 注册。
+  spec.dependency 'LynxMapKit', '1.0.0'
 end

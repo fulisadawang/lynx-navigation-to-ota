@@ -115,6 +115,53 @@ declare let NativeModules: {
     downloadFile(optionsJSON: string, callback: (result: any) => void): void;
     saveDataURL(optionsJSON: string, callback: (result: any) => void): void;
   };
+  LynxMapLocationModule: {
+    getCurrentLocation(
+      optionsJSON: string,
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+    startLocation(
+      optionsJSON: string,
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+    stopLocation(
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+    getAuthorizationStatus(
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+  };
+  LynxMapSearchModule: {
+    searchPOI(
+      optionsJSON: string,
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+    reverseGeocode(
+      optionsJSON: string,
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+    geocode(
+      optionsJSON: string,
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+    searchRoute(
+      optionsJSON: string,
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+    searchTransit(
+      optionsJSON: string,
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+    cancelSearch(
+      callback: (result: { code: number; message?: string; data?: any }) => void,
+    ): void;
+  };
+  /** 仅 Debug 构建注册；Release 页面中该字段不存在。 */
+  LynxDebugModule?: {
+    getSnapshot(callback: (snapshotJSON: string) => void): void;
+    clear(callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void): void;
+    open(callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void): void;
+  };
 };
 
 declare module '@lynx-js/types' {

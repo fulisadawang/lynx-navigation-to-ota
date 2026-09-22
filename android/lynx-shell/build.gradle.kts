@@ -2,6 +2,57 @@ import org.gradle.api.publish.maven.MavenPublication
 import com.android.build.api.variant.BuildConfigField
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.tasks.testing.Test
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileSystemOperations
+import javax.inject.Inject
+
+/** Kotlin 没有条件编译：生产编译只接收移除了显式调试块的共享源码。 */
+@CacheableTask
+abstract class GenerateProductionSources : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceFiles: ConfigurableFileCollection
+
+    @get:Internal
+    abstract val sourceRoot: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @get:Inject
+    abstract val fileSystem: FileSystemOperations
+
+    @TaskAction
+    fun generate() {
+        fileSystem.sync {
+            from(sourceRoot) { include("java/**/*.kt", "java/**/*.java", "kotlin/**/*.kt", "kotlin/**/*.java") }
+            into(outputDirectory)
+        }
+        outputDirectory.get().asFile.walkTopDown().filter { it.isFile }.forEach { file ->
+            var debugBlock = false
+            val production = file.readLines().mapIndexedNotNull { index, line ->
+                when (line.trim()) {
+                    "// LYNX_DEBUG_TOOL_BEGIN" -> {
+                        check(!debugBlock) { "${file.name}:${index + 1} 调试块不能嵌套" }
+                        debugBlock = true
+                        null
+                    }
+                    "// LYNX_DEBUG_TOOL_END" -> {
+                        check(debugBlock) { "${file.name}:${index + 1} 缺少调试块起点" }
+                        debugBlock = false
+                        null
+                    }
+                    else -> if (debugBlock) null else line
+                }
+            }.joinToString("\n", postfix = "\n")
+            check(!debugBlock) { "${file.name} 调试块没有闭合" }
+            check(!production.contains("com.example.lynxshell.debug") && !production.contains("LynxDebugBridge")) {
+                "${file.name} 仍引用 Debug Tool，拒绝生成生产源码"
+            }
+            file.writeText(production)
+        }
+    }
+}
 
 plugins {
     id("com.android.library")
@@ -39,6 +90,9 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    // 主源码按 variant 显式接线，避免 Release 同时编译原文件和生产副本。
+    sourceSets.getByName("main").java.setSrcDirs(emptyList<String>())
+    sourceSets.getByName("main").kotlin.setSrcDirs(emptyList<String>())
     publishing {
         singleVariant("release") {
             withSourcesJar()
@@ -46,7 +100,11 @@ android {
     }
 }
 
+kotlin.sourceSets.getByName("main").kotlin.setSrcDirs(emptyList<String>())
+
 dependencies {
+    implementation(project(":lynx-map"))
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 
@@ -105,6 +163,21 @@ dependencies {
 // 从当前 variant 实际解析到的 Runtime 组件生成版本，不使用业务默认值或声明文本。
 androidComponents {
     onVariants(selector().all()) { variant ->
+        if (variant.buildType == "debug") {
+            variant.sources.java?.addStaticSourceDirectory("src/main/java")
+            variant.sources.java?.addStaticSourceDirectory("src/main/kotlin")
+        } else {
+            val productionSources = tasks.register<GenerateProductionSources>(
+                "generate${variant.name.replaceFirstChar { it.uppercaseChar() }}ProductionSources",
+            ) {
+                sourceRoot.set(layout.projectDirectory.dir("src/main"))
+                sourceFiles.from(fileTree("src/main") {
+                    include("java/**/*.kt", "java/**/*.java", "kotlin/**/*.kt", "kotlin/**/*.java")
+                })
+                outputDirectory.set(layout.buildDirectory.dir("generated/productionSources/${variant.name}"))
+            }
+            variant.sources.java?.addGeneratedSourceDirectory(productionSources, GenerateProductionSources::outputDirectory)
+        }
         val runtimeVersion = providers.provider {
             val versions = variant.runtimeConfiguration.incoming.resolutionResult.allComponents
                 .mapNotNull { it.id as? ModuleComponentIdentifier }

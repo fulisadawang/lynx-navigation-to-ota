@@ -137,7 +137,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
             let request = try LynxRouteParser.request(from: url, optionsJSON: optionsJSON)
             let options = try ShellNavigationOptions.fromJSON(optionsJSON)
             let sourceLynxView = lynxContext?.getLynxView()
-            performNavigation(completion) {
+            performNavigation(method: "open", params: optionsJSON, completion: completion) {
                 ShellNavigator.shared.open(
                     request,
                     options: options,
@@ -155,7 +155,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
      * 与 back(delta) 不同，当前页是 session 首页时也允许 pop 到宿主页。
      */
     public func close(_ completion: @escaping (NSDictionary) -> Void) {
-        performNavigation(completion) { ShellNavigator.shared.close() }
+        performNavigation(method: "close", completion: completion) { ShellNavigator.shared.close() }
     }
 
     /**
@@ -170,7 +170,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
     ) {
         do {
             let options = try ShellNavigationOptions.fromJSON(optionsJSON)
-            performNavigation(completion) {
+        performNavigation(method: "back", params: optionsJSON, completion: completion) {
                 ShellNavigator.shared.back(delta: delta, options: options)
             }
         } catch {
@@ -183,7 +183,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         _ routeKey: String,
         completion: @escaping (NSDictionary) -> Void
     ) {
-        performNavigation(completion) {
+        performNavigation(method: "popTo", params: routeKey, completion: completion) {
             ShellNavigator.shared.popTo(routeKey: routeKey)
         }
     }
@@ -196,7 +196,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
     ) {
         do {
             let options = try ShellNavigationOptions.fromJSON(optionsJSON)
-            performNavigation(completion) {
+            performNavigation(method: "popToWithOptions", params: optionsJSON, completion: completion) {
                 ShellNavigator.shared.popTo(routeKey: routeKey, options: options)
             }
         } catch {
@@ -206,7 +206,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
 
     /** 保留兼容签名：关闭当前 Lynx session 并返回进入前宿主页。 */
     public func closeAll(_ completion: @escaping (NSDictionary) -> Void) {
-        performNavigation(completion) { ShellNavigator.shared.closeAll() }
+        performNavigation(method: "closeAll", completion: completion) { ShellNavigator.shared.closeAll() }
     }
 
     /** closeAll 的可配置版本，主要用于控制动画和防重复窗口。 */
@@ -216,7 +216,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
     ) {
         do {
             let options = try ShellNavigationOptions.fromJSON(optionsJSON)
-            performNavigation(completion) {
+            performNavigation(method: "closeAllWithOptions", params: optionsJSON, completion: completion) {
                 ShellNavigator.shared.closeAll(options: options)
             }
         } catch {
@@ -235,7 +235,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
     ) {
         do {
             let options = try ShellNavigationOptions.fromJSON(optionsJSON)
-            performNavigation(completion) {
+            performNavigation(method: "reLaunch", params: optionsJSON, completion: completion) {
                 ShellNavigator.shared.reLaunch(
                     optionsJSON: optionsJSON,
                     navigationOptions: options
@@ -259,7 +259,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         do {
             let request = try LynxRouteParser.request(from: url, optionsJSON: optionsJSON)
             let options = try ShellNavigationOptions.fromJSON(optionsJSON)
-            performNavigation(completion) {
+            performNavigation(method: "redirect", params: optionsJSON, completion: completion) {
                 ShellNavigator.shared.redirect(request, options: options)
             }
         } catch {
@@ -269,7 +269,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
 
     /** 查询当前 session 的 route、stack、depth、canGoBack 和宿主锚点状态。 */
     public func getNavigationState(_ completion: @escaping (NSDictionary) -> Void) {
-        performNavigation(completion) { ShellNavigator.shared.navigationState() }
+        performNavigation(method: "getNavigationState", completion: completion) { ShellNavigator.shared.navigationState() }
     }
 
     /**
@@ -284,7 +284,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         // 提前校验可以稳定返回 1001；Navigator 仍负责真正写入与回退。
         do {
             _ = try ShellNavigationOptions.withResultJSON(resultJSON)
-            performNavigation(completion) {
+            performNavigation(method: "closeWithResult", params: resultJSON, completion: completion) {
                 ShellNavigator.shared.closeWithResult(resultJSON)
             }
         } catch {
@@ -294,7 +294,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
 
     /** 一次性读取发给当前 entry 的页面结果；没有结果时成功返回 hasResult=false。 */
     public func consumeNavigationResult(_ completion: @escaping (NSDictionary) -> Void) {
-        performNavigation(completion) {
+        performNavigation(method: "consumeNavigationResult", completion: completion) {
             ShellNavigator.shared.consumeNavigationResult()
         }
     }
@@ -564,14 +564,14 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         _ transactionID: String,
         completion: @escaping (NSDictionary) -> Void
     ) {
-        performNavigation(completion) {
+        performNavigation(method: "markTransitionReady", params: transactionID, completion: completion) {
             ShellNavigator.shared.markTransitionReady(transactionID)
         }
     }
 
     /** 低频读取最近一笔原生转场状态，不用于 JS 逐帧回写。 */
     public func getTransitionState(_ completion: @escaping (NSDictionary) -> Void) {
-        performNavigation(completion) {
+        performNavigation(method: "getTransitionState", completion: completion) {
             ShellNavigator.shared.transitionState()
         }
     }
@@ -582,11 +582,32 @@ public final class LynxShellModule: NSObject, LynxContextModule {
      * 参数解析错误由调用方法返回 1001；平台操作的结构化失败由 ShellNavigator 返回。
      */
     private func performNavigation(
-        _ completion: @escaping (NSDictionary) -> Void,
+        method: String,
+        params: String = "{}",
+        completion: @escaping (NSDictionary) -> Void,
         operation: @escaping () -> LynxNavigationResult
     ) {
+#if DEBUG
+        let startTimeMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let viewId = LynxDebugBridge.viewId(for: lynxContext?.getLynxView())
+#endif
         DispatchQueue.main.async {
-            completion(Self.result(operation()))
+            let value = operation()
+#if DEBUG
+            LynxDebugBridge.recordMethod(
+                LynxDebugMethodInvocation(
+                    name: method,
+                    params: params,
+                    viewId: viewId,
+                    startTimeMs: startTimeMs,
+                    endTimeMs: Int64(Date().timeIntervalSince1970 * 1000),
+                    code: value.code,
+                    success: value.code == 0,
+                    result: value.message
+                )
+            )
+#endif
+            completion(Self.result(value))
         }
     }
 

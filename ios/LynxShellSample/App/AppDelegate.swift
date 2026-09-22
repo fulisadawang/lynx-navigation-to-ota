@@ -1,4 +1,8 @@
 import LynxShellKit
+import LynxMapKit
+#if DEBUG
+import LynxShellDebugKit
+#endif
 import UIKit
 
 /** Sample 启动时通过显式 Module Interface 准备 Lynx Runtime。 */
@@ -16,6 +20,14 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         LynxShell.bootstrap()
 #if DEBUG
+        // 模拟器验收通过显式启动参数打开高德授权；生产启动不默认同意隐私协议。
+        if ProcessInfo.processInfo.arguments.contains("--lynx-map-consent-granted"),
+           let apiKey = Bundle.main.object(forInfoDictionaryKey: "LynxMapAPIKey") as? String,
+           !apiKey.isEmpty,
+           !apiKey.contains("$(") {
+            LynxMapModuleRuntime.configureAMap(apiKey: apiKey, privacyAgreed: true)
+        }
+        LynxDebugTool.install()
         if ProcessInfo.processInfo.arguments.contains("--lynx-monitor-diagnostic") {
             let provider = LynxMonitorDiagnosticProvider()
             diagnosticProvider = provider

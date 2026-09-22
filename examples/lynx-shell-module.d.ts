@@ -260,9 +260,17 @@ export interface LynxShellModule {
   ) => void;
 }
 
+/** 仅 Debug 构建注册的 Android 端内存诊断 Module；业务页面必须按可选能力探测。 */
+export interface LynxDebugModule {
+  getSnapshot(callback: (snapshotJSON: string) => void): void;
+  clear(callback: (result: NativeResult) => void): void;
+  open(callback: (result: NativeResult) => void): void;
+}
+
 declare global {
   const NativeModules: {
     LynxShellModule: LynxShellModule;
+    LynxDebugModule?: LynxDebugModule;
   };
 }
 

@@ -42,6 +42,14 @@ LynxView + GlobalProps + NativeModules + XElement
 
 `LynxCapacitorModule` 目前是独立原生能力交付，不是默认 Shell 已注册能力。业务接入前必须显式把对应 Module 加入构建图、注册到 LynxView，并补宿主权限和生命周期接线。README 不把“源码存在”写成“默认 Sample 已可用”。
 
+开发期调试能力见 [Lynx Debug Tool](docs/LYNX_DEBUG_TOOL.md)：Android 使用仅 Debug 的
+`android/lynx-debug-tool`，iOS 使用仅 Debug configuration 的 `LynxShellDebugKit`。
+它们是本项目自有的原生 Debug Module，交互形态参考 Sparkling 但不引入 Sparkling SDK；
+Android/iOS 都提供 App 内全局可拖动入口，当前覆盖页面筛选、容器、Bundle、GlobalProps、Console、真实 Lynx HTTP Network/cURL 和已接入的 Native Method；不宣称
+完整 Lynx DevTool 或 HarmonyOS Debug HAR 已接通。
+生产隔离在编译前完成：Android Release 使用移除调试块后的源码，iOS 使用条件编译与源码排除；
+独立 Debug Module、采集 Bridge 和网络 hook 不进入生产产物。产物检查入口为 `scripts/check_debug_tool_release.py`。
+
 ## 项目结构
 
 ```text

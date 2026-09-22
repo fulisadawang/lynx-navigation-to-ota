@@ -1,0 +1,27 @@
+.route-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.route-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+.route-page { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.route-page--light { background-color: #f0f2f5; }
+.route-page--dark { background-color: #101114; }
+.route-title { color: #111; font-size: 24px; font-weight: 800; }
+.route-description { color: rgba(0, 0, 0, .64); font-size: 14px; line-height: 21px; }
+.route-page--dark .route-title { color: #fff; }
+.route-page--dark .route-description { color: rgba(255, 255, 255, .7); }
+.route-mode-row, .route-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.route-mode, .route-action { padding: 9px 12px; border-radius: 9px; background-color: #d9dde5; }
+.route-mode--active, .route-action { background-color: #087cf9; }
+.route-mode-text, .route-action-text { color: #fff; font-size: 12px; font-weight: 700; }
+.route-action--secondary { background-color: #009995; }
+.route-map-stage { position: relative; width: 100%; height: 320px; }
+.route-map { position: absolute; left: 0; top: 0; width: 100%; height: 320px; }
+.route-map-overlay { position: absolute; left: 12px; right: 12px; top: 12px; padding: 10px; border-radius: 10px; background-color: rgba(255, 255, 255, .9); }
+.route-map-overlay-text { color: #111; font-size: 12px; font-weight: 700; }
+.route-card { display: flex; flex-direction: column; gap: 6px; padding: 13px; border-radius: 12px; background-color: #fff; }
+.route-card--notes { background-color: #eaf7f6; }
+.route-page--dark .route-card { background-color: #1c1d21; }
+.route-page--dark .route-card--notes { background-color: #163331; }
+.route-card-title { color: #111; font-size: 15px; font-weight: 800; }
+.route-card-copy { color: rgba(0, 0, 0, .65); font-size: 12px; line-height: 18px; }
+.route-card-status { color: #007f7a; font-size: 12px; font-weight: 700; }
+.route-page--dark .route-card-title { color: #fff; }
+.route-page--dark .route-card-copy { color: rgba(255, 255, 255, .7); }

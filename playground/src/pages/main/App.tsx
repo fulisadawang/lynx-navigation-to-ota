@@ -16,6 +16,7 @@ interface DemoItem {
   icon: string
   titleKey?: string
   descriptionKey?: string
+  platform?: 'ios' | 'android'
 }
 
 interface Category {
@@ -129,6 +130,26 @@ const CATEGORIES: Category[] = [
       },
     ],
   },
+  {
+    name: '地图能力',
+    icon: '\u{1F5FA}',
+    color: '#087cf9',
+    items: [
+      { title: '高德地图 Native Element', description: '验证原生地图、相机、Marker、Polyline 和生命周期', bundle: 'map-diagnostic.lynx.bundle', icon: '\u{1F5FA}' },
+      { title: '地图固定 / 全屏布局', description: '切换固定宽高、全屏填充和 Lynx overlay 层级', bundle: 'map-layout.lynx.bundle', icon: '\u{1F4D0}' },
+      { title: '滴滴式地图 BottomSheet', description: '全屏地图铺底，Lynx Sheet 吸附三档高度并同步适配地图视野', bundle: 'map-bottom-sheet.lynx.bundle', icon: '\u{1F4E5}' },
+      { title: '地图常见场景清单', description: '进入路线、POI、定位、Marker、图层和性能独立 Demo', bundle: 'map-scenarios.lynx.bundle', icon: '\u{1F5C2}' },
+      { title: '路线渲染实验室', description: '驾车、步行、骑行 polyline、途经点、路况和 fitBounds', bundle: 'map-route-demo.lynx.bundle', icon: '\u{1F6E3}' },
+      { title: '导航产品场景 Demo', description: '驾车总览、公交地铁方案、骑行和步行产品界面', bundle: 'map-navigation-demo.lynx.bundle', icon: '\u{1F698}' },
+      { title: 'Lynx Marker Overlay', description: '把 LynxView 内容投影到地图坐标并跟随地图移动', bundle: 'map-marker-overlay-demo.lynx.bundle', icon: '\u{1F4AC}' },
+      { title: '海量点性能实验', description: '500 / 1000 / 5000 点 MultiPointOverlay 与点击回调', bundle: 'map-mass-points-demo.lynx.bundle', icon: '\u{1F4A0}' },
+      { title: 'Marker 交互实验室', description: '门店 / 车辆 Marker 选中、点击、拖拽和显隐', bundle: 'map-marker-demo.lynx.bundle', icon: '\u{1F4CD}' },
+      { title: '图层与地图样式', description: '底图、实时路况、overlay、文字和建筑物独立控制', bundle: 'map-layer-demo.lynx.bundle', icon: '\u{1F3A8}' },
+      { title: 'POI 与地理编码', description: '关键词 POI、逆地理编码、地理编码和结果 Marker', bundle: 'map-poi-demo.lynx.bundle', icon: '\u{1F50D}' },
+      { title: 'Marker 性能与大场景', description: '20/50/100/200 marker 创建、替换、局部更新和 burst', bundle: 'map-performance.lynx.bundle', icon: '\u{1F4C8}' },
+      { title: '高德定位 SDK', description: '单次定位、连续定位、权限状态和地图定位点回填', bundle: 'map-location.lynx.bundle', icon: '\u{1F4CD}' },
+    ],
+  },
 ]
 
 function HomePage(props: { showPage: boolean; topInset: number }) {
@@ -140,6 +161,13 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
   const [recentUrls, setRecentUrls] = useState<string[]>([])
   const isDark = resolved === 'dark'
   const bundleMeta = readBundleRuntimeMeta()
+  const hostOS = String(((lynx.__globalProps || {}) as unknown as Record<string, unknown>).os || '').toLowerCase()
+  const visibleCategories = CATEGORIES
+    .map((category) => ({
+      ...category,
+      items: category.items.filter((item) => !item.platform || !hostOS || item.platform === hostOS),
+    }))
+    .filter((category) => category.items.length > 0)
 
   useEffect(() => {
     if (props.showPage) {
@@ -394,7 +422,7 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
         </view>
 
         {/* Demo Categories (merged from Showcase) */}
-        {CATEGORIES.map((category) => (
+        {visibleCategories.map((category) => (
           <view key={category.name} className="category-section">
             <view className="category-header">
               <view className="category-icon-circle" style={{ backgroundColor: `${category.color}18` }}>

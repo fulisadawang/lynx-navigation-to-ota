@@ -1,4 +1,11 @@
 PODS:
+  - AMap3DMap (11.2.100):
+    - AMapFoundation (>= 1.9.0)
+  - AMapFoundation (1.9.1)
+  - AMapLocation (2.12.3):
+    - AMapFoundation (>= 1.9.0)
+  - AMapSearch (9.8.1):
+    - AMapFoundation (>= 1.9.0)
   - BaseDevtool (4.1.0):
     - BaseDevtool/framework (= 4.1.0)
   - BaseDevtool/framework (4.1.0):
@@ -75,6 +82,12 @@ PODS:
   - LynxDevtool/LynxCore (4.1.0)
   - LynxDevtool/LynxRecorder (4.1.0):
     - LynxDevtool/Framework
+  - LynxMapKit (1.0.0):
+    - AMap3DMap (= 11.2.100)
+    - AMapLocation (= 2.12.3)
+    - AMapSearch (= 9.8.1)
+    - Lynx/Framework (= 4.1.0)
+    - SDWebImage (= 5.15.5)
   - LynxService/Devtool (4.1.0):
     - Lynx (= 4.1.0)
     - LynxDevtool (= 4.1.0)
@@ -97,8 +110,12 @@ PODS:
   - LynxServiceAPI/Core (4.1.0):
     - LynxServiceAPI/Native
   - LynxServiceAPI/Native (4.1.0)
+  - LynxShellDebugKit (1.0.0):
+    - LynxService/Http (= 4.1.0)
+    - LynxShellKit
   - LynxShellKit (1.0.0):
     - Lynx/Framework (= 4.1.0)
+    - LynxMapKit (= 1.0.0)
     - LynxService/Http (= 4.1.0)
     - LynxService/Image (= 4.1.0)
     - LynxService/Log (= 4.1.0)
@@ -195,10 +212,13 @@ PODS:
     - Lynx (= 4.1.0)
 
 DEPENDENCIES:
+  - AMapLocation (from `LocalPods/AMapLocation.podspec`)
   - DebugRouter (= 5.0.15)
   - DebugRouter/MessageTransceiverEnable (= 5.0.15)
   - LynxDevtool (= 4.1.0)
+  - LynxMapKit (from `LynxMapKit`)
   - LynxService/Devtool (= 4.1.0)
+  - LynxShellDebugKit (from `.`)
   - LynxShellKit (from `.`)
 
 SPEC REPOS:
@@ -211,6 +231,9 @@ SPEC REPOS:
     - LynxServiceAPI
     - XElement
   trunk:
+    - AMap3DMap
+    - AMapFoundation
+    - AMapSearch
     - DebugRouter
     - libwebp
     - LynxTextra
@@ -223,19 +246,31 @@ SPEC REPOS:
     - SocketRocket
 
 EXTERNAL SOURCES:
+  AMapLocation:
+    :podspec: LocalPods/AMapLocation.podspec
+  LynxMapKit:
+    :path: LynxMapKit
+  LynxShellDebugKit:
+    :path: "."
   LynxShellKit:
     :path: "."
 
 SPEC CHECKSUMS:
+  AMap3DMap: 4718171fccb20e827d48ce9cefb20d67f35441f1
+  AMapFoundation: 8c511ce0584873bc6febb071365b2bfd62ce4a11
+  AMapLocation: 0e734da87ca13c9b6ece580c08821a1e57fe32a8
+  AMapSearch: bbbaa101ed94f3b51ab3a867d030a5336555138e
   BaseDevtool: 6f1625a8d8f99dcc0b5d3b798b75c03e00fd5e46
   DebugRouter: f0323a03519feabd12f553f0da7ac7931873a0ea
   libwebp: af5937a13536ef73f3784d69cc342b98961acf33
   Lynx: b9a0812cb5b0f1ff6efba8cc1d1d5c094a23f632
   LynxBase: 4d2fdb403f161e8fce8af3db8bddee50c8f1fe3e
   LynxDevtool: 45d2c62996dc5435010a020341d70fade6b219f5
+  LynxMapKit: 6c977c839cd9d53a81d148e59d8defafc6f22dc7
   LynxService: 4e390c8080eff4bc3d3f4e2133379c2942191c1b
   LynxServiceAPI: 79446ba6dcea4353b8e2e5b77ec9f34603c0a054
-  LynxShellKit: 89a2a1c9c3e1698b9c792864af90618e4b76b527
+  LynxShellDebugKit: 10349253672a9bc52fbafe0c3a5f807dd2e807f1
+  LynxShellKit: e9585351441f5301a98b6a50f0ae695c2c38fd0d
   LynxTextra: 82539791caa56e964cde427f05cff24ed3736d36
   MJRefresh: ff9e531227924c84ce459338414550a05d2aea78
   PrimJS: 2bb7f0e0c314cc81f6dc53aa814082b66f149e7c
@@ -246,6 +281,6 @@ SPEC CHECKSUMS:
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   XElement: 81b11cf09c9b2c773bfc3b9b631811502328016b
 
-PODFILE CHECKSUM: e9574d028b0a0a0dad55d9c44117487c8991e054
+PODFILE CHECKSUM: 9e35f5b3ceafc38ceacc555082878a8e9c74119e
 
 COCOAPODS: 1.17.0
