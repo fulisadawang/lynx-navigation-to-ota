@@ -286,10 +286,10 @@ data class LynxTransitionSpec(
                 ?.let(LynxRoutePreset::fromWireName)
             val transition = options.optionalObject("transition")
             val transparent = options.optBoolean("transparent", false)
-            // animated=false 也是调用方明确要求“无动画”，必须进入 Runtime 的双重
-            // Window suppress 通道，不能因为没写 transition 而落回系统默认 Window 动画。
+            // animated 只控制本次操作，不能把普通页面永久归入自定义转场。
+            // 普通无动画打开由 Activity Window 禁用 OPEN，后续 POP 独立选择。
             val explicitlyRequested =
-                routePreset != null || transition != null || transparent || !animated
+                routePreset != null || transition != null || transparent
             val routeConfigValue = options.optionalObject("routeConfig")
             var routeConfig = routeConfigValue?.let(::parseRouteConfig)
                 ?: LynxRouteConfig()

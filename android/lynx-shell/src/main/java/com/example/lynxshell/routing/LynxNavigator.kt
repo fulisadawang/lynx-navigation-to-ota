@@ -633,11 +633,12 @@ object LynxNavigator {
     }
 
     /** Toolbar/系统返回的最终提交点；交互 cancel 不会调用到这里。 */
-    fun commitSystemBack(activity: LynxShellActivity) {
+    @JvmOverloads
+    fun commitSystemBack(activity: LynxShellActivity, animated: Boolean = true) {
         LynxNavigationRegistry.entryFor(activity)?.let { entry ->
             AndroidNavigationResultStore.remove(activity, entry.entryID)
         }
-        finishActivity(activity, animated = false)
+        finishActivity(activity, animated)
     }
 
     private fun launch(
@@ -783,10 +784,17 @@ object LynxNavigator {
             forceTransaction = true,
             routeKey = currentEntry?.routeKey,
             transactionReason = batchSnapshotReason,
-        ) {
+        ) { windowAnimated ->
             beforeCommit()
-            // coordinator 已经完成唯一一段视觉动画；批量 finish 全部静默提交。
-            finishEntries(context, entries, animated = false)
+            if (windowAnimated) {
+                // 先静默移除中间页，最后关闭可见页，让系统只对最终目标做一次 POP。
+                val (visible, covered) = entries.partition { it.activity.get() === currentActivity }
+                finishEntries(context, covered, animated = false)
+                finishEntries(context, visible, animated = true)
+            } else {
+                // 自定义转场已完成内容层动画，或调用方显式关闭动画。
+                finishEntries(context, entries, animated = false)
+            }
         }
     }
 

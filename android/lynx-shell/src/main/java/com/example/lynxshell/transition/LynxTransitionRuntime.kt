@@ -77,11 +77,6 @@ object LynxTransitionRuntime {
         )
         val resolvedSpec = spec.copy(
             durationMs = motion.durationMs,
-            reverseDurationMs = if (motion.style == LynxTransitionStyle.NONE) {
-                0L
-            } else {
-                spec.reverseDurationMs
-            },
         )
         // LynxShellActivity 可释放 LynxView、保留 Activity 身份并在返回时重建。宿主原生
         // Activity 没有统一重建协议，只能明确报告边界，不能擅自销毁业务页面。
@@ -131,7 +126,8 @@ object LynxTransitionRuntime {
                 resolvedSpec.routePreset != null ||
                 !resolvedSpec.routeConfig.opaque ||
                 !resolvedSpec.routeConfig.maintainState
-        val shouldSnapshot = (motion.style != LynxTransitionStyle.NONE || requiresSourceSnapshot) &&
+        // 打开无动画不取消以后独立选择的 POP；自定义反向转场仍需来源快照。
+        val shouldSnapshot = (spec.style != LynxTransitionStyle.NONE || requiresSourceSnapshot) &&
             resolvedSpec.routeConfig.allowEnterRouteSnapshotting
         if (!shouldSnapshot) {
             if (motion.style != LynxTransitionStyle.NONE && requiresSourceSnapshot) {
