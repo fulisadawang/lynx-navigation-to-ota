@@ -10,6 +10,8 @@ import okhttp3.Request
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -20,9 +22,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Lynx Bundle 的唯一加载入口。
  *
  * - assets:// 与 Explorer 的 file://lynx?local:// 走 APK assets。
- * - https:// 走 OkHttp，不限制 Host。
+ * - https:// 优先读取应用私有的 Direct Bundle 缓存，并在本地命中后后台重新下载。
  * - http:// 仅 Debug 且页面明确允许时开放。
  * - 路径、响应码、最终重定向协议和最大体积都必须通过校验。
+ * - Direct Bundle 缓存不进入 OTA Store，不参与 appId、Manifest、release 或回滚。
  * - Activity 重试或销毁时调用 [close]，旧请求不会再回调已销毁的 LynxView。
  */
 class ShellTemplateProvider(
@@ -92,7 +95,7 @@ class ShellTemplateProvider(
         uri.startsWith("https://", ignoreCase = true) -> loadRemote(uri)
         uri.startsWith("http://", ignoreCase = true) -> {
             require(BuildConfig.DEBUG && allowHttpInDebug) { "明文 HTTP Bundle 已被宿主拒绝" }
-            loadRemote(uri)
+            downloadRemote(uri, trackForClose = true)
         }
         else -> loadAsset(uri)
     }
@@ -154,10 +157,22 @@ class ShellTemplateProvider(
     }
 
     private fun loadRemote(uri: String): ByteArray {
+        val cacheFile = remoteCacheFile(uri)
+        readRemoteCache(cacheFile)?.let { bytes ->
+            scheduleRemoteRefresh(uri, cacheFile)
+            return bytes
+        }
+
+        val bytes = downloadRemote(uri, trackForClose = true)
+        writeRemoteCache(cacheFile, bytes)
+        return bytes
+    }
+
+    private fun downloadRemote(uri: String, trackForClose: Boolean): ByteArray {
         val request = Request.Builder().url(uri).get().build()
 
         val call = httpClient.newCall(request)
-        activeCalls += call
+        if (trackForClose) activeCalls += call
         try {
             call.execute().use { response ->
                 val finalUrl = response.request.url
@@ -177,7 +192,58 @@ class ShellTemplateProvider(
                 return bytes
             }
         } finally {
-            activeCalls -= call
+            if (trackForClose) activeCalls -= call
+        }
+    }
+
+    private fun remoteCacheFile(uri: String): File {
+        val directory = File(appContext.filesDir, REMOTE_CACHE_DIRECTORY)
+        return File(directory, "${urlCacheKey(uri)}.lynx.bundle")
+    }
+
+    /** 只用 URL 生成文件名；这里不计算、不校验 Bundle 内容 SHA-256。 */
+    private fun urlCacheKey(uri: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(uri.toByteArray(Charsets.UTF_8))
+        return digest.joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xff) }
+    }
+
+    private fun readRemoteCache(file: File): ByteArray? {
+        if (!file.isFile) return null
+        return runCatching { loadFile(file) }.getOrNull()
+    }
+
+    private fun scheduleRemoteRefresh(uri: String, file: File) {
+        if (!refreshingRemoteUrls.add(uri)) return
+        ioExecutor.execute {
+            try {
+                val bytes = downloadRemote(uri, trackForClose = false)
+                writeRemoteCache(file, bytes)
+            } catch (_: Exception) {
+                // 后台刷新失败只保留当前缓存，不影响已经加载的页面。
+            } finally {
+                refreshingRemoteUrls.remove(uri)
+            }
+        }
+    }
+
+    /** 临时文件写完后再替换正式缓存；缓存失败不能阻断首次在线加载。 */
+    private fun writeRemoteCache(file: File, bytes: ByteArray): Boolean {
+        if (bytes.isEmpty() || bytes.size > MAX_BUNDLE_BYTES) return false
+        val directory = file.parentFile ?: return false
+        if (!directory.isDirectory && !directory.mkdirs() && !directory.isDirectory) return false
+        val temporary = runCatching { File.createTempFile(".${file.name}.", ".part", directory) }.getOrNull()
+            ?: return false
+        return try {
+            FileOutputStream(temporary, false).use { output ->
+                output.write(bytes)
+                output.fd.sync()
+            }
+            temporary.renameTo(file)
+        } catch (_: Exception) {
+            false
+        } finally {
+            if (temporary.exists()) temporary.delete()
         }
     }
 
@@ -195,11 +261,13 @@ class ShellTemplateProvider(
     companion object {
         private const val ASSET_PREFIX = "assets://"
         private const val EXPLORER_LOCAL_PREFIX = "file://lynx?local://"
+        private const val REMOTE_CACHE_DIRECTORY = "lynx-https-bundles"
         private const val MAX_BUNDLE_BYTES = 20L * 1024L * 1024L
 
         private val ioExecutor: ExecutorService = Executors.newCachedThreadPool { runnable ->
             Thread(runnable, "lynx-template-loader").apply { isDaemon = true }
         }
+        private val refreshingRemoteUrls = ConcurrentHashMap.newKeySet<String>()
 
         private val httpClient: OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
