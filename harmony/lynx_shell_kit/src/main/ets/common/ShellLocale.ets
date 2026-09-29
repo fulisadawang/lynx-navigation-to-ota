@@ -15,15 +15,17 @@ export interface ShellLocaleCapabilities {
 }
 
 /**
- * 宿主级语言状态。appLocale 是页面实际使用的有效语言，
- * appLocaleOverride 只表示用户是否保存了 App 覆盖值。
+ * 宿主级语言状态。locale/effectiveLocale 是页面使用的语言；
+ * appLocale/appLocaleOverride 只表示用户是否保存了 App 覆盖值。
  */
 export interface ShellLocaleStateValue {
   schemaVersion: number;
   revision: number;
   timestampMillis: number;
   systemLocale: string;
-  appLocale: ShellLocaleTag;
+  locale: ShellLocaleTag;
+  effectiveLocale: ShellLocaleTag;
+  appLocale: ShellLocaleTag | null;
   appLocaleOverride: ShellLocaleTag | null;
   formatLocale: ShellLocaleTag;
   requestedLocale?: string;
@@ -47,7 +49,7 @@ export interface ShellLocaleMutation {
  * Harmony 壳的 App Locale Store。
  *
  * 语言选择写入普通 Preferences，不进入 OTA Store、Manifest 或页面路由快照。
- * 该类只维护状态和持久化边界，页面翻译资源由各自 Lynx Bundle 管理。
+ * 该类只维护状态和持久化边界；页面用当前 Bundle 内的文案响应语言变化。
  */
 export default class ShellLocaleState {
   static readonly STORAGE_KEY: string = ShellConstants.STORAGE_LOCALE_OVERRIDE;
@@ -213,7 +215,9 @@ export default class ShellLocaleState {
       revision: revision,
       timestampMillis: new Date().getTime(),
       systemLocale: systemLocale,
-      appLocale: effective,
+      locale: effective,
+      effectiveLocale: effective,
+      appLocale: override,
       appLocaleOverride: override,
       formatLocale: effective,
       language: effective === 'en-US' ? 'en' : 'zh',

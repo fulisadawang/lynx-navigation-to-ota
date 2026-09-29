@@ -9,6 +9,7 @@ public enum OtaEnvironment: String, Codable, CaseIterable, Sendable {
 public enum OtaAppID: String, Codable, CaseIterable, Sendable {
     case capp
     case gapp
+    case template
 }
 
 public enum OtaDefaults {
@@ -172,6 +173,7 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
     public let platforms: [OtaPlatform]?
     public let status: OtaReleaseStatus
     public let bundles: [OtaBundleArtifact]
+    public let asyncBundleManifest: OtaAsyncManifestReference?
 
     enum CodingKeys: String, CodingKey {
         case env
@@ -183,6 +185,8 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         case platforms
         case status
         case bundles
+        case asyncBundleManifest
+        case i18nRequirement
     }
 
     public init(
@@ -193,7 +197,8 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         platform: OtaPlatform,
         platforms: [OtaPlatform]? = nil,
         bundles: [OtaBundleArtifact],
-        status: OtaReleaseStatus = .active
+        status: OtaReleaseStatus = .active,
+        asyncBundleManifest: OtaAsyncManifestReference? = nil
     ) {
         self.env = env
         self.app = app
@@ -203,6 +208,7 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         self.platforms = platforms
         self.status = status
         self.bundles = bundles
+        self.asyncBundleManifest = asyncBundleManifest
     }
 
     public init(from decoder: Decoder) throws {
@@ -219,6 +225,11 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         platforms = try container.decodeIfPresent([OtaPlatform].self, forKey: .platforms)
         status = try container.decode(OtaReleaseStatus.self, forKey: .status)
         bundles = try container.decode([OtaBundleArtifact].self, forKey: .bundles)
+        asyncBundleManifest = try container.decodeIfPresent(OtaAsyncManifestReference.self, forKey: .asyncBundleManifest)
+        if container.contains(.i18nRequirement) {
+            throw DecodingError.dataCorruptedError(forKey: .i18nRequirement, in: container,
+                debugDescription: "旧独立 Catalog Release 不可激活，请发布内含语言资源的 Bundle")
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -231,6 +242,7 @@ public struct OtaReleaseManifest: Codable, Equatable, Sendable {
         try container.encodeIfPresent(platforms, forKey: .platforms)
         try container.encode(status, forKey: .status)
         try container.encode(bundles, forKey: .bundles)
+        try container.encodeIfPresent(asyncBundleManifest, forKey: .asyncBundleManifest)
     }
 }
 
@@ -513,13 +525,15 @@ public struct OtaInstalledRelease: Codable, Equatable, Sendable {
     public let bundles: [OtaInstalledBundle]
     public var selection: OtaStoredSelection?
     public var identityEpoch: UInt64?
+    public let asyncBundleManifest: OtaAsyncManifestReference?
 
-    public init(context: OtaCurrentReleaseContext, installedAt: Date, bundles: [OtaInstalledBundle], selection: OtaStoredSelection? = nil, identityEpoch: UInt64? = nil) {
+    public init(context: OtaCurrentReleaseContext, installedAt: Date, bundles: [OtaInstalledBundle], selection: OtaStoredSelection? = nil, identityEpoch: UInt64? = nil, asyncBundleManifest: OtaAsyncManifestReference? = nil) {
         self.context = context
         self.installedAt = installedAt
         self.bundles = bundles
         self.selection = selection
         self.identityEpoch = identityEpoch
+        self.asyncBundleManifest = asyncBundleManifest
     }
 }
 
@@ -955,6 +969,7 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
     public let selection: OtaSelectionMetadata?
     public let versionCodeRange: OtaVersionCodeRange?
     public let changedBundles: [OtaBundleArtifact]
+    public let asyncBundleManifest: OtaAsyncManifestReference?
 
     enum CodingKeys: String, CodingKey {
         case env
@@ -975,6 +990,8 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         case selection
         case versionCodeRange
         case changedBundles
+        case asyncBundleManifest
+        case i18nRequirement
     }
 
     public init(
@@ -994,7 +1011,8 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         releaseSequence: String? = nil,
         selection: OtaSelectionMetadata? = nil,
         versionCodeRange: OtaVersionCodeRange? = nil,
-        changedBundles: [OtaBundleArtifact]
+        changedBundles: [OtaBundleArtifact],
+        asyncBundleManifest: OtaAsyncManifestReference? = nil
     ) {
         self.env = env
         self.app = app
@@ -1013,6 +1031,7 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         self.selection = selection
         self.versionCodeRange = versionCodeRange
         self.changedBundles = changedBundles
+        self.asyncBundleManifest = asyncBundleManifest
     }
 
     public init(from decoder: Decoder) throws {
@@ -1038,6 +1057,11 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         selection = try container.decodeIfPresent(OtaSelectionMetadata.self, forKey: .selection)
         versionCodeRange = try container.decodeIfPresent(OtaVersionCodeRange.self, forKey: .versionCodeRange)
         changedBundles = try container.decode([OtaBundleArtifact].self, forKey: .changedBundles)
+        asyncBundleManifest = try container.decodeIfPresent(OtaAsyncManifestReference.self, forKey: .asyncBundleManifest)
+        if container.contains(.i18nRequirement) {
+            throw DecodingError.dataCorruptedError(forKey: .i18nRequirement, in: container,
+                debugDescription: "旧独立 Catalog Release 不可激活，请发布内含语言资源的 Bundle")
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1059,6 +1083,7 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
         try container.encodeIfPresent(selection, forKey: .selection)
         try container.encodeIfPresent(versionCodeRange, forKey: .versionCodeRange)
         try container.encode(changedBundles, forKey: .changedBundles)
+        try container.encodeIfPresent(asyncBundleManifest, forKey: .asyncBundleManifest)
     }
 
     public func asManifest() -> OtaReleaseManifest {
@@ -1070,7 +1095,8 @@ public struct OtaLatestBundleList: Codable, Equatable, Sendable {
             platform: platform,
             platforms: platforms,
             bundles: changedBundles,
-            status: status
+            status: status,
+            asyncBundleManifest: asyncBundleManifest
         )
     }
 }

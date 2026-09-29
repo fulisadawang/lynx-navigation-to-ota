@@ -70,9 +70,31 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
   private val allowLocalHTTPForTest: Boolean = false,
   private val environment: OtaModels.Environment = OtaModels.Environment.TEST,
 ) : OtaReleaseStore {
+  private val sidecars = OtaSidecarDisk(storageRoot, environment, allowLocalHTTPForTest, capacityProbe)
   @Volatile private var userContext: OtaUserContextBox? = null
   internal fun bindUserContext(context: OtaUserContextBox) { userContext = context }
-  private val validationCache = ConcurrentHashMap<ValidationKey, Unit>()
+  private val validationCache = VerifiedOtaFileCache()
+
+  /** 下载只进入不可变 Async 资源快照，不移动代码 current。 */
+  fun stageAsyncResources(manifest: OtaModels.ReleaseManifest) {
+    val ref = manifest.asyncBundleManifest ?: return
+    sidecars.stageAsync(manifest.lynxAppId, ref, manifest.bundles.map { it.bundlePath }.toSet(), ::validateSidecarIdentity)
+  }
+
+  private fun validateSidecarIdentity() { userContext?.operation() }
+
+  fun pinStagedSidecars(manifest: OtaModels.ReleaseManifest): AutoCloseable =
+    sidecars.pinStaged(manifest.lynxAppId, manifest.asyncBundleManifest,
+      manifest.bundles.map { it.bundlePath }.toSet())
+
+  fun reserveSidecars(appId: String, asyncRef: OtaSidecarModels.AsyncManifestRef?): AutoCloseable =
+    sidecars.reserveStage(appId, asyncRef)
+
+  fun resourcesComplete(release: OtaModels.InstalledRelease): Boolean = runCatching {
+    sidecars.requireAsync(release.context.lynxAppId, release.asyncBundleManifest,
+      release.bundles.map { it.bundlePath }.toSet())
+    true
+  }.getOrDefault(false)
   @Volatile
   private var latestMetrics = ContentAddressedOperationMetrics(
     operation = "none",
@@ -132,6 +154,22 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     else -> null
   }
 
+  private fun normalizeUnavailableRefs(state: StateRecord): StateRecord {
+    fun resolvable(ref: Ref): Boolean = try { resolveRef(state.scope, ref) != null }
+    catch (error: OtaSelectionException) { throw error }
+    catch (_: Exception) { false }
+    fun usable(ref: Ref): Boolean = eligible(ref, state) && resolvable(ref)
+    val candidate = state.candidate?.takeIf { usable(it.release) }
+    if (eligible(state.current, state) &&
+      (state.current.kind == RefKind.EMBEDDED || resolvable(state.current))) {
+      return state.copy(candidate = candidate)
+    }
+    val next = state.previous?.takeIf { it.selection?.kind != OtaSelectionKind.GRAY && usable(it) }
+      ?: Ref(RefKind.EMBEDDED, resolveEmbedded(state.scope)?.context?.releaseId ?: "embedded", null)
+    // 旧 current 暂留 previous；不可读根会阻止 GC 清掉其主包与 Async 对象。
+    return state.copy(current = next, previous = state.current, candidate = candidate)
+  }
+
   override fun recordDecision(scope: ReleaseTransaction.ReleaseScope, decision: OtaLastDecision, selection: OtaStoredSelection?) {
     withStorageLock {
       val identity = selectionContext() ?: throw OtaSelectionException("requires_store_v3")
@@ -143,6 +181,11 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
         val oldRevision = OtaSelectionValidation.decimal(old.policyRevision, allowZero = true)
         if (revision < oldRevision || (revision == oldRevision && (old.action != decision.action || old.targetReleaseId != decision.targetReleaseId))) throw OtaSelectionException("stale_decision")
       }
+      val normalized = normalizeUnavailableRefs(state)
+      if (normalized != state) {
+        state = normalized.copy(generation = state.generation + 1L, selectionSchemaVersion = 1)
+        writeStateAtomic(state)
+      }
       fun refresh(ref: Ref?): Ref? = ref?.let { if (selection != null && it.releaseId == decision.targetReleaseId) it.copy(selection = selection) else it }
       var current = refresh(state.current)!!
       var previous = refresh(state.previous)
@@ -152,6 +195,9 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
       state = state.copy(generation = state.generation + 1L, current = current, previous = previous,
         candidate = state.candidate?.takeIf { decision.action == OtaSelectionAction.USE_RELEASE && it.release.releaseId == decision.targetReleaseId }
           ?.let { it.copy(release = refresh(it.release)!!) }, selectionSchemaVersion = 1, lastDecision = decision)
+      if (state.current.kind == RefKind.DOWNLOADED && resolveRef(scope, state.current) == null) {
+        throw IOException("选择目标的主包或附属资源不完整")
+      }
       faultInjector.check(ContentAddressedFaultPoint.BEFORE_STATE_COMMIT)
       writeStateAtomic(state)
       faultInjector.check(ContentAddressedFaultPoint.AFTER_STATE_COMMIT)
@@ -162,14 +208,9 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     withStorageLock {
       val identity = selectionContext() ?: return@withStorageLock
       appsRoot().listFiles().orEmpty().filter { it.isDirectory && APP_ID_PATTERN.matches(it.name) }.forEach { directory ->
-        var state = readState(directory.name) ?: return@forEach
+        val state = readState(directory.name) ?: return@forEach
         if (state.scope.hostApp != identity.hostApp || state.scope.env != identity.env || state.scope.platform != identity.platform) return@forEach
-        val candidate = state.candidate?.takeIf { eligible(it.release, state) }
-        if (!eligible(state.current, state)) {
-          val next = currentRef(state) ?: Ref(RefKind.EMBEDDED, resolveEmbedded(state.scope)?.context?.releaseId ?: "embedded", null)
-          state = state.copy(current = next, previous = state.current)
-        }
-        writeStateAtomic(state.copy(generation = state.generation + 1L, candidate = candidate, selectionSchemaVersion = 1))
+        writeStateAtomic(normalizeUnavailableRefs(state).copy(generation = state.generation + 1L, selectionSchemaVersion = 1))
       }
     }
   }
@@ -191,6 +232,9 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
   override fun install(request: ReleaseTransaction.InstallRequest): ReleaseTransaction.InstallOutcome {
     userContext?.operation()
     validateManifest(request.scope, request.targetManifest)
+    // 直接调用低层 install 也必须先拥有完整附属快照，不能绕过 SDK stage 顺序。
+    sidecars.requireAsync(request.scope.lynxAppId, request.targetManifest.asyncBundleManifest,
+      request.targetManifest.bundles.map { it.bundlePath }.toSet())
     request.embeddedDescriptor?.let {
       requireScope(ReleaseTransaction.ReleaseScope.fromRelease(it), request.scope, "embedded 描述")
     }
@@ -315,7 +359,8 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
         manifestWriteCount += 1
         val installed = (readManifestRelease(request.scope, request.targetManifest, targetManifestId)
           ?: throw OtaSdkException("OTA v3 Manifest 发布后不可读", null, "manifest_publish_failed")).let {
-          OtaModels.InstalledRelease(it.context, it.installedAt, it.bundles, request.selection, selectionContext()?.identityEpoch)
+          OtaModels.InstalledRelease(it.context, it.installedAt, it.bundles, request.selection, selectionContext()?.identityEpoch,
+            it.asyncBundleManifest)
         }
 
         val publishState = readState(request.scope.lynxAppId)
@@ -352,6 +397,8 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
             publishState?.lastDecision,
           )
         }
+        sidecars.requireAsync(request.scope.lynxAppId, request.targetManifest.asyncBundleManifest,
+          request.targetManifest.bundles.map { it.bundlePath }.toSet())
         faultInjector.check(ContentAddressedFaultPoint.BEFORE_STATE_COMMIT)
         writeStateAtomic(nextState)
         faultInjector.check(ContentAddressedFaultPoint.AFTER_STATE_COMMIT)
@@ -606,6 +653,7 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
         writeStateAtomic(state.copy(generation = state.generation + 1L,
           current = Ref(RefKind.EMBEDDED, embedded?.context?.releaseId ?: "embedded", null), candidate = null))
         faultInjector.check(ContentAddressedFaultPoint.AFTER_ROLLBACK_COMMIT)
+        pruneApp(scope.lynxAppId)
         return@withStorageLock embedded
       }
       if (previous == null || restored == null) return@withStorageLock null
@@ -622,6 +670,7 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     val appId = OtaModels.requireLynxAppId(lynxAppId)
     withStorageLock {
       userContext?.operation()
+      validationCache.evictUnder(appDirectory(appId))
       ensureAppDirectories(appId)
       val state = readState(appId)
       if (selectionContext() != null && state != null) {
@@ -630,9 +679,10 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
           current = Ref(RefKind.EMBEDDED, resolveEmbedded(state.scope)?.context?.releaseId ?: "embedded", null), previous = null, candidate = null))
         faultInjector.check(ContentAddressedFaultPoint.AFTER_STATE_COMMIT)
       } else cleanup(statePath(appId))
+      val app = appDirectory(appId)
+      val hasSidecarDirectory = File(app, "async-bundles").isDirectory
       recoverTransactions(appId)
-      pruneApp(appId)
-      validationCache.clear()
+      pruneApp(appId, includeOrphanSidecars = hasSidecarDirectory)
       setMetrics(latestMetrics.copy(operation = "delete", releaseId = null, result = "success"))
     }
   }
@@ -654,7 +704,7 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
       userContext?.operation()
       appsRoot().listFiles().orEmpty()
         .filter { it.isDirectory && APP_ID_PATTERN.matches(it.name) }
-        .forEach { pruneApp(it.name) }
+        .forEach { pruneApp(it.name, includeOrphanSidecars = true) }
     }
   }
 
@@ -700,10 +750,17 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     val release = resolveRef(scope, ref) ?: return null
     val bundle = findBundle(release, bundleName) ?: return null
     val file = resolveBundle(scope, ref, bundleName) ?: return null
+    val usesSidecars = release.asyncBundleManifest != null
+    val viewResources = if (usesSidecars) sidecars.viewResources(scope.lynxAppId, bundle.bundlePath,
+      release.asyncBundleManifest) else null
     val key = LeaseKey(canonicalOrAbsolute(storageRoot).path, scope.lynxAppId, ref.manifestId ?: ref.releaseId)
+    val token = if (usesSidecars) UUID.randomUUID().toString() else null
     LEASE_COUNTS[key] = (LEASE_COUNTS[key] ?: 0) + 1
-    return ReleaseTransaction.BundleLease(release, bundle, file) {
+    if (token != null) ACTIVE_SIDECAR_LEASES[token] = SidecarLeaseRoot(key.rootPath, scope.lynxAppId,
+      release.asyncBundleManifest)
+    return ReleaseTransaction.BundleLease(release, bundle, file, viewResources) {
       withStorageLock {
+        if (token != null) ACTIVE_SIDECAR_LEASES.remove(token)
         val remaining = (LEASE_COUNTS[key] ?: 0) - 1
         if (remaining > 0) LEASE_COUNTS[key] = remaining else LEASE_COUNTS.remove(key)
         pruneApp(scope.lynxAppId)
@@ -722,13 +779,8 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     val artifact = findBundle(record.manifest, bundleName) ?: return null
     val objectPath = objectPath(scope.lynxAppId, artifact.bundleSha256)
     if (!objectPath.isFile || artifact.size == null || objectPath.length() != artifact.size.toLong()) return null
-    val key = ValidationKey(scope.lynxAppId, ref.manifestId.orEmpty(), artifact.bundlePath, artifact.bundleSha256, objectPath.length(), objectPath.lastModified())
-    if (!validationCache.containsKey(key)) {
-      if (!OtaIO.sha256(objectPath).equals(artifact.bundleSha256, ignoreCase = true)) {
-        validationCache.remove(key)
-        throw transactionError("Bundle 校验失败：$bundleName", "bundle_checksum_failed")
-      }
-      validationCache[key] = Unit
+    if (!validationCache.matches(objectPath, artifact.bundleSha256, artifact.size.toLong())) {
+      throw transactionError("Bundle 校验失败：$bundleName", "bundle_checksum_failed")
     }
     return objectPath
   }
@@ -743,7 +795,8 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
         requireScope(ReleaseTransaction.ReleaseScope.fromManifest(record.manifest), scope, "Manifest")
         readManifestRelease(scope, record.manifest, ref.manifestId!!)?.let {
           if (identity != null) userContext?.validate(identity)
-          OtaModels.InstalledRelease(it.context, it.installedAt, it.bundles, ref.selection, identity?.identityEpoch)
+          OtaModels.InstalledRelease(it.context, it.installedAt, it.bundles, ref.selection, identity?.identityEpoch,
+            it.asyncBundleManifest)
         }
       }
     }
@@ -764,10 +817,14 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     val embedded = resolveEmbedded(scope)
     if (embedded?.context?.releaseId == release.context.releaseId) return true
     if (release.context.lynxAppId != scope.lynxAppId || release.context.platform != scope.platform) return false
-    return release.bundles.all { bundle ->
+    if (!release.bundles.all { bundle ->
       val path = objectPath(scope.lynxAppId, bundle.bundleSha256)
       path.isFile && runCatching { OtaIO.sha256(path).equals(bundle.bundleSha256, ignoreCase = true) }.getOrDefault(false)
-    }
+    }) return false
+    return runCatching {
+      sidecars.requireAsync(scope.lynxAppId, release.asyncBundleManifest, release.bundles.map { it.bundlePath }.toSet())
+      true
+    }.getOrDefault(false)
   }
 
   private fun readManifestRelease(
@@ -797,6 +854,7 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
       ),
       installedAt,
       bundles,
+      asyncBundleManifest = manifest.asyncBundleManifest,
     )
   }
 
@@ -847,21 +905,18 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
   }
 
   private fun manifestObjectsUsable(appId: String, manifest: OtaModels.ReleaseManifest): Boolean {
-    return manifest.bundles.all { hasUsableObject(appId, it.bundleSha256, it.size) }
+    if (!manifest.bundles.all { hasUsableObject(appId, it.bundleSha256, it.size) }) return false
+    if (manifest.asyncBundleManifest == null) return true
+    return runCatching {
+      sidecars.requireAsync(appId, manifest.asyncBundleManifest, manifest.bundles.map { it.bundlePath }.toSet())
+      true
+    }.getOrDefault(false)
   }
 
   private fun hasUsableObject(appId: String, objectID: String, expectedSize: Int?): Boolean {
     val path = objectPath(appId, objectID)
     if (!path.isFile || expectedSize == null || path.length() != expectedSize.toLong()) return false
-    val key = ValidationKey(appId, "object", path.name, objectID, path.length(), path.lastModified())
-    if (validationCache.containsKey(key)) return true
-    return try {
-      val matches = OtaIO.sha256(path).equals(objectID, ignoreCase = true)
-      if (matches) validationCache[key] = Unit
-      matches
-    } catch (_: IOException) {
-      false
-    }
+    return validationCache.matches(path, objectID, expectedSize.toLong())
   }
 
   private fun validateManifest(scope: ReleaseTransaction.ReleaseScope, manifest: OtaModels.ReleaseManifest) {
@@ -887,6 +942,12 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
       if (size > OtaModels.MAX_BUNDLE_BYTES) throw transactionError("Bundle 超过允许大小", OtaModels.ReasonCodes.BUNDLE_TOO_LARGE)
       if (!OtaURLPolicy.isAllowed(artifact.bundleUrl, environment, allowLocalHTTPForTest) || artifact.bundleUrl.userInfo != null || artifact.bundleUrl.fragment != null) {
         throw transactionError("Bundle URL 不允许：${artifact.bundlePath}", OtaModels.ReasonCodes.INVALID_BUNDLE_URL)
+      }
+    }
+    manifest.asyncBundleManifest?.let { ref ->
+      if (!OtaURLPolicy.isAllowed(ref.url, environment, allowLocalHTTPForTest) ||
+        ref.url.userInfo != null || ref.url.fragment != null) {
+        throw transactionError("AsyncBundleManifest URL 不允许", OtaModels.ReasonCodes.INVALID_BUNDLE_URL)
       }
     }
   }
@@ -1009,7 +1070,8 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     if (kind == RefKind.DOWNLOADED && manifestID == null) {
       throw transactionError("downloaded ref 缺少 manifestId", "storage_recovery_failed")
     }
-    return Ref(kind, releaseID, manifestID, map["selection"]?.let { OtaStoredSelection.fromJsonMap(OtaJson.asObject(it, "selection")) })
+    return Ref(kind, releaseID, manifestID,
+      map["selection"]?.let { OtaStoredSelection.fromJsonMap(OtaJson.asObject(it, "selection")) })
   }
 
   private fun writeStateAtomic(state: StateRecord) {
@@ -1098,30 +1160,49 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     )
   }
 
-  private fun pruneApp(appId: String) {
+  private fun pruneApp(appId: String, includeOrphanSidecars: Boolean = false) {
     val app = appDirectory(appId)
     if (!app.isDirectory) return
     val state = try { readState(appId) } catch (_: Exception) { return }
     val retainedManifests = linkedSetOf<String>()
     val retainedObjects = linkedSetOf<String>()
-    fun retain(ref: Ref?) {
-      if (ref?.kind != RefKind.DOWNLOADED || ref.manifestId == null) return
-      retainedManifests += ref.manifestId
-      readManifest(appId, ref.manifestId)?.manifest?.bundles?.forEach { retainedObjects += it.bundleSha256 }
-    }
-    retain(state?.current)
-    retain(state?.previous)
-    retain(state?.candidate?.release)
-    activeLeaseIds(appId).forEach { manifestID ->
+    val retainedAsync = linkedSetOf<OtaSidecarModels.AsyncManifestRef>()
+    fun retain(ref: Ref?): Boolean {
+      if (ref == null || ref.kind != RefKind.DOWNLOADED) return true
+      val manifestID = ref.manifestId ?: return false
+      val record = readManifest(appId, manifestID) ?: return false
+      if (!manifestObjectsUsable(appId, record.manifest)) return false
       retainedManifests += manifestID
-      readManifest(appId, manifestID)?.manifest?.bundles?.forEach { retainedObjects += it.bundleSha256 }
+      record.manifest.bundles.forEach { retainedObjects += it.bundleSha256 }
+      record.manifest.asyncBundleManifest?.let(retainedAsync::add)
+      return true
+    }
+    if (!retain(state?.current) || !retain(state?.previous) || !retain(state?.candidate?.release)) return
+    activeLeaseIds(appId).forEach { manifestID ->
+      val record = readManifest(appId, manifestID) ?: return
+      if (!record.manifest.bundles.all { hasUsableObject(appId, it.bundleSha256, it.size) }) return
+      retainedManifests += manifestID
+      record.manifest.bundles.forEach { retainedObjects += it.bundleSha256 }
+      record.manifest.asyncBundleManifest?.let(retainedAsync::add)
+    }
+    val rootPath = canonicalOrAbsolute(storageRoot).path
+    ACTIVE_SIDECAR_LEASES.values.filter { it.rootPath == rootPath && it.appId == appId }.forEach { lease ->
+      lease.asyncManifest?.let(retainedAsync::add)
     }
     transactionRoot(appId).listFiles().orEmpty().filter(File::isDirectory).forEach { transaction ->
       val meta = File(transaction, TRANSACTION_META_NAME)
-      runCatching {
+      val planned = runCatching {
         val map = OtaJson.asObject(OtaJson.parse(meta.readText(Charsets.UTF_8)), meta.toString())
-        OtaJson.asArray(map["objectIds"], "transaction.objectIds").forEach { retainedObjects += OtaModels.stringValue(it) }
-      }
+        OtaJson.asArray(map["objectIds"], "transaction.objectIds").map { OtaModels.stringValue(it) }
+      }.getOrNull() ?: return
+      if (planned.any { !SHA_PATTERN.matches(it) }) return
+      retainedObjects += planned
+    }
+    val hasSidecarRoots = retainedAsync.isNotEmpty()
+    val hasOrphanSidecarDirectory = includeOrphanSidecars &&
+      File(app, "async-bundles").isDirectory
+    if (hasSidecarRoots || hasOrphanSidecarDirectory) {
+      if (!runCatching { sidecars.prune(appId, retainedAsync) }.getOrDefault(false)) return
     }
     manifestsRoot(appId).listFiles().orEmpty().filter(File::isFile).forEach { path ->
       if (path.name.removeSuffix(".json") !in retainedManifests) cleanup(path)
@@ -1129,7 +1210,10 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     objectRoot(appId).walkTopDown().filter(File::isFile).forEach { path ->
       val objectID = path.name.removeSuffix(".lynx.bundle")
       val normalized = if (objectID.startsWith("sha256:")) objectID else "sha256:$objectID"
-      if (normalized !in retainedObjects) cleanup(path)
+      if (normalized !in retainedObjects) {
+        cleanup(path)
+        validationCache.evict(path)
+      }
     }
     objectRoot(appId).walkBottomUp().filter { it.isDirectory && it != objectRoot(appId) && it.listFiles().isNullOrEmpty() }.forEach(::cleanup)
   }
@@ -1286,7 +1370,8 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     )
   }
 
-  private data class Ref(val kind: RefKind, val releaseId: String, val manifestId: String?, val selection: OtaStoredSelection? = null) {
+  private data class Ref(val kind: RefKind, val releaseId: String, val manifestId: String?,
+    val selection: OtaStoredSelection? = null) {
     fun toJsonMap(): Map<String, Any?> = mapOf(
       "kind" to kind.wireValue,
       "releaseId" to releaseId,
@@ -1302,16 +1387,9 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     val installedAt: Instant,
   )
 
-  private data class ValidationKey(
-    val appId: String,
-    val releaseOrObject: String,
-    val bundlePath: String,
-    val sha256: String,
-    val length: Long,
-    val modifiedAt: Long,
-  )
-
   private data class LeaseKey(val rootPath: String, val appId: String, val manifestID: String)
+  private data class SidecarLeaseRoot(val rootPath: String, val appId: String,
+    val asyncManifest: OtaSidecarModels.AsyncManifestRef?)
   private data class TreeScan(val bytes: Long, val count: Int)
   private enum class RefKind(val wireValue: String) { EMBEDDED("embedded"), DOWNLOADED("downloaded") }
 
@@ -1325,5 +1403,6 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     val PROCESS_LOCKS = ConcurrentHashMap<String, ReentrantLock>()
     val ACTIVE_TRANSACTIONS = ConcurrentHashMap.newKeySet<String>()
     val LEASE_COUNTS = ConcurrentHashMap<LeaseKey, Int>()
+    val ACTIVE_SIDECAR_LEASES = ConcurrentHashMap<String, SidecarLeaseRoot>()
   }
 }

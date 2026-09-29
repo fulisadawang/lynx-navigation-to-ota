@@ -79,12 +79,15 @@ object ShellGlobalPropsFactory {
         request: LynxPageRequest,
         bundleMetadata: Map<String, Any>? = null,
         initialLayout: LynxLayoutSnapshot? = null,
+        locale: LynxLocaleState = LynxLocaleStore.current(activity),
     ): HashMap<String, Any> {
         val props = JsonObjectCodec.toMap(request.globalPropsJson, "globalProps")
+        props.remove("__lynxI18n")
         props.putAll(
             createEnvironment(
                 activity = activity,
                 snapshot = initialLayout ?: captureLayout(activity),
+                locale = locale,
             ),
         )
         // 页面应读取“原生最终采用”的 chrome 状态，而不是调用方可能遗漏或互相冲突的
@@ -100,7 +103,6 @@ object ShellGlobalPropsFactory {
         queryItems["hide_status_bar"] = if (request.hideStatusBar) "1" else "0"
         queryItems["trans_status_bar"] =
             if (request.fullscreen && !request.hideStatusBar) "1" else "0"
-        val locale = LynxLocaleStore.current(activity)
         queryItems["locale"] = locale.effectiveLocale
         queryItems["language"] = locale.language
         props["queryItems"] = queryItems

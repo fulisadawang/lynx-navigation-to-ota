@@ -436,6 +436,7 @@ class LynxShellActivity : AppCompatActivity() {
         preparedBytes: ByteArray?,
         preparedFile: File?,
         bundleMetadata: Map<String, Any>? = null,
+        sidecarResources: com.ota.android.sdk.OtaSidecarViewResources? = null,
     ) {
         val monitoring = monitoringView
         val provider = ShellTemplateProvider(
@@ -508,6 +509,7 @@ class LynxShellActivity : AppCompatActivity() {
                 templateProvider = provider,
                 lynxViewClient = client,
                 bundleMetadata = bundleMetadata,
+                sidecarResources = sidecarResources,
                 monitoring = monitoring,
             )
             // 错误 View 已经在容器中，因此 LynxView 插到最底层。
@@ -648,6 +650,7 @@ class LynxShellActivity : AppCompatActivity() {
                     preparedBytes = value.bytes,
                     preparedFile = value.file,
                     bundleMetadata = bundleRuntimeMetadata,
+                    sidecarResources = value.sidecarResources,
                 )
             },
             onFailure = { error ->

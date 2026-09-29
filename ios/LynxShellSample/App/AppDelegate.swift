@@ -1,6 +1,12 @@
+#if LYNX_SHELL_E2E_CORE_ONLY
+import LynxShellKitE2ECore
+#else
 import LynxShellKit
+#endif
+#if canImport(LynxMapKit)
 import LynxMapKit
-#if DEBUG
+#endif
+#if DEBUG && canImport(LynxShellDebugKit)
 import LynxShellDebugKit
 #endif
 import UIKit
@@ -20,6 +26,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         LynxShell.bootstrap()
 #if DEBUG
+#if canImport(LynxMapKit)
         // 模拟器验收通过显式启动参数打开高德授权；生产启动不默认同意隐私协议。
         if ProcessInfo.processInfo.arguments.contains("--lynx-map-consent-granted"),
            let apiKey = Bundle.main.object(forInfoDictionaryKey: "LynxMapAPIKey") as? String,
@@ -27,7 +34,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
            !apiKey.contains("$(") {
             LynxMapModuleRuntime.configureAMap(apiKey: apiKey, privacyAgreed: true)
         }
+#endif
+#if canImport(LynxShellDebugKit)
         LynxDebugTool.install()
+#endif
         if ProcessInfo.processInfo.arguments.contains("--lynx-monitor-diagnostic") {
             let provider = LynxMonitorDiagnosticProvider()
             diagnosticProvider = provider
@@ -73,6 +83,15 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
             guard summary != self.lastDiagnosticSnapshot else { return }
             self.lastDiagnosticSnapshot = summary
             NSLog("[LynxMonitor] snapshot %@", summary)
+            if ProcessInfo.processInfo.environment["LYNX_TEST_OTA_SIDECAR_REPORT"] == "1" {
+                // 本地 sidecar 验收显式启用；仅保存监控层已脱敏的有界事件，不保存请求头。
+                do {
+                    let destination = FileManager.default.temporaryDirectory.appendingPathComponent("ota-sidecar-monitor.json")
+                    try JSONEncoder().encode(events).write(to: destination, options: .atomic)
+                } catch {
+                    NSLog("[LynxMonitor] 本地 sidecar 报告写入失败")
+                }
+            }
         }
         diagnosticSnapshotTimer = timer
         timer.resume()

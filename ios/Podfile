@@ -17,16 +17,21 @@ target 'LynxShell' do
   pod 'LynxShellDebugKit', :path => '.', :configurations => ['Debug']
 end
 
+# 只供 Async/i18n OTA UI 验收使用，不链接无 arm64 Simulator slice 的地图 SDK。
+target 'LynxShellE2EHost' do
+  pod 'LynxShellKitE2ECore', :path => '.'
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
-      if ['LynxShellKit', 'LynxShellDebugKit'].include?(target.name)
+      if target.name.start_with?('LynxShellKit') || target.name.start_with?('LynxShellDebugKit')
         if config.name == 'Debug'
-          # Pod 与 App 分别编译，显式保证诊断源码只在 Pod 的 Debug 配置可用。
+          # subspec variants 与 App 分别编译，显式保证诊断源码只在 Debug 配置可用。
           config.build_settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) DEBUG'
         else
           # 生产编译任务不读取真实诊断源码；公共调用点另由 #if DEBUG 一并移除。
-          excluded = target.name == 'LynxShellKit' ? ['LynxDebugBridge.swift'] : ['*.swift', 'LynxDebugHttpCapture.m']
+          excluded = target.name.start_with?('LynxShellKit') ? ['LynxDebugBridge.swift'] : ['*.swift', 'LynxDebugHttpCapture.m']
           config.build_settings['EXCLUDED_SOURCE_FILE_NAMES'] = ['$(inherited)'] + excluded
         end
       end

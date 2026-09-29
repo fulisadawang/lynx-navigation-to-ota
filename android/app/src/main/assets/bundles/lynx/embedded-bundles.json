@@ -444,6 +444,29 @@
           "assetPath": "bundles/lynx/10000002/releases/r20260806_dhax5q/same-app.lynx.bundle"
         }
       ]
+    },
+    {
+      "lynxAppId": "10020000",
+      "releaseId": "embedded_20260929_inline_i18n",
+      "bundles": [
+        {
+          "pageId": 1001,
+          "bundleName": "HomePage.lynx.bundle",
+          "bundlePath": "HomePage.lynx.bundle",
+          "size": 143659,
+          "sha256": "sha256:ad31fd1e734d8ebbd4324f92a437f6ae8e0d90dca0ba36f676996f4e64c84dce",
+          "assetPath": "bundles/lynx/10020000/releases/embedded_20260929_inline_i18n/HomePage.lynx.bundle"
+        },
+        {
+          "pageId": 1002,
+          "bundleName": "OtaEcommercePage.lynx.bundle",
+          "bundlePath": "OtaEcommercePage.lynx.bundle",
+          "size": 282830,
+          "sha256": "sha256:376382954ee8ce4e3f4f3598f9f1c82dd737cdb24a421c0360d6bdd2485bd31f",
+          "assetPath": "bundles/lynx/10020000/releases/embedded_20260929_inline_i18n/OtaEcommercePage.lynx.bundle"
+        }
+      ],
+      "sidecarIndexAssetPath": "bundles/lynx/10020000/releases/embedded_20260929_inline_i18n/ota-resources.local.json"
     }
   ]
 }

@@ -100,6 +100,7 @@ export function createNodeAdapters(directory, { allowedOrigins = [], rawResource
             audience: !user ? 'anonymous' : user === 'user_demo_A' ? 'A' : user === 'user_demo_B' ? 'B' : 'other',
             platform: url.searchParams.get('platform'), versioncode: url.searchParams.get('versioncode'), lynxSdkVersion: url.searchParams.get('lynxSdkVersion'),
             clientTokenPresent: Object.keys(options.header ?? {}).some((key) => key.toLowerCase() === 'x-ota-client-token'),
+            resourceSchemaVersion: Object.entries(options.header ?? {}).find(([key]) => key.toLowerCase() === 'x-ota-resource-schema')?.[1],
             conditional: Object.keys(options.header ?? {}).some((key) => key.toLowerCase() === 'if-none-match') };
           audit.http.push(entry);
           const timer = setTimeout(() => controller.abort(), options.readTimeout ?? 30000);
@@ -128,6 +129,13 @@ export function createNodeAdapters(directory, { allowedOrigins = [], rawResource
     },
   };
   const modules = {
+    '@ohos.util': { TextDecoder },
+    '@kit.LocalizationKit': { i18n: { System: { getSystemLocale() { return 'zh-CN'; }, getSystemLanguage() { return 'zh'; } } } },
+    '@kit.ArkData': { preferences: { getPreferencesSync() {
+      const values = new Map();
+      return { getSync(key, fallback) { return values.get(key) ?? fallback; }, putSync(key, value) { values.set(key, value); },
+        deleteSync(key) { values.delete(key); }, flushSync() {} };
+    } } },
     '@ohos.file.fs': fileSystem,
     '@ohos.security.cryptoFramework': cryptoFramework,
     '@ohos.net.http': http,

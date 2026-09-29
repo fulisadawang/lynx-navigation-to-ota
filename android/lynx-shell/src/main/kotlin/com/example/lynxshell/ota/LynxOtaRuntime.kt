@@ -474,6 +474,7 @@ class LynxOtaRuntime(
                 sha256 = embedded.sha256,
                 source = "embedded_baseline",
                 userIdentityEpoch = userIdentityEpoch,
+                sidecarResources = embeddedBundleRegistry.resolveSidecars(embedded),
             )
         }
     }
@@ -538,6 +539,7 @@ class LynxOtaRuntime(
         userIdentityEpoch = lease.release.identityEpoch ?: userIdentityEpoch,
         selectionKind = lease.release.selection?.kind?.wireValue,
         releaseSequence = lease.release.selection?.releaseSequence,
+        sidecarResources = lease.sidecars,
     )
 
     private fun navigationSnapshotRelease(snapshotID: String?, lynxAppId: String): String? {

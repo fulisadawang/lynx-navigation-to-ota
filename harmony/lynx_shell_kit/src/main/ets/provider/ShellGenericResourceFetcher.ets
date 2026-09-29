@@ -12,12 +12,38 @@ import {
 } from '@lynx/lynx';
 import ShellConstants from '../common/ShellConstants';
 import ShellSecurityPolicy from '../common/ShellSecurityPolicy';
+import { OtaAsyncResourceResolver } from '../ota/OtaModels';
 
 /** 字体、图片和通用二进制资源 Fetcher，支持真实取消而不是空实现。 */
 export default class ShellGenericResourceFetcher extends LynxGenericResourceFetcher {
   private readonly activeRequests: Map<string, http.HttpRequest> = new Map();
+  private readonly activeLocalRequests: Set<LynxResourceRequest> = new Set();
+  private readonly asyncResolver?: OtaAsyncResourceResolver;
+  private requestGeneration: number = 0;
+  constructor(asyncResolver?: OtaAsyncResourceResolver) { super(); this.asyncResolver = asyncResolver; }
 
   fetchResource(request: LynxResourceRequest, callback: AsyncCallback<ArrayBuffer, void>): void {
+    const kind = this.asyncResolver?.kind(request.url);
+    if (kind !== null && kind !== undefined) {
+      if (kind === 'bundle') {
+        callback(this.createError(LynxError.LYNX_ERROR_CODE_RESOURCE, 'Bundle 不能作为通用资源加载'), new ArrayBuffer(0));
+        return;
+      }
+      const generation = this.requestGeneration;
+      this.activeLocalRequests.add(request);
+      this.asyncResolver!.resolveBytes(request.url).then((bytes: ArrayBuffer) => {
+        if (generation === this.requestGeneration && this.activeLocalRequests.has(request)) callback(undefined, bytes);
+      }, (error: Error) => {
+        if (generation === this.requestGeneration && this.activeLocalRequests.has(request)) {
+          callback(this.createError(LynxError.LYNX_ERROR_CODE_RESOURCE, `Async 资源本地读取失败：${error}`), new ArrayBuffer(0));
+        }
+      }).finally(() => { this.activeLocalRequests.delete(request); });
+      return;
+    }
+    if (this.asyncResolver !== undefined && request.url.startsWith('webpack:///')) {
+      callback(this.createError(LynxError.LYNX_ERROR_CODE_RESOURCE, '当前代码快照未声明此通用资源'), new ArrayBuffer(0));
+      return;
+    }
     if (ShellSecurityPolicy.isRemoteUrl(request.url)) {
       this.fetchRemote(request, callback);
       return;
@@ -26,6 +52,20 @@ export default class ShellGenericResourceFetcher extends LynxGenericResourceFetc
   }
 
   fetchResourcePath(request: LynxResourceRequest, callback: AsyncCallback<string, void>): void {
+    const kind = this.asyncResolver?.kind(request.url);
+    if (kind !== null && kind !== undefined) {
+      if (kind === 'bundle') {
+        callback(this.createError(LynxError.LYNX_ERROR_CODE_RESOURCE, 'Bundle 不能作为通用资源加载'), '');
+        return;
+      }
+      try { callback(undefined, this.asyncResolver!.resolvePath(request.url)); }
+      catch (error) { callback(this.createError(LynxError.LYNX_ERROR_CODE_RESOURCE, `Async 图片本地路径失败：${error}`), ''); }
+      return;
+    }
+    if (this.asyncResolver !== undefined && request.url.startsWith('webpack:///')) {
+      callback(this.createError(LynxError.LYNX_ERROR_CODE_RESOURCE, '当前代码快照未声明此图片资源'), '');
+      return;
+    }
     if (request.type !== LynxResourceType.LYNX_RESOURCE_TYPE_IMAGE) {
       callback(this.createError(
         LynxError.LYNX_ERROR_CODE_RESOURCE,
@@ -86,6 +126,7 @@ export default class ShellGenericResourceFetcher extends LynxGenericResourceFetc
   }
 
   cancel(request: LynxResourceRequest): void {
+    this.activeLocalRequests.delete(request);
     const active = this.activeRequests.get(request.url);
     if (active !== undefined) {
       active.destroy();
@@ -95,6 +136,8 @@ export default class ShellGenericResourceFetcher extends LynxGenericResourceFetc
 
   /** 容器销毁或重试时批量释放所有通用资源请求。 */
   cancelAll(): void {
+    this.requestGeneration += 1;
+    this.activeLocalRequests.clear();
     this.activeRequests.forEach((request: http.HttpRequest) => request.destroy());
     this.activeRequests.clear();
   }

@@ -3,6 +3,7 @@ import fs from '@ohos.file.fs';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import OtaApiClient from './OtaApiClient';
 import OtaJson from './OtaJson';
+import OtaSidecarStore from './OtaSidecarStore';
 import { OtaUserContext, OtaUserContextBox } from './OtaUserContext';
 import { OtaLastDecision, OtaLatestSelection, OtaSelection, OtaStoredSelection } from './OtaSelection';
 import {
@@ -57,6 +58,7 @@ export default class ContentAddressedOtaStore {
   private leaseReleaseScheduler: (() => void) | null = null;
   private lastOperation: string = 'none';
   private readonly identityBox: OtaUserContextBox;
+  private readonly sidecars: OtaSidecarStore;
   private static readonly runningTransactions: Set<string> = new Set();
   private static readonly sharedLeases: Map<string, number> = new Map();
   private static readonly leasedSelections: Map<string, OtaStoredSelection> = new Map();
@@ -67,6 +69,7 @@ export default class ContentAddressedOtaStore {
     this.root = config.storageDirectory;
     this.identityBox = identityBox ?? new OtaUserContextBox(config);
     this.api.bindUserContext(this.identityBox);
+    this.sidecars = new OtaSidecarStore(config, api, this.identityBox);
     this.testFaultPoint = config.environment.toUpperCase() === 'TEST' ? config.testFaultPoint.trim().toLowerCase() : '';
     this.testAvailableCapacityBytes = config.environment.toUpperCase() === 'TEST' ? config.testAvailableCapacityBytes : -1;
     this.testPausePoint = config.environment.toUpperCase() === 'TEST' ? config.testPausePoint.trim().toLowerCase() : '';
@@ -88,11 +91,20 @@ export default class ContentAddressedOtaStore {
     if (state === null) return null;
     const ref = this.effectiveRef(state, context);
     if (ref === undefined || ref.kind !== 'downloaded') return null;
-    return this.acquireBundleLease(ref, lynxAppId, bundleName, context);
+    try { return this.acquireBundleLease(ref, lynxAppId, bundleName, context); }
+    catch (error) { return null; }
+  }
+
+  hasDownloadedCurrent(lynxAppId: string, context?: OtaUserContext): boolean {
+    const state = this.contextState(lynxAppId, context);
+    if (state === null) return false;
+    const ref = this.effectiveRef(state, context);
+    return ref !== undefined && ref.kind === 'downloaded';
   }
 
   /** 按固定 Release 读取 Bundle；用于同一导航 session 继承旧 Manifest。 */
-  acquireBundleLeaseForRelease(lynxAppId: string, releaseId: string, bundleName: string, manifestId: string = '', context?: OtaUserContext): PreparedPageBundle | null {
+  acquireBundleLeaseForRelease(lynxAppId: string, releaseId: string, bundleName: string, manifestId: string = '',
+    context?: OtaUserContext): PreparedPageBundle | null {
     this.validateContext(context);
     if (manifestId.trim().length > 0 && !context?.selectionEnabled) {
       const pinnedRef: OtaReleaseRef = { kind: 'downloaded', releaseId: releaseId, manifestId: manifestId };
@@ -126,7 +138,8 @@ export default class ContentAddressedOtaStore {
     if (!this.eligible(ref, state, context)) return null;
     if (manifestId.trim().length > 0 && ref.manifestId !== manifestId) return null;
     const manifest = this.readManifest(lynxAppId, ref.manifestId);
-    if (manifest === null || !this.manifestObjectsUsable(lynxAppId, manifest.bundles)) return null;
+    if (manifest === null || !this.manifestObjectsUsable(lynxAppId, manifest.bundles) ||
+      !this.sidecars.verifyBound(lynxAppId, manifest)) return null;
     return this.createManifestLease(lynxAppId, ref.manifestId, ref.selection);
   }
 
@@ -177,30 +190,43 @@ export default class ContentAddressedOtaStore {
     this.ensureAppDirectories(snapshot.lynxAppId);
     this.recoverTransactions(snapshot.lynxAppId);
 
-    const targetManifestId = this.manifestId(snapshot);
     const oldState = this.readState(snapshot.lynxAppId);
     if (oldState !== null) {
       this.ensureScope(oldState, snapshot.lynxAppId);
-      if (oldState.current.kind === 'downloaded' &&
-        oldState.current.releaseId === snapshot.releaseId &&
-        oldState.current.manifestId === targetManifestId &&
-        this.manifestObjectsUsable(snapshot.lynxAppId, snapshot.changedBundles)) {
+      const currentManifest = oldState.current.manifestId === undefined ? null :
+        this.readManifest(snapshot.lynxAppId, oldState.current.manifestId);
+      if (oldState.current.kind === 'downloaded' && oldState.current.releaseId === snapshot.releaseId &&
+        currentManifest !== null && this.sameSnapshot(currentManifest, snapshot) &&
+        this.manifestObjectsUsable(snapshot.lynxAppId, snapshot.changedBundles, true) &&
+        this.sidecars.verifyBound(snapshot.lynxAppId, currentManifest)) {
         this.retireRecoveredTransactions(snapshot.lynxAppId);
+        this.sidecars.retireTransactions(snapshot.lynxAppId);
         this.pruneApp(snapshot.lynxAppId);
         this.lastOperation = 'already_active';
         return;
       }
     }
 
+    if (snapshot.asyncBundleManifest !== undefined) {
+      const mainMissingBytes = snapshot.changedBundles
+        .filter((artifact: OtaBundleArtifact) => !this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size, true))
+        .reduce((total: number, artifact: OtaBundleArtifact) => total + (artifact.size ?? 0), 0);
+      await this.sidecars.prepareAsync(snapshot.lynxAppId, snapshot.asyncBundleManifest,
+        snapshot.changedBundles.map((bundle) => bundle.bundlePath), signal, context, mainMissingBytes);
+    }
+    signal.throwIfCancelled();
+    this.validateContext(context);
+    const targetManifestId = this.manifestId(snapshot);
+
     const reusableTargetObjects = snapshot.changedBundles
-      .filter((artifact: OtaBundleArtifact) => this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size))
+      .filter((artifact: OtaBundleArtifact) => this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size, true))
       .map((artifact: OtaBundleArtifact) => artifact.bundleSha256);
     // 进程可能在 State 提交前被终止；保留事务索引声明的已发布对象，避免预检前 GC
     // 把仍可复用的 CAS Object 当作 orphan 删除。
     const recoveredObjectIds = this.transactionObjectIds(snapshot.lynxAppId);
     this.pruneApp(snapshot.lynxAppId, reusableTargetObjects.concat(recoveredObjectIds));
     const missingBytes = snapshot.changedBundles
-      .filter((artifact: OtaBundleArtifact) => !this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size))
+      .filter((artifact: OtaBundleArtifact) => !this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size, true))
       .reduce((total: number, artifact: OtaBundleArtifact) => total + (artifact.size ?? 0), 0);
     const requiredBytes = missingBytes + ContentAddressedOtaStore.METADATA_ALLOWANCE_BYTES +
       Math.max(ContentAddressedOtaStore.SAFETY_RESERVE_BYTES, Math.ceil(missingBytes * 0.1));
@@ -209,9 +235,7 @@ export default class ContentAddressedOtaStore {
       throw new Error(`OTA v3 预检空间不足：需要 ${requiredBytes} bytes，可用 ${availableBytes} bytes`);
     }
 
-    const transactionId = `${new Date().getTime()}-${Math.floor(Math.random() * 1000000)}`;
-    const transaction = this.transactionDirectory(snapshot.lynxAppId, transactionId);
-    this.ensureDirectory(transaction);
+    const transaction = this.createTransactionDirectory(snapshot.lynxAppId);
     this.writeTextAtomic(`${transaction}/transaction.json`, JSON.stringify({
       schemaVersion: ContentAddressedOtaStore.STORE_SCHEMA_VERSION,
       lynxAppId: snapshot.lynxAppId,
@@ -227,7 +251,7 @@ export default class ContentAddressedOtaStore {
       for (let index = 0; index < snapshot.changedBundles.length; index += 1) {
         signal.throwIfCancelled();
         const artifact = snapshot.changedBundles[index];
-        if (this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size)) {
+        if (this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size, true)) {
           reusedCount += 1;
           continue;
         }
@@ -240,7 +264,7 @@ export default class ContentAddressedOtaStore {
         this.writeBinaryAtomic(part, binary);
         const objectPath = this.objectPath(snapshot.lynxAppId, artifact.bundleSha256);
         this.ensureParent(objectPath);
-        if (this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size)) {
+        if (this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size, true)) {
           this.removeIfPresent(part);
           reusedCount += 1;
         } else {
@@ -280,6 +304,7 @@ export default class ContentAddressedOtaStore {
             objectId: item.bundleSha256
           } as OtaBundleArtifact;
         }),
+        asyncBundleManifest: snapshot.asyncBundleManifest,
         installedAt: new Date().getTime()
       };
       this.checkTestFault('before_manifest_commit');
@@ -302,7 +327,8 @@ export default class ContentAddressedOtaStore {
         lynxAppId: snapshot.lynxAppId,
         platform: snapshot.platform,
         generation: (publishState?.generation ?? 0) + 1,
-        current: { kind: 'downloaded', releaseId: snapshot.releaseId, manifestId: targetManifestId, selection: selected },
+        current: { kind: 'downloaded', releaseId: snapshot.releaseId, manifestId: targetManifestId,
+          selection: selected },
         previous: previous,
         selectionSchemaVersion: context?.selectionEnabled ? 1 : publishState?.selectionSchemaVersion,
         lastDecision: decision ?? publishState?.lastDecision
@@ -316,6 +342,7 @@ export default class ContentAddressedOtaStore {
       this.checkTestFault('after_state_commit_report_failure');
       this.removeIfPresent(transaction);
       this.retireRecoveredTransactions(snapshot.lynxAppId);
+      this.sidecars.retireTransactions(snapshot.lynxAppId);
       this.pruneApp(snapshot.lynxAppId);
       this.lastOperation = `install:${snapshot.releaseId}:downloaded=${downloadedCount}:reused=${reusedCount}`;
     } catch (error) {
@@ -565,7 +592,8 @@ export default class ContentAddressedOtaStore {
             truncated: false,
             manifestId: manifestId,
             bundleCount: manifest.bundles.length,
-            objectIds: manifest.bundles.map((item: OtaBundleArtifact) => item.objectId ?? item.bundleSha256)
+            objectIds: manifest.bundles.map((item: OtaBundleArtifact) => item.objectId ?? item.bundleSha256),
+            asyncManifestId: manifest.asyncBundleManifest?.sha256
           });
         });
     }
@@ -620,6 +648,17 @@ export default class ContentAddressedOtaStore {
     if (prepared === null || ref.kind !== 'downloaded') return prepared;
     const manifestId = ref.manifestId ?? ref.releaseId;
     prepared.lease = this.createManifestLease(appId, manifestId, ref.selection);
+    try {
+      const manifest = this.readManifest(appId, manifestId);
+      if (manifest === null) throw new Error('页面主 Manifest 缺失');
+      if (manifest.asyncBundleManifest !== undefined) {
+        const resources = this.sidecars.preparePage(appId, manifest, prepared.bundleName);
+        prepared.asyncResolver = resources.asyncResolver;
+      }
+    } catch (error) {
+      prepared.lease.close();
+      throw (error as Error);
+    }
     prepared.selection = ref.selection;
     prepared.identityEpoch = context?.identityEpoch;
     prepared.userIdentityEpoch = context?.identityEpoch;
@@ -677,7 +716,8 @@ export default class ContentAddressedOtaStore {
   private resolveRef(ref: OtaReleaseRef, appId: string): PreparedPageBundle | null {
     if (ref.kind !== 'downloaded' || ref.manifestId === undefined) return null;
     const manifest = this.readManifest(appId, ref.manifestId);
-    if (manifest === null || !this.manifestObjectsUsable(appId, manifest.bundles)) return null;
+    if (manifest === null || !this.manifestObjectsUsable(appId, manifest.bundles) ||
+      !this.sidecars.verifyBound(appId, manifest)) return null;
     return {
       lynxAppId: appId,
       bundleName: manifest.bundles[0]?.bundlePath ?? '',
@@ -689,25 +729,32 @@ export default class ContentAddressedOtaStore {
     };
   }
 
-  private manifestObjectsUsable(appId: string, bundles: OtaBundleArtifact[]): boolean {
-    return bundles.every((item: OtaBundleArtifact) => this.hasUsableObject(appId, item.objectId ?? item.bundleSha256, item.size));
+  private manifestObjectsUsable(appId: string, bundles: OtaBundleArtifact[], forceHash: boolean = false): boolean {
+    return bundles.every((item: OtaBundleArtifact) => this.hasUsableObject(appId,
+      item.objectId ?? item.bundleSha256, item.size, forceHash));
   }
 
   private verifyManifestObjects(appId: string, manifest: OtaLocalManifest): void {
-    if (!this.manifestObjectsUsable(appId, manifest.bundles)) throw new Error('Manifest 对象校验失败');
+    if (!manifest.bundles.every((item: OtaBundleArtifact) =>
+      this.hasUsableObject(appId, item.objectId ?? item.bundleSha256, item.size, true))) {
+      throw new Error('Manifest 对象校验失败');
+    }
+    if (!this.sidecars.verifyBound(appId, manifest)) throw new Error('Manifest 附属资源校验失败');
   }
 
-  private hasUsableObject(appId: string, objectId: string, expectedSize: number | undefined): boolean {
+  private hasUsableObject(appId: string, objectId: string, expectedSize: number | undefined,
+    forceHash: boolean = false): boolean {
     if (!/^sha256:[0-9a-fA-F]{64}$/.test(objectId) || expectedSize === undefined) return false;
     const path = this.objectPath(appId, objectId);
     if (!this.isRegularFile(path)) return false;
     const stat = fs.statSync(path);
     if (stat.size !== expectedSize) return false;
     const key = `${appId}|${objectId.toLowerCase()}|${stat.size}|${stat.mtime}|${stat.ctime}|${stat.ino}`;
-    if (this.validatedObjects.has(key)) return true;
+    if (!forceHash && this.validatedObjects.has(key)) return true;
     try {
       const matches = this.sha256File(path).toLowerCase() === objectId.toLowerCase();
       if (matches) this.validatedObjects.set(key, new Date().getTime());
+      else this.validatedObjects.delete(key);
       return matches;
     } catch (error) {
       return false;
@@ -773,6 +820,7 @@ export default class ContentAddressedOtaStore {
     const retainedManifests = new Set<string>();
     this.transactionManifestIds(appId).forEach((manifestId: string) => retainedManifests.add(manifestId));
     const retainedObjects = new Set<string>();
+    const rootedMainManifests: OtaLocalManifest[] = [];
     preservedObjectIds.forEach((objectId: string) => retainedObjects.add(objectId));
     this.transactionObjectIds(appId).forEach((objectId: string) => retainedObjects.add(objectId));
     const retain = (ref: OtaReleaseRef | undefined): boolean => {
@@ -780,16 +828,31 @@ export default class ContentAddressedOtaStore {
       retainedManifests.add(ref.manifestId);
       const manifest = this.readManifest(appId, ref.manifestId);
       if (manifest === null) return false;
-      manifest.bundles.forEach((item: OtaBundleArtifact) => retainedObjects.add(item.objectId ?? item.bundleSha256));
+      rootedMainManifests.push(manifest);
+      for (const item of manifest.bundles) {
+        const objectId = item.objectId ?? item.bundleSha256;
+        if (!this.hasUsableObject(appId, objectId, item.size, true)) return false;
+        retainedObjects.add(objectId);
+      }
       return true;
     };
     if (!retain(state?.current) || !retain(state?.previous)) return;
     const activeLeaseManifestIds = this.activeLeasedManifestIds(appId);
+    let leaseRootsValid = true;
     activeLeaseManifestIds.forEach((manifestId: string) => {
       retainedManifests.add(manifestId);
       const manifest = this.readManifest(appId, manifestId);
-      if (manifest !== null) manifest.bundles.forEach((item: OtaBundleArtifact) => retainedObjects.add(item.objectId ?? item.bundleSha256));
+      if (manifest === null) { leaseRootsValid = false; return; }
+      rootedMainManifests.push(manifest);
+      for (const item of manifest.bundles) {
+        const objectId = item.objectId ?? item.bundleSha256;
+        if (!this.hasUsableObject(appId, objectId, item.size, true)) { leaseRootsValid = false; return; }
+        retainedObjects.add(objectId);
+      }
     });
+    if (!leaseRootsValid) return;
+    try { this.sidecars.prune(appId, rootedMainManifests); }
+    catch (error) { console.warn('附属资源 rooted Manifest 校验失败，本轮不清理'); return; }
     const manifestRoot = this.manifestsRoot(appId);
     if (this.exists(manifestRoot)) {
       fs.listFileSync(manifestRoot).filter((name: string) => name.endsWith('.json')).forEach((name: string) => {
@@ -917,6 +980,10 @@ export default class ContentAddressedOtaStore {
       const localHttp = this.isTestHttpUrl(url);
       if (!url.startsWith('https://') && !(this.config.allowLocalHTTPForTest && this.config.environment.toUpperCase() === 'TEST' && localHttp)) throw new Error(`OTA Bundle URL 不允许：${path}`);
     });
+    if (snapshot.asyncBundleManifest !== undefined &&
+      (snapshot.asyncBundleManifest.schemaVersion !== 1 || !Number.isSafeInteger(snapshot.asyncBundleManifest.size) ||
+        snapshot.asyncBundleManifest.size <= 0 ||
+        !/^sha256:[0-9a-f]{64}$/.test(snapshot.asyncBundleManifest.sha256))) throw new Error('Async 清单引用不合法');
   }
 
   private validateLogicalObjectId(value: string): void {
@@ -924,7 +991,7 @@ export default class ContentAddressedOtaStore {
   }
 
   private manifestId(snapshot: OtaReleaseSnapshot): string {
-    const canonical = [
+    const base = [
       snapshot.env,
       snapshot.hostApp,
       snapshot.lynxAppId,
@@ -935,7 +1002,19 @@ export default class ContentAddressedOtaStore {
         `${item.pageId}|${item.bundlePath}|${item.bundleSha256}|${item.bundleUrl}|${item.size ?? 0}`
       ).join('\n')
     ].join('\n');
-    return this.sha256(this.stringBytes(canonical));
+    return snapshot.asyncBundleManifest === undefined ? this.sha256(this.stringBytes(base)) :
+      OtaUserContext.hash(`${base}\n${JSON.stringify(snapshot.asyncBundleManifest)}`);
+  }
+
+  private sameSnapshot(manifest: OtaLocalManifest, snapshot: OtaReleaseSnapshot): boolean {
+    if (manifest.releaseId !== snapshot.releaseId || manifest.bundles.length !== snapshot.changedBundles.length) return false;
+    if (JSON.stringify(manifest.asyncBundleManifest) !== JSON.stringify(snapshot.asyncBundleManifest)) return false;
+    return manifest.bundles.every((installed, index) => {
+      const expected = snapshot.changedBundles[index];
+      return installed.pageId === expected.pageId && installed.bundlePath === expected.bundlePath &&
+        installed.bundleUrl === expected.bundleUrl && installed.bundleSha256 === expected.bundleSha256 &&
+        installed.size === expected.size;
+    });
   }
 
   private stringBytes(value: string): ArrayBuffer {
@@ -1037,6 +1116,25 @@ export default class ContentAddressedOtaStore {
   private objectsRoot(appId: string): string { return `${this.appDirectory(appId)}/objects`; }
   private transactionRoot(appId: string): string { return `${this.appDirectory(appId)}/transactions`; }
   private transactionDirectory(appId: string, transactionId: string): string { return `${this.transactionRoot(appId)}/${transactionId}`; }
+  private createTransactionDirectory(appId: string): string {
+    const root = this.transactionRoot(appId);
+    this.ensureDirectory(root);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const path = this.transactionDirectory(appId, this.randomToken());
+      try { fs.mkdirSync(path); return path; }
+      catch (error) {
+        if (!this.exists(path)) throw (error as Error);
+      }
+    }
+    throw new Error('无法分配 OTA 事务目录');
+  }
+  private randomToken(): string {
+    let token = '';
+    cryptoFramework.createRandom().generateRandomSync(16).data.forEach((byte: number) => {
+      token += byte.toString(16).padStart(2, '0');
+    });
+    return token;
+  }
   private manifestPath(appId: string, manifestId: string): string { return `${this.manifestsRoot(appId)}/${manifestId}.json`; }
   private objectPath(appId: string, objectId: string): string {
     this.validateLogicalObjectId(objectId);
@@ -1076,7 +1174,7 @@ export default class ContentAddressedOtaStore {
 
   private writeTextAtomic(path: string, raw: string, finalGuard?: () => void): void {
     this.ensureParent(path);
-    const temporary = `${path}.tmp-${new Date().getTime()}-${Math.floor(Math.random() * 1000000)}`;
+    const temporary = `${path}.tmp-${this.randomToken()}`;
     const file = fs.openSync(temporary, fs.OpenMode.WRITE_ONLY | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
     try { fs.writeSync(file.fd, raw); fs.fsyncSync(file.fd); } finally { fs.closeSync(file); }
     try {

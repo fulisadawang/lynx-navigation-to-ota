@@ -7,6 +7,7 @@ import android.os.Looper
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -48,12 +49,40 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_launcher)
 
+        if (BuildConfig.DEBUG && (BuildConfig.LYNX_OTA_DEVICE_E2E || BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E)) {
+            findViewById<TextView>(R.id.launcher_description).text =
+                if (BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E) {
+                    "APK 内置资源 · 10020000；主 Bundle 与 Async Bundle 来自 APK assets，中英文随各自 Bundle。"
+                } else {
+                    "本机 TEST · template / 10020000；主 Bundle 与 Async Bundle 经 OTA 下载，中英文随各自 Bundle。"
+                }
+            findViewById<MaterialButton>(R.id.open_playground_button).visibility = View.GONE
+            findViewById<MaterialButton>(R.id.open_native_tab_demo_button).visibility = View.GONE
+            findViewById<MaterialButton>(R.id.open_monitoring_acceptance_button).visibility = View.GONE
+            if (BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E) {
+                findViewById<MaterialButton>(R.id.open_ota_storage_inspector_button).visibility = View.GONE
+                findViewById<MaterialButton>(R.id.manual_sync_all_ota_button).visibility = View.GONE
+                findViewById<MaterialButton>(R.id.clear_ota_button).visibility = View.GONE
+            }
+        }
+
         findViewById<MaterialButton>(R.id.open_playground_button).setOnClickListener {
             openPlaygroundHome()
         }
 
-        findViewById<MaterialButton>(R.id.open_ota_acceptance_button).setOnClickListener {
-            openOtaAcceptanceHome()
+        findViewById<MaterialButton>(R.id.open_ota_acceptance_button).apply {
+            if (BuildConfig.DEBUG && BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E) {
+                text = "打开 APK 内置双语电商页"
+            } else if (BuildConfig.DEBUG && BuildConfig.LYNX_OTA_DEVICE_E2E) {
+                text = "打开 OTA 电商验收页（含 Async 双语）"
+            }
+            setOnClickListener {
+                if (BuildConfig.DEBUG && (BuildConfig.LYNX_OTA_DEVICE_E2E || BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E)) {
+                    openSidecarDevicePage()
+                } else {
+                    openOtaAcceptanceHome()
+                }
+            }
         }
 
         findViewById<MaterialButton>(R.id.open_native_tab_demo_button).setOnClickListener {
@@ -100,6 +129,13 @@ class MainActivity : AppCompatActivity() {
                 LynxRouter.debugFailNextFirstScreen()
             }
             openPlaygroundHome()
+            return
+        }
+        if (BuildConfig.DEBUG &&
+            (BuildConfig.LYNX_OTA_DEVICE_E2E || BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E) &&
+            savedInstanceState == null
+        ) {
+            openSidecarDevicePage()
             return
         }
         if (!intent.getBooleanExtra("lynx_shell.show_native_launcher", false) && savedInstanceState == null) {
@@ -161,6 +197,34 @@ class MainActivity : AppCompatActivity() {
             )
         }.onFailure { error ->
             Toast.makeText(this, error.message ?: "OTA 验收首页打开失败", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openSidecarDevicePage() {
+        runCatching {
+            LynxRouter.open(
+                context = this,
+                lynxAppId = "10020000",
+                bundleName = "OtaEcommercePage.lynx.bundle",
+                params = mapOf(
+                    "source" to if (BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E) {
+                        "android-embedded-assets-device-test"
+                    } else {
+                        "android-sidecar-device-test"
+                    },
+                ),
+                options = mapOf(
+                    "title" to if (BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E) {
+                        "APK 内置双语电商"
+                    } else {
+                        "OTA 双语/Async 真机验收"
+                    },
+                    "fullscreen" to false,
+                    "showToolbar" to false,
+                ),
+            )
+        }.onFailure { error ->
+            Toast.makeText(this, error.message ?: "电商验收页打开失败", Toast.LENGTH_LONG).show()
         }
     }
 

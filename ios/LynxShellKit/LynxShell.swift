@@ -181,6 +181,8 @@ public final class LynxTabViewController: UIViewController {
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
     private var releaseLease: OtaBundleLease?
+    private var preparedResources: OtaPreparedResources?
+    private var resourceFetcher: LynxLocalResourceFetcher?
     /** 当前 LynxView 对应的请求；语言/布局原位更新需要复用同一份页面身份。 */
     private var currentRequest: LynxPageRequest?
     /** 当前 LynxView 的完整 GlobalProps；主题更新不能只回传一个 theme 字段。 */
@@ -379,8 +381,11 @@ public final class LynxTabViewController: UIViewController {
 #endif
         loadTask = Task { [weak self] in
             var pendingLease: OtaBundleLease?
+            var pendingResources: OtaPreparedResources?
             defer {
-                if let pendingLease {
+                if let pendingResources {
+                    pendingResources.close(releasing: pendingLease)
+                } else if let pendingLease {
                     Task { await pendingLease.close() }
                 }
             }
@@ -408,6 +413,8 @@ public final class LynxTabViewController: UIViewController {
                     )
                 }
                 pendingLease = prepared.releaseLease
+                let resources = try await runtime.prepareResources(for: prepared)
+                pendingResources = resources
                 let data = try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
                 var metadata: [String: Any] = [
                     "lynxAppId": prepared.lynxAppId,
@@ -431,11 +438,12 @@ public final class LynxTabViewController: UIViewController {
                         prefetchedData: data,
                         bundleMetadata: metadata,
                         releaseLease: prepared.releaseLease,
+                        preparedResources: resources,
                         generation: generation
                     )
                     return true
                 }
-                if accepted { pendingLease = nil }
+                if accepted { pendingLease = nil; pendingResources = nil }
             } catch is CancellationError {
                 return
             } catch {
@@ -454,14 +462,20 @@ public final class LynxTabViewController: UIViewController {
         prefetchedData: Data?,
         bundleMetadata: [String: Any]? = nil,
         releaseLease: OtaBundleLease? = nil,
+        preparedResources: OtaPreparedResources? = nil,
         generation: UUID
     ) {
         guard lynxView == nil else {
-            if let releaseLease { Task { await releaseLease.close() } }
+            if let preparedResources {
+                preparedResources.close(releasing: releaseLease)
+            } else if let releaseLease {
+                Task { await releaseLease.close() }
+            }
             return
         }
         releaseCurrentLease()
         self.releaseLease = releaseLease
+        self.preparedResources = preparedResources
         do {
             let request = try LynxPageRequest(
                 bundleURL: spec.bundleURL,
@@ -501,6 +515,8 @@ public final class LynxTabViewController: UIViewController {
                 }
             )
             templateProvider = provider
+            let localFetcher = preparedResources?.makeFetcher(provider: provider)
+            resourceFetcher = localFetcher
             var props = ShellGlobalPropsFactory.make(
                 for: contentView,
                 request: request,
@@ -515,6 +531,7 @@ public final class LynxTabViewController: UIViewController {
             let createStarted = ProcessInfo.processInfo.systemUptime
             let created = LynxNativeRuntime.makeView(
                 provider: provider,
+                resourceFetcher: localFetcher,
                 screenSize: latestLayoutSnapshot?.screenSize
                     ?? ShellLayoutSnapshot.measure(for: contentView).screenSize,
                 viewportSize: latestLayoutSnapshot?.viewportSize
@@ -712,8 +729,16 @@ public final class LynxTabViewController: UIViewController {
     }
 
     private func releaseCurrentLease() {
-        guard let lease = releaseLease else { return }
+        resourceFetcher?.cancel()
+        resourceFetcher = nil
+        let resources = preparedResources
+        preparedResources = nil
+        let lease = releaseLease
         releaseLease = nil
-        Task { await lease.close() }
+        if let resources {
+            resources.close(releasing: lease)
+        } else if let lease {
+            Task { await lease.close() }
+        }
     }
 }

@@ -56,9 +56,10 @@ export default class ShellMessageHub {
   /** 将已解析的主题同步到所有仍登记的 LynxContext；不重建 View 或重新加载 Bundle。 */
   static updateTheme(theme: ShellTheme): void {
     const globalProps: ShellThemeGlobalProps = { theme: theme };
+    const localeState = ShellLocaleState.current();
     ShellMessageHub.contexts.forEach((context: LynxContext, pageId: string) => {
       context.updateColorScheme(ShellThemeState.colorScheme(theme));
-      const environment = ShellGlobalPropsFactory.environmentProps(pageId);
+      const environment = ShellGlobalPropsFactory.environmentProps(pageId, localeState);
       Object.keys(globalProps).forEach((key: string) => {
         environment[key] = globalProps[key];
       });
@@ -66,12 +67,12 @@ export default class ShellMessageHub {
     });
   }
 
-  /** 将完整 LocaleState 更新到所有存活 Context，并通知页面侧资源层。 */
+  /** 将完整 LocaleState 更新到所有存活 Context，并通知页面侧切换内联文案。 */
   static updateLocale(reason: string): number {
     const state = ShellLocaleState.current();
     let affectedCount = 0;
     ShellMessageHub.contexts.forEach((context: LynxContext, pageId: string) => {
-      ShellMessageHub.applyEnvironment(context, pageId);
+      ShellMessageHub.applyEnvironment(context, pageId, state);
       const payload: ShellLocaleChangedPayload = {
         schemaVersion: 1,
         revision: state.revision,
@@ -87,6 +88,7 @@ export default class ShellMessageHub {
   /** 将当前 Window/viewport LayoutSnapshot 更新到所有存活 Context。 */
   static updateLayout(reason: string): number {
     let affectedCount = 0;
+    const localeState = ShellLocaleState.current();
     ShellMessageHub.contexts.forEach((context: LynxContext, pageId: string) => {
       const snapshot = ShellLayoutState.snapshot(pageId);
       const rawScreen = ShellLayoutState.rawScreenSize();
@@ -95,7 +97,7 @@ export default class ShellMessageHub {
       context.updateViewport(snapshot.viewportWidth, 1, snapshot.viewportHeight, 1);
       context.updateMetaData(new MetaData(
         undefined,
-        new TemplateData(ShellGlobalPropsFactory.environmentProps(pageId))
+        new TemplateData(ShellGlobalPropsFactory.environmentProps(pageId, localeState))
       ));
       const payload: ShellLayoutChangedPayload = {
         schemaVersion: 1,
@@ -210,7 +212,9 @@ export default class ShellMessageHub {
       normalized !== ShellMessageHub.LAYOUT_EVENT;
   }
 
-  private static applyEnvironment(context: LynxContext, pageId: string): void {
+  private static applyEnvironment(context: LynxContext, pageId: string,
+    localeState?: ShellLocaleStateValue): void {
+    const locale = localeState ?? ShellLocaleState.current();
     const snapshot = ShellLayoutState.snapshot(pageId);
     const rawScreen = ShellLayoutState.rawScreenSize();
     context.updateColorScheme(ShellThemeState.colorScheme());
@@ -218,7 +222,7 @@ export default class ShellMessageHub {
     context.updateViewport(snapshot.viewportWidth, 1, snapshot.viewportHeight, 1);
     context.updateMetaData(new MetaData(
       undefined,
-      new TemplateData(ShellGlobalPropsFactory.environmentProps(pageId))
+      new TemplateData(ShellGlobalPropsFactory.environmentProps(pageId, locale))
     ));
   }
 

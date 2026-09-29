@@ -239,6 +239,7 @@ class OtaUserSelectionTest {
     val sdk = f.sdk("A", candidate = true)
     f.install(sdk, "6", OtaSelectionKind.GRAY, "1")
     sdk.registerUserId("B"); sdk.reconcileUserContext(); assertNull(sdk.candidate(APP))
+    assertEquals(1, f.root.resolve("apps/$APP/objects").walkTopDown().count { it.isFile })
     f.api.selection = OtaLatestSelection.Release(f.latest("7", revision = "2", reuseVersion = "6"))
     val result = sdk.syncLatestBundleList(APP)
     assertEquals("B", f.api.contexts.last().userId)

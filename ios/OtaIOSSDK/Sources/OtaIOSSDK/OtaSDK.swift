@@ -62,6 +62,7 @@ public actor OtaSDK {
         let installed: OtaInstalledRelease
         let summary: OtaBundleSyncSummary
         let temporaryDirectory: URL?
+        let sidecarTransactions: [OtaSidecarTransaction]
     }
 
     private let configuration: OtaSDKConfiguration
@@ -72,6 +73,7 @@ public actor OtaSDK {
     private let bundleRuntime: BundleRuntime
     private let downloader: OtaBundleDownloading
     private let checksumValidator: OtaChecksumValidating
+    private let asyncBundleStore: OtaAsyncBundleStore
     private var validatedBundleCache = OtaBundleValidationCache<BundleValidationKey>()
 
     private var lifecycleIdentityEpoch: UInt64 = 0
@@ -128,16 +130,17 @@ public actor OtaSDK {
         self.configuration = configuration
         let contextBox = OtaUserContextBox(configuration: configuration)
         self.userContextBox = contextBox
-        self.apiClient = apiClient ?? ServerOtaAPIClient(
-            baseURL: configuration.apiBaseURL,
-            otaClientToken: configuration.otaClientToken,
-            allowLocalHTTPForTest: configuration.allowLocalHTTPForTest
-        )
-        // 宿主的 LynxOtaConfiguration 默认使用 v3；低层 SDK 仍允许测试/迁移方显式选择 v2。
         let resolvedStore = store ?? FileOtaReleaseStore(
             baseDirectory: configuration.storageDirectory,
             version: configuration.storeVersion
         )
+        self.apiClient = apiClient ?? ServerOtaAPIClient(
+            baseURL: configuration.apiBaseURL,
+            otaClientToken: configuration.otaClientToken,
+            allowLocalHTTPForTest: configuration.allowLocalHTTPForTest,
+            supportsSidecarResources: resolvedStore.version == .v3
+        )
+        // 宿主的 LynxOtaConfiguration 默认使用 v3；低层 SDK 仍允许测试/迁移方显式选择 v2。
         self.selectionStoreSupported = resolvedStore.version == .v3
         if let transactionFaultInjectorOptional {
             self.releaseTransaction = ReleaseTransaction(
@@ -149,12 +152,34 @@ public actor OtaSDK {
             self.releaseTransaction = ReleaseTransaction(store: resolvedStore, userContext: contextBox)
         }
         self.bundleRuntime = BundleRuntime(transaction: releaseTransaction)
-        self.downloader = downloader ?? URLSessionBundleDownloader(
+        let resolvedDownloader = downloader ?? URLSessionBundleDownloader(
             allowLocalFileURLs: configuration.environment == .test &&
                 configuration.apiBaseURL.scheme?.lowercased() == "http",
             allowLocalHTTPURLs: configuration.allowLocalHTTPForTest
         )
+        self.downloader = resolvedDownloader
+        self.asyncBundleStore = OtaAsyncBundleStore(baseDirectory: configuration.storageDirectory, downloader: resolvedDownloader)
         self.checksumValidator = checksumValidator
+    }
+
+    /// 页面只读准备；lazy 资源从已激活的 Async 快照读取，不在页面请求时联网。
+    public func prepareResources(release: OtaInstalledRelease, ownerBundlePath: String) async throws -> OtaPreparedResources? {
+        guard release.asyncBundleManifest != nil else { return nil }
+        guard selectionStoreSupported else { throw OtaSelectionError.requiresStoreV3 }
+        let appId = release.context.lynxAppId
+        let reference = release.asyncBundleManifest
+        let asyncStore = asyncBundleStore
+        var paths: [String: URL] = [:]
+        if let reference {
+            paths = try await asyncStore.localPaths(owner: ownerBundlePath, appId: appId, reference: reference)
+        }
+        let transaction = releaseTransaction
+        return OtaPreparedResources(hasAsyncResources: true, localPaths: paths, resolver: { url in
+            guard let reference else { throw OtaSidecarError.unknownRequest }
+            return try await asyncStore.resolve(url, owner: ownerBundlePath, appId: appId, reference: reference)
+        }, closeAction: {
+            try? await transaction.pruneAllUnreferencedReleases()
+        })
     }
 
     public nonisolated func registerUserId(_ userId: String?) throws -> Bool { try userContextBox.register(userId) }
@@ -662,6 +687,7 @@ public actor OtaSDK {
         let reusableRelease = await reusableReleaseSnapshot(current: current, lynxAppId: manifest.lynxAppId)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: reusableRelease)
         defer {
+            outcome.sidecarTransactions.forEach { $0.finish() }
             if let temporaryDirectory = outcome.temporaryDirectory {
                 try? FileManager.default.removeItem(at: temporaryDirectory)
             }
@@ -725,7 +751,8 @@ public actor OtaSDK {
         let current = await getCurrentRelease()
         let match = try await checkForUpdate(request)
         guard match.matched else {
-            return .noUpdate(current: current)
+            if let current { return .noUpdate(current: current) }
+            return .noUpdate(current: nil)
         }
         guard let releaseId = match.releaseId else {
             throw OtaSDKError.missingReleaseIdentifier
@@ -829,6 +856,7 @@ public actor OtaSDK {
         _ latest: OtaLatestBundleList,
         current: OtaInstalledRelease?
     ) async throws -> OtaLatestBundleListUpdateResult {
+        try validateSidecarStoreSupport(asyncBundleManifest: latest.asyncBundleManifest)
         if configuration.candidateActivationEnabled {
             try? await recoverInterruptedCandidate(lynxAppId: latest.lynxAppId)
         }
@@ -917,6 +945,7 @@ public actor OtaSDK {
         let reusableRelease = await reusableReleaseSnapshot(current: current, lynxAppId: latest.lynxAppId)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: reusableRelease)
         defer {
+            outcome.sidecarTransactions.forEach { $0.finish() }
             if let temporaryDirectory = outcome.temporaryDirectory {
                 try? FileManager.default.removeItem(at: temporaryDirectory)
             }
@@ -990,6 +1019,9 @@ public actor OtaSDK {
                 await reportSelectedCheckFailure(lynxAppId: lynxAppId, reason: .latestBundleListDecodeFailed)
                 throw error
             }
+            if case let .release(latest) = response {
+                try validateSidecarStoreSupport(asyncBundleManifest: latest.asyncBundleManifest)
+            }
             switch response {
             case let .release(latest):
                 do { return try await applySelectedRelease(latest, identity: identity) }
@@ -1023,7 +1055,9 @@ public actor OtaSDK {
                       group.platform == identity.platform else { throw OtaSelectionError.missingSelectionMetadata }
                 let ids = group.bundleLists.map(\.lynxAppId) + group.directives.map(\.lynxAppId)
                 guard Set(ids).count == ids.count else { throw OtaSelectionError.invalidSelectionMetadata }
-                for latest in group.bundleLists { selections[latest.lynxAppId] = try selectionMetadata(for: latest, identity: identity) }
+                for latest in group.bundleLists {
+                    selections[latest.lynxAppId] = try selectionMetadata(for: latest, identity: identity)
+                }
                 for directive in group.directives { try validateDirective(directive) }
             } catch {
                 await reportSelectedCheckFailure(lynxAppId: configuration.lynxAppId, reason: .latestBundleListDecodeFailed)
@@ -1041,6 +1075,7 @@ public actor OtaSDK {
             }
             for latest in group.bundleLists {
                 do {
+                    try validateSidecarStoreSupport(asyncBundleManifest: latest.asyncBundleManifest)
                     try await recordSelectedDecision(latest, selection: selections[latest.lynxAppId]!, identity: identity)
                 } catch {
                     try validateBatchContinuation(error, identity: identity)
@@ -1103,6 +1138,7 @@ public actor OtaSDK {
 
     private func applySelectedRelease(_ latest: OtaLatestBundleList, identity: OtaUserContext, decisionAlreadyRecorded: Bool = false) async throws -> OtaLatestBundleListUpdateResult {
         try userContextBox.validate(identity)
+        try validateSidecarStoreSupport(asyncBundleManifest: latest.asyncBundleManifest)
         let selection = try selectionMetadata(for: latest, identity: identity)
         if OtaOperationContext.selection != selection {
             return try await OtaOperationContext.$selection.withValue(selection) {
@@ -1124,7 +1160,10 @@ public actor OtaSDK {
         let manifest = latest.asManifest()
         try validateRemoteManifest(manifest)
         let outcome = try await downloadAndValidate(manifest: manifest, reusableRelease: before)
-        defer { if let directory = outcome.temporaryDirectory { try? FileManager.default.removeItem(at: directory) } }
+        defer {
+            outcome.sidecarTransactions.forEach { $0.finish() }
+            if let directory = outcome.temporaryDirectory { try? FileManager.default.removeItem(at: directory) }
+        }
         try userContextBox.validate(identity)
         var installed = outcome.installed
         installed.selection = selection; installed.identityEpoch = identity.identityEpoch
@@ -1282,8 +1321,10 @@ public actor OtaSDK {
             .appendingPathComponent("lynx-ota-download-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: downloadDirectory, withIntermediateDirectories: true)
         var completed = false
+        var sidecarTransactions: [OtaSidecarTransaction] = []
         defer {
             if !completed {
+                sidecarTransactions.forEach { $0.finish() }
                 try? FileManager.default.removeItem(at: downloadDirectory)
             }
         }
@@ -1426,6 +1467,11 @@ public actor OtaSDK {
             )
         }
 
+        if let reference = manifest.asyncBundleManifest {
+            let transaction = try await asyncBundleStore.prepare(reference, appId: manifest.lynxAppId, owners: Set(manifest.bundles.map(\.bundlePath)))
+            sidecarTransactions.append(transaction)
+        }
+
         let installed = OtaInstalledRelease(
             context: OtaCurrentReleaseContext(
                 env: manifest.env,
@@ -1436,7 +1482,8 @@ public actor OtaSDK {
                 status: .active
             ),
             installedAt: Date(),
-            bundles: bundles
+            bundles: bundles,
+            asyncBundleManifest: manifest.asyncBundleManifest
         )
         completed = true
         return DownloadOutcome(
@@ -1447,11 +1494,19 @@ public actor OtaSDK {
                 downloadedBundleCount: downloadedBundleCount,
                 reusedBundleCount: reusedBundleCount
             ),
-            temporaryDirectory: downloadDirectory
+            temporaryDirectory: downloadDirectory,
+            sidecarTransactions: sidecarTransactions
         )
     }
 
+    private func validateSidecarStoreSupport(asyncBundleManifest: OtaAsyncManifestReference?) throws {
+        guard selectionStoreSupported || asyncBundleManifest == nil else {
+            throw OtaSelectionError.requiresStoreV3
+        }
+    }
+
     private func validateRemoteManifest(_ manifest: OtaReleaseManifest) throws {
+        try validateSidecarStoreSupport(asyncBundleManifest: manifest.asyncBundleManifest)
         guard manifest.status == .active else {
             throw OtaSDKError.invalidReleaseStatus(manifest.status.rawValue)
         }
@@ -1529,7 +1584,7 @@ public actor OtaSDK {
             bundlesToCheck = release.bundles.map { ($0.bundleSha256, $0.localFilePath) }
         }
 
-        return bundlesToCheck.allSatisfy { expected in
+        let mainReady = bundlesToCheck.allSatisfy { expected in
             guard FileManager.default.fileExists(atPath: expected.localFilePath) else {
                 return false
             }
@@ -1537,6 +1592,16 @@ public actor OtaSDK {
                 return false
             }
             return actualChecksum.lowercased() == expected.sha256.lowercased()
+        }
+        guard mainReady else { return false }
+        do {
+            if let reference = release.asyncBundleManifest {
+                try OtaAsyncBundleStore.verifyInstalled(baseDirectory: configuration.storageDirectory, appId: release.context.lynxAppId, reference: reference, owners: Set(release.bundles.map(\.bundlePath)))
+            }
+            return true
+        } catch {
+            // 显式 OTA 更新路径转入同版本修复，页面资源请求仍不联网。
+            return false
         }
     }
 

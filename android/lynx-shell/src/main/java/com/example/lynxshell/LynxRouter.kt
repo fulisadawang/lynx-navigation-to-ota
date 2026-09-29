@@ -134,18 +134,18 @@ object LynxRouter {
         localeTag: String?,
         onComplete: (LynxLocaleResult) -> Unit = {},
     ) {
-        val change = runCatching {
-            LynxLocaleStore.setLocale(LynxLocaleStore.applicationContext(), localeTag)
-        }.getOrElse { error ->
-            val failure = LynxLocaleResult(
-                code = 1001,
-                message = error.message ?: "语言参数不合法",
-                state = runCatching { currentLocale() }.getOrNull(),
-            )
-            postLocaleCallback(onComplete, failure)
-            return
-        }
         val apply = Runnable {
+            val change = runCatching {
+                val context = LynxLocaleStore.applicationContext()
+                LynxLocaleStore.setLocale(context, localeTag)
+            }.getOrElse { error ->
+                onComplete(LynxLocaleResult(
+                    code = 1001,
+                    message = error.message ?: "语言更新失败",
+                    state = runCatching { currentLocale() }.getOrNull(),
+                ))
+                return@Runnable
+            }
             val affectedCount = if (change.changed) {
                 LynxEnvironmentCoordinator.updateLocale(change.state)
             } else {
@@ -162,14 +162,6 @@ object LynxRouter {
             )
         }
         if (Looper.myLooper() == Looper.getMainLooper()) apply.run() else mainHandler.post(apply)
-    }
-
-    private fun postLocaleCallback(
-        onComplete: (LynxLocaleResult) -> Unit,
-        result: LynxLocaleResult,
-    ) {
-        if (Looper.myLooper() == Looper.getMainLooper()) onComplete(result)
-        else mainHandler.post { onComplete(result) }
     }
 
     /**

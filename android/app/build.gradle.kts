@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.File
+import java.net.URI
 
 plugins {
     id("com.android.application")
@@ -33,8 +34,22 @@ val localOtaServerEnabled = providers.environmentVariable("LYNX_OTA_LOCAL_SERVER
     ?.lowercase()
     ?.let { it == "1" || it == "true" || it == "yes" || it == "on" }
     ?: false
+val isolatedOtaDeviceTest = providers.environmentVariable("LYNX_OTA_DEVICE_E2E").orNull == "1"
+val embeddedAssetsDeviceTest = providers.environmentVariable("LYNX_EMBEDDED_ASSETS_DEVICE_E2E").orNull == "1"
 val otaUserSelectionTestEnabled = providers.environmentVariable("LYNX_TEST_OTA_USER_SELECTION").orNull
     ?.trim()?.lowercase()?.let { it in setOf("1", "true", "yes", "on") } ?: false
+require(!isolatedOtaDeviceTest || localOtaServerEnabled) {
+    "Android 附属资源真机验收必须开启 LYNX_OTA_LOCAL_SERVER=1"
+}
+require(!isolatedOtaDeviceTest || !otaUserSelectionTestEnabled) {
+    "Android 附属资源真机验收不能与用户灰度验收同时开启"
+}
+require(!embeddedAssetsDeviceTest || !isolatedOtaDeviceTest) {
+    "APK 内置资源验收不能与 OTA 附属资源真机验收同时开启"
+}
+require(!embeddedAssetsDeviceTest || !otaUserSelectionTestEnabled) {
+    "APK 内置资源验收不能与用户灰度验收同时开启"
+}
 val otaDebugVersionCode = providers.environmentVariable("LYNX_OTA_DEBUG_VERSION_CODE").orNull?.let {
     it.toIntOrNull()?.takeIf { value -> value > 0 }
         ?: error("LYNX_OTA_DEBUG_VERSION_CODE 必须为正整数，例如 1000")
@@ -45,6 +60,12 @@ require(!otaUserSelectionTestEnabled || localOtaServerEnabled) {
 val localOtaBaseUrl = providers.environmentVariable("LYNX_OTA_LOCAL_BASE_URL").orNull
     ?.takeIf { it.isNotBlank() }
     ?: if (otaUserSelectionTestEnabled) "http://127.0.0.1:18770" else "http://127.0.0.1:18765"
+if (isolatedOtaDeviceTest) {
+    val localUri = runCatching { URI.create(localOtaBaseUrl) }.getOrNull()
+    require(localUri?.scheme == "http" && localUri.host in setOf("127.0.0.1", "localhost")) {
+        "Android 附属资源真机验收只允许连接本机 HTTP Server"
+    }
+}
 val escapedLocalOtaBaseUrl = localOtaBaseUrl.replace("\"", "\\\"")
 val amapApiKey = providers.environmentVariable("AMAP_API_KEY").orNull
     ?.takeIf { it.isNotBlank() }
@@ -101,6 +122,8 @@ android {
         buildConfigField("String", "AMAP_API_KEY", "\"$escapedAmapApiKey\"")
         buildConfigField("boolean", "LYNX_OTA_CANDIDATE_MODE", candidateActivationEnabled.toString())
         buildConfigField("boolean", "LYNX_OTA_LOCAL_SERVER", localOtaServerEnabled.toString())
+        buildConfigField("boolean", "LYNX_OTA_DEVICE_E2E", isolatedOtaDeviceTest.toString())
+        buildConfigField("boolean", "LYNX_EMBEDDED_ASSETS_DEVICE_E2E", embeddedAssetsDeviceTest.toString())
         buildConfigField("String", "LYNX_OTA_LOCAL_BASE_URL", "\"$escapedLocalOtaBaseUrl\"")
         buildConfigField("boolean", "LYNX_TEST_OTA_USER_SELECTION", "false")
     }
@@ -120,6 +143,8 @@ android {
 
     buildTypes {
         debug {
+            if (isolatedOtaDeviceTest) applicationIdSuffix = ".otae2e"
+            if (embeddedAssetsDeviceTest) applicationIdSuffix = ".embeddedassets"
             versionNameSuffix = "-debug"
             buildConfigField("boolean", "LYNX_TEST_OTA_USER_SELECTION", otaUserSelectionTestEnabled.toString())
             if (otaUserSelectionTestEnabled) {

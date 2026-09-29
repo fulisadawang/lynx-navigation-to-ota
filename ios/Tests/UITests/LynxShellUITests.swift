@@ -219,6 +219,90 @@ final class LynxShellUITests: XCTestCase {
         throw XCTSkip("OTA Server 在限定时间内无响应；客户端 mock suite 已覆盖同一协议")
     }
 
+    func testLiveStoreV3EcommerceAsyncAndI18nFlow() throws {
+        guard Self.testOtaToken != nil, Self.useLiveOta else {
+            throw XCTSkip("电商 Async/i18n 流程需要显式启用本机 TEST OTA 服务")
+        }
+        app.launchArguments.append("--lynx-monitor-diagnostic")
+        launchApp(extraEnvironment: [
+            "LYNX_OTA_HOST_APP": "template",
+            "LYNX_OTA_TEST_STORE_ID": "ecommerce-\(UUID().uuidString)",
+            "LYNX_TEST_OTA_SIDECAR_REPORT": "1",
+        ])
+
+        let launcherEntry = app.buttons["open-store-v3-ecommerce-bundle"]
+        XCTAssertTrue(launcherEntry.waitForExistence(timeout: 10))
+        launcherEntry.tap()
+
+        let englishBrand = app.staticTexts["JILAN"]
+        let chineseBrand = app.staticTexts["霁岚"]
+        if !englishBrand.waitForExistence(timeout: 5) {
+            XCTAssertTrue(chineseBrand.waitForExistence(timeout: 10))
+            attachStoreScreenshot("电商首页 - 初始中文")
+            let toEnglish = app.staticTexts["EN"]
+            XCTAssertTrue(toEnglish.waitForExistence(timeout: 5))
+            toEnglish.tap()
+        }
+        XCTAssertTrue(englishBrand.waitForExistence(timeout: 10), "iOS locale 更新后首页应切到英文词典")
+        XCTAssertTrue(app.staticTexts["Green Tea Comfort Serum"].exists)
+        attachStoreScreenshot("电商首页 - English")
+
+        let toChinese = app.staticTexts["中"]
+        XCTAssertTrue(toChinese.waitForExistence(timeout: 5))
+        toChinese.tap()
+        XCTAssertTrue(chineseBrand.waitForExistence(timeout: 10), "iOS locale 更新后首页应切到中文词典")
+        XCTAssertTrue(app.staticTexts["绿茶舒润精华露"].exists)
+        attachStoreScreenshot("电商首页 - 中文")
+
+        app.staticTexts["EN"].tap()
+        let openProduct = app.staticTexts["Explore the collection"]
+        XCTAssertTrue(openProduct.waitForExistence(timeout: 10))
+        openProduct.tap()
+        XCTAssertTrue(app.staticTexts["Product details"].waitForExistence(timeout: 10), "商品详情应由 ProductDetailPage Async Bundle 渲染")
+        app.staticTexts["Add to bag"].tap()
+        XCTAssertTrue(app.staticTexts["Added to bag"].waitForExistence(timeout: 5))
+        attachStoreScreenshot("Async 商品详情")
+
+        tapStoreBackButton(label: "Back to store")
+        let openCampaign = app.staticTexts["Explore the offer"]
+        XCTAssertTrue(openCampaign.waitForExistence(timeout: 10))
+        openCampaign.tap()
+        XCTAssertTrue(app.staticTexts["Limited-time offer"].waitForExistence(timeout: 10), "活动页应由 CampaignPage Async Bundle 渲染")
+        app.staticTexts["Claim coupon"].tap()
+        XCTAssertTrue(app.staticTexts["Claimed"].waitForExistence(timeout: 5))
+        attachStoreScreenshot("Async 限时活动")
+
+        tapStoreBackButton(label: "Back to store")
+        let openReviews = app.staticTexts["Read customer stories"]
+        for _ in 0..<5 where !openReviews.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(openReviews.waitForExistence(timeout: 10))
+        openReviews.tap()
+        XCTAssertTrue(app.staticTexts["Customer reviews"].waitForExistence(timeout: 10), "评价页应由 ReviewsPage Async Bundle 渲染")
+        XCTAssertTrue(app.staticTexts["L. Lin"].exists)
+        attachStoreScreenshot("Async 顾客评价")
+    }
+
+    private func tapStoreBackButton(label: String) {
+        let predicate = NSPredicate(format: "label CONTAINS %@", label)
+        let back = app.staticTexts.matching(predicate).firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 10), "找不到返回商城按钮：\(label)")
+        for _ in 0..<8 {
+            if back.isHittable { break }
+            app.swipeDown()
+        }
+        XCTAssertTrue(back.isHittable, "返回商城按钮滚动到顶端后仍不可点击：\(label)")
+        back.tap()
+    }
+
+    private func attachStoreScreenshot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testDeferredTabLoadCannotOverwriteNewGeneration() throws {
         guard Self.testOtaToken != nil else {
             throw XCTSkip("该用例需要 TEST OTA runtime 才能验证 deferred resolve 代际门禁")

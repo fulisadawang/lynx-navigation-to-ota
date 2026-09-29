@@ -1,6 +1,12 @@
+#if LYNX_SHELL_E2E_CORE_ONLY
+import LynxShellKitE2ECore
+#else
 import LynxShellKit
+#endif
+#if canImport(LynxMapKit)
 import LynxMapKit
-#if DEBUG
+#endif
+#if DEBUG && canImport(LynxShellDebugKit)
 import LynxShellDebugKit
 #endif
 import UIKit
@@ -17,9 +23,11 @@ final class DemoNavigationController: UINavigationController {}
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var hasEnteredForeground = false
+#if canImport(LynxMapKit)
     private var didPresentAMapPrivacyPrompt = false
 
     private static let amapPrivacyAgreedKey = "lynx.amap.privacyAgreed"
+#endif
 
     func scene(
         _ scene: UIScene,
@@ -69,7 +77,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = navigationController
         window.makeKeyAndVisible()
         self.window = window
-#if DEBUG
+#if DEBUG && canImport(LynxShellDebugKit)
         LynxDebugTool.attach(to: windowScene)
 #endif
 
@@ -127,11 +135,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 DispatchQueue.main.async { [weak self] in self?.openOtaAcceptanceHome() }
             }
         }
+#if canImport(LynxMapKit)
         presentAMapPrivacyPromptIfNeeded(completion: continueStartup)
+#else
+        continueStartup()
+#endif
     }
 
     private func presentDebugToolIfRequested(from rootController: UIViewController) -> Bool {
-#if DEBUG
+#if DEBUG && canImport(LynxShellDebugKit)
         guard ProcessInfo.processInfo.arguments.contains("--show-lynx-debug-tool") else {
             return false
         }
@@ -179,6 +191,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
      * 真机手动启动不会携带模拟器的启动参数，因此首次启动必须由用户明确选择；
      * 同意结果只保存布尔状态，Key 仍只从构建注入的 Info.plist 读取。
      */
+#if canImport(LynxMapKit)
     private func presentAMapPrivacyPromptIfNeeded(completion: @escaping () -> Void) {
         guard !didPresentAMapPrivacyPrompt else {
             completion()
@@ -222,6 +235,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         })
         presenter.present(alert, animated: true)
     }
+#endif
 
     private func openPlaygroundHome() {
         do {

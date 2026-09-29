@@ -1,4 +1,7 @@
 import {
+  OtaAsyncBundleManifest,
+  OtaAsyncBundleManifestRef,
+  OtaAsyncBundleResource,
   OtaBundleArtifact,
   OtaLatestBundleLists,
   OtaLocalManifest,
@@ -51,6 +54,7 @@ export default class OtaJson {
 
   static parseLocalManifest(raw: string): OtaLocalManifest {
     const root = OtaJson.objectValue(JSON.parse(raw), '本地 Manifest');
+    if (root['i18nRequirement'] !== undefined) throw new Error('旧词典 Release 不支持当前双语 Bundle 模式');
     const schemaVersion = OtaJson.numberValue(root, 'schemaVersion');
     if (schemaVersion !== 1 && schemaVersion !== 3) {
       throw new Error('本地 Manifest schemaVersion 不支持');
@@ -66,7 +70,8 @@ export default class OtaJson {
       platform: OtaJson.stringValue(root, 'platform'),
       status: OtaJson.optionalString(root, 'status') ?? 'ACTIVE',
       bundles: bundles,
-      installedAt: OtaJson.numberValue(root, 'installedAt')
+      installedAt: OtaJson.numberValue(root, 'installedAt'),
+      asyncBundleManifest: OtaJson.parseAsyncRef(root['asyncBundleManifest'])
     };
   }
 
@@ -98,6 +103,7 @@ export default class OtaJson {
 
   private static parseSnapshotObject(value: Object): OtaReleaseSnapshot {
     const root = OtaJson.objectValue(value, 'Release Snapshot');
+    if (root['i18nRequirement'] !== undefined) throw new Error('旧词典 Release 不支持当前双语 Bundle 模式');
     return {
       env: OtaJson.stringValue(root, 'env'),
       hostApp: OtaJson.hostApp(root),
@@ -114,8 +120,74 @@ export default class OtaJson {
       lynxSdkRange: OtaJson.range(root['lynxSdkRange']),
       minAppVersion: OtaJson.strictOptionalString(root, 'minAppVersion'),
       maxAppVersion: OtaJson.strictOptionalString(root, 'maxAppVersion'),
-      nativeProtocolVersionRange: OtaJson.range(root['nativeProtocolVersionRange'])
+      nativeProtocolVersionRange: OtaJson.range(root['nativeProtocolVersionRange']),
+      asyncBundleManifest: OtaJson.parseAsyncRef(root['asyncBundleManifest'])
     };
+  }
+
+  static parseAsyncBundleManifest(raw: string): OtaAsyncBundleManifest {
+    const root = OtaJson.objectValue(JSON.parse(raw), 'Async Bundle Manifest');
+    if (OtaJson.numberValue(root, 'schemaVersion') !== 1) throw new Error('Async 清单版本不支持');
+    const rawEntries = root['entries'];
+    if (!Array.isArray(rawEntries) || rawEntries.length === 0) throw new Error('Async 清单 entries 为空');
+    const entries: OtaAsyncBundleResource[] = [];
+    const keys = new Set<string>();
+    rawEntries.forEach((item: Object) => {
+      const entry = OtaJson.objectValue(item, 'Async 资源');
+      const ownerBundlePath = OtaJson.safePath(OtaJson.stringValue(entry, 'ownerBundlePath'));
+      const requestKey = OtaJson.safeRequestKey(OtaJson.stringValue(entry, 'requestKey'));
+      const key = JSON.stringify([ownerBundlePath, requestKey]);
+      if (keys.has(key)) throw new Error('Async 请求键重复');
+      keys.add(key);
+      const kind = OtaJson.stringValue(entry, 'kind');
+      if (kind !== 'bundle' && kind !== 'script' && kind !== 'style' && kind !== 'asset') throw new Error('Async 资源 kind 不合法');
+      const size = OtaJson.positiveSize(entry, 'size');
+      if (size > 20 * 1024 * 1024) throw new Error('Async 资源超过 20 MB');
+      entries.push({ ownerBundlePath: ownerBundlePath, requestKey: requestKey,
+        path: OtaJson.safePath(OtaJson.stringValue(entry, 'path')),
+        url: OtaJson.stringValue(entry, 'url'),
+        sha256: OtaJson.sha(OtaJson.stringValue(entry, 'sha256')),
+        size: size,
+        kind: kind as 'bundle' | 'script' | 'style' | 'asset' });
+    });
+    return { schemaVersion: 1, entries: entries };
+  }
+
+  private static parseAsyncRef(value: Object | undefined): OtaAsyncBundleManifestRef | undefined {
+    if (value === undefined) return undefined;
+    const root = OtaJson.objectValue(value, 'asyncBundleManifest');
+    if (OtaJson.numberValue(root, 'schemaVersion') !== 1) throw new Error('Async 清单引用版本不支持');
+    const size = OtaJson.positiveSize(root, 'size');
+    if (size > 1024 * 1024) throw new Error('Async 清单超过 1 MB');
+    return { schemaVersion: 1, url: OtaJson.stringValue(root, 'url'),
+      sha256: OtaJson.sha(OtaJson.stringValue(root, 'sha256')), size: size };
+  }
+
+  private static positiveSize(root: Record<string, Object>, key: string): number {
+    const value = OtaJson.numberValue(root, key);
+    if (value <= 0 || !Number.isSafeInteger(value)) throw new Error(`${key} 必须是正整数`);
+    return value;
+  }
+
+  private static sha(value: string): string {
+    if (!/^sha256:[0-9a-f]{64}$/.test(value)) throw new Error('SHA-256 不合法');
+    return value;
+  }
+
+  private static safePath(value: string): string {
+    const segments = value.split('/');
+    if (value.startsWith('/') || value.includes('\\') || value.includes('?') || value.includes('#') || value.includes('%') ||
+      segments.some((part: string) => part.length === 0 || part === '.' || part === '..')) throw new Error('附属资源路径不安全');
+    for (let index = 0; index < value.length; index += 1) {
+      if (value.charCodeAt(index) < 32) throw new Error('附属资源路径包含控制字符');
+    }
+    return value;
+  }
+
+  private static safeRequestKey(value: string): string {
+    const key = value.startsWith('/') ? value.substring(1) : value;
+    OtaJson.safePath(key);
+    return key;
   }
 
   private static parseBundles(value: Object | undefined, field: string, requiredSize: boolean): OtaBundleArtifact[] {

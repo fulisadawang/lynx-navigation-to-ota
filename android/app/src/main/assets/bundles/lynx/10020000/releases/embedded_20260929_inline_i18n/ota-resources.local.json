@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "mode": "test",
+  "appId": "10020000",
+  "asyncEntries": [
+    {
+      "ownerBundlePath": "OtaEcommercePage.lynx.bundle",
+      "requestKey": "/lazy-bundle/src_components_store_CampaignPage.tsx.036d481c5f3fc764.bundle",
+      "path": "lazy-bundle/src_components_store_CampaignPage.tsx.036d481c5f3fc764.bundle",
+      "sha256": "sha256:9fbc3591863e17fff8f5157b39792b2ed8062247c3bcc1e065d0f9af3a41aa06",
+      "size": 168439,
+      "kind": "bundle"
+    },
+    {
+      "ownerBundlePath": "OtaEcommercePage.lynx.bundle",
+      "requestKey": "/lazy-bundle/src_components_store_ProductDetailPage.tsx.036d481c5f3fc764.bundle",
+      "path": "lazy-bundle/src_components_store_ProductDetailPage.tsx.036d481c5f3fc764.bundle",
+      "sha256": "sha256:6cde75fe0343a8ecbe1123d843efffe7672cbcc2d742ccf7a08f21d52a96f679",
+      "size": 20862,
+      "kind": "bundle"
+    },
+    {
+      "ownerBundlePath": "OtaEcommercePage.lynx.bundle",
+      "requestKey": "/lazy-bundle/src_components_store_ReviewsPage.tsx.036d481c5f3fc764.bundle",
+      "path": "lazy-bundle/src_components_store_ReviewsPage.tsx.036d481c5f3fc764.bundle",
+      "sha256": "sha256:3dc7a010ab3c830e063adae36bacd7222c475164ecc1e062c4dabda4e9ae3857",
+      "size": 19494,
+      "kind": "bundle"
+    }
+  ]
+}

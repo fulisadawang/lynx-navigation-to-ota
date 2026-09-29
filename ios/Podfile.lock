@@ -65,7 +65,48 @@ PODS:
     - LynxShellKit
   - LynxShellKit (1.0.0):
     - Lynx/Framework (= 4.1.0)
+    - LynxService/Http (= 4.1.0)
+    - LynxService/Image (= 4.1.0)
+    - LynxService/Log (= 4.1.0)
+    - LynxShellKit/Map (= 1.0.0)
+    - PrimJS/napi (= 4.1.1)
+    - PrimJS/quickjs (= 4.1.1)
+    - SDWebImage (= 5.15.5)
+    - SDWebImageWebPCoder (= 0.11.0)
+    - XElement/Behavior (= 4.1.0)
+    - XElement/BlurView (= 4.1.0)
+    - XElement/Input (= 4.1.0)
+    - XElement/Markdown (= 4.1.0)
+    - XElement/Overlay (= 4.1.0)
+    - XElement/Refresh (= 4.1.0)
+    - XElement/ScrollCoordinator (= 4.1.0)
+    - XElement/SVG (= 4.1.0)
+    - XElement/Video (= 4.1.0)
+    - XElement/ViewPager (= 4.1.0)
+    - XElement/WebView (= 4.1.0)
+  - LynxShellKit/Map (1.0.0):
+    - Lynx/Framework (= 4.1.0)
     - LynxMapKit (= 1.0.0)
+    - LynxService/Http (= 4.1.0)
+    - LynxService/Image (= 4.1.0)
+    - LynxService/Log (= 4.1.0)
+    - PrimJS/napi (= 4.1.1)
+    - PrimJS/quickjs (= 4.1.1)
+    - SDWebImage (= 5.15.5)
+    - SDWebImageWebPCoder (= 0.11.0)
+    - XElement/Behavior (= 4.1.0)
+    - XElement/BlurView (= 4.1.0)
+    - XElement/Input (= 4.1.0)
+    - XElement/Markdown (= 4.1.0)
+    - XElement/Overlay (= 4.1.0)
+    - XElement/Refresh (= 4.1.0)
+    - XElement/ScrollCoordinator (= 4.1.0)
+    - XElement/SVG (= 4.1.0)
+    - XElement/Video (= 4.1.0)
+    - XElement/ViewPager (= 4.1.0)
+    - XElement/WebView (= 4.1.0)
+  - LynxShellKitE2ECore (1.0.0):
+    - Lynx/Framework (= 4.1.0)
     - LynxService/Http (= 4.1.0)
     - LynxService/Image (= 4.1.0)
     - LynxService/Log (= 4.1.0)
@@ -159,6 +200,7 @@ DEPENDENCIES:
   - LynxMapKit (from `LynxMapKit`)
   - LynxShellDebugKit (from `.`)
   - LynxShellKit (from `.`)
+  - LynxShellKitE2ECore (from `.`)
 
 SPEC REPOS:
   https://github.com/lynx-family/Specs.git:
@@ -189,6 +231,8 @@ EXTERNAL SOURCES:
     :path: "."
   LynxShellKit:
     :path: "."
+  LynxShellKitE2ECore:
+    :path: "."
 
 SPEC CHECKSUMS:
   AMap3DMap: 4718171fccb20e827d48ce9cefb20d67f35441f1
@@ -202,7 +246,8 @@ SPEC CHECKSUMS:
   LynxService: 4e390c8080eff4bc3d3f4e2133379c2942191c1b
   LynxServiceAPI: 79446ba6dcea4353b8e2e5b77ec9f34603c0a054
   LynxShellDebugKit: 10349253672a9bc52fbafe0c3a5f807dd2e807f1
-  LynxShellKit: e9585351441f5301a98b6a50f0ae695c2c38fd0d
+  LynxShellKit: c38aafe191ef064238c9a2b653c5a48779fba89d
+  LynxShellKitE2ECore: 546dfcd208ea94d39d4ce153e1f7d1871760099b
   LynxTextra: 82539791caa56e964cde427f05cff24ed3736d36
   MJRefresh: ff9e531227924c84ce459338414550a05d2aea78
   PrimJS: 2bb7f0e0c314cc81f6dc53aa814082b66f149e7c
@@ -212,6 +257,6 @@ SPEC CHECKSUMS:
   ServalSVG: 19bf88f72dae928c28a744c9b91475a3691ded42
   XElement: 81b11cf09c9b2c773bfc3b9b631811502328016b
 
-PODFILE CHECKSUM: 01ea626fdff3ece1a02edc0fb9d3f0d517702325
+PODFILE CHECKSUM: c18b2019c57e186729a3c3edb70432846e509db0
 
 COCOAPODS: 1.17.0

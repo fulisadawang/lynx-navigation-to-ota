@@ -42,6 +42,7 @@ struct Index {
   private hasRequestedDefaultHome: boolean = false;
   private otaOperationGeneration: number = 0;
   private readonly otaTestAppId: string = '10000001';
+  private readonly ecommerceTestAppId: string = '10020000';
   private readonly embeddedHomeBundleName: string = 'home.lynx.bundle';
   private readonly embeddedPlaygroundBundleName: string = 'main.lynx.bundle';
   private otaHomeBundleName: string = 'home.lynx.bundle';
@@ -53,7 +54,7 @@ struct Index {
   };
 
   private isEnglish(): boolean {
-    return this.localeRevision >= 0 && LynxRouter.currentLocaleState().appLocale === 'en-US';
+    return this.localeRevision >= 0 && LynxRouter.currentLocaleState().locale === 'en-US';
   }
 
   aboutToAppear(): void {
@@ -141,6 +142,27 @@ struct Index {
     }).finally(() => {
       this.isOpening = false;
     });
+  }
+
+  /** 电商验收页从同一代码 Release 读取主 Bundle 与三个本地 Async Bundle。 */
+  private openOtaEcommerce(): void {
+    if (this.isOpening) return;
+    this.isOpening = true;
+    this.otaStatusMessage = `正在打开 ${this.ecommerceTestAppId}/OtaEcommercePage.lynx.bundle…`;
+    const params: Record<string, Object> = { 'source': 'harmony-ota-ecommerce' };
+    const options: Record<string, Object> = {
+      'title': 'Store v3 电商测试',
+      'fullscreen': true,
+      'showNavigationBar': false
+    };
+    LynxRouter.openOta(this.ecommerceTestAppId, 'OtaEcommercePage.lynx.bundle', params, options)
+      .then((result) => {
+        this.otaStatusMessage = result.code === 0 ? '已打开 OTA 双语电商页' : result.message;
+      }).catch((error: Error) => {
+        this.otaStatusMessage = `打开 OTA 双语电商页失败：${error.message}`;
+      }).finally(() => {
+        this.isOpening = false;
+      });
   }
 
   private openPlaygroundHome(): void {
@@ -523,6 +545,17 @@ struct Index {
             .border({ width: 1, color: $r('app.color.shell_brand') })
             .borderRadius(12)
             .onClick(() => this.openOtaHome())
+
+          Button('打开 OTA 双语电商页（10020000）')
+            .width('100%')
+            .height(52)
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.shell_text_primary'))
+            .backgroundColor('#FFFFFF')
+            .border({ width: 1, color: $r('app.color.shell_brand') })
+            .borderRadius(12)
+            .onClick(() => this.openOtaEcommerce())
 
           Button('打开内置基线（不走 OTA）')
             .width('100%')

@@ -103,6 +103,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         let status: String
         let installedAt: Date
         let bundles: [LocalBundle]
+        var asyncBundleManifest: OtaAsyncManifestReference? = nil
     }
 
     private struct ManifestHashInput: Codable {
@@ -115,6 +116,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         let status: String
         let installedAt: Date
         let bundles: [LocalBundle]
+        var asyncBundleManifest: OtaAsyncManifestReference? = nil
     }
 
     private struct TransactionJournal: Codable {
@@ -911,7 +913,8 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
                 status: status
             ),
             installedAt: manifest.installedAt,
-            bundles: bundles
+            bundles: bundles,
+            asyncBundleManifest: manifest.asyncBundleManifest
         )
     }
 
@@ -928,7 +931,8 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
             platform: release.context.platform.rawValue,
             status: OtaReleaseStatus.active.rawValue,
             installedAt: installedAt,
-            bundles: bundles
+            bundles: bundles,
+            asyncBundleManifest: release.asyncBundleManifest
         )
         let manifestId = digest(try! encoder.encode(input))
         return LocalManifest(
@@ -941,7 +945,8 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
             platform: release.context.platform.rawValue,
             status: OtaReleaseStatus.active.rawValue,
             installedAt: installedAt,
-            bundles: bundles
+            bundles: bundles,
+            asyncBundleManifest: release.asyncBundleManifest
         )
     }
 
@@ -955,7 +960,8 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
             platform: manifest.platform,
             status: manifest.status,
             installedAt: manifest.installedAt,
-            bundles: manifest.bundles
+            bundles: manifest.bundles,
+            asyncBundleManifest: manifest.asyncBundleManifest
         )
         return digest(try! encoder.encode(input))
     }
@@ -1125,12 +1131,29 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
             }
         }
 
+        let availableManifestIds = Set(manifests.map(\.id))
+        guard retainedManifestIds.isSubset(of: availableManifestIds) else {
+            NSLog("[Lynx OTA] prune_deferred：Store v3 保留的主 Manifest 缺失，跳过主包与附属资源回收")
+            return
+        }
+
         for item in manifests where !retainedManifestIds.contains(item.id) {
             try removeItemIfPresent(manifestURL(lynxAppId: lynxAppId, manifestId: item.id))
         }
         for object in try objectURLs(lynxAppId: lynxAppId) {
             let id = "sha256:" + String(object.lastPathComponent.dropLast(".lynx.bundle".count))
             if !retainedObjectIds.contains(id) { try removeItemIfPresent(object) }
+        }
+        let retainedManifests = manifests.filter { retainedManifestIds.contains($0.id) }.map(\.manifest)
+        do {
+            try OtaSidecarGarbageCollector.prune(
+                baseDirectory: baseDirectory,
+                appId: lynxAppId,
+                asyncIds: Set(retainedManifests.compactMap { $0.asyncBundleManifest?.sha256 })
+            )
+        } catch {
+            // GC 不是激活事务：附属资源根不可读时保留对象，不能反向宣告已提交的主状态失败。
+            NSLog("[Lynx OTA] sidecar_gc_deferred：资源根校验或清理失败，保留剩余资源供下次维护重试")
         }
     }
 
@@ -1245,6 +1268,9 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     private func validateRelease(_ release: OtaInstalledRelease) throws {
         guard release.context.status == .active else { throw OtaSDKError.invalidReleaseStatus(release.context.status.rawValue) }
         guard !release.bundles.isEmpty else { throw storageError("Release 不包含 Bundle") }
+        if let reference = release.asyncBundleManifest {
+            try OtaAsyncBundleStore.verifyInstalled(baseDirectory: baseDirectory, appId: release.context.lynxAppId, reference: reference, owners: Set(release.bundles.map(\.bundlePath)))
+        }
         for bundle in release.bundles {
             _ = try safeBundlePath(bundle.bundlePath)
             _ = try normalizeSha256(bundle.bundleSha256)

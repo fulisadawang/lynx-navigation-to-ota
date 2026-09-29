@@ -1,5 +1,9 @@
+#if LYNX_SHELL_E2E_CORE_ONLY
+import LynxShellKitE2ECore
+#else
 import LynxShellKit
-#if DEBUG
+#endif
+#if DEBUG && canImport(LynxShellDebugKit)
 import LynxShellDebugKit
 #endif
 import UIKit
@@ -91,13 +95,22 @@ final class LauncherViewController: UIViewController {
         contentStack.setCustomSpacing(28, after: introLabel)
         contentStack.addArrangedSubview(otaHomeButton)
 
-#if DEBUG
+        let ecommerceTestButton = makeButton(
+            title: "打开 iOS OTA 电商压力测试",
+            filled: true,
+            action: #selector(openStoreV3EcommerceBundle)
+        )
+        ecommerceTestButton.accessibilityIdentifier = "open-store-v3-ecommerce-bundle"
+        contentStack.setCustomSpacing(12, after: otaHomeButton)
+        contentStack.addArrangedSubview(ecommerceTestButton)
+
+#if DEBUG && canImport(LynxShellDebugKit)
         let debugToolButton = makeButton(
             title: "打开 Lynx 调试面板",
             filled: false,
             action: #selector(openLynxDebugTool)
         )
-        contentStack.setCustomSpacing(12, after: otaHomeButton)
+        contentStack.setCustomSpacing(12, after: ecommerceTestButton)
         contentStack.addArrangedSubview(debugToolButton)
 #endif
 
@@ -108,7 +121,7 @@ final class LauncherViewController: UIViewController {
                 filled: false,
                 action: #selector(prepareRollbackProcessTest)
             )
-            contentStack.setCustomSpacing(8, after: otaHomeButton)
+            contentStack.setCustomSpacing(8, after: ecommerceTestButton)
             contentStack.addArrangedSubview(prepareRollbackButton)
             installDebugF12StatusLabel()
         }
@@ -119,7 +132,7 @@ final class LauncherViewController: UIViewController {
             filled: false,
             action: #selector(openPlaygroundHome)
         )
-        contentStack.setCustomSpacing(12, after: otaHomeButton)
+        contentStack.setCustomSpacing(12, after: ecommerceTestButton)
         contentStack.addArrangedSubview(playgroundButton)
 
         let nativeTabButton = makeButton(
@@ -152,7 +165,7 @@ final class LauncherViewController: UIViewController {
         contentStack.addArrangedSubview(card)
     }
 
-#if DEBUG
+#if DEBUG && canImport(LynxShellDebugKit)
     @objc private func openLynxDebugTool() {
         LynxDebugTool.present(from: self)
     }
@@ -329,6 +342,23 @@ final class LauncherViewController: UIViewController {
                 title: "无法打开 OTA 验收首页",
                 message: error.localizedDescription
             )
+        }
+    }
+
+    @objc private func openStoreV3EcommerceBundle() {
+        do {
+            _ = try LynxRouter.open(
+                lynxAppId: "10020000",
+                bundleName: "OtaEcommercePage.lynx.bundle",
+                params: ["source": "ios-store-v3-ecommerce-test"],
+                options: [
+                    "title": "Store v3 电商测试",
+                    "fullscreen": true,
+                    "showNavigationBar": false,
+                ]
+            )
+        } catch {
+            presentShellAlert(title: "无法打开 Store v3 电商测试页", message: error.localizedDescription)
         }
     }
 

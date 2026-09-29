@@ -58,6 +58,9 @@ interface OtaApiClient {
 
   companion object {
     const val OTA_CLIENT_TOKEN_HEADER = "x-ota-client-token"
+    /** Server 只向显式支持 Async 资源的新版客户端选择对应 Release。 */
+    const val RESOURCE_SCHEMA_HEADER = "x-ota-resource-schema"
+    const val RESOURCE_SCHEMA_VERSION = "1"
 
     @JvmStatic
     fun server(baseUri: URI): OtaApiClient {
@@ -66,12 +69,13 @@ interface OtaApiClient {
         OtaModels.DEFAULT_OTA_CLIENT_TOKEN,
         OtaModels.Environment.TEST,
         false,
+        false,
       )
     }
 
     @JvmStatic
     fun server(baseUri: URI, otaClientToken: String?): OtaApiClient {
-      return ServerOtaApiClient(baseUri, otaClientToken, OtaModels.Environment.TEST, false)
+      return ServerOtaApiClient(baseUri, otaClientToken, OtaModels.Environment.TEST, false, false)
     }
 
     @JvmStatic
@@ -81,7 +85,18 @@ interface OtaApiClient {
       environment: OtaModels.Environment,
       allowLocalHTTPForTest: Boolean,
     ): OtaApiClient {
-      return ServerOtaApiClient(baseUri, otaClientToken, environment, allowLocalHTTPForTest)
+      return ServerOtaApiClient(baseUri, otaClientToken, environment, allowLocalHTTPForTest, false)
+    }
+
+    @JvmStatic
+    fun server(
+      baseUri: URI,
+      otaClientToken: String?,
+      environment: OtaModels.Environment,
+      allowLocalHTTPForTest: Boolean,
+      supportsSidecars: Boolean,
+    ): OtaApiClient {
+      return ServerOtaApiClient(baseUri, otaClientToken, environment, allowLocalHTTPForTest, supportsSidecars)
     }
   }
 }
@@ -91,6 +106,7 @@ private class ServerOtaApiClient(
   otaClientToken: String?,
   private val environment: OtaModels.Environment,
   private val allowLocalHTTPForTest: Boolean,
+  private val supportsSidecars: Boolean,
 ) : OtaApiClient {
   init {
     require(OtaURLPolicy.isAllowed(baseUri, environment, allowLocalHTTPForTest)) {
@@ -254,6 +270,7 @@ private class ServerOtaApiClient(
     connection.readTimeout = 30_000
     connection.setRequestProperty("Accept", "application/json")
     connection.setRequestProperty(OtaApiClient.OTA_CLIENT_TOKEN_HEADER, otaClientToken)
+    if (supportsSidecars) connection.setRequestProperty(OtaApiClient.RESOURCE_SCHEMA_HEADER, OtaApiClient.RESOURCE_SCHEMA_VERSION)
     requestHeaders.forEach { (name, value) -> connection.setRequestProperty(name, value) }
     if (body != null) {
       val bytes = body.toByteArray(Charsets.UTF_8)

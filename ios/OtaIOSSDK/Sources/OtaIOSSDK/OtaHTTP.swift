@@ -287,11 +287,13 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
     private let encoder: JSONEncoder
     private let allowLocalHTTPForTest: Bool
     private let responseCache: OtaHTTPResponseCache
+    private let supportsSidecarResources: Bool
 
     public init(
         baseURL: URL,
         otaClientToken: String = OtaDefaults.otaClientToken,
-        allowLocalHTTPForTest: Bool = false
+        allowLocalHTTPForTest: Bool = false,
+        supportsSidecarResources: Bool = false
     ) {
         let isHTTPS = baseURL.scheme?.lowercased() == "https"
         let isLocalHTTP = allowLocalHTTPForTest && OtaLocalTestURLPolicy.isAllowedLocalHTTP(baseURL)
@@ -308,6 +310,7 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
         self.encoder = JSONEncoder()
         self.allowLocalHTTPForTest = allowLocalHTTPForTest
         self.responseCache = OtaHTTPResponseCache()
+        self.supportsSidecarResources = supportsSidecarResources
     }
 
     public func checkForUpdate(_ request: OtaPolicyMatchRequest) async throws -> OtaPolicyMatchResponse {
@@ -434,6 +437,7 @@ public struct ServerOtaAPIClient: OtaAPIClientProtocol {
 
     private func applyClientToken(to request: inout URLRequest) {
         request.setValue(otaClientToken, forHTTPHeaderField: Self.otaClientTokenHeader)
+        if supportsSidecarResources { request.setValue("1", forHTTPHeaderField: "x-ota-resource-schema") }
     }
 
     private func send<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {

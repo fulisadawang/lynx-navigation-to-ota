@@ -30,6 +30,7 @@ enum ShellGlobalPropsFactory {
         props["buildNumber"] = info["CFBundleVersion"] as? String ?? ""
         applyLayout(resolvedLayoutSnapshot, to: &props)
         applyLocale(resolvedLocaleState, to: &props)
+        props.removeValue(forKey: "__lynxI18n")
         // 页面应读取原生容器最终采用的 chrome 状态，避免原始 query 与 options 合并后
         // 留下过期值。其他业务参数保持不变，宿主保留字段在这里统一覆盖。
         var queryItems: [String: Any] = [:]
