@@ -8,6 +8,8 @@ import com.example.lynxshell.debug.LynxDebugBridge
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.monitoring.LynxViewMonitor
 import com.example.lynxshell.resource.ShellTemplateProvider
+import com.example.lynxshell.resource.ShellSidecarFetchers
+import com.example.lynxshell.runtime.LynxLocaleStore
 import com.example.lynxshell.runtime.ShellGlobalPropsFactory
 import com.example.lynxshell.runtime.XElementRuntime
 import com.example.lynxmap.LynxMapRuntime
@@ -16,6 +18,7 @@ import com.lynx.tasm.LynxViewBuilder
 import com.lynx.tasm.LynxViewClient
 import com.lynx.tasm.TemplateData
 import com.lynx.tasm.ThreadStrategyForRendering
+import com.ota.android.sdk.OtaSidecarViewResources
 
 /** 只负责把页面配置翻译成 LynxViewBuilder，不承担导航与页面状态。 */
 object LynxContainerFactory {
@@ -25,17 +28,20 @@ object LynxContainerFactory {
         templateProvider: ShellTemplateProvider,
         lynxViewClient: LynxViewClient? = null,
         bundleMetadata: Map<String, Any>? = null,
+        sidecarResources: OtaSidecarViewResources? = null,
         monitoring: LynxViewMonitor? = null,
         // LYNX_DEBUG_TOOL_BEGIN
         containerKind: String = "page",
         // LYNX_DEBUG_TOOL_END
     ): LynxView {
         val initialLayout = ShellGlobalPropsFactory.captureLayout(activity)
+        val locale = LynxLocaleStore.current(activity)
         val builder = LynxViewBuilder()
             .setTemplateProvider(templateProvider)
             .setThreadStrategyForRendering(ThreadStrategyForRendering.MOST_ON_TASM)
             .setColorScheme(ShellGlobalPropsFactory.resolveColorScheme(activity))
             .setScreenSize(initialLayout.screenWidthPx, initialLayout.screenHeightPx)
+        ShellSidecarFetchers.install(builder, sidecarResources, request.bundleUrl, templateProvider)
 
         // 全部页面统一安装 Lynx 4.1 Explorer 范围内的完整 XElement Behavior，包含
         // Video；不让业务页面自行注册，避免不同页面能力不一致。
@@ -65,6 +71,7 @@ object LynxContainerFactory {
                 request = request,
                 bundleMetadata = bundleMetadata,
                 initialLayout = initialLayout,
+                locale = locale,
             )
             lynxView.updateGlobalProps(TemplateData.fromMap(globalProps))
             // LYNX_DEBUG_TOOL_BEGIN

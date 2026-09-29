@@ -10,6 +10,7 @@ class OtaSdk {
   private val embeddedStore: EmbeddedReleaseStore
   private val releaseTransaction: OtaReleaseStore
   private val bundleRuntime: BundleRuntime
+  private val sidecarStore: ContentAddressedOtaStore?
 
   constructor(configuration: OtaModels.Configuration) : this(
     configuration,
@@ -18,6 +19,7 @@ class OtaSdk {
       configuration.otaClientToken,
       configuration.environment,
       configuration.allowLocalHTTPForTest,
+      configuration.storeVersion == OtaModels.StoreVersion.V3,
     ),
   )
 
@@ -36,6 +38,7 @@ class OtaSdk {
       ).also { it.bindUserContext(userContext) }
     }
     this.bundleRuntime = BundleRuntime(releaseTransaction)
+    this.sidecarStore = releaseTransaction as? ContentAddressedOtaStore
   }
 
   val userIdentityEpoch: Long get() = userContext.identityEpoch
@@ -127,7 +130,9 @@ class OtaSdk {
     platform: OtaModels.Platform,
   ): OtaModels.ReleaseManifest {
     return identityScope {
-      return@identityScope apiClient.fetchManifest(releaseId, env, hostApp, lynxAppId, platform)
+      return@identityScope apiClient.fetchManifest(releaseId, env, hostApp, lynxAppId, platform).also {
+        ensureSidecarsAllowed(it.asyncBundleManifest)
+      }
     }
   }
 
@@ -166,7 +171,14 @@ class OtaSdk {
 
       val results = LinkedHashMap<String, OtaModels.LatestBundleListUpdateResult>()
       for (latest in latestGroup.bundleLists) {
-        results[latest.lynxAppId] = updateToLatestBundleList(latest)
+        try {
+          results[latest.lynxAppId] = updateToLatestBundleList(latest)
+        } catch (error: OtaSdkException) {
+          if (error.reasonCode != "unsupported_sidecar_store") throw error
+          reportSelectionFailure(latest.lynxAppId, latest.releaseId, "unsupported_sidecar_store")
+          results[latest.lynxAppId] = OtaModels.LatestBundleListUpdateResult.skipped(
+            getCurrentRelease(latest.lynxAppId), error.message ?: "Store v2 不支持 Async OTA")
+        }
       }
       return@identityScope OtaModels.HostBundleListSyncResult(results)
     }
@@ -549,6 +561,7 @@ class OtaSdk {
   }
 
   private fun recordSelected(latest: OtaModels.LatestBundleList, selection: OtaStoredSelection, identity: OtaUserContext) {
+    ensureSidecarsAllowed(latest.asyncBundleManifest)
     releaseTransaction.recordDecision(scopeFor(latest.lynxAppId),
       OtaLastDecision(identity.audienceKey, identity.clientContextKey, selection.policyRevision, OtaSelectionAction.USE_RELEASE, latest.releaseId, latest.selection!!.reason), selection)
   }
@@ -561,11 +574,17 @@ class OtaSdk {
   }
 
   private fun applySelected(latest: OtaModels.LatestBundleList, selection: OtaStoredSelection, identity: OtaUserContext): OtaModels.LatestBundleListUpdateResult {
+    ensureSidecarsAllowed(latest.asyncBundleManifest)
     userContext.validate(identity)
     if (!selection.compatible(identity)) throw OtaSelectionException("incompatible_release")
     return OtaOperationContext.withSelection(selection) {
-      val outcome = releaseTransaction.install(ReleaseTransaction.InstallRequest(scopeFor(latest.lynxAppId), latest.asManifest(),
-        embeddedStore.embeddedRelease(latest.lynxAppId), configuration.candidateActivationEnabled, selection))
+      val manifest = latest.asManifest()
+      val staged = stageSidecars(manifest)
+      val outcome = try {
+        releaseTransaction.install(ReleaseTransaction.InstallRequest(scopeFor(latest.lynxAppId), manifest,
+          embeddedStore.embeddedRelease(latest.lynxAppId), configuration.candidateActivationEnabled,
+          selection))
+      } finally { staged?.close() }
       userContext.validate(identity)
       val installed = outcome.installed ?: throw OtaSelectionException("missing_selection_metadata")
       val summary = OtaModels.BundleSyncSummary(latest.releaseId, latest.changedBundles.size, outcome.downloadedBundleCount, outcome.reusedBundleCount, outcome.copiedBundleCount)
@@ -601,6 +620,7 @@ class OtaSdk {
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)
   private fun updateToLatestBundleList(latest: OtaModels.LatestBundleList): OtaModels.LatestBundleListUpdateResult {
+    ensureSidecarsAllowed(latest.asyncBundleManifest)
     val latestScope = ReleaseTransaction.ReleaseScope.fromManifest(latest.asManifest())
     if (configuration.candidateActivationEnabled) {
       // trial 只允许由真正打开页面的路径消费；进程重启时未完成 trial 必须清理，
@@ -641,10 +661,11 @@ class OtaSdk {
       )
     }
     if (current != null && current.context.releaseId == latest.releaseId) {
-      if (hasAllLocalBundles(current)) {
+      val sameResources = current.asyncBundleManifest == latest.asyncBundleManifest
+      if (sameResources && hasAllLocalBundles(current)) {
         return OtaModels.LatestBundleListUpdateResult.alreadyActive(current)
       }
-      report(
+      if (sameResources) report(
         OtaModels.ReportEvent.CHECK_RESULT,
         latest.releaseId,
         latest.lynxAppId,
@@ -710,6 +731,7 @@ class OtaSdk {
 
     val manifest = latest.asManifest()
     val scope = ReleaseTransaction.ReleaseScope.fromManifest(manifest)
+    val staged = stageSidecars(manifest)
     val transaction = try {
       // 所有新下载都经过同一个 Release 事务：Bundle 写入 appId staging，完整校验后再
       // 原子发布并提交 current/previous state。
@@ -744,6 +766,8 @@ class OtaSdk {
         )
       }
       throw error
+    } finally {
+      staged?.close()
     }
     val activated = transaction.installed
       ?: return OtaModels.LatestBundleListUpdateResult.noRelease(transaction.current)
@@ -917,6 +941,27 @@ class OtaSdk {
     }
   }
 
+  private fun ensureSidecarsAllowed(asyncRef: OtaSidecarModels.AsyncManifestRef?) {
+    if (configuration.storeVersion != OtaModels.StoreVersion.V3 && asyncRef != null) {
+      throw OtaSdkException("Store v2 不支持 Async OTA", null, "unsupported_sidecar_store")
+    }
+  }
+
+  private fun stageSidecars(manifest: OtaModels.ReleaseManifest): AutoCloseable? {
+    ensureSidecarsAllowed(manifest.asyncBundleManifest)
+    if (manifest.asyncBundleManifest == null) return null
+    val store = sidecarStore ?: throw OtaSdkException("Store v2 不支持 OTA 附属资源", null, "unsupported_sidecar_store")
+    val reserved = store.reserveSidecars(manifest.lynxAppId, manifest.asyncBundleManifest)
+    try {
+      store.stageAsyncResources(manifest)
+      store.pinStagedSidecars(manifest).close()
+      return reserved
+    } catch (error: Throwable) {
+      reserved.close()
+      throw error
+    }
+  }
+
   private fun hasAllLocalBundles(release: OtaModels.InstalledRelease): Boolean {
     // embedded descriptor 的 localFilePath 是受控 asset URI，不是 filesDir 普通文件；它的
     // 内容由宿主 EmbeddedBundleRegistry 在真正交付 LynxView 时从 APK AssetManager 校验。
@@ -935,7 +980,8 @@ class OtaSdk {
         return false
       }
     }
-    return true
+    if (release.asyncBundleManifest == null) return true
+    return sidecarStore?.resourcesComplete(release) ?: false
   }
 
   @Throws(IOException::class, InterruptedException::class, OtaSdkException::class)

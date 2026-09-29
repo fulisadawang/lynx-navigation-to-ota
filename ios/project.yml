@@ -16,6 +16,9 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: '14.0'
+    scheme:
+      testTargets:
+        - LynxShellUITests
     sources:
       # App Target 只编译 Sample 宿主；Lynx 实现由 Podfile 中的 LynxShellKit 提供。
       - path: LynxShellSample
@@ -59,3 +62,72 @@ targets:
         TARGETED_DEVICE_FAMILY: '1'
         TEST_TARGET_NAME: LynxShell
         GENERATE_INFOPLIST_FILE: YES
+  LynxShellE2EHost:
+    type: application
+    platform: iOS
+    deploymentTarget: '14.0'
+    sources:
+      - path: LynxShellSample
+        excludes:
+          - Resources/Bundles
+          - Supporting/Info.plist
+          - Supporting/Info-Debug.plist
+      - path: LynxShellSample/Resources/Bundles
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.huangbaoche.client.store.otae2e
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: Apple Development
+        DEVELOPMENT_TEAM: J6SYSM2AHQ
+        TARGETED_DEVICE_FAMILY: '1'
+        CURRENT_PROJECT_VERSION: '1'
+        MARKETING_VERSION: '1.0.0'
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS:
+          - $(inherited)
+          - LYNX_SHELL_E2E_CORE_ONLY
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -ObjC
+      configs:
+        Debug:
+          INFOPLIST_FILE: LynxShellSample/Supporting/Info-Debug.plist
+        Release:
+          INFOPLIST_FILE: LynxShellSample/Supporting/Info.plist
+  LynxShellE2EUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: '14.0'
+    sources:
+      - path: Tests/UITests/LynxShellUITests.swift
+    dependencies:
+      - target: LynxShellE2EHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.huangbaoche.client.store.otae2e.uitests
+        TARGETED_DEVICE_FAMILY: '1'
+        TEST_TARGET_NAME: LynxShellE2EHost
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  LynxShellE2EHost:
+    build:
+      targets:
+        LynxShellE2EHost:
+          - run
+          - test
+          - analyze
+        LynxShellE2EUITests:
+          - test
+      parallelizeBuild: false
+      buildImplicitDependencies: true
+      buildArchitectures: matchRunDestination
+    run:
+      config: Debug
+      executable: LynxShellE2EHost
+    test:
+      config: Debug
+      targets:
+        - name: LynxShellE2EUITests
+          parallelizable: false

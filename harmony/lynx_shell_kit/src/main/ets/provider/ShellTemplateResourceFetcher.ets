@@ -6,6 +6,7 @@ import { LynxResourceRequest, LynxTemplateResourceFetcher, TemplateProviderResul
 import ShellConstants from '../common/ShellConstants';
 import ShellSecurityPolicy from '../common/ShellSecurityPolicy';
 import { OtaUserContext } from '../ota/OtaUserContext';
+import { OtaAsyncResourceResolver } from '../ota/OtaModels';
 
 /**
  * Lynx Bundle / SSR 数据加载器。
@@ -21,6 +22,7 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
   private readonly preparedFilePath: string;
   private readonly preparedStorageRoot: string;
   private readonly preparedBytes: ArrayBuffer | null;
+  private readonly asyncResolver?: OtaAsyncResourceResolver;
   private preparedConsumed: boolean = false;
   private readonly activeRequests: Set<http.HttpRequest> = new Set();
   private requestGeneration: number = 0;
@@ -30,7 +32,8 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
     preparedUrl: string = '',
     preparedFilePath: string = '',
     preparedStorageRoot: string = '',
-    preparedBytes: ArrayBuffer | null = null
+    preparedBytes: ArrayBuffer | null = null,
+    asyncResolver?: OtaAsyncResourceResolver
   ) {
     super();
     this.allowHttpInDebug = allowHttpInDebug;
@@ -38,6 +41,7 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
     this.preparedFilePath = preparedFilePath;
     this.preparedStorageRoot = preparedStorageRoot;
     this.preparedBytes = preparedBytes;
+    this.asyncResolver = asyncResolver;
   }
 
   fetchTemplate(
@@ -50,6 +54,10 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
   }
 
   fetchSSRData(request: LynxResourceRequest, callback: AsyncCallback<ArrayBuffer, void>): void {
+    if (this.asyncResolver !== undefined) {
+      callback(this.createError(1108, '当前 OTA 页面没有声明 SSR 资源'), new ArrayBuffer(0));
+      return;
+    }
     this.loadBinary(request.url, callback);
   }
 
@@ -58,6 +66,20 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
     if (!this.preparedConsumed && this.preparedUrl.length > 0 && rawUrl === this.preparedUrl) {
       this.preparedConsumed = true;
       this.loadPreparedBundle(callback, generation);
+      return;
+    }
+    if (this.asyncResolver !== undefined) {
+      if (this.asyncResolver.kind(rawUrl) !== 'bundle') {
+        callback(this.createError(1107, '当前代码快照未声明此 Async Bundle'), new ArrayBuffer(0));
+        return;
+      }
+      this.asyncResolver.resolveBytes(rawUrl).then((bytes: ArrayBuffer) => {
+        if (generation === this.requestGeneration) callback(undefined, bytes);
+      }, (error: Error) => {
+        if (generation === this.requestGeneration) {
+          callback(this.createError(1106, `Async Bundle 本地读取失败：${error}`), new ArrayBuffer(0));
+        }
+      });
       return;
     }
     if (ShellSecurityPolicy.isRemoteUrl(rawUrl)) {
@@ -264,8 +286,8 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
     cachePath: string,
     allowHttpInDebug: boolean
   ): void {
-    if (this.refreshingRemoteUrls.has(rawUrl)) return;
-    this.refreshingRemoteUrls.add(rawUrl);
+    if (ShellTemplateResourceFetcher.refreshingRemoteUrls.has(rawUrl)) return;
+    ShellTemplateResourceFetcher.refreshingRemoteUrls.add(rawUrl);
     const httpRequest = http.createHttp();
     try {
       httpRequest.request(rawUrl, {
@@ -283,15 +305,15 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
             binary.byteLength > ShellConstants.MAX_BUNDLE_BYTES) return;
           const validation = ShellSecurityPolicy.validateTemplateUrl(rawUrl, allowHttpInDebug);
           if (!validation.valid) return;
-          this.writeRemoteCache(cachePath, binary);
+          ShellTemplateResourceFetcher.writeRemoteCache(cachePath, binary);
         } finally {
           httpRequest.destroy();
-          this.refreshingRemoteUrls.delete(rawUrl);
+          ShellTemplateResourceFetcher.refreshingRemoteUrls.delete(rawUrl);
         }
       });
     } catch (error) {
       httpRequest.destroy();
-      this.refreshingRemoteUrls.delete(rawUrl);
+      ShellTemplateResourceFetcher.refreshingRemoteUrls.delete(rawUrl);
     }
   }
 

@@ -3,7 +3,9 @@
 #import <Lynx/LynxConfig.h>
 #import <Lynx/LynxEnv.h>
 #import <Lynx/LynxTemplateData.h>
+#if defined(LYNX_SHELL_ENABLE_MAP)
 #import <LynxMapKit/LynxMapModuleRuntime.h>
+#endif
 #import <SDWebImage/SDWebImage.h>
 #import <SDWebImageWebPCoder/SDWebImageWebPCoder.h>
 
@@ -38,7 +40,13 @@
 
 // Swift Module 与 Provider 会出现在 CocoaPods Target 自动生成的接口头中。
 // 条件分支兼容 framework 与 development pod 两种 Header 搜索路径。
-#if __has_include(<LynxShellKit/LynxShellKit-Swift.h>)
+#if defined(LYNX_SHELL_E2E_CORE_ONLY)
+#if __has_include(<LynxShellKitE2ECore/LynxShellKitE2ECore-Swift.h>)
+#import <LynxShellKitE2ECore/LynxShellKitE2ECore-Swift.h>
+#else
+#import "LynxShellKitE2ECore-Swift.h"
+#endif
+#elif __has_include(<LynxShellKit/LynxShellKit-Swift.h>)
 #import <LynxShellKit/LynxShellKit-Swift.h>
 #else
 #import "LynxShellKit-Swift.h"
@@ -74,9 +82,12 @@ static NSString *LynxHostString(NSDictionary *info, NSString *key) {
     LynxConfig *globalConfig =
         [[LynxConfig alloc] initWithProvider:[[ShellTemplateProvider alloc] init]];
     [globalConfig registerModule:LynxShellModule.class];
+#if defined(LYNX_SHELL_ENABLE_MAP)
     [LynxMapModuleRuntime registerModulesIntoConfig:globalConfig];
+#endif
     [env prepareConfig:globalConfig];
 
+#if defined(LYNX_SHELL_ENABLE_MAP)
     // 地图 Key 可以由宿主构建配置提供；隐私同意状态必须由运行时授权结果提供，默认拒绝。
     NSDictionary *info = [NSBundle mainBundle].infoDictionary ?: @{};
     BOOL privacyAgreed = NO;
@@ -87,6 +98,7 @@ static NSString *LynxHostString(NSDictionary *info, NSString *key) {
 #endif
     [LynxMapModuleRuntime bootstrapWithAPIKey:LynxHostString(info, @"LynxMapAPIKey")
                                privacyAgreed:privacyAgreed];
+#endif
   });
 }
 
@@ -103,14 +115,31 @@ static NSString *LynxHostString(NSDictionary *info, NSString *key) {
                         screenSize:(CGSize)screenSize
                       viewportSize:(CGSize)viewportSize
                        globalProps:(NSDictionary<NSString *, id> *)globalProps {
+  return [self makeViewWithProvider:provider resourceFetcher:nil screenSize:screenSize
+                      viewportSize:viewportSize globalProps:globalProps];
+}
+
++ (LynxView *)makeViewWithProvider:(id<LynxTemplateProvider>)provider
+                  resourceFetcher:(LynxLocalResourceFetcher *)resourceFetcher
+                       screenSize:(CGSize)screenSize
+                     viewportSize:(CGSize)viewportSize
+                      globalProps:(NSDictionary<NSString *, id> *)globalProps {
   LynxConfig *config = [[LynxConfig alloc] initWithProvider:provider];
   [config registerModule:LynxShellModule.class];
+#if defined(LYNX_SHELL_ENABLE_MAP)
   [LynxMapModuleRuntime registerModulesIntoConfig:config];
   // 每个 LynxView 显式注册，保证普通 Page 与 Native Tab 不依赖静态链接器是否保留 lazy symbol。
   [LynxMapModuleRuntime registerUIElementsIntoConfig:config];
+#endif
 
   LynxView *lynxView = [[LynxView alloc] initWithBuilderBlock:^(LynxViewBuilder *builder) {
     builder.config = config;
+    if (resourceFetcher) {
+      builder.templateResourceFetcher = resourceFetcher;
+      builder.genericResourceFetcher = resourceFetcher;
+      builder.mediaResourceFetcher = resourceFetcher;
+      builder.enableGenericResourceFetcher = LynxBooleanOptionTrue;
+    }
     builder.screenSize = screenSize;
     builder.fontScale = 1.0;
     id theme = globalProps[@"theme"];
@@ -168,4 +197,84 @@ static NSString *LynxHostString(NSDictionary *info, NSString *key) {
   [lynxView updateGlobalPropsWithTemplateData:templateData];
 }
 
+@end
+
+@interface LynxLocalResourceFetcher ()
+@property(nonatomic, strong) id<LynxTemplateProvider> provider;
+@property(nonatomic, copy) LynxLocalResolveBlock resolver;
+@property(nonatomic, copy) LynxLocalURLBlock localURL;
+@property(atomic, assign) BOOL cancelled;
+@end
+
+@implementation LynxLocalResourceFetcher
+
+- (instancetype)initWithProvider:(id<LynxTemplateProvider>)provider
+                         resolver:(LynxLocalResolveBlock)resolver
+                         localURL:(LynxLocalURLBlock)localURL {
+  if ((self = [super init])) {
+    _provider = provider;
+    _resolver = [resolver copy];
+    _localURL = [localURL copy];
+  }
+  return self;
+}
+
+- (void)cancel { self.cancelled = YES; }
+
+- (NSError *)unavailableError {
+  return [NSError errorWithDomain:@"LynxLocalResource" code:404
+                        userInfo:@{NSLocalizedDescriptionKey:@"当前页面版本没有可用的本地资源"}];
+}
+
+- (void)fetchTemplate:(LynxResourceRequest *)request onComplete:(LynxTemplateResourceCompletionBlock)callback {
+  if (self.cancelled) return;
+  __weak typeof(self) weakSelf = self;
+  LynxGenericResourceCompletionBlock complete = ^(NSData *data, NSError *error) {
+    typeof(self) self = weakSelf;
+    if (!self || self.cancelled) return;
+    callback(data ? [[LynxTemplateResource alloc] initWithNSData:data] : nil, error);
+  };
+  if (request.type == LynxResourceTypeTemplate) {
+    [self.provider loadTemplateWithUrl:request.url onComplete:complete];
+  } else if (request.type == LynxResourceTypeDynamicComponent) {
+    self.resolver(request.url, complete);
+  } else {
+    callback(nil, [self unavailableError]);
+  }
+}
+
+- (void)fetchSSRData:(LynxResourceRequest *)request onComplete:(LynxSSRResourceCompletionBlock)callback {
+  if (!self.cancelled) callback(nil, [self unavailableError]);
+}
+
+- (dispatch_block_t)fetchResource:(LynxResourceRequest *)request onComplete:(LynxGenericResourceCompletionBlock)callback {
+  NSProgress *progress = [NSProgress progressWithTotalUnitCount:1];
+  __weak typeof(self) weakSelf = self;
+  if (!self.cancelled) self.resolver(request.url, ^(NSData *data, NSError *error) {
+    typeof(self) self = weakSelf;
+    if (self && !self.cancelled && !progress.cancelled) callback(data, error);
+  });
+  return ^{ [progress cancel]; };
+}
+
+- (dispatch_block_t)fetchResourcePath:(LynxResourceRequest *)request onComplete:(LynxGenericResourcePathCompletionBlock)callback {
+  if (!self.cancelled) {
+    NSURL *url = self.localURL(request.url);
+    callback(url.path, url ? nil : [self unavailableError]);
+  }
+  return ^{};
+}
+
+- (LynxResourceOptionalBool)isLocalResource:(NSURL *)url {
+  if (self.cancelled) return LynxResourceOptionalBoolFalse;
+  return self.localURL(url.absoluteString) || [url.scheme isEqualToString:@"webpack"]
+      ? LynxResourceOptionalBoolTrue : LynxResourceOptionalBoolFalse;
+}
+
+- (NSString *)shouldRedirectUrl:(LynxResourceRequest *)request {
+  if (self.cancelled) return @"";
+  NSURL *url = self.localURL(request.url);
+  if (url) return url.absoluteString;
+  return [request.url hasPrefix:@"webpack:"] ? @"" : request.url;
+}
 @end

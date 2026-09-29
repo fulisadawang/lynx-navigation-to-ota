@@ -27,6 +27,8 @@ final class LynxContainerViewController: UIViewController {
     private var lynxView: LynxView?
     private var templateProvider: ShellTemplateProvider?
     private var releaseLease: OtaBundleLease?
+    private var preparedResources: OtaPreparedResources?
+    private var resourceFetcher: LynxLocalResourceFetcher?
     private var preparedBundleData: Data?
     private var bundleRuntimeMetadata: [String: Any]?
     private var preparedUserIdentityEpoch: UInt64?
@@ -553,8 +555,11 @@ final class LynxContainerViewController: UIViewController {
         let sessionID = navigationSessionID
         otaPrepareTask = Task { [weak self] in
             var pendingLease: OtaBundleLease?
+            var pendingResources: OtaPreparedResources?
             defer {
-                if let pendingLease {
+                if let pendingResources {
+                    pendingResources.close(releasing: pendingLease)
+                } else if let pendingLease {
                     Task { await pendingLease.close() }
                 }
             }
@@ -600,6 +605,8 @@ final class LynxContainerViewController: UIViewController {
                     }
                 }
                 pendingLease = prepared.releaseLease
+                let resources = try await runtime.prepareResources(for: prepared)
+                pendingResources = resources
                 if Task.isCancelled { return }
                 let data = try await Task.detached(priority: .userInitiated) {
                     try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
@@ -625,6 +632,7 @@ final class LynxContainerViewController: UIViewController {
                     }
                     self.releaseCurrentLease()
                     self.releaseLease = prepared.releaseLease
+                    self.preparedResources = resources
                     self.preparedBundleData = data
                     self.monitorScope?.setPreparedBundle(prepared)
                     var metadata: [String: Any] = [
@@ -655,7 +663,7 @@ final class LynxContainerViewController: UIViewController {
                     self.renderLynxView(generation: generation)
                     return true
                 }
-                if accepted { pendingLease = nil }
+                if accepted { pendingLease = nil; pendingResources = nil }
             } catch is CancellationError {
                 return
             } catch {
@@ -694,6 +702,8 @@ final class LynxContainerViewController: UIViewController {
         )
         preparedBundleData = nil
         templateProvider = provider
+        let localFetcher = preparedResources?.makeFetcher(provider: provider)
+        resourceFetcher = localFetcher
 
         let size = resolvedSize()
         let layoutSnapshot = latestLayoutSnapshot ?? ShellLayoutSnapshot(
@@ -715,6 +725,7 @@ final class LynxContainerViewController: UIViewController {
         let createStarted = ProcessInfo.processInfo.systemUptime
         let createdView = LynxNativeRuntime.makeView(
             provider: provider,
+            resourceFetcher: localFetcher,
             screenSize: layoutSnapshot.screenSize,
             viewportSize: layoutSnapshot.viewportSize,
             globalProps: globalProps
@@ -1073,9 +1084,17 @@ final class LynxContainerViewController: UIViewController {
     }
 
     private func releaseCurrentLease() {
-        guard let lease = releaseLease else { return }
+        resourceFetcher?.cancel()
+        resourceFetcher = nil
+        let resources = preparedResources
+        preparedResources = nil
+        let lease = releaseLease
         releaseLease = nil
-        Task { await lease.close() }
+        if let resources {
+            resources.close(releasing: lease)
+        } else if let lease {
+            Task { await lease.close() }
+        }
     }
 
     /**

@@ -15,6 +15,7 @@ import ShellLynxViewClient from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
 import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
 import ShellThemeState from '../common/ShellTheme';
+import ShellLocaleState from '../common/ShellLocale';
 import ShellLayoutState from '../common/ShellLayoutState';
 import OtaUserContextEvents from '../ota/OtaUserContextEvents';
 import { ShellViewAppearPayload } from '../common/ShellTypes';
@@ -320,8 +321,13 @@ export struct LynxContainer {
           this.request.bundleUrl,
           prepared.filePath,
           runtime.storageRoot(),
-          prepared.bytes ?? null
+          prepared.bytes ?? null,
+          prepared.asyncResolver
         );
+        this.genericFetcher.cancelAll();
+        this.genericFetcher = new ShellGenericResourceFetcher(prepared.asyncResolver);
+        this.mediaFetcher = new ShellMediaResourceFetcher(prepared.asyncResolver);
+        const localeState = ShellLocaleState.current();
         const bundleMetadata: ShellBundleMetadata = {
           lynxAppId: prepared.lynxAppId,
           releaseId: prepared.releaseId,
@@ -340,7 +346,8 @@ export struct LynxContainer {
           new TemplateData(ShellGlobalPropsFactory.build(
             this.request.globalPropsJson,
             this.request,
-            bundleMetadata
+            bundleMetadata,
+            localeState
           ))
         );
         this.clients[0]?.setPreparedBundle(
@@ -427,10 +434,9 @@ export struct LynxContainer {
   }
 
   private releaseCurrentLease(): void {
-    if (this.releaseLease === null) return;
     const lease = this.releaseLease;
     this.releaseLease = null;
-    lease.close();
+    lease?.close();
   }
 
   /** 外层 ArkUI 区域是当前 LynxView 的 viewport；只提交尺寸，更新由状态层合帧处理。 */

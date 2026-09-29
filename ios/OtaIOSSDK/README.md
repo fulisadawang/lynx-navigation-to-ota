@@ -36,6 +36,7 @@ Store、容器和路由链路。
 - Store v3：完整 Manifest + App ID 作用域 CAS Object，按 SHA 复用仍在磁盘的历史对象，不无限保留所有历史
 - 有界保留 current / previous / candidate
 - 页面级 Release lease 与延迟回收
+- Async Bundle 作为 Release 绑定的可选 sidecar，由同一 Store v3 current / previous / candidate 激活与回滚
 - 导航 session release snapshot，保证同一页面栈不混用不同版本
 - 冷启动 orphan / staging 清理
 - 下载前容量预检
@@ -68,6 +69,19 @@ Bundle 不复制到新 Release。
 
 embedded baseline 的 Bundle bytes 始终留在 App Bundle。`embedded.json` 只保存逻辑描述，
 不会在 Application Support 再复制一份 baseline。
+
+### Async Bundle 与内置语言资源
+
+Store v3 宿主继续声明 `x-ota-resource-schema: 1`。代码 Release 携带
+`asyncBundleManifest` 时，SDK 在激活前下载并校验 Async 清单与对象；未携带时走纯主包路径。
+页面按所持 Release 快照解析 lazy 资源，关闭后等待在途解析结束才释放资源。系统语言、
+App 语言设置和切语通知仍由 Shell 提供，页面双语文案由 Bundle 自身携带。
+
+独立 Catalog 的下载、绑定、注入和 current 更新已经退出 iOS Core。网络返回的 Release
+如包含旧 `i18nRequirement` 字段，解码即失败，阻止缺少内联文案的旧 Bundle 激活。
+旧 Catalog 安装记录的 Manifest digest 在移除字段后不能直接重算复用；本地 TEST
+联调须先换成新双语 embedded/Release，再受控重装测试包。其他环境的旧安装与 Release
+状态尚未核实，不能把这条路径视为原地升级方案。
 
 ### 保留、lease 与清理
 

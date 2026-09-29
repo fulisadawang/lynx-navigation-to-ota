@@ -68,6 +68,9 @@ Router 不要求 route registry，也不把本地绝对路径写入 Intent。`bu
 - 可选 candidate 模式：`stage candidate -> trial -> 首屏健康确认 -> promote current`；
   Native Tab 不消费 candidate，进程重启会清理未完成 trial。
 - 无 clientToken 时为 embedded-only，启动/前台/页面缺包均不发 OTA 请求。
+- APK 内置 Manifest 可选 `sidecarIndexAssetPath`：仅内置页面从同一 APK 版本读取并校验
+  Async Bundle，交给原有资源 Fetcher。未声明该字段时保持纯主包
+  embedded 行为；远程 OTA current 仍优先于 embedded，并使用自己的 Store v3 sidecar lease。
 - Native Tab 切换只读当前身份适用版本，普通后台不重建。身份变化/主动刷新完成后重读已提交 State，包括 partial failure；只给成功 App 更新门控。
 
 ## 存储边界
@@ -132,12 +135,35 @@ Demo 原生 Launcher 的“查看 OTA 磁盘目录”通过 `LynxRouter.otaStora
 
 Store v3 不读取或迁移旧 v2 路径。Demo 验收时卸载旧 App、重新安装，以全新沙盒直接使用最新 schema。
 
+## 可选 Async Bundle 与 Bundle 内置双语文案
+
+Store v3 宿主预置 Async 能力，并在 OTA HTTP 请求中发送 `x-ota-resource-schema: 1`；代码 Release 的可选 `asyncBundleManifest` 决定是否预下载。纯主包 Release 不扫描附属资源目录。Store v2 不支持 Async；若服务端或自定义 API client 返回该类 Release，SDK 会在记录选择和下载前拒绝。`HostApp.TEMPLATE` 是本地模板宿主的显式协议值，不复用 `capp` 或 `gapp`。
+
+`asyncBundleManifest` 是带 SHA/size 的独立清单引用。原有 `changedBundles` 与 Store v3 主包对象目录不变；App ID 目录新增：
+
+```text
+apps/<appId>/
+├── async-bundles/manifests/<sha>.json
+├── async-bundles/objects/<sha前两位>/<sha>
+└── async-bundles/transactions/<token>/
+```
+
+下载会先建立暂存根，再对 Async 清单和每个 Async 资源做 size/SHA 校验。直接调用低层 `install` 时也要求 Async 快照完整。主代码 state 的 current/candidate/previous 仍是唯一激活状态；页面 lease 固定打开时的 Async 资源映射。GC 保留当前、前版、候选、页面租约与暂存事务引用的 Async 对象；任一引用快照不完整时整轮停止清理。
+
+Async 下载先登记暂存根和事务根；已有快照和对象的完整校验在附属资源锁外进行，原子发布仍在锁内。SHA 校验缓存以文件设备号、inode、size、mtime、ctime 为身份；API 27 起使用纳秒时间，API 24–26 的当前 ctime 秒内和本地 JVM 无法取得 Android stat 时均不复用缓存。普通主包路径跳过附属资源维护；显式执行 `pruneUnreferencedBundles` 时才扫描历史孤儿目录。
+
+每个 OTA LynxView 的 Template、Generic 与 Media fetcher 固定到该页面 lease；真实 Rspeedy lazy 请求键 `/lazy-bundle/...` 和 CSS 图片 `webpack:///static/image/...` 都从本地 CAS 精确寻址，不在点击 lazy 时联网。中英文文案由主 Bundle 与 Async Bundle 自带。宿主继续提供 `locale`、`language`、`__lynxShellLocale`，切语时更新 GlobalProps 并发送 `lynxShellLocaleChanged`。
+
+旧本地 Manifest 若带 `i18nRequirement`，新代码会拒绝读取；旧 Manifest ID 重算也会不匹配，`current()` 会回到 embedded。用户上下文对齐或记录新 Release 选择时，Store 将不可解析的下载态 current 原子归一化到可用 previous 或 embedded，暂留旧 ref 以阻止 GC 删除其主包与 Async 对象，让全量与定向选择都能继续。旧回滚目标不能当成已验证可用版本。网络响应仍带该字段时会拒绝选择。TEST 联调须先提供新的内置双语 baseline 与代码 Release，再在已授权的测试设备上重装和验证；其他环境是否仍有旧 Release 待核实。
+
+本地 TEST 可显式允许 loopback HTTP；Android Emulator 访问宿主 `127.0.0.1` 资源服务需单独建立端口反向映射。当前只有 Kotlin 编译/JVM HTTP 测试证据，Android 设备上的 FetchBundle、图片重定向、断网与首帧性能仍需验收。
+
 ## 源码边界
 
 OTA 核心源码位于 `src/main/kotlin/com/ota/android/sdk`，由 Router AAR 一起编译和发布；
 `ActivityBundleRuntime` 仍然保留为可选扩展口，允许已有宿主替换网络层，但不再是三方接入
 内置 OTA 的必需步骤。
 
-当前 user-gray 证据：[Android 报告](../../docs/android-ota-user-gray-test-report.html)，87 tests / 0 failure/error/skipped＋APK；本次已取消设备测试。
+此前 user-gray 证据：[Android 报告](../../docs/android-ota-user-gray-test-report.html)，87 tests / 0 failure/error/skipped＋APK；本次 Async/i18n 验证结果另见 `.workflow/ota-async-i18n/results/android.md`。
 旧 [Store v3 报告](../../docs/android-ota-store-v3-test-report.html) 及 `android-ota-test-report.html` 是历史证据，不代表本次设备通过。
 三端匿名内置脚本及必需 `--versioncode/--lynx-sdk-version` 参数见 [Module 接入](../../MODULE_INTEGRATION.md#三端匿名内置-baseline-下载)。

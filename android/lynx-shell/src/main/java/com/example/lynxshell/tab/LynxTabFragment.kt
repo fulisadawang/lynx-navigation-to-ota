@@ -207,6 +207,7 @@ class LynxTabFragment : Fragment() {
                         preparedFile = resolved?.file,
                         preparedBytes = resolved?.bytes,
                         nextReleaseLease = resolved?.releaseLease,
+                        sidecarResources = resolved?.sidecarResources,
                         bundleMetadata = resolved?.let {
                             mapOf(
                                 "lynxAppId" to it.lynxAppId,
@@ -255,6 +256,7 @@ class LynxTabFragment : Fragment() {
         preparedFile: java.io.File?,
         preparedBytes: ByteArray?,
         nextReleaseLease: AutoCloseable?,
+        sidecarResources: com.ota.android.sdk.OtaSidecarViewResources? = null,
         bundleMetadata: Map<String, Any>? = null,
     ) {
         val activity = activity ?: run {
@@ -314,6 +316,7 @@ class LynxTabFragment : Fragment() {
             templateProvider = provider,
             lynxViewClient = client,
             bundleMetadata = bundleMetadata,
+            sidecarResources = sidecarResources,
             monitoring = monitoringView,
             // LYNX_DEBUG_TOOL_BEGIN
             containerKind = "tab",

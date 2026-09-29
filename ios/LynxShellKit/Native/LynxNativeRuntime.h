@@ -2,8 +2,23 @@
 #import <UIKit/UIKit.h>
 #import <Lynx/LynxTemplateProvider.h>
 #import <Lynx/LynxView.h>
+#import <Lynx/LynxTemplateResourceFetcher.h>
+#import <Lynx/LynxGenericResourceFetcher.h>
+#import <Lynx/LynxMediaResourceFetcher.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+typedef void (^LynxLocalResolveBlock)(NSString *, LynxGenericResourceCompletionBlock);
+typedef NSURL *_Nullable (^LynxLocalURLBlock)(NSString *);
+
+/** 每个 View 独立捕获代码快照，Lynx 的资源 request 本身不提供页面身份。 */
+@interface LynxLocalResourceFetcher : NSObject <LynxTemplateResourceFetcher, LynxGenericResourceFetcher, LynxMediaResourceFetcher>
+- (instancetype)initWithProvider:(id<LynxTemplateProvider>)provider
+                         resolver:(LynxLocalResolveBlock)resolver
+                         localURL:(LynxLocalURLBlock)localURL
+    NS_SWIFT_NAME(init(provider:resolver:localURL:));
+- (void)cancel;
+@end
 
 /**
  * 用 Objective-C 保持 Lynx 4.1 官方 API 的原始调用形态，Swift 容器只面对稳定方法。
@@ -22,6 +37,13 @@ NS_ASSUME_NONNULL_BEGIN
                       viewportSize:(CGSize)viewportSize
                        globalProps:(NSDictionary<NSString *, id> *)globalProps
     NS_SWIFT_NAME(makeView(provider:screenSize:viewportSize:globalProps:));
+
++ (LynxView *)makeViewWithProvider:(id<LynxTemplateProvider>)provider
+                  resourceFetcher:(nullable LynxLocalResourceFetcher *)resourceFetcher
+                       screenSize:(CGSize)screenSize
+                     viewportSize:(CGSize)viewportSize
+                      globalProps:(NSDictionary<NSString *, id> *)globalProps
+    NS_SWIFT_NAME(makeView(provider:resourceFetcher:screenSize:viewportSize:globalProps:));
 
 + (void)loadURL:(NSString *)url
        initData:(NSDictionary<NSString *, id> *)initData

@@ -7,6 +7,33 @@
 三端 Shell 业务方分别引入一个平台模块：Android AAR、iOS CocoaPods Module、HarmonyOS HAR。
 本仓库不包含旧的 `LynxScreens-Android` 工程，也不依赖 Sparkling 原生 SDK。
 
+## Async Bundle 与中英文随包 OTA（2026-09-29）
+
+当前工作根下的五个独立 Git 项目已改为**译文随代码 Bundle 同版本**的方案；此节记录代码所有权，
+不改变本仓库的三端原生 Router + OTA 定位：
+
+| 项目 | 负责内容 |
+| --- | --- |
+| `../LynxContracts` | 主 Bundle、Async Manifest 引用与资源能力门禁的共享契约 |
+| `../LynxAppPackagesAndTemplates` | 以源码 JSON 编辑中英文；主入口与各 lazy 功能静态导入自己的双语资源，构建主/Async Bundle 和清单 |
+| `../LynxOtaAdmin` | 只管理代码 Release、主 Bundle、Async 清单及发布/停发/回滚 |
+| `../LynxOtaServer` | 主/Async URL、size、SHA、owner/requestKey 校验，Release 选择、灰度、回滚与持久化 |
+| 本仓库 | Android/iOS/Harmony Store v3、Async 本地 CAS/Provider 寻址、宿主 locale/切语、页面 lease 与回收 |
+
+代码 Release 可选引用 Async 清单；它不再声明 `i18nRequirement`，也没有独立 Catalog API、
+Catalog 本地 Store 或 `__lynxI18n` 词典注入。中英文本在 Bundle 内，原生仅传当前 `locale`。
+主包和全部 Async 文件在 Store v3 切换 current 前下载并校验；页面首次 lazy 从页面固定的
+代码 Release 读取本地 Async，回滚恢复对应的主/Async 组合。没有 Async 的纯主包仍走原路径。
+Android APK 内置 `10020000` 新验收版本由 `sidecarIndexAssetPath` 关联主包与三个 Async；
+iOS/HarmonyOS 当前新增的 `10020000` 内置 baseline 仅有 HomePage，电商 lazy 以下载态 Store v3
+为验收目标，不能把前者说成已支持内置 Async。三端资源能力头 `x-ota-resource-schema: 1`
+继续保护含 Async 的 Release。HarmonyOS 仍无 candidate/trial。
+
+旧 Catalog Release 的网络响应由三端拒绝。当前本地 TEST 验收按用户决定采用新双语版本并重装
+旧测试安装；没有验证存量真实用户设备原地升级。五仓实施计划、官方插件失败证据与模板构建
+结果见 [随包双语迁移计划](../LynxAppPackagesAndTemplates/templates/lynx-template/docs/INLINE_I18N_CATALOG_RETIREMENT_PLAN.md)
+及 [本地工作流记录](../LynxAppPackagesAndTemplates/.workflow/lynx-bundled-i18n-retirement/final-report.md)。
+
 ## 顶层结构
 
 ```text
@@ -63,8 +90,11 @@ ios/
 └── OtaIOSSDK/Sources/OtaIOSSDK/         编进 LynxShellKit 的内部 OTA 源码
 ```
 
-业务方接入 `LynxShellKit` 时会通过 Pod 依赖带入 `LynxMapKit`；需要单独使用地图能力的宿主
-也可以显式声明 `pod 'LynxMapKit', :path => 'LynxMapKit'`。Shell 只调用
+生产业务方继续依赖 `LynxShellKit` 并默认带入
+`LynxMapKit`；本地 iOS OTA E2E Host 使用独立的 `LynxShellKitE2ECore.podspec`，复用 Shell 源码
+但保持唯一 Core 模块名，以便 Simulator 测试不隐式解析到带地图的生产 Pod。该测试 Pod 不发布，
+也不进入生产依赖图。需要单独使用地图能力的宿主仍可声明
+`pod 'LynxMapKit', :path => 'LynxMapKit'`。Shell 只调用
 `LynxMapModuleRuntime` 做 Config 注册和隐私配置，不编译地图实现或直接声明高德 SDK。
 `OtaIOSSDK/Sources` 保留 Swift 单测边界，不是业务方的第二个 OTA Pod。
 `ios/LynxShellDebugKit` 是仅 Debug configuration 引入的开发 Pod；它复用 Shell 诊断 SPI，

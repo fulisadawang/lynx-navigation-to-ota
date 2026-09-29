@@ -332,6 +332,20 @@
           "assetPath": "bundles/lynx/10000002/releases/r20260806_dhax5q/same-app.lynx.bundle"
         }
       ]
+    },
+    {
+      "lynxAppId": "10020000",
+      "releaseId": "embedded_20260929_inline_i18n",
+      "bundles": [
+        {
+          "pageId": 1001,
+          "bundleName": "HomePage.lynx.bundle",
+          "bundlePath": "HomePage.lynx.bundle",
+          "size": 143659,
+          "sha256": "sha256:ad31fd1e734d8ebbd4324f92a437f6ae8e0d90dca0ba36f676996f4e64c84dce",
+          "assetPath": "bundles/lynx/10020000/releases/embedded_20260929_inline_i18n/HomePage.lynx.bundle"
+        }
+      ]
     }
   ]
 }

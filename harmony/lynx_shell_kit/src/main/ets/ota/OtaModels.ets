@@ -148,6 +148,36 @@ export interface OtaBundleArtifact {
   objectId?: string;
 }
 
+export interface OtaAsyncBundleManifestRef {
+  schemaVersion: number;
+  url: string;
+  sha256: string;
+  size: number;
+}
+
+export type OtaAsyncResourceKind = 'bundle' | 'script' | 'style' | 'asset';
+
+export interface OtaAsyncBundleResource {
+  ownerBundlePath: string;
+  requestKey: string;
+  path: string;
+  url: string;
+  sha256: string;
+  size: number;
+  kind: OtaAsyncResourceKind;
+}
+
+export interface OtaAsyncBundleManifest {
+  schemaVersion: number;
+  entries: OtaAsyncBundleResource[];
+}
+
+export interface OtaAsyncResourceResolver {
+  resolveBytes(requestKey: string): Promise<ArrayBuffer>;
+  resolvePath(requestKey: string): string;
+  kind(requestKey: string): OtaAsyncResourceKind | null;
+}
+
 /** 服务端 Release Snapshot；changedBundles 在当前服务端契约中是完整 Bundle 快照。 */
 export interface OtaReleaseSnapshot {
   env: string;
@@ -166,6 +196,7 @@ export interface OtaReleaseSnapshot {
   minAppVersion?: string;
   maxAppVersion?: string;
   nativeProtocolVersionRange?: OtaVersionRange;
+  asyncBundleManifest?: OtaAsyncBundleManifestRef;
 }
 
 /** 全量 latest-bundle-list 响应。定向接口也可能直接返回单个 Snapshot。 */
@@ -190,6 +221,7 @@ export interface OtaLocalManifest {
   status: string;
   bundles: OtaBundleArtifact[];
   installedAt: number;
+  asyncBundleManifest?: OtaAsyncBundleManifestRef;
 }
 
 /** apps/<appId>/state.json；state 始终在 Release 完整发布后最后原子提交。 */
@@ -253,6 +285,7 @@ export interface PreparedPageBundle {
   selectionKind?: 'full' | 'gray';
   releaseSequence?: string;
   policyRevision?: string;
+  asyncResolver?: OtaAsyncResourceResolver;
 }
 
 export enum OtaStorageReleaseRole {
@@ -289,6 +322,7 @@ export interface OtaStorageReleaseSnapshot {
   manifestId?: string;
   bundleCount?: number;
   objectIds?: string[];
+  asyncManifestId?: string;
 }
 
 export interface OtaStorageStagingSnapshot {

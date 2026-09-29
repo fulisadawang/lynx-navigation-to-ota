@@ -120,6 +120,8 @@ data class PreparedActivityBundle(
     val userIdentityEpoch: Long? = null,
     val selectionKind: String? = null,
     val releaseSequence: String? = null,
+    /** 与 releaseLease 一起固定的本地 Async/词典快照；只给当前 View 使用。 */
+    val sidecarResources: com.ota.android.sdk.OtaSidecarViewResources? = null,
 ) {
     init {
         require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }

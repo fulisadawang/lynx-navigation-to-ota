@@ -18,8 +18,9 @@ Pod::Spec.new do |spec|
   spec.module_name = 'LynxShellKit'
   spec.static_framework = true
   spec.requires_arc = true
-
-  # OTA 源码作为 Router 的内部实现一起编译进 LynxShellKit；业务方不需要再引入独立 OTA Pod。
+  # 生产公开 Pod 默认带地图；本地 E2E 宿主使用独立 Core-only Pod。
+  spec.default_subspecs = 'Map'
+  # OTA 源码作为 Router 的内部实现一起编译；业务方不需要再引入独立 OTA Pod。
   spec.source_files = [
     'LynxShellKit/**/*.{swift,h,m}',
     'OtaIOSSDK/Sources/OtaIOSSDK/**/*.swift',
@@ -51,6 +52,11 @@ Pod::Spec.new do |spec|
   spec.dependency 'XElement/Markdown', '4.1.0'
   spec.dependency 'XElement/Video', '4.1.0'
   spec.dependency 'XElement/Behavior', '4.1.0'
-  # 地图能力由独立 LynxMapKit Module 提供；Shell 只负责容器/runtime 接入与 Config 注册。
-  spec.dependency 'LynxMapKit', '1.0.0'
+
+  spec.subspec 'Map' do |map|
+    map.dependency 'LynxMapKit', '1.0.0'
+    map.pod_target_xcconfig = {
+      'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) LYNX_SHELL_ENABLE_MAP=1',
+    }
+  end
 end

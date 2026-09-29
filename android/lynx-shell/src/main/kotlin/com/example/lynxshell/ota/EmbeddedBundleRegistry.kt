@@ -2,6 +2,7 @@ package com.example.lynxshell.ota
 
 import android.content.Context
 import com.ota.android.sdk.OtaModels
+import com.ota.android.sdk.OtaSidecarViewResources
 import org.json.JSONObject
 import java.io.FileNotFoundException
 import java.io.InputStream
@@ -20,6 +21,7 @@ data class EmbeddedBundle(
     val size: Int,
     val sha256: String,
     val bytes: ByteArray,
+    val sidecarIndexAssetPath: String?,
 )
 
 /** 构建期 Manifest 暴露给 Demo/宿主的逻辑 identity；不包含物理文件路径。 */
@@ -41,6 +43,7 @@ class EmbeddedBundleRegistry(
 ) {
     private val appContext = context.applicationContext
     private val entries: List<Descriptor> by lazy(::loadManifest)
+    private val sidecars by lazy { EmbeddedSidecarResources(appContext) }
 
     fun resolve(lynxAppId: String, bundleName: String): EmbeddedBundle? {
         val descriptor = entries.firstOrNull {
@@ -64,7 +67,16 @@ class EmbeddedBundleRegistry(
             size = descriptor.size,
             sha256 = descriptor.sha256,
             bytes = bytes,
+            sidecarIndexAssetPath = descriptor.sidecarIndexAssetPath,
         )
+    }
+
+    /** 只在交付 APK 内置页面时解析内置 sidecar；下载态仍由 Store v3 lease 提供。 */
+    fun resolveSidecars(bundle: EmbeddedBundle): OtaSidecarViewResources? {
+        val indexPath = bundle.sidecarIndexAssetPath ?: return null
+        return sidecars.resolve(bundle, indexPath,
+            entries.filter { it.lynxAppId == bundle.lynxAppId && it.releaseId == bundle.releaseId }
+                .map { it.bundlePath }.toSet())
     }
 
     /** 判断 App 是否有内置 baseline；只查 Manifest，不读取或复制 Bundle。 */
@@ -144,6 +156,9 @@ class EmbeddedBundleRegistry(
                     val app = apps.getJSONObject(appIndex)
                     val appId = app.getString("lynxAppId")
                     val releaseId = app.getString("releaseId")
+                    val sidecarIndexAssetPath = app.optString("sidecarIndexAssetPath")
+                        .takeIf(String::isNotBlank)
+                        ?.let { validateSidecarIndexPath(it, appId, releaseId) }
                     val bundles = app.optJSONArray("bundles")
                         ?: error("内置 Bundle Manifest 缺少 bundles：$appId")
                     for (bundleIndex in 0 until bundles.length()) {
@@ -160,6 +175,7 @@ class EmbeddedBundleRegistry(
                                 assetPath = validateAssetPath(bundle.getString("assetPath")),
                                 size = bundle.getInt("size"),
                                 sha256 = validateSha(bundle.getString("sha256")),
+                                sidecarIndexAssetPath = sidecarIndexAssetPath,
                             ),
                         )
                     }
@@ -183,6 +199,16 @@ class EmbeddedBundleRegistry(
         require(Regex("^sha256:[0-9a-fA-F]{64}$").matches(value)) {
             "内置 Bundle sha256 格式错误：$value"
         }
+        return value
+    }
+
+    private fun validateSidecarIndexPath(value: String, appId: String, releaseId: String): String {
+        require(
+            value.startsWith("bundles/lynx/$appId/releases/$releaseId/") &&
+                value.endsWith("/ota-resources.local.json") &&
+                !value.contains('\\') &&
+                value.split('/').none { it.isBlank() || it == "." || it == ".." },
+        ) { "内置附属资源索引路径不安全：$value" }
         return value
     }
 
@@ -219,6 +245,7 @@ class EmbeddedBundleRegistry(
         val assetPath: String,
         val size: Int,
         val sha256: String,
+        val sidecarIndexAssetPath: String?,
     )
 
     private companion object {
@@ -241,6 +268,7 @@ class EmbeddedBundleRuntime(context: Context) : ActivityBundleRuntime {
             releaseId = embedded.releaseId,
             sha256 = embedded.sha256,
             source = "embedded_baseline",
+            sidecarResources = registry.resolveSidecars(embedded),
         )
     }
 
@@ -256,6 +284,7 @@ class EmbeddedBundleRuntime(context: Context) : ActivityBundleRuntime {
             releaseId = embedded.releaseId,
             sha256 = embedded.sha256,
             source = "embedded_baseline",
+            sidecarResources = registry.resolveSidecars(embedded),
         )
     }
 }

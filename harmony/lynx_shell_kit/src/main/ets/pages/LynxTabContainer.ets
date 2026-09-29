@@ -14,6 +14,7 @@ import ShellLynxViewClient from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
 import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
 import ShellThemeState from '../common/ShellTheme';
+import ShellLocaleState, { ShellLocaleStateValue } from '../common/ShellLocale';
 import ShellLayoutState from '../common/ShellLayoutState';
 import { ShellViewAppearPayload } from '../common/ShellTypes';
 import XElementRuntime from '../common/XElementRuntime';
@@ -223,11 +224,13 @@ export struct LynxTabContainer {
     this.releaseCurrentLease();
   }
 
-  private buildTabGlobalProps(bundleMetadata?: ShellBundleMetadata): Object {
+  private buildTabGlobalProps(bundleMetadata?: ShellBundleMetadata,
+    localeState?: ShellLocaleStateValue): Object {
     const props = ShellGlobalPropsFactory.build(
       this.request.globalPropsJson,
       this.request,
-      bundleMetadata
+      bundleMetadata,
+      localeState
     ) as Record<string, Object>;
     props['__lynxRouterNavigationModel'] = 'native_tab_host';
     props['__lynxRouterPlatformContainer'] = 'arkui_tab_container';
@@ -285,8 +288,13 @@ export struct LynxTabContainer {
           this.request.bundleUrl,
           prepared.filePath,
           runtime.storageRoot(),
-          prepared.bytes ?? null
+          prepared.bytes ?? null,
+          prepared.asyncResolver
         );
+        this.genericFetcher.cancelAll();
+        this.genericFetcher = new ShellGenericResourceFetcher(prepared.asyncResolver);
+        this.mediaFetcher = new ShellMediaResourceFetcher(prepared.asyncResolver);
+        const localeState = ShellLocaleState.current();
         const bundleMetadata: ShellBundleMetadata = {
           lynxAppId: prepared.lynxAppId,
           releaseId: prepared.releaseId,
@@ -303,7 +311,7 @@ export struct LynxTabContainer {
         };
         this.metaData = new MetaData(
           new TemplateData(this.request.initDataJson),
-          new TemplateData(this.buildTabGlobalProps(bundleMetadata))
+          new TemplateData(this.buildTabGlobalProps(bundleMetadata, localeState))
         );
         this.clients[0]?.setPreparedBundle(
           prepared.source ?? 'ota_current', prepared.lynxAppId, prepared.bundleName,
@@ -347,10 +355,9 @@ export struct LynxTabContainer {
   }
 
   private releaseCurrentLease(): void {
-    if (this.releaseLease === null) return;
     const lease = this.releaseLease;
     this.releaseLease = null;
-    lease.close();
+    lease?.close();
   }
 
   /** 外层 ArkUI 区域是当前 Native Tab 的 viewport；切换 Tab 不会重建或联网。 */

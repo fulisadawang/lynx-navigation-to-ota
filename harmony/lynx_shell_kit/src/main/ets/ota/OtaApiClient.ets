@@ -142,7 +142,7 @@ export default class OtaApiClient {
     const request = http.createHttp();
     this.activeRequests.add(request);
     try {
-      const headers: Record<string, string> = { 'Accept': 'application/json' };
+      const headers: Record<string, string> = { 'Accept': 'application/json', 'x-ota-resource-schema': '1' };
       if (this.config.clientToken.trim().length > 0) {
         headers['x-ota-client-token'] = this.config.clientToken;
       }

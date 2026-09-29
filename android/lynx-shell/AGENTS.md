@@ -6,7 +6,7 @@
 
 `lynx-shell` 是业务方可复用的 Android Library/AAR，不是 Sample App。它同时拥有：
 
-- Lynx 4.0 Runtime、Service 和 XElement 注册；
+- Lynx 4.1 Runtime、Service 和 XElement 注册；
 - Activity-first Router、Container、原生页面栈与恢复；
 - `NativeModules.LynxShellModule`、存储、消息和媒体 Bridge；
 - Android 原生转场、共享元素、Open Container、Sheet 和 Back 手势；
@@ -39,7 +39,7 @@ src/main/java/com/example/lynxshell/
 ├── routing/                       原生页面栈、参数、恢复
 ├── transition/                    自定义转场、快照、手势状态机
 ├── bridge/                        LynxShellModule、Storage、消息、媒体
-├── runtime/                       Lynx 4.0、Service、XElement
+├── runtime/                       Lynx 4.1、Service、XElement
 ├── provider/                      本地/HTTPS Bundle Provider
 └── ota/                           Router 与 OTA Runtime 接线
 
@@ -112,7 +112,7 @@ files/lynx-ota-store/apps/<lynxAppId>/
 
 ### 5. Lynx 与依赖
 
-- Lynx、PrimJS、Service 和 10 个 XElement 依赖统一为 `4.0.0`，未经明确授权不要升级或混入 nightly。
+- Lynx、Service 和 XElement 依赖使用 `4.1.0`，PrimJS 使用 `4.1.1`；未经明确授权不要升级或混入 nightly。以 `build.gradle.kts` 的实际构建组合为准。
 - 每个 `LynxViewBuilder` 必须安装统一 XElement BehaviorBundle。
 - 保留 `consumer-rules.pro` 中的反射入口。
 - Library `minSdk=24`、`compileSdk=35`、Java/Kotlin 17；修改前先确认兼容范围。

@@ -1,7 +1,7 @@
 import ShellJson from './ShellJson';
 import ShellConstants from './ShellConstants';
 import ShellThemeState from './ShellTheme';
-import ShellLocaleState from './ShellLocale';
+import ShellLocaleState, { ShellLocaleStateValue } from './ShellLocale';
 import ShellLayoutState from './ShellLayoutState';
 import LynxPageRequest from '../model/LynxPageRequest';
 
@@ -26,11 +26,16 @@ export default class ShellGlobalPropsFactory {
   static build(
     businessJson: string,
     request?: LynxPageRequest,
-    bundleMetadata?: ShellBundleMetadata
+    bundleMetadata?: ShellBundleMetadata,
+    localeState?: ShellLocaleStateValue
   ): Object {
-    const business = ShellJson.parseObject(businessJson) as Record<string, Object>;
+    const parsed = ShellJson.parseObject(businessJson) as Record<string, Object | null>;
+    const business: Record<string, Object | null> = {};
+    Object.keys(parsed).forEach((key: string) => {
+      if (key !== '__lynxI18n') business[key] = parsed[key];
+    });
     const pageId = request?.entryID ?? '';
-    const environment = ShellGlobalPropsFactory.environmentProps(pageId);
+    const environment = ShellGlobalPropsFactory.environmentProps(pageId, localeState);
     Object.keys(environment).forEach((key: string) => {
       business[key] = environment[key];
     });
@@ -46,6 +51,10 @@ export default class ShellGlobalPropsFactory {
       queryItems['hide_nav_bar'] = request.hideNavigationBar ? '1' : '0';
       queryItems['hide_status_bar'] = request.hideStatusBar ? '1' : '0';
     }
+    const resolvedLocale = localeState ?? ShellLocaleState.current();
+    queryItems['locale'] = resolvedLocale.locale;
+    queryItems['language'] = resolvedLocale.language;
+    queryItems['localeRevision'] = resolvedLocale.revision;
     business['queryItems'] = queryItems;
     // v1 跨端契约：每次打开同一个 Bundle 都必须拥有独立 pageId，不能使用 Bundle 名称或
     // hash 作为消息目标。containerID 继续保留为旧 Shell 字段，但值改为当前 entry 身份。
@@ -66,11 +75,11 @@ export default class ShellGlobalPropsFactory {
   }
 
   /** 主题、语言和布局共用的宿主环境增量字段；业务 GlobalProps 不能覆盖这些字段。 */
-  static environmentProps(pageId: string = ''): Record<string, Object> {
-    const locale = ShellLocaleState.current();
+  static environmentProps(pageId: string = '', localeState?: ShellLocaleStateValue): Record<string, Object | null> {
+    const locale = localeState ?? ShellLocaleState.current();
     const layout = ShellLayoutState.snapshot(pageId);
     const rawScreen = ShellLayoutState.rawScreenSize();
-    const props: Record<string, Object> = {};
+    const props: Record<string, Object | null> = {};
     props['density'] = layout.density;
     props['screenWidthPx'] = rawScreen.width;
     props['screenHeightPx'] = rawScreen.height;
@@ -79,10 +88,11 @@ export default class ShellGlobalPropsFactory {
     props['viewportWidth'] = layout.viewportWidth;
     props['viewportHeight'] = layout.viewportHeight;
     props['direction'] = locale.direction;
-    props['locale'] = locale.appLocale;
-    props['effectiveLocale'] = locale.appLocale;
+    props['locale'] = locale.locale;
+    props['effectiveLocale'] = locale.effectiveLocale;
+    props['language'] = locale.language;
     props['appLocale'] = locale.appLocale;
-    props['appLocaleOverride'] = locale.appLocaleOverride ?? '';
+    props['appLocaleOverride'] = locale.appLocaleOverride;
     props['appLanguage'] = locale.language;
     props['systemLocale'] = locale.systemLocale;
     props['localeSource'] = locale.source;

@@ -104,7 +104,8 @@ class OtaModels private constructor() {
 
   enum class HostApp(@JvmField val wireValue: String) {
     CAPP("capp"),
-    GAPP("gapp");
+    GAPP("gapp"),
+    TEMPLATE("template");
 
     companion object {
       @JvmStatic
@@ -277,7 +278,7 @@ class OtaModels private constructor() {
     }
   }
 
-  class ReleaseManifest(
+  class ReleaseManifest @JvmOverloads constructor(
     @JvmField val env: Environment,
     @JvmField val hostApp: HostApp,
     lynxAppId: String?,
@@ -286,6 +287,7 @@ class OtaModels private constructor() {
     platforms: List<Platform>?,
     bundles: List<BundleArtifact>?,
     @JvmField val status: ReleaseStatus = ReleaseStatus.ACTIVE,
+    @JvmField val asyncBundleManifest: OtaSidecarModels.AsyncManifestRef? = null,
   ) {
     @JvmField val lynxAppId: String = lynxAppId ?: DEFAULT_LYNX_APP_ID
     @JvmField val platforms: List<Platform> = immutableList(if (platforms.isNullOrEmpty()) singletonList(platform) else platforms)
@@ -301,12 +303,14 @@ class OtaModels private constructor() {
       map["platforms"] = platforms.map { it.wireValue }
       map["status"] = status.wireValue
       map["bundles"] = bundles.map { it.toJsonMap() }
+      asyncBundleManifest?.let { map["asyncBundleManifest"] = it.toJsonMap() }
       return map
     }
 
     companion object {
       @JvmStatic
       fun fromJsonMap(map: Map<String, Any?>, requireStatus: Boolean = false): ReleaseManifest {
+        require(!map.containsKey("i18nRequirement")) { "旧词典 Release 需要重新发布内置双语 Bundle" }
         val parsedPlatforms = ArrayList<Platform>()
         val rawPlatforms = map["platforms"]
         if (rawPlatforms is List<*>) {
@@ -334,6 +338,7 @@ class OtaModels private constructor() {
           if (parsedPlatforms.isEmpty()) singletonList(parsedPlatform) else parsedPlatforms,
           parsedBundles,
           rawStatus?.let { ReleaseStatus.fromWire(it) } ?: ReleaseStatus.ACTIVE,
+          map["asyncBundleManifest"]?.let { OtaSidecarModels.AsyncManifestRef.fromJsonMap(OtaJson.asObject(it, "asyncBundleManifest")) },
         )
       }
     }
@@ -483,6 +488,7 @@ class OtaModels private constructor() {
     bundles: List<InstalledBundle>?,
     @JvmField val selection: OtaStoredSelection? = null,
     @JvmField val identityEpoch: Long? = null,
+    @JvmField val asyncBundleManifest: OtaSidecarModels.AsyncManifestRef? = null,
   ) {
     @JvmField val bundles: List<InstalledBundle> = immutableList(bundles)
 
@@ -492,6 +498,7 @@ class OtaModels private constructor() {
       map["installedAt"] = installedAt.toString()
       map["selection"] = selection?.toJsonMap()
       map["identityEpoch"] = identityEpoch
+      asyncBundleManifest?.let { map["asyncBundleManifest"] = it.toJsonMap() }
       val bundleMaps = ArrayList<Map<String, Any?>>()
       for (bundle in bundles) {
         bundleMaps.add(bundle.toJsonMap())
@@ -513,6 +520,7 @@ class OtaModels private constructor() {
           bundles,
           map["selection"]?.let { OtaStoredSelection.fromJsonMap(OtaJson.asObject(it, "selection")) },
           (map["identityEpoch"] as? Number)?.toLong(),
+          map["asyncBundleManifest"]?.let { OtaSidecarModels.AsyncManifestRef.fromJsonMap(OtaJson.asObject(it, "asyncBundleManifest")) },
         )
       }
     }
@@ -652,18 +660,21 @@ class OtaModels private constructor() {
     @JvmField val releaseSequence: String? = null,
     @JvmField val selection: OtaSelectionMetadata? = null,
     @JvmField val versionCodeRange: OtaVersionCodeRange? = null,
+    @JvmField val asyncBundleManifest: OtaSidecarModels.AsyncManifestRef? = null,
   ) {
     @JvmField val lynxAppId: String = lynxAppId ?: DEFAULT_LYNX_APP_ID
     @JvmField val platforms: List<Platform> = immutableList(if (platforms.isNullOrEmpty()) singletonList(platform) else platforms)
     @JvmField val changedBundles: List<BundleArtifact> = immutableList(changedBundles)
 
     fun asManifest(): ReleaseManifest {
-      return ReleaseManifest(env, hostApp, lynxAppId, releaseId, platform, platforms, changedBundles, status)
+      return ReleaseManifest(env, hostApp, lynxAppId, releaseId, platform, platforms, changedBundles, status,
+        asyncBundleManifest)
     }
 
     companion object {
       @JvmStatic
       fun fromJsonMap(map: Map<String, Any?>): LatestBundleList {
+        require(!map.containsKey("i18nRequirement")) { "旧词典 Release 需要重新发布内置双语 Bundle" }
         if (map["selectionSchemaVersion"] != null) OtaSelectionJson.string(map, "lynxAppId")
         val parsedPlatforms = ArrayList<Platform>()
         val rawPlatforms = map["platforms"]
@@ -697,6 +708,7 @@ class OtaModels private constructor() {
           OtaSelectionJson.optionalString(map, "releaseSequence"),
           map["selection"]?.let { OtaSelectionMetadata.fromJsonMap(OtaJson.asObject(it, "selection")) },
           map["versionCodeRange"]?.let { OtaVersionCodeRange.fromJsonMap(OtaJson.asObject(it, "versionCodeRange")) },
+          map["asyncBundleManifest"]?.let { OtaSidecarModels.AsyncManifestRef.fromJsonMap(OtaJson.asObject(it, "asyncBundleManifest")) },
         )
       }
     }

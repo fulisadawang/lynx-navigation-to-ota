@@ -1,4 +1,8 @@
+#if LYNX_SHELL_E2E_CORE_ONLY
+import LynxShellKitE2ECore
+#else
 import LynxShellKit
+#endif
 import UIKit
 
 /**

@@ -163,6 +163,20 @@ Android 的 embedded baseline 不会在启动时复制到 `filesDir`。命中内
 LynxView；应用私有磁盘按 App ID 隔离，只保存远程 OTA 的 `state.json`、完整 Manifest 快照、
 SHA-256 CAS 对象和事务临时目录。`embedded.json` 仅是逻辑描述，不包含 Bundle bytes。
 
+模板电商页的 APK 内置验收版本由 `embedded-bundles.json` 登记主 Bundle，并用可选
+`sidecarIndexAssetPath` 指向同版本的 `ota-resources.local.json`；该索引只关联 Async Bundle。
+内置运行时从 APK 读取并校验这些资源，页面通过原有 Fetcher 消费；中英文文案随 Bundle 构建。
+没有该字段的内置版本继续只加载主 Bundle。真机仅验内置资源时，可设置
+`LYNX_EMBEDDED_ASSETS_DEVICE_E2E=1` 构建 Debug APK；它使用独立包名
+`com.hugboga.custom.embeddedassets`，不连接 OTA Server，也不覆盖 OTA 验收包。
+页面图片仍使用模板配置的远程地址，不属于 APK 内置 Async Bundle。
+
+当前本地未跟踪的旧 Catalog fixture 尚未替换为新双语 Bundle，不能作为这轮设备验收产物。
+新内置 baseline 同步后才进行测试设备重装与首屏、切语、lazy 验收。
+
+`sync_ota_bundles_to_assets.mjs` 会整体替换 `bundles/lynx`，并且目前只同步服务端主 Bundle。
+再次运行该脚本会清除上述模板电商页的 APK 内置资源；需要重新同步完整本地产物后再构建。
+
 Android Store v3 的真实路径为：
 
 ```text

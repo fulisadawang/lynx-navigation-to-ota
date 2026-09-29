@@ -132,6 +132,7 @@ class ReleaseTransaction @JvmOverloads constructor(
     @JvmField val release: OtaModels.InstalledRelease,
     @JvmField val bundle: OtaModels.InstalledBundle,
     @JvmField val file: File,
+    @JvmField val sidecars: OtaSidecarViewResources? = null,
     private val onClose: () -> Unit,
   ) : AutoCloseable {
     private val closed = AtomicBoolean(false)

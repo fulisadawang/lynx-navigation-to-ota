@@ -3,13 +3,14 @@
 技术栈：Swift、UIKit、CocoaPods、Lynx 4.1。
 
 主工程使用 Swift + UIKit；Shell Runtime 与地图能力分别收进显式 CocoaPods Module
-`LynxShellKit` 和 `LynxMapKit`，Sample App 不再直接编译壳源码。`Native/LynxNativeRuntime.m`
-是薄 Objective-C 包装层，保留官方 Lynx 4.1 API 形态；地图由 `LynxMapModuleRuntime`
-完成 Config 注册和隐私状态接入。
+`LynxShellKit` 和 `LynxMapKit`，Sample App 不再直接编译壳源码。`LynxShellKit` 默认安装
+`Core + Map` subspec，保持生产 Shell 的地图接入；OTA arm64 Simulator 验收宿主只安装 `Core`，
+不链接地图二进制。`Native/LynxNativeRuntime.m` 是薄 Objective-C 包装层，保留官方 Lynx 4.1 API
+形态；Map subspec 存在时由 `LynxMapModuleRuntime` 注册地图 Config。
 
 ## 主要结构
 
-- `LynxShellKit.podspec`：Shell/Router 业务接入 Module，统一声明 Lynx 4.1、Service、全量 XElement
+- `LynxShellKit.podspec`：Shell/Router 业务接入 Module，统一声明 Lynx 4.1、Service、全量 XElement；默认 `Core + Map`，E2E 可选 `Core`
 - `LynxMapKit/LynxMapKit.podspec`：独立地图 Module，声明 `lynx-map`、AMap Provider、
   Search、Location 和高德 SDK 依赖。
 - `OtaIOSSDK/Sources/OtaIOSSDK`：Router 内部 OTA 实现源码；不需要在业务 Podfile 中单独引用。
@@ -45,6 +46,32 @@ cd ios
 pod install
 open LynxShell.xcworkspace
 ```
+
+### Store v3 Async Simulator 验收宿主
+
+`LynxShellE2EHost` 是仅供 UI 验收使用的 map-free App target；它通过本地 `LynxShellKitE2ECore.podspec` 复用 Shell Router、Store v3、Async Bundle 和 Debug Monitor，不进入生产 Archive。生产 `LynxShell` 仍使用 `LynxShellKit`，保留 LynxMapKit/AMap；E2E Core Pod 仅限本地测试，不发布。
+
+以下是旧独立 Catalog 的联调命令留档。新双语 Bundle 与测试入口完成装配前，不能用它验收本次迁移。
+当时需要启动本机 TEST Server、Admin 和资源服务，并从本机安全配置导出与 Server 匹配的
+`TEST_RUNNER_LYNX_OTA_CLIENT_TOKEN`：
+
+```bash
+cd ios
+TEST_RUNNER_LYNX_TEST_LIVE_OTA=1 \
+TEST_RUNNER_LYNX_TEST_OTA_ENV=TEST \
+TEST_RUNNER_LYNX_TEST_OTA_BASE_URL=http://127.0.0.1:18080 \
+xcodebuild test \
+  -workspace LynxShell.xcworkspace \
+  -scheme LynxShellE2EHost \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -only-testing:LynxShellE2EUITests/LynxShellUITests/testLiveStoreV3EcommerceAsyncAndI18nFlow \
+  IPHONEOS_DEPLOYMENT_TARGET=15.0 CODE_SIGNING_ALLOWED=NO \
+  -collect-test-diagnostics never
+```
+
+`TEST_RUNNER_LYNX_OTA_CLIENT_TOKEN` 必须与本地 Server 的 `x-ota-client-token` 匹配；不要将它写入仓库或日志。
+当前 Xcode 27.1 的 Simulator SDK 最低部署目标为 iOS 15，因此命令行覆盖 `IPHONEOS_DEPLOYMENT_TARGET=15.0`，不会修改 App/Pod 持久化的 iOS 14 部署目标。E2E scheme 只构建无地图的 `LynxShellKitE2ECore` 测试模块，Profile/Archive 构建动作关闭。
 
 地图 Debug 构建不会把 Key 写进仓库。需要运行高德地图 Demo 时，从 KMP `capp-iOS` 的
 `Sources/Data/Constants.m` 读取 `AMAP_APPKEY`，通过 `LYNX_AMAP_API_KEY` 注入 Xcode Build

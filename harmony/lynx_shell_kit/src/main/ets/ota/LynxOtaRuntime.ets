@@ -283,7 +283,8 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       this.syncAppBundleAsync(lynxAppId);
       return this.createOrAttachSnapshot(sessionID, local, context, snapshotGeneration);
     }
-    const embedded = await this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
+    const repairDownloadedCurrent = this.transaction.hasDownloadedCurrent(lynxAppId, context);
+    const embedded = repairDownloadedCurrent ? null : await this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
     this.guard(context, signal);
     if (embedded !== null) {
       return this.createOrAttachSnapshot(sessionID, embedded, context, snapshotGeneration);
@@ -428,14 +429,14 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       if (prepared.userIdentityEpoch !== undefined && prepared.userIdentityEpoch !== context.identityEpoch) throw new Error('stale_identity');
       prepared.userIdentityEpoch = context.identityEpoch;
       return prepared;
-    } catch (error) { prepared.lease?.close(); throw (error as Error); }
+    } catch (error) { this.closePrepared(prepared); throw (error as Error); }
   }
 
   private createOrAttachSnapshot(sessionID: string, prepared: PreparedPageBundle, context: OtaUserContext, generation: NavigationSnapshotToken): PreparedPageBundle {
     this.preparedForContext(context, prepared);
     if (sessionID.length === 0) return prepared;
     if (!generation.active || generation !== this.snapshotTokens.get(this.snapshotKey(sessionID, prepared.lynxAppId))) {
-      prepared.lease?.close();
+      this.closePrepared(prepared);
       throw new Error('navigation_snapshot_reset');
     }
     const key = this.snapshotKey(sessionID, prepared.lynxAppId);
@@ -449,10 +450,10 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       context
     );
     if (!embedded && lease === null) {
-      prepared.lease?.close();
+      this.closePrepared(prepared);
       throw new Error(`NavigationSnapshot lease 建立失败：${prepared.lynxAppId}/${prepared.releaseId}`);
     }
-    try { this.guard(context); } catch (error) { lease?.close(); prepared.lease?.close(); throw (error as Error); }
+    try { this.guard(context); } catch (error) { lease?.close(); this.closePrepared(prepared); throw (error as Error); }
     this.navigationSnapshotSequence += 1;
     const snapshot: NavigationSnapshotRecord = {
       id: `lynx-snapshot-${new Date().getTime()}-${this.navigationSnapshotSequence}`,
@@ -472,11 +473,15 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     if (this.navigationSnapshots.get(this.snapshotKey(snapshot.sessionID, snapshot.lynxAppId)) !== snapshot ||
       snapshot.identityEpoch !== this.userIdentityEpoch || snapshot.releaseId !== prepared.releaseId ||
       snapshot.manifestId !== prepared.manifestId) {
-      prepared.lease?.close();
+      this.closePrepared(prepared);
       throw new Error('stale_navigation_snapshot');
     }
     prepared.navigationSnapshotID = snapshot.id;
     return prepared;
+  }
+
+  private closePrepared(prepared: PreparedPageBundle): void {
+    prepared.lease?.close();
   }
 
   private async prepareFromSnapshot(
