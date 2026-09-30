@@ -1,4 +1,5 @@
 /** Android/iOS 页面侧完整 NativeModules 类型声明。 */
+import type { BusinessEventNativeResult } from './lynx-business-events';
 export interface NativeResult<T = unknown> {
   code: number;
   message?: string;
@@ -159,6 +160,8 @@ export interface TransitionState {
 }
 
 export interface LynxShellModule {
+  /** 三端通用业务事件；group/name 自由定义，成功仅表示真实入队。 */
+  reportBusinessEvent(group: string, name: string, attributesJSON: string, callback: (result: BusinessEventNativeResult) => void): void;
   open(url: string, optionsJSON: string, callback: (result: NativeResult) => void): void;
   close(callback: (result: NativeResult) => void): void;
   back(

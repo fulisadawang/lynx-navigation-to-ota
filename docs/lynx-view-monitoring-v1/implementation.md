@@ -8,6 +8,12 @@
 
 ## 厂商上报接入备注
 
+### 2026-09-30 上线前通用业务入口
+
+三端本次增加 `LynxShellModule.reportBusinessEvent(group,name,attributesJSON,callback)`，通过当前调用 Context/View 关联其监控 Scope，再进入同一 Core 队列和 `Provider.record(event)`。七类事件共用 Schema 1.0 与顶层 group，业务组名/事件名自由定义。Provider 没有新增第二个业务发送方法，Diagnostic 仍只本地记录。
+
+源码接线与静态核对不代表运行验收；本次未运行单元测试、类型检查、编译、构建或设备调用，也没有厂商 SDK/后台收件证据。下文 G1 历史报告不能作为本次业务入口的 PASS。详细字段与拒绝状态见 [Bridge 合同](../../BRIDGE_CONTRACT.md#业务事件与分组) 和 [当前事件合同](runtime-contract.md)。
+
 当前只保留可插拔的 `RuntimeProvider` 接口，没有选择或接入具体厂商。Android 的 `RuntimeProvider.record(event)`、iOS 的对应 Provider 入口以及 HarmonyOS 的对应 Provider 入口，都是统一的事件交付口；它们不是网络 URL，也不代表事件已经到达后台。
 
 目前使用的 `DiagnosticProvider` / `LynxMonitorDiagnosticProvider` / `LocalDiagnosticProvider` 只用于本地验收，返回本地记录状态，不产生网络请求。后续确定 ARMS、Bugly 或其他平台后，新增独立的 `integration/monitoring/<provider>/` 适配器，由适配器调用厂商 SDK 或自定义 HTTP；厂商 SDK 或该适配器负责 URL、Token、异步发送、批量、重试和 `flush`。公共监控核心、Page、Tab 和 LynxView 接线不绑定任何厂商实现。

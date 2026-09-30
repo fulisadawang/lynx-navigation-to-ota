@@ -5,7 +5,7 @@ import UIKit
 /** 生命周期和关联状态只在本实例内变更；事件生成后是不可变快照。 */
 final class LynxMonitorScope {
     let viewId = UUID().uuidString
-    private let runtime: LynxMonitorRuntime
+    let runtime: LynxMonitorRuntime
     private let kind: LynxMonitorContainerKind
     private let lock = NSLock()
     private var loadId = UUID().uuidString
@@ -214,7 +214,32 @@ final class LynxMonitorScope {
         }
     }
 
+    func admitBusinessEvent(_ input: LynxBusinessEventInput) -> LynxMonitorAdmissionResult {
+        let rejection = lock.monitorLocked { () -> LynxMonitorBusinessRejection? in
+            guard !closed else { return .pageContextUnavailable }
+            return runtime.capabilities.supportedEvents.contains(.business) ? nil : .eventUnsupported
+        }
+        if let rejection { return .rejected(rejection) }
+        // 纯文本清理和容量估算在调用工作线程执行，不持有 Scope 锁阻塞主线程 close。
+        let payload = LynxMonitorSanitizer.sanitizeBusiness(input.payload)
+        let event = lock.monitorLocked { () -> LynxMonitorEvent? in
+            guard !closed else { return nil }
+            return makeEventLocked(.business(payload))
+        }
+        guard let event else { return .rejected(.pageContextUnavailable) }
+        let admissionBytes = event.monitorBudgetBytes
+        return lock.monitorLocked {
+            guard !closed else { return .rejected(.pageContextUnavailable) }
+            // 与 close 共用 Scope 锁，真实 append 前关闭则拒绝；append 后身份不会变动。
+            return runtime.enqueue(event, admissionBytes: admissionBytes)
+        }
+    }
+
     private func emitLocked(_ payload: LynxMonitorPayload, missing: [String] = [], invalid: [String] = [], truncated: [String] = []) {
+        runtime.enqueue(makeEventLocked(payload, missing: missing, invalid: invalid, truncated: truncated))
+    }
+
+    private func makeEventLocked(_ payload: LynxMonitorPayload, missing: [String] = [], invalid: [String] = [], truncated: [String] = []) -> LynxMonitorEvent {
         let performance = payload.eventType == .performance
         let sampling: LynxMonitorSampling = performance
             ? .init(owner: runtime.capabilities.samplingOwner,
@@ -227,13 +252,13 @@ final class LynxMonitorScope {
                                             + (ambiguous ? ["ambiguous_load"] : [])
                                             + (!hasBundle ? ["bundle"] : []),
                                          invalidFields: invalid, truncatedFields: truncated)
-        runtime.enqueue(.init(eventId: UUID().uuidString, processSessionId: runtime.context.processSessionId,
-                              observedAtMs: Date().timeIntervalSince1970 * 1000,
-                              runtimeVersion: runtime.context.runtimeVersion, hostBuild: runtime.context.hostBuild,
-                              viewId: viewId, nativeInstanceId: nil, containerKind: kind,
-                              loadId: exactLoad ? loadId : nil, loadKind: exactLoad ? loadKind : nil,
-                              bundle: ambiguous ? nil : bundle,
-                              visibility: backgrounded ? .background : visibility,
-                              quality: quality, sampling: sampling, payload: payload))
+        return .init(eventId: UUID().uuidString, processSessionId: runtime.context.processSessionId,
+                     observedAtMs: Date().timeIntervalSince1970 * 1000,
+                     runtimeVersion: runtime.context.runtimeVersion, hostBuild: runtime.context.hostBuild,
+                     viewId: viewId, nativeInstanceId: nil, containerKind: kind,
+                     loadId: exactLoad ? loadId : nil, loadKind: exactLoad ? loadKind : nil,
+                     bundle: ambiguous ? nil : bundle,
+                     visibility: backgrounded ? .background : visibility,
+                     quality: quality, sampling: sampling, payload: payload)
     }
 }

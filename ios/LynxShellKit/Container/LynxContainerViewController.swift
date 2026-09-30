@@ -80,6 +80,7 @@ final class LynxContainerViewController: UIViewController {
         LynxDebugBridge.detach(view: lynxView)
 #endif
         monitorScope?.close(reason: "page_destroyed")
+        LynxMonitorViewBinding.unbind(lynxView)
         ShellMessageHub.unregister(pageId: navigationEntryID)
         otaPrepareTask?.cancel()
         templateProvider?.cancel()
@@ -729,6 +730,7 @@ final class LynxContainerViewController: UIViewController {
             globalProps: globalProps
         )
         if let monitoredScope {
+            LynxMonitorViewBinding.bind(monitoredScope, to: createdView)
             let monitor = LynxMonitorObserver(scope: monitoredScope)
             monitorObserver = monitor
             createdView.addLifecycleClient(monitor)
@@ -1076,6 +1078,7 @@ final class LynxContainerViewController: UIViewController {
         LynxDebugBridge.detach(view: lynxView)
 #endif
         monitorScope?.close(reason: reason)
+        LynxMonitorViewBinding.unbind(lynxView)
         if let monitorObserver { lynxView?.removeLifecycleClient(monitorObserver) }
         monitorObserver = nil
         monitorScope = nil

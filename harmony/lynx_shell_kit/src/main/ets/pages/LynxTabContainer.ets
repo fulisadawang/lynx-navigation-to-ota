@@ -145,6 +145,7 @@ export struct LynxTabContainer {
       context.updateColorScheme(ShellThemeState.colorScheme());
       ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
         pageKey: this.request.routeKey, hostMode: 'arkui_tab_container' }, context);
+      monitorClient?.bindContext(context, this.request.entryID);
       context.onEnterForeground();
       context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
       ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_tab_appear');

@@ -103,6 +103,9 @@ files/lynx-ota-store/apps/<lynxAppId>/
 
 ### 4. Bridge 与线程
 
+- 业务事件入口为 `reportBusinessEvent(group,name,attributesJSON,callback)`，复用监控 Core/Provider.record。七类事件统一 Schema 1.0 和顶层 group；业务分组/名称自由，不增加业务枚举或 ASCII 限制。
+- 原生从调用者 LynxContext 对应 View 找监控实例，attach/关闭清理索引；不按最近页或最新 OTA current 猜身份。group 从不可变 payload 冻结到外层，投影/序列化/预算必须保留。
+- 业务 queued 回执只证明实际 append，Provider/SDK/后台状态不反填。入队前复用文本清理和总32KiB预算，预计算 perf/resource 可腾足空间后才删旧事件；拒绝时队列不变。
 - 所有 UI/Router 操作进入 Android 主线程；高频动画帧不跨 NativeModules Bridge。
 - Android 对象型 callback 必须用 `Arguments.makeNativeMap` / `JavaOnlyMap` / `JavaOnlyArray` 编码。
 - 禁止把 Kotlin `HashMap` 直接传给 `Callback.invoke`；真机会导致 callback 收到 `null`。

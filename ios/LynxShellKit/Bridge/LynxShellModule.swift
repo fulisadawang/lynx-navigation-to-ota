@@ -56,6 +56,9 @@ public final class LynxShellModule: NSObject, LynxContextModule {
             "sendToPage": NSStringFromSelector(
                 #selector(sendToPage(_:eventName:payload:completion:))
             ),
+            "reportBusinessEvent": NSStringFromSelector(
+                #selector(reportBusinessEvent(_:name:attributesJSON:completion:))
+            ),
             "setStorageItem": NSStringFromSelector(#selector(setStorageItem(_:value:))),
             "getStorageItem": NSStringFromSelector(#selector(getStorageItem(_:completion:))),
             "removeStorageItem": NSStringFromSelector(#selector(removeStorageItem(_:))),
@@ -120,6 +123,37 @@ public final class LynxShellModule: NSObject, LynxContextModule {
 
     public func destroy() {
         lynxContext = nil
+    }
+
+    /** 业务成功只表示实际入队；完整编码、宿主脱敏和 Provider 交付由监控线程处理。 */
+    public func reportBusinessEvent(
+        _ group: String,
+        name: String,
+        attributesJSON: String,
+        completion: @escaping (NSDictionary) -> Void
+    ) {
+        let parse = { [weak self] in
+            do {
+                let input = try LynxBusinessEventInput(group: group, name: name, attributesJSON: attributesJSON)
+                DispatchQueue.main.async { [weak self] in
+                    guard let context = self?.lynxContext, !context.hasLynxViewDestroyed,
+                          let view = context.getLynxView() else {
+                        completion(LynxMonitorAdmissionResult.rejected(.pageContextUnavailable).bridgeResult)
+                        return
+                    }
+                    let scope = LynxMonitorViewBinding.scope(for: view)
+                    DispatchQueue.global(qos: .utility).async {
+                        completion(LynxMonitor.admitBusinessEvent(input, from: scope).bridgeResult)
+                    }
+                }
+            } catch let reason as LynxMonitorBusinessRejection {
+                completion(LynxMonitorAdmissionResult.rejected(reason).bridgeResult)
+            } catch {
+                completion(LynxMonitorAdmissionResult.rejected(.internalError).bridgeResult)
+            }
+        }
+        if Thread.isMainThread { DispatchQueue.global(qos: .utility).async(execute: parse) }
+        else { parse() }
     }
 
     /**

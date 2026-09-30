@@ -8,6 +8,7 @@ import LynxRouteParser from '../routing/LynxRouteParser';
 import LynxNavigator from '../routing/LynxNavigator';
 import LynxRouter from '../routing/LynxRouter';
 import ShellMessageHub from '../common/ShellMessageHub';
+import BusinessEventReporter, { NativeBusinessEventResult } from '../monitoring/BusinessEventReporter';
 
 interface ShellLocaleReadData {
   state: ShellLocaleStateValue;
@@ -113,6 +114,16 @@ export class LynxShellModule extends LynxModule {
       message: reply.message,
       data: reply.data
     });
+  }
+
+  public reportBusinessEvent(
+    group: string,
+    name: string,
+    attributesJSON: string,
+    callback: (result: NativeBusinessEventResult) => void
+  ): void {
+    const result = BusinessEventReporter.report(this.context, group, name, attributesJSON);
+    callback(result);
   }
 
   /** 页面向当前进程内全部活体 Lynx 页面广播事件。 */

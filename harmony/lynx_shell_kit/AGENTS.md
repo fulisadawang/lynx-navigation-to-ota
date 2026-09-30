@@ -9,6 +9,7 @@
 - Lynx 4.0 Runtime、Service、XElement 和模块初始化；
 - ArkUI `LynxContainer`、Router、原生 Page Stack 与页面状态；
 - `LynxShellModule`、Storage、消息和宿主能力 Bridge；
+- LynxView 监控 Core、七类 Schema 1.0 事件与本地 Diagnostic Provider；
 - Bundle Provider、embedded rawfile Registry；
 - OTA Store v3、完整 Manifest、App ID 作用域 CAS、State、lease、回滚和诊断。
 
@@ -35,8 +36,10 @@
 
 ```text
 src/main/ets/
+├── client/        LynxView 回调与每 View 监控 Binding
 ├── common/        请求、配置、GlobalProps 和公共类型
 ├── module/        LynxShellModule Bridge
+├── monitoring/    事件模型、业务输入/回执、Context 索引与有界队列
 ├── ota/           API Client、Store v3、Runtime、embedded Registry
 ├── pages/         LynxContainer、LynxTabContainer
 ├── provider/      Bundle/Template Provider
@@ -113,6 +116,17 @@ src/main/ets/
 - 原始 Module 成功码是 `code=0`；页面 wrapper 归一化规则不在 HAR 内重复实现。
 - 不在 main-thread 高频动画函数里调用 NativeModules、网络或 Router。
 - GlobalProps 的宿主保留字段不能被业务 params 覆盖。
+
+### 业务事件与监控
+
+- `reportBusinessEvent(group, name, attributesJSON, callback)` 使用普通 Module 的 callback 语义；成功只表示实际进入 Core 队列，不代表 Provider 或云端收件。
+- 所有事件顶层必填 `group`，Schema 固定 1.0。系统采集器填写默认组；业务 group/name 保留原文，只拒绝空或全空白，不维护业务枚举或注册白名单。
+- 业务属性 key 非空，value 只允许 string、finite number、boolean；字符串在入队前复用 `monitorSanitize`，不截断修复非法或超限输入。
+- raw group/name/attributesJSON 合计及完整快照沿用 32 KiB 总预算，队列沿用 128 条/512 KiB；group 计入实际编码字节，不增加独立字段或数量上限。
+- Context 必须先在 `ShellMessageHub` 登记，再与对应 entryID/ViewMonitorBinding 绑定。Page/Tab 销毁、刷新和重建配对解绑；不得用最后一个 View 或 OTA current 猜测身份。同 View reload 无可靠 load 归属时降为 exact_view。
+- 业务 admission 在同一同步段检查 runtime、Provider capability、快照预算和实际 append；initializing/ready 可排队，关闭、失败、未配置或不支持时明确拒绝。
+- 业务只淘汰最旧 performance/resource，预算不足时零删除拒绝；系统按 performance/resource、business、原兜底顺序淘汰并记录 Core 丢弃类型。
+- `RuntimeProvider.record(event)` 签名不变；business 支持由 capability 声明，安装不强制该能力。LocalDiagnosticProvider 保存相同处理后的本地事件，不执行网络上报。
 
 ### 6. `BuildProfile.ets` 特别规则
 

@@ -3,6 +3,7 @@ import Foundation
 public enum LynxMonitorEventType: String, Codable, CaseIterable {
     case lifecycle = "view.lifecycle", load = "view.load", performance = "lynx.performance"
     case jsError = "lynx.js_error", resource = "lynx.resource", diagnostic = "monitor.diagnostic"
+    case business = "business.event"
 }
 
 public enum LynxMonitorVisibility: String, Codable { case visible, hidden, background, unknown }
@@ -157,6 +158,7 @@ public enum LynxMonitorPayload: Encodable {
     case jsError(LynxMonitorJSError)
     case resource(resourceType: String, failed: Bool, errorCode: String?)
     case diagnostic(code: String, count: Int, detail: String?)
+    case business(LynxMonitorBusinessEvent)
 
     public var eventType: LynxMonitorEventType {
         switch self {
@@ -166,6 +168,7 @@ public enum LynxMonitorPayload: Encodable {
         case .jsError: return .jsError
         case .resource: return .resource
         case .diagnostic: return .diagnostic
+        case .business: return .business
         }
     }
     enum CodingKeys: String, CodingKey {
@@ -175,6 +178,7 @@ public enum LynxMonitorPayload: Encodable {
         switch self {
         case let .performance(value): try value.encode(to: encoder)
         case let .jsError(value): try value.encode(to: encoder)
+        case let .business(value): try value.encode(to: encoder)
         default:
             var c = encoder.container(keyedBy: CodingKeys.self)
             switch self {
@@ -195,7 +199,7 @@ public enum LynxMonitorPayload: Encodable {
                 try c.encode(code, forKey: .code)
                 try c.encode(count, forKey: .count)
                 try c.encode(detail, forKey: .detail)
-            case .performance, .jsError: break
+            case .performance, .jsError, .business: break
             }
         }
     }
@@ -204,6 +208,16 @@ public enum LynxMonitorPayload: Encodable {
 /** Provider 收到独立值快照；异步交付不会读取另一个 View 的当前版本。 */
 public struct LynxMonitorEvent: Encodable {
     public let schemaVersion = "1.0"
+    public var group: String {
+        switch payload {
+        case .lifecycle, .load: return "page"
+        case .performance: return "performance"
+        case .jsError: return "error"
+        case .resource: return "resource"
+        case .diagnostic: return "diagnostic"
+        case let .business(value): return value.group
+        }
+    }
     public let eventId: String
     public let processSessionId: String
     public let observedAtMs: Double
@@ -223,12 +237,13 @@ public struct LynxMonitorEvent: Encodable {
     public var eventType: LynxMonitorEventType { payload.eventType }
 
     enum CodingKeys: String, CodingKey {
-        case schemaVersion, eventId, processSessionId, observedAtMs, platform, runtimeVersion, hostBuild
+        case schemaVersion, group, eventId, processSessionId, observedAtMs, platform, runtimeVersion, hostBuild
         case viewId, nativeInstanceId, containerKind, loadId, loadKind, bundle, visibility, quality, sampling, eventType, payload
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(schemaVersion, forKey: .schemaVersion)
+        try c.encode(group, forKey: .group)
         try c.encode(eventId, forKey: .eventId)
         try c.encode(processSessionId, forKey: .processSessionId)
         try c.encode(observedAtMs, forKey: .observedAtMs)

@@ -76,6 +76,13 @@ internal object MonitorProjection {
         "pipeline_ms" to ("pipelineStart" to "pipelineEnd"),
     )
 
+    /** 业务字符串在入队前清理，保留分组、名称、属性名和标量的业务含义。 */
+    fun business(payload: BusinessPayload, policy: MonitorTextPolicy): BusinessPayload = BusinessPayload(
+        payload.group, payload.name, payload.attributes.mapValues { (_, value) ->
+            if (value is BusinessEventValue.Text) BusinessEventValue.Text(policy.sanitize(value.value)) else value
+        },
+    )
+
     fun performance(entry: PerformanceEntry): Projection<PerformancePayload>? {
         if (entry !is PipelineEntry && entry !is LazyBundleEntry) return null
         val raw = entry.toHashMap()

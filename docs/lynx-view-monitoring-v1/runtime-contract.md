@@ -2,6 +2,8 @@
 
 本文是跨端语义契约。TypeScript 仅用于表达统一数据形状；当前 Android、iOS、HarmonyOS 的平台实现位于各自 monitoring 目录，不要求原生事件经过 JS Bridge。
 
+2026-09-30 上线前完善：同一份 Schema 1.0 增加全事件 `group` 与通用 `business.event`。业务名称、分组和属性字段由调用方定义，不列业务事件枚举；此前 G1 报告是历史采集验收，不能当作新增业务桥的运行证明。
+
 ## 1. 标识与生命周期
 
 | 标识 | 生成/来源 | 有效期 |
@@ -49,6 +51,7 @@ interface BundleIdentity {
 ```ts
 interface EventEnvelope {
   schemaVersion: '1.0';
+  group: string; // 系统采集器填默认组；业务调用方自由传入，所有事件必填
   eventId: string;
   processSessionId: string;
   observedAtMs: number; // 接收时的 Unix ms，不能冒充 SDK 发生时间
@@ -76,7 +79,7 @@ interface EventEnvelope {
 }
 
 type EventType = 'view.lifecycle' | 'view.load' | 'lynx.performance'
-  | 'lynx.js_error' | 'lynx.resource' | 'monitor.diagnostic';
+  | 'lynx.js_error' | 'lynx.resource' | 'monitor.diagnostic' | 'business.event';
 
 type MonitorEvent = EventEnvelope & (
   | {eventType: 'view.lifecycle'; payload: LifecyclePayload}
@@ -85,10 +88,11 @@ type MonitorEvent = EventEnvelope & (
   | {eventType: 'lynx.js_error'; payload: JsErrorPayload}
   | {eventType: 'lynx.resource'; payload: ResourcePayload}
   | {eventType: 'monitor.diagnostic'; payload: DiagnosticPayload}
+  | {eventType: 'business.event'; payload: BusinessPayload}
 );
 ```
 
-eventType 与 payload 必须按下表对应，不能把任意字典当合法事件。新增事件类型需更新版本及 Provider capabilities。JSON 中禁用 NaN/Infinity；所有时长单位固定 ms。
+eventType 与 payload 必须按下表对应，不能把任意字典当合法事件。当前项目未上线，在本次统一完善 Schema 1.0；首次上线后结构变更再按版本规则管理。新增业务 name/group 不改变 Schema，也不要求注册原生方法。Provider capabilities 与实际支持的事件类别同步。JSON 中禁用 NaN/Infinity；所有时长单位固定 ms。
 
 LifecyclePayload、LoadPayload、PerformancePayload、ResourcePayload、DiagnosticPayload 分别按下表完整定义；JsErrorPayload 见第4节。Schema是这些结构的机器可读约束，原生实现也须按事件种类穷举处理。
 
@@ -102,6 +106,19 @@ LifecyclePayload、LoadPayload、PerformancePayload、ResourcePayload、Diagnost
 | `lynx.js_error` | 见第 4 节 | 同时包括首屏前和运行期；与加载失败处理解耦 |
 | `lynx.resource` | `{resourceType, outcome: success / failed, durationMs: number|null, errorCode: string|null, resourceKey: string|null}` | duration 无可靠来源为 null；resourceKey 不能含签名参数 |
 | `monitor.diagnostic` | `{code, count: number, detail: string|null}` | 适配器拒绝、截断、丢弃、关联缺失；不得递归触发自身上报 |
+| `business.event` | `{name: string, attributes: Record<string,string|number|boolean>}` | 业务名与字段自由定义；group 位于外层，接收时间/页面/Bundle 身份由原生 Scope 生成 |
+
+`group` 用于分类和筛选，`eventType` 决定结构、采样、能力与队列优先级。系统默认分组为：lifecycle/load→page，performance→performance，js_error→error，resource→resource，diagnostic→diagnostic。业务分组可与系统组同名，不因此改变业务事件类别；所有投影、克隆和 Provider 序列化均保留创建时的 group。
+
+### 3.1.1 业务入口与回执
+
+三端 `LynxShellModule` 提供 `reportBusinessEvent(group, name, attributesJSON, callback)`。JS 页面通过具名对象 API 调用，包内负责编码。分组/名字拒绝空或全空白字符串，其他内容原样保留，无 ASCII/注册/白名单限制；属性只收扁平 string/finite number/boolean，不接受 null、数组或嵌套对象，不静默转类型或截断。
+
+raw 输入和完整事件沿用 32 KiB 总预算，队列沿用 128 条/512 KiB，不另设业务名长度、字段数或单字段容量。真实 append 返回 `code=0,data={stage:'queued',eventId,monitorState:'initializing'|'ready'}`；它不表示 Provider/SDK/后台已收到。未配置、无活动 Scope、不支持、非法/超限、队列拒绝均返回稳定 code/reasonCode，详见 `BRIDGE_CONTRACT.md`。
+
+业务入队只允许淘汰 performance/resource，预计算可腾足条数和字节后才删除并 append；不足时零删除拒绝，不挤旧 business 或生命周期/错误等事实。系统事件按 performance/resource→business→原兜底顺序。业务不使用 performanceSampleRate。
+
+业务字符串入队前复用现有内建清理；iOS 的额外宿主 redactText 保持 worker 执行，最终编码门禁和 Provider 交付也在 worker。诊断与 Provider 收到同一处理后的不可变事件。迟到旧 Context 不借新 Scope，普通关闭前已接受快照仍可排出。
 
 ```ts
 interface MetricValue {

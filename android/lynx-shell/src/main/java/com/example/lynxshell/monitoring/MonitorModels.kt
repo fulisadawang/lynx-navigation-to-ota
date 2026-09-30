@@ -9,9 +9,10 @@ internal fun <K, V> frozen(values: Map<K, V>): Map<K, V> = Collections.unmodifia
 enum class ContainerKind(val wire: String) { PAGE("page"), TAB("tab"), EMBEDDED("embedded"), UNKNOWN("unknown") }
 enum class Visibility(val wire: String) { VISIBLE("visible"), HIDDEN("hidden"), BACKGROUND("background"), UNKNOWN("unknown") }
 enum class LoadKind(val wire: String) { INITIAL("initial"), RETRY("retry"), RELOAD("reload") }
-enum class EventType(val wire: String) {
-    LIFECYCLE("view.lifecycle"), LOAD("view.load"), PERFORMANCE("lynx.performance"),
-    JS_ERROR("lynx.js_error"), RESOURCE("lynx.resource"), DIAGNOSTIC("monitor.diagnostic")
+enum class EventType(val wire: String, internal val systemGroup: String?) {
+    LIFECYCLE("view.lifecycle", "page"), LOAD("view.load", "page"), PERFORMANCE("lynx.performance", "performance"),
+    JS_ERROR("lynx.js_error", "error"), RESOURCE("lynx.resource", "resource"), DIAGNOSTIC("monitor.diagnostic", "diagnostic"),
+    BUSINESS("business.event", null)
 }
 
 data class BundleIdentity internal constructor(
@@ -87,6 +88,16 @@ data class ResourcePayload(
 data class DiagnosticPayload(val code: String, val count: Long, val detail: String? = null) : MonitorPayload {
     override val eventType = EventType.DIAGNOSTIC
 }
+sealed interface BusinessEventValue {
+    data class Text internal constructor(val value: String) : BusinessEventValue
+    data class Numeric internal constructor(val value: Double) : BusinessEventValue
+    data class Flag internal constructor(val value: Boolean) : BusinessEventValue
+}
+class BusinessPayload internal constructor(internal val group: String, val name: String,
+    attributes: Map<String, BusinessEventValue>) : MonitorPayload {
+    override val eventType = EventType.BUSINESS
+    val attributes = frozen(attributes)
+}
 
 class MonitorEvent internal constructor(
     val eventId: String, val processSessionId: String, val observedAtMs: Long,
@@ -98,8 +109,9 @@ class MonitorEvent internal constructor(
     val schemaVersion = "1.0"
     val platform = "android"
     val eventType: EventType get() = payload.eventType
+    val group: String = if (payload is BusinessPayload) payload.group else requireNotNull(payload.eventType.systemGroup)
 
-    /** 仅供 Provider 的分发线程或宿主诊断导出使用，不在 Lynx 回调中序列化。 */
+    /** 仅供 Provider 的分发线程或宿主诊断导出使用，不在引擎观测回调中序列化。 */
     fun toJson(): String = JSONObject(wire()).toString()
 
     /** 按 JSON 转义后的 UTF-8 长度计预算，避免多字节文本突破队列上限。 */
@@ -113,7 +125,7 @@ class MonitorEvent internal constructor(
     )
 
     private fun wire(): Map<String, Any?> = linkedMapOf(
-        "schemaVersion" to schemaVersion, "eventId" to eventId, "processSessionId" to processSessionId,
+        "schemaVersion" to schemaVersion, "group" to group, "eventId" to eventId, "processSessionId" to processSessionId,
         "observedAtMs" to observedAtMs, "platform" to platform, "eventType" to eventType.wire,
         "runtimeVersion" to runtimeVersion, "hostBuild" to hostBuild, "viewId" to viewId,
         "nativeInstanceId" to nativeInstanceId, "containerKind" to containerKind.wire,
@@ -154,6 +166,13 @@ class MonitorEvent internal constructor(
         is ResourcePayload -> linkedMapOf("resourceType" to value.resourceType, "outcome" to value.outcome,
             "durationMs" to value.durationMs, "errorCode" to value.errorCode, "resourceKey" to value.resourceKey)
         is DiagnosticPayload -> linkedMapOf("code" to value.code, "count" to value.count, "detail" to value.detail)
+        is BusinessPayload -> linkedMapOf("name" to value.name, "attributes" to value.attributes.mapValues { (_, attribute) ->
+            when (attribute) {
+                is BusinessEventValue.Text -> attribute.value
+                is BusinessEventValue.Numeric -> attribute.value
+                is BusinessEventValue.Flag -> attribute.value
+            }
+        })
     }
 }
 

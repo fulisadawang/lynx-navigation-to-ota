@@ -95,6 +95,7 @@ class LynxViewMonitor internal constructor(
             runtime.detach(this)
             return
         }
+        LynxMonitor.bind(value, this)
         created = true
         emit(LifecyclePayload("created", elapsed(creationStartNanos)))
         // 创建前只记录目标可见状态；真实 View 建立后再发首个 visible/hidden/background。
@@ -233,8 +234,15 @@ class LynxViewMonitor internal constructor(
         removeListeners()
     }
 
+    /** 先关门的实例拒绝新事件；先入队的事件保留冻结身份，可在 close 后继续排出。 */
+    @Synchronized internal fun reportBusinessEvent(sender: LynxView, input: BusinessEventInput): QueueAdmissionResult =
+        runtime.enqueueBusiness(!closed && view.get() === sender) {
+            event(MonitorProjection.business(input.payload, runtime.config.textPolicy))
+        }
+
     private fun removeListeners() {
         val target = view.get()
+        if (target != null) LynxMonitor.unbind(target, this)
         view.clear()
         if (target != null) {
             val remove = Runnable {

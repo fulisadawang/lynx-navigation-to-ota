@@ -8,6 +8,47 @@
 
 基础 `open/close`、存储和 AppInfo 三端方法名保持一致，UI 导航动作必须进入平台
 UI 线程/路由上下文。
+
+## 业务事件与分组
+
+三端在现有模块新增必需接口，项目上线前一次对齐：
+
+```ts
+reportBusinessEvent(
+  group: string,
+  name: string,
+  attributesJSON: string,
+  callback: (result: BusinessEventNativeResult) => void,
+): void;
+```
+
+页面使用 `@cclx/lynx-native-bridge/shell/business-events` 的对象 API，由包内编码 attributesJSON。group/name 和属性字段由业务方自由定义、支持中文，不需要注册或业务枚举；属性只允许扁平 string、finite number、boolean，未提供属性由页面封装传 `{}`，显式 null/数组/嵌套对象不接受。
+
+原生根据调用者 Context 对应的 View/Binding 生成事件身份与接收时间；不接受页面覆盖 viewId、Bundle、平台或时钟。所有监控事件使用统一 Schema 1.0、顶层必填 `group`；默认系统组为 page（lifecycle/load）、performance、error、resource、diagnostic，业务组取调用方原值。group 用于筛选，不改变 eventType、Provider 能力、采样或队列优先级。
+
+### 回执和错误
+
+成功对象为 `code=0,message,data={stage:'queued',eventId,monitorState:'initializing'|'ready'}`，仅在 Core 真正 append 后返回。Provider/SDK/网络/后台接受是后续阶段，不能解释为此 Promise 已证明送达。回调最多一次；页面 runtime 销毁后按 SDK 生命周期丢弃回调，不补假成功。
+
+失败对象为 `code,message,data={stage:'rejected',reasonCode}`：
+
+| code | reasonCode | 含义 |
+|---:|---|---|
+| 1001 | invalid_argument | 分组/名称为空或全空白、JSON/属性类型非法 |
+| 1001 | event_too_large | 原始输入或完整快照超 32 KiB 预算 |
+| 1002 | page_context_unavailable | 调用者 View/活动 Scope 无法确定或已关闭 |
+| 1004 | not_configured | 未启用监控或未配置 Provider |
+| 1004 | not_ready | 监控初始化已失败或不可再接收；initializing 本身仍可排队 |
+| 1004 | monitor_closed | 监控 Core 已关闭 |
+| 1004 | event_unsupported | Provider 未支持 business.event |
+| 1004 | queue_rejected | 无法在保护核心事件的前提下接受本条业务事件 |
+| 1500 | internal_error | 意外内部异常 |
+
+业务分组、名称、属性 key 保留原文，不自动 trim/改名，不新增 ASCII/字段名单或独立长度限制。原始输入和完整事件沿用总 32 KiB，队列为 128 条/512 KiB。字符串属性复用既有敏感文本清理，事件以不可变快照处理；不打印输入。iOS 宿主 redactText 仍在监控线程执行，真正 JSON 编码预算和 Provider 交付也留在该线程。
+
+业务 admission 先预计算最旧 performance/resource 能否腾足空间，足额后才执行删除和 append，否则零删除拒绝；业务不挤已有业务、加载、生命周期或异常事件。系统淘汰顺序为 performance/resource→business→原有兜底。关闭前入队快照保留旧身份可晚排出，关闭后新调用拒绝；同 View reload 沿原 exact_view 降级，不按最新 Bundle 猜归属。
+
+三端 Provider 接口继续使用 `record(event)`，LocalDiagnostic 仍只本地记录。首次需要监控的 View 创建前由宿主安装 Provider，声明并实际处理 business.event；厂商 SDK/后台尚未接入。此扩展完成源码接线，本轮没有编译、测试或设备调用证明。
 Playground 的媒体方法由 Android / iOS 手写宿主实现；HarmonyOS 已导出同名方法，但当前明确返回
 `1004`“尚未接入”，不伪造系统 Picker 或上传下载成功。
 

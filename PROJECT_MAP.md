@@ -162,6 +162,8 @@ Tab 普通切换 cache-only、后台不重建；身份变化和主动完成后�
 
 ## LynxView 可插拔监控 G1
 
+2026-09-30 上线前业务事件扩展：三端现有 Shell Module 增加 `reportBusinessEvent(group,name,attributesJSON,callback)`，监控 Core 统一记录 `business.event`。所有事件拥有顶层 `group`；原生系统分组由采集器填写、业务分组/名称自由传入。回执仅证明原生队列接受，厂商 Provider/后台交付仍需后续接入。接口、身份绑定与状态见 [业务桥接合同](BRIDGE_CONTRACT.md#业务事件与分组)。本轮未运行新增能力的编译、测试或设备验收。
+
 [研发方案 v1.0](docs/lynx-view-monitoring-v1/README.md) 定义三端 Page/Native Tab 性能、运行期 JS 异常、实际 Bundle 身份、可替换第三方 SDK 适配，以及构建调试材料归档和源码还原。
 [G1 实现说明](docs/lynx-view-monitoring-v1/implementation.md) 对应当前分支的 Android、iOS、HarmonyOS 接线和 Playground 归档工具；不依赖 OTA Server/Admin，G2 第三方平台 Provider 仍未接入。
 

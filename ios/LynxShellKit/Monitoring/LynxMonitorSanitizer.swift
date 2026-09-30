@@ -25,6 +25,16 @@ enum LynxMonitorSanitizer {
     }
 
     static func process(_ event: LynxMonitorEvent, customRedactor: ((String) -> String)?) -> LynxMonitorEvent {
+        if case let .business(business) = event.payload {
+            guard let customRedactor else { return event }
+            // 内建清理已在入队前完成；宿主回调只在串行交付线程补充执行。
+            let attributes = business.attributes.mapValues { value -> LynxMonitorBusinessValue in
+                if case let .string(text) = value { return .string(customRedactor(text)) }
+                return value
+            }
+            return event.replacing(payload: .business(.init(group: business.group, name: business.name, attributes: attributes)),
+                                   missing: event.quality.missingFields, truncated: event.quality.truncatedFields)
+        }
         guard case let .jsError(error) = event.payload else { return event }
         func clean(_ value: String, limit: Int) -> (text: String, truncated: Bool) {
             let safe = redact(value)
@@ -46,6 +56,14 @@ enum LynxMonitorSanitizer {
                                        realm: error.realm, message: message, rawStack: stack, frames: frames,
                                        handled: error.handled, phase: error.phase)
         return event.replacing(payload: .jsError(result), missing: missing, truncated: truncated)
+    }
+
+    static func sanitizeBusiness(_ value: LynxMonitorBusinessEvent) -> LynxMonitorBusinessEvent {
+        let attributes = value.attributes.mapValues { attribute -> LynxMonitorBusinessValue in
+            if case let .string(text) = attribute { return .string(redact(text)) }
+            return attribute
+        }
+        return .init(group: value.group, name: value.name, attributes: attributes)
     }
 
     private static func redact(_ text: String) -> String {
@@ -126,7 +144,7 @@ extension LynxMonitorEvent {
                 count + (byte < 0x20 ? 6 : (byte == 0x22 || byte == 0x5c || byte == 0x2f ? 2 : 1))
             }
         }
-        var strings = [eventId, processSessionId, runtimeVersion, hostBuild, viewId, nativeInstanceId, loadId]
+        var strings = [group, eventId, processSessionId, runtimeVersion, hostBuild, viewId, nativeInstanceId, loadId]
         if let bundle {
             strings += [bundle.lynxAppId, bundle.bundleName, bundle.releaseId, bundle.releaseSequence, bundle.sha256, bundle.missingReason, bundle.buildId]
         }
@@ -150,6 +168,17 @@ extension LynxMonitorEvent {
         case let .load(_, reason, _): strings += [reason]
         case let .resource(type, _, code): strings += [type, code]
         case let .diagnostic(code, _, detail): strings += [code, detail]
+        case let .business(business):
+            strings.append(business.name)
+            for (key, value) in business.attributes {
+                strings.append(key)
+                fixed += 2 // 每项的冒号和逗号；引号已计入 stringBytes。
+                switch value {
+                case let .string(text): strings.append(text)
+                case .number: fixed += 32 // 有限 Double 的 JSON 数字表示上界。
+                case .boolean: fixed += 5
+                }
+            }
         case .lifecycle: break
         }
         return strings.reduce(fixed) { $0 + stringBytes($1) }
