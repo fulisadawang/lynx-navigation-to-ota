@@ -27,7 +27,13 @@ import {
   RuntimeProvider
 } from './MonitorTypes';
 import { monitorId, monitorJsonBytes } from './MonitorUtils';
-import { LynxEnv } from '@lynx/lynx';
+import { LynxContext, LynxEnv } from '@lynx/lynx';
+import BusinessEventInput, {
+  BusinessEventReasonCode,
+  BusinessQueueAdmission,
+  QueuedBusinessAdmissionValue,
+  RejectedBusinessAdmissionValue
+} from './BusinessEventInput';
 
 const MAX_QUEUE_EVENTS: number = 128;
 const MAX_QUEUE_BYTES: number = 512 * 1024;
@@ -49,6 +55,7 @@ export default class LynxMonitor {
   private drainScheduled: boolean = false;
   private providerDisposed: boolean = false;
   private readonly diagnostics: Map<string, number> = new Map<string, number>();
+  private readonly contexts: Map<LynxContext, MonitorContextBinding> = new Map<LynxContext, MonitorContextBinding>();
 
   static shared(): LynxMonitor {
     if (LynxMonitor.singleton === null) LynxMonitor.singleton = new LynxMonitor();
@@ -120,6 +127,7 @@ export default class LynxMonitor {
       const result = await Promise.race([initialization, timeout]);
       if (result.state !== 'ready') {
         this.recordDiagnostic('provider_initialization_failed', result.reason);
+        this.pending.forEach((event: MonitorEvent) => this.incrementDiagnostic(`discarded_initialization_${event.eventType}`));
         this.pending.length = 0;
         this.pendingBytes = 0;
         this.ready = false;
@@ -137,6 +145,7 @@ export default class LynxMonitor {
       return result;
     } catch (_error) {
       this.recordDiagnostic('provider_initialization_failed', 'provider_initialize_threw');
+      this.pending.forEach((event: MonitorEvent) => this.incrementDiagnostic(`discarded_initialization_${event.eventType}`));
       this.pending.length = 0;
       this.pendingBytes = 0;
       this.ready = false;
@@ -173,6 +182,41 @@ export default class LynxMonitor {
     this.scheduleDrain();
   }
 
+  bindContext(context: LynxContext, entryID: string, binding: ViewMonitorBinding): void {
+    if (!this.closed) this.contexts.set(context, new MonitorContextBinding(entryID, binding));
+  }
+
+  unbindContext(context: LynxContext): void {
+    this.contexts.delete(context);
+  }
+
+  contextBinding(context: LynxContext, entryID: string): ViewMonitorBinding | null {
+    const registered = this.contexts.get(context);
+    return registered !== undefined && registered.entryID === entryID ? registered.binding : null;
+  }
+
+  businessRuntimeRejection(): BusinessEventReasonCode | null {
+    if (this.closed || this.state === 'closed') return 'monitor_closed';
+    if (this.state === 'failed') return 'not_ready';
+    if (this.config?.enabled !== true || this.provider === null) return 'not_configured';
+    if (this.state !== 'initializing' && this.state !== 'ready') return 'not_ready';
+    return null;
+  }
+
+  /** 状态、能力、快照预算与实际 append 在同一同步段完成，回执只表示 Core 入队。 */
+  recordBusinessEvent(binding: ViewMonitorBinding, input: BusinessEventInput): BusinessQueueAdmission {
+    const runtimeRejection = this.businessRuntimeRejection();
+    if (runtimeRejection !== null) return new RejectedBusinessAdmissionValue(runtimeRejection);
+    if (binding.isClosed) return new RejectedBusinessAdmissionValue('page_context_unavailable');
+    if (this.provider === null || !this.provider.capabilities.supportedEvents.includes('business.event')) {
+      return new RejectedBusinessAdmissionValue('event_unsupported');
+    }
+    const event = binding.businessSnapshot(input);
+    const admission = this.enqueue(event);
+    if (admission.stage === 'queued') this.scheduleDrain();
+    return admission;
+  }
+
   private deliver(event: MonitorEvent): void {
     if (this.provider === null) return;
     if (!this.provider.capabilities.supportedEvents.includes(event.eventType)) {
@@ -187,24 +231,51 @@ export default class LynxMonitor {
     }
   }
 
-  private enqueue(event: MonitorEvent): void {
+  private enqueue(event: MonitorEvent): BusinessQueueAdmission {
     const bytes = this.eventBytes(event);
     if (bytes > MAX_EVENT_BYTES) {
       this.incrementDiagnostic('event_too_large');
-      return;
+      return new RejectedBusinessAdmissionValue('event_too_large');
+    }
+    if (event.eventType === 'business.event') {
+      const candidates: number[] = [];
+      let remainingCount = this.pending.length;
+      let remainingBytes = this.pendingBytes;
+      for (let index = 0; index < this.pending.length &&
+        (remainingCount >= MAX_QUEUE_EVENTS || remainingBytes + bytes > MAX_QUEUE_BYTES); index++) {
+        const candidate = this.pending[index];
+        if (candidate.eventType === 'lynx.performance' || candidate.eventType === 'lynx.resource') {
+          candidates.push(index);
+          remainingCount -= 1;
+          remainingBytes -= this.eventBytes(candidate);
+        }
+      }
+      // 容量不足时零删除；不能先丢旧事件，再拒绝本条业务事件。
+      if (remainingCount >= MAX_QUEUE_EVENTS || remainingBytes + bytes > MAX_QUEUE_BYTES) {
+        this.incrementDiagnostic('queue_rejected');
+        return new RejectedBusinessAdmissionValue('queue_rejected');
+      }
+      for (let index = candidates.length - 1; index >= 0; index--) {
+        const dropped = this.pending.splice(candidates[index], 1)[0];
+        this.incrementDiagnostic(`dropped_${dropped.eventType}`);
+      }
+      this.pendingBytes = remainingBytes;
     }
     while (this.pending.length >= MAX_QUEUE_EVENTS || this.pendingBytes + bytes > MAX_QUEUE_BYTES) {
       const performanceIndex = this.pending.findIndex((item: MonitorEvent) =>
         item.eventType === 'lynx.performance' || item.eventType === 'lynx.resource');
+      const businessIndex = performanceIndex >= 0 ? -1 : this.pending.findIndex((item: MonitorEvent) =>
+        item.eventType === 'business.event');
       const dropped = performanceIndex >= 0
         ? this.pending.splice(performanceIndex, 1)[0]
-        : this.pending.shift();
+        : businessIndex >= 0 ? this.pending.splice(businessIndex, 1)[0] : this.pending.shift();
       if (dropped === undefined) break;
       this.pendingBytes -= this.eventBytes(dropped);
       this.incrementDiagnostic(`dropped_${dropped.eventType}`);
     }
     this.pending.push(event);
     this.pendingBytes += bytes;
+    return new QueuedBusinessAdmissionValue(event.eventId, this.state === 'initializing' ? 'initializing' : 'ready');
   }
 
   /** Lynx 回调只入队；Provider 交付在下一轮事件循环串行执行。 */
@@ -252,7 +323,7 @@ export default class LynxMonitor {
     loadId: string | null, loadKind: LoadKind, bundle: BundleIdentity | null,
     visibility: 'visible' | 'hidden' | 'background' | 'unknown', quality: EventQuality,
     sampling: EventSampling): EventEnvelope {
-    return new EventEnvelopeValue('1.0', monitorId('event'), this.processSessionId,
+    return new EventEnvelopeValue('1.0', 'diagnostic', monitorId('event'), this.processSessionId,
       new Date().getTime(), 'harmony', this.hostContext?.runtimeVersion ?? 'unknown',
       this.hostContext?.hostBuild ?? 'unknown', viewId, nativeInstanceId,
       containerKind, loadId, loadKind, bundle, visibility, quality, sampling);
@@ -299,8 +370,19 @@ export default class LynxMonitor {
     this.drainScheduled = false;
     this.pending.length = 0;
     this.pendingBytes = 0;
+    this.contexts.clear();
     this.disposeProviderOnce();
     this.provider = null;
+  }
+}
+
+class MonitorContextBinding {
+  readonly entryID: string;
+  readonly binding: ViewMonitorBinding;
+
+  constructor(entryID: string, binding: ViewMonitorBinding) {
+    this.entryID = entryID;
+    this.binding = binding;
   }
 }
 
@@ -321,6 +403,7 @@ export class ViewMonitorBinding {
   private firstContentReached: boolean = false;
   private loadTerminal: boolean = false;
   private ambiguous: boolean = false;
+  private engineLoadStarted: boolean = false;
 
   constructor(monitor: LynxMonitor, viewId: string, containerKind: ContainerKind,
     hostBuild: string, runtimeVersion: string, processSessionId: string) {
@@ -330,6 +413,26 @@ export class ViewMonitorBinding {
     this.hostBuild = hostBuild;
     this.runtimeVersion = runtimeVersion;
     this.processSessionId = processSessionId;
+  }
+
+  get isClosed(): boolean {
+    return this.closed;
+  }
+
+  pageStarted(): void {
+    // 同 View 的后续加载回调不能证明属于哪个 load，保留 view 归属并降级 Bundle 关联。
+    if (this.engineLoadStarted) this.ambiguous = true;
+    this.engineLoadStarted = true;
+  }
+
+  contextReplaced(): void {
+    this.ambiguous = true;
+  }
+
+  businessSnapshot(input: BusinessEventInput): MonitorEvent {
+    return Object.freeze(new MonitorEventValue(
+      this.envelope(input.group, new EventSamplingValue('none', null)),
+      'business.event', input.sanitizedPayload()));
   }
 
   setBundle(bundle: BundleIdentity): void {
@@ -427,14 +530,21 @@ export class ViewMonitorBinding {
     const sampling: EventSampling = sampleType === 'performance'
       ? new EventSamplingValue('core', this.monitor.performanceSampleRate)
       : new EventSamplingValue('none', null);
+    const group = eventType === 'view.lifecycle' || eventType === 'view.load' ? 'page' :
+      eventType === 'lynx.performance' ? 'performance' : eventType === 'lynx.js_error' ? 'error' :
+      eventType === 'lynx.resource' ? 'resource' : 'diagnostic';
+    this.monitor.record(new MonitorEventValue(this.envelope(group, sampling), eventType, payload));
+  }
+
+  private envelope(group: string, sampling: EventSampling): EventEnvelope {
     const exactLoad = !this.ambiguous && this.bundle !== null;
     const quality = new EventQualityValue(exactLoad ? 'exact_load' : 'exact_view', false,
-      this.bundle === null ? ['bundle'] : [], [], []);
+      this.ambiguous ? ['bundle', 'loadId'] : this.bundle === null ? ['bundle'] : [], [], []);
     const envelope: EventEnvelope = new EventEnvelopeValue(
-      '1.0', monitorId('event'), this.processSessionId, new Date().getTime(), 'harmony',
+      '1.0', group, monitorId('event'), this.processSessionId, new Date().getTime(), 'harmony',
       this.runtimeVersion, this.hostBuild, this.viewId, this.nativeInstanceId, this.containerKind,
       exactLoad ? this.loadId : null, exactLoad ? this.loadKind : null,
       this.ambiguous ? null : this.bundle, this.visibility, quality, sampling);
-    this.monitor.record(new MonitorEventValue(envelope, eventType, payload));
+    return envelope;
   }
 }

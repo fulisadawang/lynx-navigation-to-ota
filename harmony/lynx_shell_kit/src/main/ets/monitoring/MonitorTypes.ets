@@ -9,7 +9,15 @@ export type MonitorEventType =
   | 'lynx.performance'
   | 'lynx.js_error'
   | 'lynx.resource'
-  | 'monitor.diagnostic';
+  | 'monitor.diagnostic'
+  | 'business.event';
+
+export type BusinessEventValue = string | number | boolean;
+
+export interface BusinessPayload {
+  readonly name: string;
+  readonly attributes: Readonly<Record<string, BusinessEventValue>>;
+}
 
 export interface BundleIdentity {
   readonly source: BundleSource;
@@ -59,6 +67,7 @@ export interface EventSampling {
 
 export interface EventEnvelope {
   readonly schemaVersion: '1.0';
+  readonly group: string;
   readonly eventId: string;
   readonly processSessionId: string;
   readonly observedAtMs: number;
@@ -123,7 +132,7 @@ export interface DiagnosticPayload {
 
 export interface MonitorEvent extends EventEnvelope {
   readonly eventType: MonitorEventType;
-  readonly payload: LifecyclePayload | LoadPayload | PerformancePayload | JsErrorPayload | ResourcePayload | DiagnosticPayload;
+  readonly payload: LifecyclePayload | LoadPayload | PerformancePayload | JsErrorPayload | ResourcePayload | DiagnosticPayload | BusinessPayload;
 }
 
 export interface HostContext {
@@ -237,6 +246,7 @@ export class EventSamplingValue implements EventSampling {
 
 export class EventEnvelopeValue implements EventEnvelope {
   readonly schemaVersion: '1.0';
+  readonly group: string;
   readonly eventId: string;
   readonly processSessionId: string;
   readonly observedAtMs: number;
@@ -252,13 +262,14 @@ export class EventEnvelopeValue implements EventEnvelope {
   readonly visibility: 'visible' | 'hidden' | 'background' | 'unknown';
   readonly quality: EventQuality;
   readonly sampling: EventSampling;
-  constructor(schemaVersion: '1.0', eventId: string, processSessionId: string, observedAtMs: number,
+  constructor(schemaVersion: '1.0', group: string, eventId: string, processSessionId: string, observedAtMs: number,
     platform: MonitorPlatform, runtimeVersion: string, hostBuild: string, viewId: string | null,
     nativeInstanceId: string | null, containerKind: ContainerKind, loadId: string | null,
     loadKind: LoadKind, bundle: BundleIdentity | null,
     visibility: 'visible' | 'hidden' | 'background' | 'unknown',
     quality: EventQuality, sampling: EventSampling) {
     this.schemaVersion = schemaVersion;
+    this.group = group;
     this.eventId = eventId;
     this.processSessionId = processSessionId;
     this.observedAtMs = observedAtMs;
@@ -485,8 +496,19 @@ export class JsErrorPayloadValue implements JsErrorPayload {
   }
 }
 
+export class BusinessPayloadValue implements BusinessPayload {
+  readonly name: string;
+  readonly attributes: Readonly<Record<string, BusinessEventValue>>;
+
+  constructor(name: string, attributes: Readonly<Record<string, BusinessEventValue>>) {
+    this.name = name;
+    this.attributes = attributes;
+  }
+}
+
 export class MonitorEventValue implements MonitorEvent {
   readonly schemaVersion: '1.0';
+  readonly group: string;
   readonly eventId: string;
   readonly processSessionId: string;
   readonly observedAtMs: number;
@@ -503,11 +525,12 @@ export class MonitorEventValue implements MonitorEvent {
   readonly quality: EventQuality;
   readonly sampling: EventSampling;
   readonly eventType: MonitorEventType;
-  readonly payload: LifecyclePayload | LoadPayload | PerformancePayload | JsErrorPayload | ResourcePayload | DiagnosticPayload;
+  readonly payload: LifecyclePayload | LoadPayload | PerformancePayload | JsErrorPayload | ResourcePayload | DiagnosticPayload | BusinessPayload;
 
   constructor(envelope: EventEnvelope, eventType: MonitorEventType,
-    payload: LifecyclePayload | LoadPayload | PerformancePayload | JsErrorPayload | ResourcePayload | DiagnosticPayload) {
+    payload: LifecyclePayload | LoadPayload | PerformancePayload | JsErrorPayload | ResourcePayload | DiagnosticPayload | BusinessPayload) {
     this.schemaVersion = envelope.schemaVersion;
+    this.group = envelope.group;
     this.eventId = envelope.eventId;
     this.processSessionId = envelope.processSessionId;
     this.observedAtMs = envelope.observedAtMs;

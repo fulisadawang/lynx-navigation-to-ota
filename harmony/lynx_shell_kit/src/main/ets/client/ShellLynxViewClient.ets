@@ -41,6 +41,7 @@ export default class ShellLynxViewClient extends LynxViewClient {
   private readonly onErrorCallback: (message: string) => void;
   private readonly onFirstScreenCallback: () => void;
   private readonly monitor: ViewMonitorBinding;
+  private monitorContext: LynxContext | null = null;
   private hasFirstContent: boolean = false;
 
   constructor(
@@ -54,6 +55,15 @@ export default class ShellLynxViewClient extends LynxViewClient {
     this.onErrorCallback = onError;
     this.onFirstScreenCallback = onFirstScreen;
     this.monitor = LynxMonitor.shared().bindView(containerKind);
+  }
+
+  bindContext(context: LynxContext, entryID: string): void {
+    if (this.monitorContext !== null && this.monitorContext !== context) {
+      LynxMonitor.shared().unbindContext(this.monitorContext);
+      this.monitor.contextReplaced();
+    }
+    this.monitorContext = context;
+    LynxMonitor.shared().bindContext(context, entryID, this.monitor);
   }
 
   setBundleIdentity(bundle: BundleIdentity): void {
@@ -98,6 +108,10 @@ export default class ShellLynxViewClient extends LynxViewClient {
   }
 
   markDestroyed(reasonCode: string): void {
+    if (this.monitorContext !== null) {
+      LynxMonitor.shared().unbindContext(this.monitorContext);
+      this.monitorContext = null;
+    }
     this.monitor.destroyed(reasonCode);
   }
 
@@ -110,6 +124,7 @@ export default class ShellLynxViewClient extends LynxViewClient {
   }
 
   override onPageStarted(lynxContext: LynxContext, pipelineInfo: LynxPipelineInfo): void {
+    this.monitor.pageStarted();
     LLog.d(ShellConstants.TAG, `onPageStarted: ${pipelineInfo}`);
   }
 

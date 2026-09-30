@@ -55,6 +55,8 @@ export { default as LocalDiagnosticProvider } from './monitoring/LocalDiagnostic
 export {
   BundleIdentity,
   BundleSource,
+  BusinessEventValue,
+  BusinessPayload,
   MonitorConfig,
   MonitorEvent,
   MonitorEventType,

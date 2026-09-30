@@ -21,7 +21,8 @@ export default class LocalDiagnosticProvider implements RuntimeProvider {
   readonly id: string = 'harmony.local_diagnostic';
   readonly capabilities: ProviderCapabilities = new ProviderCapabilitiesValue(
     'harmony', [
-      'view.lifecycle', 'view.load', 'lynx.performance', 'lynx.js_error', 'lynx.resource', 'monitor.diagnostic'
+      'view.lifecycle', 'view.load', 'lynx.performance', 'lynx.js_error', 'lynx.resource', 'monitor.diagnostic',
+      'business.event'
     ] as MonitorEventType[], true, true, false, false, 'core',
     new DiagnosticCapabilitiesValue('unsupported', 'unsupported', 'unsupported', 'unsupported'));
 
@@ -39,12 +40,33 @@ export default class LocalDiagnosticProvider implements RuntimeProvider {
     const eventValue = event as MonitorEvent;
     const eventBytes = monitorJsonBytes(eventValue);
     if (eventBytes > 32 * 1024) return new RejectedHandoffResultValue('invalid_event');
+    if (eventValue.eventType === 'business.event') {
+      const candidates: number[] = [];
+      let remainingCount = this.events.length;
+      let remainingBytes = this.bytes;
+      for (let index = 0; index < this.events.length &&
+        (remainingCount >= 128 || remainingBytes + eventBytes > 512 * 1024); index++) {
+        const candidate = this.events[index];
+        if (candidate.eventType === 'lynx.performance' || candidate.eventType === 'lynx.resource') {
+          candidates.push(index);
+          remainingCount -= 1;
+          remainingBytes -= monitorJsonBytes(candidate);
+        }
+      }
+      if (remainingCount >= 128 || remainingBytes + eventBytes > 512 * 1024) {
+        return new RejectedHandoffResultValue('provider_error');
+      }
+      for (let index = candidates.length - 1; index >= 0; index--) this.events.splice(candidates[index], 1);
+      this.bytes = remainingBytes;
+    }
     while (this.events.length >= 128 || this.bytes + eventBytes > 512 * 1024) {
       const performanceIndex = this.events.findIndex((item: MonitorEvent) =>
         item.eventType === 'lynx.performance' || item.eventType === 'lynx.resource');
+      const businessIndex = performanceIndex >= 0 ? -1 : this.events.findIndex((item: MonitorEvent) =>
+        item.eventType === 'business.event');
       const dropped = performanceIndex >= 0
         ? this.events.splice(performanceIndex, 1)[0]
-        : this.events.shift();
+        : businessIndex >= 0 ? this.events.splice(businessIndex, 1)[0] : this.events.shift();
       if (dropped === undefined) break;
       this.bytes -= monitorJsonBytes(dropped);
     }

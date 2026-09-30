@@ -4,12 +4,13 @@
   "title": "LynxView monitoring event v1.0 design contract",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "eventId", "processSessionId", "eventType", "observedAtMs", "platform", "runtimeVersion", "hostBuild", "viewId", "nativeInstanceId", "containerKind", "loadId", "loadKind", "bundle", "visibility", "quality", "sampling", "payload"],
+  "required": ["schemaVersion", "group", "eventId", "processSessionId", "eventType", "observedAtMs", "platform", "runtimeVersion", "hostBuild", "viewId", "nativeInstanceId", "containerKind", "loadId", "loadKind", "bundle", "visibility", "quality", "sampling", "payload"],
   "properties": {
     "schemaVersion": {"const": "1.0"},
+    "group": {"type": "string", "minLength": 1, "pattern": "\\S"},
     "eventId": {"$ref": "#/$defs/id"},
     "processSessionId": {"$ref": "#/$defs/id"},
-    "eventType": {"enum": ["view.lifecycle", "view.load", "lynx.performance", "lynx.js_error", "lynx.resource", "monitor.diagnostic"]},
+    "eventType": {"enum": ["view.lifecycle", "view.load", "lynx.performance", "lynx.js_error", "lynx.resource", "monitor.diagnostic", "business.event"]},
     "observedAtMs": {"type": "number", "minimum": 0},
     "platform": {"enum": ["android", "ios", "harmony"]},
     "runtimeVersion": {"type": "string", "minLength": 1, "maxLength": 128},
@@ -45,6 +46,7 @@
     {"if": {"properties": {"eventType": {"const": "lynx.js_error"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/jsError"}}}},
     {"if": {"properties": {"eventType": {"const": "lynx.resource"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/resource"}}}},
     {"if": {"properties": {"eventType": {"const": "monitor.diagnostic"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/diagnostic"}}}},
+    {"if": {"properties": {"eventType": {"const": "business.event"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/business"}}}},
     {
       "if": {"properties": {"quality": {"properties": {"association": {"const": "exact_load"}}}}},
       "then": {"properties": {"viewId": {"$ref": "#/$defs/id"}, "loadId": {"$ref": "#/$defs/id"}, "loadKind": {"enum": ["initial", "retry", "reload"]}, "bundle": {"$ref": "#/$defs/bundle"}}}
@@ -135,6 +137,16 @@
     "resource": {
       "type": "object", "additionalProperties": false, "required": ["resourceType", "outcome", "durationMs", "errorCode", "resourceKey"],
       "properties": {"resourceType": {"type": "string", "minLength": 1, "maxLength": 128}, "outcome": {"enum": ["success", "failed"]}, "durationMs": {"type": ["number", "null"], "minimum": 0}, "errorCode": {"$ref": "#/$defs/nullableText"}, "resourceKey": {"$ref": "#/$defs/nullableText"}}
+    },
+    "business": {
+      "type": "object", "additionalProperties": false, "required": ["name", "attributes"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "attributes": {
+          "type": "object", "propertyNames": {"minLength": 1},
+          "additionalProperties": {"type": ["string", "number", "boolean"]}
+        }
+      }
     },
     "diagnostic": {
       "type": "object", "additionalProperties": false, "required": ["code", "count", "detail"],

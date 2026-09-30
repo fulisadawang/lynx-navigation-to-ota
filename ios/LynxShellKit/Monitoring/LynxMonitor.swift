@@ -52,7 +52,7 @@ public struct LynxMonitorConfig {
     public let enabled: Bool
     public let provider: LynxMonitorProvider?
     public let performanceSampleRate: Double
-    /** 仅处理 message / stack，在监控线程调用；业务特有隐私规则由宿主明确提供。 */
+    /** 在监控线程处理 JS message/stack 与业务属性字符串；业务隐私规则由宿主提供。 */
     public let redactText: ((String) -> String)?
     public init(enabled: Bool, provider: LynxMonitorProvider?, performanceSampleRate: Double = 1,
                 redactText: ((String) -> String)? = nil) {
@@ -154,6 +154,15 @@ public enum LynxMonitor {
         guard let current, current.canCapture else { return nil }
         return LynxMonitorScope(runtime: current, kind: kind, loadKind: loadKind, visibility: visibility)
     }
+
+    static func admitBusinessEvent(_ input: LynxBusinessEventInput, from scope: LynxMonitorScope?) -> LynxMonitorAdmissionResult {
+        // 先检查发送 View 已绑定的旧 Runtime，避免 shutdown 后误归属新 Runtime。
+        if let reason = scope?.runtime.admissionRejection { return .rejected(reason) }
+        guard let current = lock.monitorLocked({ runtime }) else { return .rejected(.notConfigured) }
+        if let reason = current.admissionRejection { return .rejected(reason) }
+        guard let scope, scope.runtime === current else { return .rejected(.pageContextUnavailable) }
+        return scope.admitBusinessEvent(input)
+    }
 }
 
 final class LynxMonitorRuntime {
@@ -180,6 +189,15 @@ final class LynxMonitorRuntime {
     }
 
     var canCapture: Bool { lock.monitorLocked { state == "initializing" || state == "ready" } }
+
+    var admissionRejection: LynxMonitorBusinessRejection? {
+        lock.monitorLocked { admissionRejectionLocked() }
+    }
+
+    private func admissionRejectionLocked() -> LynxMonitorBusinessRejection? {
+        if state == "disposed" { return .monitorClosed }
+        return state == "initializing" || state == "ready" ? nil : .notReady
+    }
 
     func start() {
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10) { [weak self] in
@@ -215,23 +233,59 @@ final class LynxMonitorRuntime {
         lock.monitorLocked { incrementLocked(code, by: amount) }
     }
 
-    func enqueue(_ event: LynxMonitorEvent) {
+    @discardableResult
+    func enqueue(_ event: LynxMonitorEvent, admissionBytes: Int? = nil) -> LynxMonitorAdmissionResult {
         // 只做有界字段的容量估算，JSON 编码和 Provider 调用留在串行消费线程。
-        let bytes = event.monitorBudgetBytes
+        let bytes = admissionBytes ?? event.monitorBudgetBytes
         lock.lock()
         defer { lock.unlock() }
-        guard state == "initializing" || state == "ready" else { incrementLocked("discarded_inactive"); return }
-        guard capabilities.supportedEvents.contains(event.eventType) else { incrementLocked("unsupported_event"); return }
-        guard bytes <= 32 * 1024 else { incrementLocked("event_too_large"); return }
-        while pending.count >= 128 || pendingBytes + bytes > 512 * 1024 {
-            let index = pending.firstIndex { $0.event.eventType == .performance || $0.event.eventType == .resource } ?? 0
-            let removed = pending.remove(at: index)
-            pendingBytes -= removed.bytes
-            incrementLocked("dropped_\(removed.event.eventType.rawValue)")
+        if let reason = admissionRejectionLocked() {
+            incrementLocked("discarded_inactive")
+            return .rejected(reason)
+        }
+        guard capabilities.supportedEvents.contains(event.eventType) else {
+            incrementLocked("unsupported_event")
+            return .rejected(.eventUnsupported)
+        }
+        guard bytes <= 32 * 1024 else {
+            incrementLocked("event_too_large")
+            return .rejected(.eventTooLarge)
+        }
+        if event.eventType == .business {
+            var requiredCount = pending.count + 1
+            var requiredBytes = pendingBytes + bytes
+            var removals: [Int] = []
+            for (index, entry) in pending.enumerated() {
+                if requiredCount <= 128, requiredBytes <= 512 * 1024 { break }
+                guard entry.event.eventType == .performance || entry.event.eventType == .resource else { continue }
+                removals.append(index)
+                requiredCount -= 1
+                requiredBytes -= entry.bytes
+            }
+            guard requiredCount <= 128, requiredBytes <= 512 * 1024 else {
+                incrementLocked("queue_rejected")
+                return .rejected(.queueRejected)
+            }
+            // 已确认可以 append 后才删除，拒绝的业务事件不损失旧队列内容。
+            for index in removals.reversed() { removePendingLocked(at: index) }
+        } else {
+            while pending.count >= 128 || pendingBytes + bytes > 512 * 1024 {
+                let index = pending.firstIndex { $0.event.eventType == .performance || $0.event.eventType == .resource }
+                    ?? pending.firstIndex { $0.event.eventType == .business }
+                    ?? 0
+                removePendingLocked(at: index)
+            }
         }
         pending.append((event, bytes))
         pendingBytes += bytes
         if state == "ready" { scheduleDrainLocked() }
+        return .queued(eventId: event.eventId, monitorState: state == "ready" ? .ready : .initializing)
+    }
+
+    private func removePendingLocked(at index: Int) {
+        let removed = pending.remove(at: index)
+        pendingBytes -= removed.bytes
+        incrementLocked("dropped_\(removed.event.eventType.rawValue)")
     }
 
     private func scheduleDrainLocked() {

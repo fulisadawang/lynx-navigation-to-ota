@@ -16,6 +16,11 @@ import com.example.lynxshell.ota.LynxOtaRuntime
 import com.example.lynxshell.LynxLocaleResult
 import com.example.lynxshell.LynxRouter
 import com.example.lynxshell.runtime.LynxLocaleState
+import com.example.lynxshell.monitoring.BusinessEventInputException
+import com.example.lynxshell.monitoring.BusinessEventRejection
+import com.example.lynxshell.monitoring.LynxMonitor
+import com.example.lynxshell.monitoring.QueueAdmissionResult
+import com.example.lynxshell.monitoring.parseBusinessEventInput
 import com.lynx.jsbridge.Arguments
 import com.lynx.jsbridge.LynxMethod
 import com.lynx.jsbridge.LynxModule
@@ -39,6 +44,23 @@ import com.lynx.tasm.behavior.LynxContext
 class LynxShellModule(context: Context) : LynxModule(context) {
     /** 所有 UIKit/Activity 等价操作都串行进入 Android 主线程。 */
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** 接受只表示本页面的业务事件已进入监控队列，Provider/云端结果不回填此回调。 */
+    @LynxMethod
+    fun reportBusinessEvent(group: String, name: String, attributesJSON: String, callback: Callback) {
+        val admission = try {
+            val input = parseBusinessEventInput(group, name, attributesJSON)
+            val view = (mContext as? LynxContext)?.getLynxView()
+            if (view == null) QueueAdmissionResult.Rejected(BusinessEventRejection.PAGE_CONTEXT_UNAVAILABLE)
+            else LynxMonitor.reportBusinessEvent(view, input)
+        } catch (error: BusinessEventInputException) {
+            QueueAdmissionResult.Rejected(error.rejection)
+        } catch (_: Exception) {
+            QueueAdmissionResult.Rejected(BusinessEventRejection.INTERNAL_ERROR)
+        }
+        // 回调在异常边界外只调用一次，已销毁的 JS Runtime 由 Lynx 自身丢弃回调。
+        callback.invoke(businessEventResult(admission))
+    }
 
     /**
      * 打开页面。
@@ -642,6 +664,20 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     /** 构造不带 data 的统一错误/结果结构。 */
     private fun result(code: Int, message: String): JavaOnlyMap =
         nativeMap(hashMapOf("code" to code, "message" to message))
+
+    private fun businessEventResult(admission: QueueAdmissionResult): JavaOnlyMap = nativeMap(
+        when (admission) {
+            is QueueAdmissionResult.Queued -> hashMapOf<String, Any>(
+                "code" to 0, "message" to "业务事件已进入原生监控队列",
+                "data" to hashMapOf("stage" to "queued", "eventId" to admission.eventId,
+                    "monitorState" to admission.monitorState),
+            )
+            is QueueAdmissionResult.Rejected -> hashMapOf<String, Any>(
+                "code" to admission.rejection.code, "message" to admission.rejection.message,
+                "data" to hashMapOf("stage" to "rejected", "reasonCode" to admission.rejection.reasonCode),
+            )
+        },
+    )
 
     /** 把导航 result 的扩展数据和 affectedCount 合并为页面可消费的 Lynx Map。 */
     private fun result(value: LynxNavigationResult): JavaOnlyMap {

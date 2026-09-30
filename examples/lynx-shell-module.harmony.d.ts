@@ -1,4 +1,5 @@
 /** HarmonyOS NativeModules 类型；导航、生命周期和消息协议与 Android/iOS 对齐。 */
+import type { BusinessEventNativeResult } from './lynx-business-events';
 export interface HarmonyNativeResult<T = unknown> {
   code: number;
   message: string;
@@ -13,6 +14,8 @@ export interface HarmonyAppInfo {
 }
 
 export interface HarmonyLynxShellModule {
+  /** 通用业务事件；group/name 自由定义，成功仅表示真实入队。 */
+  reportBusinessEvent(group: string, name: string, attributesJSON: string, callback: (result: BusinessEventNativeResult) => void): void;
   open(
     url: string,
     optionsJSON: string,

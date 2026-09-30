@@ -104,6 +104,24 @@ Native/       Objective-C 原生 Runtime 接线
 - 释放顺序：取消 Provider/任务 → 移除或销毁 LynxView → 关闭 OTA lease → 清理手势和 observer。
 - 图片/字体等首屏后的普通资源错误不能自动回滚整个 Release。
 
+### 业务事件监控
+
+- `LynxShellModule.reportBusinessEvent(group, name, attributesJSON, callback)` 是必需的四参数 ABI；
+  返回 `queued` 只表示 Core 在实际 append 的锁内接受了事件，不代表 Provider 或后台收件。
+- 所有 Schema 1.0 事件都编码顶层必填 `group`。系统组从不可变 payload 派生，业务组由调用方
+  必传并原样保存在值快照中；业务 payload 只编码 `name/attributes`，投影必须保留 group。
+- group/name 只拒绝空或全空白；属性 key 只拒绝空字符串。属性只允许 string、finite number、
+  boolean，不加入 ASCII、注册表或独立字段长度/数量限制；原始输入和完整事件受 32 KiB 总预算约束。
+- 用发送 `LynxContext.getLynxView()` 和 View 的 associated Scope 定位，不按当前栈顶或最新 Bundle
+  归属。Page/Native Tab 在 makeView 后、load 前绑定，close/rebuild/deinit 关闭 Scope 并解绑。
+- 主线程只查询或修改 View/Scope 绑定；解析、内建清理和预算计算在调用工作线程执行。
+  业务属性字符串入队前内建脱敏，`redactText` 与 JSONEncoder 保持在串行交付线程，JS Error 的
+  既有延迟处理时点不变。名称、分组和属性 key 不经过脱敏改名。
+- 业务事件只能淘汰最旧的 performance/resource，须先确认条数与字节均足够再删除；系统事件
+  按 performance/resource、business、原兜底顺序淘汰。业务不消费 performanceSampleRate。
+- Provider 继续实现 `record(event)`，业务支持沿 `capabilities.supportedEvents` 判断；不增加
+  business 安装强制门禁，不在 Bridge 接入 SDK/HTTP，也不把后续交付诊断再次回调给页面。
+
 ### 5. Pod 与依赖
 
 - `LynxShellKit.podspec` 是 Shell/Router 接入事实源；未经明确授权不要创建第二个公开 Pod。

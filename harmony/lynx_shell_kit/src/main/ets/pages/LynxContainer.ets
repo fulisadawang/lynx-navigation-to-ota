@@ -133,19 +133,25 @@ export struct LynxContainer {
   }
 
   private configureClients(generation: number): void {
+    this.clients[0]?.markDestroyed('view_reconfigured');
+    if (this.lynxContext !== null) {
+      ShellMessageHub.unregister(this.request.entryID);
+      this.lynxContext = null;
+    }
     let monitorClient: ShellLynxViewClient | null = null;
     this.contextCreated = (context: LynxContext) => {
       if (generation !== this.prepareGeneration || (this.request.isOtaRequest() && !this.isPreparedUserCurrent())) {
         context.onEnterBackground(); return;
       }
-    this.lynxContext = context;
-    monitorClient?.markCreated();
+      this.lynxContext = context;
+      monitorClient?.markCreated();
       monitorClient?.markVisible();
       // Harmony LynxView 的 colorScheme 字段由 SDK 保持私有；Context 建立后立即使用
       // 官方动态 API 设定首值，早于壳层登记和前台事件，不重载 Bundle。
       context.updateColorScheme(ShellThemeState.colorScheme());
       ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
         pageKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.request.bundleUrl, hostMode: 'arkui_page' }, context);
+      monitorClient?.bindContext(context, this.request.entryID);
       context.onEnterForeground();
       context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
       ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_page_appear');
@@ -171,9 +177,10 @@ export struct LynxContainer {
 
   aboutToDisappear(): void {
     const disappearingContext = this.lynxContext;
+    const disappearingClient = this.clients[0];
     if (disappearingContext !== null) {
       disappearingContext.onEnterBackground();
-      this.clients[0]?.markHidden();
+      disappearingClient?.markHidden();
       // aboutToDisappear 既可能表示被下一页覆盖，也可能表示从 NavPathStack 移除；先
       // 发 covered，下一轮根据逻辑栈是否还存在来决定是否真正销毁。被覆盖时
       // 不能取消 Provider 请求或丢弃 Context，否则返回后页面无法恢复。
@@ -186,7 +193,7 @@ export struct LynxContainer {
         return;
       }
       ShellMessageHub.sendLifecycle(this.request.entryID, 'destroyed', 'arkui_page_removed');
-      this.clients[0]?.markDestroyed('arkui_page_removed');
+      disappearingClient?.markDestroyed('arkui_page_removed');
       ShellMessageHub.unregister(this.request.entryID);
       this.cancelPendingRequests();
       if (this.lynxContext === disappearingContext) {

@@ -230,6 +230,7 @@ public final class LynxTabViewController: UIViewController {
         LynxDebugBridge.detach(view: lynxView)
 #endif
         monitorScope?.close(reason: "tab_destroyed")
+        LynxMonitorViewBinding.unbind(lynxView)
         if let userContextObserver { NotificationCenter.default.removeObserver(userContextObserver) }
         if let userSyncObserver { NotificationCenter.default.removeObserver(userSyncObserver) }
         loadTask?.cancel()
@@ -539,6 +540,7 @@ public final class LynxTabViewController: UIViewController {
                 globalProps: props
             )
             if let monitoredScope {
+                LynxMonitorViewBinding.bind(monitoredScope, to: created)
                 let monitor = LynxMonitorObserver(scope: monitoredScope)
                 monitorObserver = monitor
                 created.addLifecycleClient(monitor)
@@ -649,6 +651,7 @@ public final class LynxTabViewController: UIViewController {
         LynxDebugBridge.detach(view: lynxView)
 #endif
         monitorScope?.close(reason: reason)
+        LynxMonitorViewBinding.unbind(lynxView)
         if let monitorObserver { lynxView?.removeLifecycleClient(monitorObserver) }
         monitorObserver = nil
         monitorScope = nil

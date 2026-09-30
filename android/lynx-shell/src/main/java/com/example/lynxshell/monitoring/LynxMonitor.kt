@@ -8,8 +8,11 @@ import android.os.Bundle
 import com.example.lynxshell.debug.LynxDebugBridge
 // LYNX_DEBUG_TOOL_END
 import com.example.lynxshell.BuildConfig
+import com.lynx.tasm.LynxView
+import java.lang.ref.WeakReference
 import java.util.ArrayDeque
 import java.util.UUID
+import java.util.WeakHashMap
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.Executors
@@ -86,6 +89,7 @@ object LynxMonitor {
     private var runtime: MonitorRuntime? = null
     private var installedConfig: MonitorConfig? = null
     private var installState = InstallResult("disabled")
+    private val viewBindings = WeakHashMap<LynxView, WeakReference<LynxViewMonitor>>()
 
     @Synchronized fun install(application: Application, config: MonitorConfig): InstallResult {
         if (installedConfig != null) {
@@ -125,13 +129,29 @@ object LynxMonitor {
 
     internal fun reserve(kind: ContainerKind, loadKind: LoadKind, bundle: BundleIdentity, visibility: Visibility): LynxViewMonitor? =
         synchronized(this) { runtime }?.reserve(kind, loadKind, bundle, visibility)
+
+    @Synchronized internal fun bind(view: LynxView, binding: LynxViewMonitor) {
+        viewBindings[view] = WeakReference(binding)
+    }
+
+    @Synchronized internal fun unbind(view: LynxView, binding: LynxViewMonitor) {
+        if (viewBindings[view]?.get() === binding) viewBindings.remove(view)
+    }
+
+    /** 仅按发送 View 查询绑定，绝不借 Activity、最近页或 OTA current 补身份。 */
+    internal fun reportBusinessEvent(view: LynxView, input: BusinessEventInput): QueueAdmissionResult {
+        val (binding, current) = synchronized(this) { viewBindings[view]?.get() to runtime }
+        if (binding != null) return binding.reportBusinessEvent(view, input)
+        return current?.businessAdmissionWithoutScope()
+            ?: QueueAdmissionResult.Rejected(BusinessEventRejection.NOT_CONFIGURED)
+    }
 }
 
 internal class MonitorRuntime(val host: HostContext, val config: MonitorConfig) {
     internal val initialization = CompletableFuture<InitResult>()
     private val provider = requireNotNull(config.provider)
     private val lock = Any()
-    private class QueuedObservation(val type: EventType, val bytes: Int, val inputLimit: Int = MAX_EVENT_BYTES,
+    private class QueuedObservation(val eventId: String, val type: EventType, val bytes: Int, val inputLimit: Int = MAX_EVENT_BYTES,
         val materialize: () -> MonitorEvent)
     private val queue = ArrayDeque<QueuedObservation>()
     private var queuedBytes = 0
@@ -180,33 +200,84 @@ internal class MonitorRuntime(val host: HostContext, val config: MonitorConfig) 
         return Sampling("core", rate)
     }
 
-    fun enqueue(event: MonitorEvent) {
-        enqueue(QueuedObservation(event.eventType, event.wireBytes()) { event })
+    fun enqueue(event: MonitorEvent): QueueAdmissionResult {
+        return enqueue(QueuedObservation(event.eventId, event.eventType, event.wireBytes()) { event })
     }
 
-    fun enqueueError(envelope: MonitorEvent, captured: CapturedJsError, phase: String) {
+    fun enqueueError(envelope: MonitorEvent, captured: CapturedJsError, phase: String): QueueAdmissionResult {
         val size = envelope.wireBytes() + utf8Bytes(captured.summary) + utf8Bytes(captured.encoded)
         // SDK wrapper 与最终事件不是同一预算；保留完整 JSON，避免截断后丢失尾部堆栈与调试 key。
-        enqueue(QueuedObservation(EventType.JS_ERROR, size, MAX_QUEUE_BYTES) {
+        return enqueue(QueuedObservation(envelope.eventId, EventType.JS_ERROR, size, MAX_QUEUE_BYTES) {
             envelope.projected(MonitorProjection.error(captured, config.textPolicy, phase, config.scriptPositionFormats))
         })
     }
 
-    private fun enqueue(item: QueuedObservation) {
-        synchronized(lock) {
-            if (state !in setOf("ready", "initializing")) { count("discarded_closed"); return }
-            if (item.bytes > item.inputLimit) { count("oversize.${item.type.wire}"); return }
+    fun businessAdmissionWithoutScope(): QueueAdmissionResult = synchronized(lock) {
+        QueueAdmissionResult.Rejected(businessStateRejection() ?: BusinessEventRejection.PAGE_CONTEXT_UNAVAILABLE)
+    }
+
+    /** 调用者同时持有 Scope 锁，状态、活动绑定、能力和实际 append 共用本次临界区。 */
+    fun enqueueBusiness(activeScope: Boolean, createEvent: () -> MonitorEvent): QueueAdmissionResult = synchronized(lock) {
+        businessStateRejection()?.let { return@synchronized QueueAdmissionResult.Rejected(it) }
+        if (!activeScope) return@synchronized QueueAdmissionResult.Rejected(BusinessEventRejection.PAGE_CONTEXT_UNAVAILABLE)
+        if (EventType.BUSINESS !in provider.capabilities.supportedEvents) {
+            return@synchronized QueueAdmissionResult.Rejected(BusinessEventRejection.EVENT_UNSUPPORTED)
+        }
+        val event = createEvent()
+        enqueue(QueuedObservation(event.eventId, event.eventType, event.wireBytes()) { event })
+    }
+
+    private fun businessStateRejection(): BusinessEventRejection? = when (state) {
+        "initializing", "ready" -> null
+        "disposed" -> BusinessEventRejection.MONITOR_CLOSED
+        else -> BusinessEventRejection.NOT_READY
+    }
+
+    private fun enqueue(item: QueuedObservation): QueueAdmissionResult = synchronized(lock) {
+        businessStateRejection()?.let {
+            count("discarded_closed")
+            return@synchronized QueueAdmissionResult.Rejected(it)
+        }
+        if (item.bytes > item.inputLimit) {
+            count("oversize.${item.type.wire}")
+            return@synchronized QueueAdmissionResult.Rejected(BusinessEventRejection.EVENT_TOO_LARGE)
+        }
+        if (item.type == EventType.BUSINESS) {
+            var remainingEvents = queue.size + 1
+            var remainingBytes = queuedBytes + item.bytes
+            val evictions = ArrayList<QueuedObservation>()
+            // 预计算全部可回收容量，拒绝时不先删除任何已接受事件。
+            for (candidate in queue) {
+                if (remainingEvents <= MAX_QUEUE_EVENTS && remainingBytes <= MAX_QUEUE_BYTES) break
+                if (candidate.type != EventType.PERFORMANCE && candidate.type != EventType.RESOURCE) continue
+                evictions.add(candidate)
+                remainingEvents--
+                remainingBytes -= candidate.bytes
+            }
+            if (remainingEvents > MAX_QUEUE_EVENTS || remainingBytes > MAX_QUEUE_BYTES) {
+                count("queue_rejected.${item.type.wire}")
+                return@synchronized QueueAdmissionResult.Rejected(BusinessEventRejection.QUEUE_REJECTED)
+            }
+            evictions.forEach { candidate ->
+                queue.remove(candidate)
+                queuedBytes -= candidate.bytes
+                count("dropped.${candidate.type.wire}")
+            }
+        } else {
             while (queue.size >= MAX_QUEUE_EVENTS || queuedBytes + item.bytes > MAX_QUEUE_BYTES) {
                 val candidate = queue.firstOrNull { it.type == EventType.PERFORMANCE || it.type == EventType.RESOURCE }
+                    ?: queue.firstOrNull { it.type == EventType.BUSINESS }
                     ?: queue.first()
                 queue.remove(candidate)
                 queuedBytes -= candidate.bytes
                 count("dropped.${candidate.type.wire}")
             }
-            queue.addLast(item)
-            queuedBytes += item.bytes
-            scheduleDrain()
         }
+        queue.addLast(item)
+        queuedBytes += item.bytes
+        val admission = QueueAdmissionResult.Queued(item.eventId, state)
+        scheduleDrain()
+        admission
     }
 
     private fun scheduleDrain() {
