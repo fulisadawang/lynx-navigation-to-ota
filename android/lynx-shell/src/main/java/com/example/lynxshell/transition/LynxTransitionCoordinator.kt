@@ -22,6 +22,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.activity.BackEventCompat
 import androidx.activity.OnBackPressedCallback
+import androidx.core.view.OneShotPreDrawListener
 import androidx.core.view.ViewCompat
 import com.example.lynxshell.container.LynxShellActivity
 import com.lynx.react.bridge.JavaOnlyArray
@@ -83,6 +84,7 @@ class LynxTransitionCoordinator(
     }
     private var gateDeadlineMs = 0L
     private var gateRetryPosted = false
+    private var entryPreDrawListener: OneShotPreDrawListener? = null
     private var animator: ValueAnimator? = null
     private var barrierView: View? = null
     private var bottomSheetBackdropDrawable: GradientDrawable? = null
@@ -168,8 +170,9 @@ class LynxTransitionCoordinator(
             prepareIncomingTransition()
         }
         root.post {
+            if (destroyed) return@post
             configurePresetFrame()
-            if (ticket != null && entryPending) applyInitialEntryVisual()
+            if (isWaitingForEnter()) applyInitialEntryVisual()
         }
         updatePredictiveBackAvailability()
     }
@@ -181,6 +184,7 @@ class LynxTransitionCoordinator(
 
     /** redirect/singleTop reload 会递增 generation，旧 onFirstScreen 回调必须被忽略。 */
     fun onPageGenerationChanged(lynxView: LynxView, generation: Long) {
+        removeEntryPreDrawListener()
         currentLynxView = lynxView
         contentGeneration = generation
         firstScreenReady = false
@@ -371,6 +375,7 @@ class LynxTransitionCoordinator(
         mainHandler.removeCallbacks(gateTimeout)
         mainHandler.removeCallbacks(gateRetry)
         gateRetryPosted = false
+        removeEntryPreDrawListener()
         animator?.cancel()
         animator = null
         entryPending = false
@@ -396,6 +401,7 @@ class LynxTransitionCoordinator(
         destroyed = true
         mainHandler.removeCallbacks(gateTimeout)
         mainHandler.removeCallbacks(gateRetry)
+        removeEntryPreDrawListener()
         animator?.cancel()
         animator = null
         clearTransientVisuals()
@@ -656,6 +662,11 @@ class LynxTransitionCoordinator(
             liveContent.alpha = 1f
             return
         }
+        if (requiresMeasuredEntryStart(currentTicket)) {
+            // 等待首屏期间仅显示来源快照，避免未测量的目标容器先露出空背景。
+            liveContent.alpha = 0f
+            return
+        }
         when (currentTicket.effectiveTransition) {
             LynxTransitionStyle.SHARED_ELEMENT,
             LynxTransitionStyle.OPEN_CONTAINER,
@@ -664,12 +675,29 @@ class LynxTransitionCoordinator(
         }
     }
 
-    private fun tryStartEnter(): Boolean {
-        if (!isWaitingForEnter() || !firstScreenReady || !targetFrameReady) return false
+    private fun tryStartEnter(fromPreDraw: Boolean = false): Boolean {
+        if (destroyed || !isWaitingForEnter() || !firstScreenReady || !targetFrameReady) return false
         val currentTicket = ticket ?: return false
+        if (requiresMeasuredEntryStart(currentTicket)) {
+            if (!fromPreDraw) {
+                if (entryPreDrawListener == null) {
+                    // 首屏门禁成立后，在已测量的绘制帧中设置真正的屏外起点。
+                    entryPreDrawListener = OneShotPreDrawListener.add(root) {
+                        entryPreDrawListener = null
+                        if (!tryStartEnter(fromPreDraw = true)) scheduleGateRetry()
+                    }
+                    root.invalidate()
+                }
+                return false
+            }
+            if (root.width <= 0 || root.height <= 0 ||
+                liveContent.width <= 0 || liveContent.height <= 0
+            ) return false
+        }
         mainHandler.removeCallbacks(gateTimeout)
         mainHandler.removeCallbacks(gateRetry)
         gateRetryPosted = false
+        removeEntryPreDrawListener()
 
         restoredReason?.let { reason ->
             restoredReason = null
@@ -713,6 +741,7 @@ class LynxTransitionCoordinator(
                 "duration=${currentTicket.spec.durationMs}ms",
         )
         activeDegradeReason = currentTicket.reason
+        if (requiresMeasuredEntryStart(currentTicket)) applyBasicOrPresetEntryProgress(0f)
         LynxTransitionRuntime.update(
             requireNotNull(transactionID),
             LynxTransitionStatus.RUNNING,
@@ -903,9 +932,20 @@ class LynxTransitionCoordinator(
         mainHandler.removeCallbacks(gateTimeout)
         mainHandler.removeCallbacks(gateRetry)
         gateRetryPosted = false
+        removeEntryPreDrawListener()
         clearTransientVisuals()
 
-        val fallback = currentTicket.fallbackTransition
+        val fallback = if (
+            currentTicket.fallbackTransition in setOf(
+                LynxTransitionStyle.SLIDE,
+                LynxTransitionStyle.SLIDE_UP,
+            ) && (root.width <= 0 || root.height <= 0)
+        ) {
+            // 无有效几何时直接恢复可见终态，不以 1px 假尺寸重播滑入。
+            LynxTransitionStyle.NONE
+        } else {
+            currentTicket.fallbackTransition
+        }
         ticket = currentTicket.copy(
             effectiveTransition = fallback,
             reason = reason,
@@ -2145,6 +2185,19 @@ class LynxTransitionCoordinator(
         if (!isWaitingForEnter() || gateRetryPosted) return
         gateRetryPosted = true
         mainHandler.postDelayed(gateRetry, if (businessReady) 0L else 32L)
+    }
+
+    private fun requiresMeasuredEntryStart(currentTicket: AndroidTransitionTicket): Boolean =
+        when (currentTicket.spec.routePreset) {
+            LynxRoutePreset.UPWARDS -> currentTicket.effectiveTransition != LynxTransitionStyle.NONE
+            null -> currentTicket.effectiveTransition == LynxTransitionStyle.SLIDE ||
+                currentTicket.effectiveTransition == LynxTransitionStyle.SLIDE_UP
+            else -> false
+        }
+
+    private fun removeEntryPreDrawListener() {
+        entryPreDrawListener?.removeListener()
+        entryPreDrawListener = null
     }
 
     private fun popFallbackStyle(): LynxTransitionStyle {

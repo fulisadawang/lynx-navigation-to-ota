@@ -48,7 +48,7 @@ enum ShellGlobalPropsFactory {
             }
         }
         queryItems["fullscreen"] = request.fullscreen ? "1" : "0"
-        queryItems["hide_nav_bar"] = request.showNavigationBar ? "0" : "1"
+        queryItems["hide_nav_bar"] = request.fullscreen || !request.showNavigationBar ? "1" : "0"
         queryItems["hide_status_bar"] = request.hideStatusBar ? "1" : "0"
         queryItems["trans_status_bar"] =
             request.fullscreen && !request.hideStatusBar ? "1" : "0"
@@ -101,7 +101,9 @@ enum ShellGlobalPropsFactory {
 
     static func applyLayout(_ snapshot: ShellLayoutSnapshot, to props: inout [String: Any]) {
         let measurement = snapshot.measurement
-        props["__lynxShellLayout"] = snapshot.dictionary
+        let layout = snapshot.dictionary
+        props["__lynxShellLayout"] = layout
+        props["safeAreaInsets"] = layout["safeAreaInsets"]
         props["screenWidth"] = measurement.screenWidth
         props["screenHeight"] = measurement.screenHeight
         props["viewportWidth"] = measurement.viewportWidth

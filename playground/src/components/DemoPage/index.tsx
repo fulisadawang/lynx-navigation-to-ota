@@ -12,14 +12,12 @@ export function DemoPage(props: DemoPageProps) {
   const isDark = resolved === 'dark'
 
   return (
-    <SafeAreaView edges={['bottom']} style={{ flex: 1 }}>
-      <view className={`demo-page ${isDark ? 'demo-page--dark' : 'demo-page--light'}`}>
-        <scroll-view className="demo-scroll" scroll-orientation="vertical">
-          <view className="demo-content">
-            {props.children}
-          </view>
-        </scroll-view>
-      </view>
+    <SafeAreaView className={`demo-page ${isDark ? 'demo-page--dark' : 'demo-page--light'}`}>
+      <scroll-view className="demo-scroll" scroll-orientation="vertical">
+        <view className="demo-content">
+          {props.children}
+        </view>
+      </scroll-view>
     </SafeAreaView>
   )
 }

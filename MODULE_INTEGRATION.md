@@ -23,10 +23,23 @@ Module 内保留当前全部手写 `NativeModules.LynxShellModule`、高级导�
 Bundle 自己加载；Playground 的接入边界见 [`playground/src/locales/README.md`](playground/src/locales/README.md)。
 
 窗口环境在页面创建和原生布局回调后同步 Lynx 4.1 的 screen metrics、viewport 与完整
-GlobalProps，并发送 `lynxShellLayoutChanged`。`screen` 是 Window/Scene 尺寸，`viewport`
+GlobalProps；Android 另发送 `lynxShellLayoutChanged`。当前 Playground 使用默认 reactive
+GlobalProps 模式，双端 SDK 更新会驱动页面重新渲染，不需要再新增布局订阅。`screen` 是 Window/Scene 尺寸，`viewport`
 是具体 LynxView 可用区域；布局更新采用合帧、去重和 revision，不重建页面、不触发 OTA
 resolve。没有官方折叠数据的平台只报告 capability，不推导双栏；HarmonyOS 共享元素转场
 暂不在本批次接入。
+
+Android/iOS 的 `safeAreaInsets` 与 `__lynxShellLayout.safeAreaInsets` 都表示当前 Lynx
+容器仍需避让的 `{top, right, bottom, left}`。Android 内部先以 px 测量，再除 density；
+iOS 使用 points。页面直接把结果写入 Lynx 的 `px` 样式，不再次换算像素比。
+Android 安全绘制区域包含 systemBars 和 displayCutout，原生已经让出的 Toolbar、Tab
+或键盘空间会从剩余边距中消耗；测量采用稳定布局坐标，不跟随转场的 translation/scale。
+IME 继续由现有键盘策略处理，不混入 safeAreaInsets。
+
+本次页面按 Lynx 自绘导航接入：背景绘制到边缘，标题、按钮和底栏内容按安全边距避让。
+Android fullscreen 保持系统底部导航栏可见；iOS 宿主接管返回手势不再强制显示原生导航栏。
+原生页面栈、返回机制和系统手势条继续沿用现有实现。每个边距只由一个内容层消费；
+原生底栏已占据的区域不重复 padding，自绘底栏消费 bottom 时滚动内容不再增加同一边距。
 
 ## Android
 
