@@ -4,6 +4,7 @@ import { ThemeProvider, useTheme } from '../../lib/theme.js'
 import { localeLabel, useLocale, type LocaleSelection, type SupportedLocale } from '../../lib/locale.js'
 import { Navigator, type TabPage } from '../../components/Navigator/index.js'
 import { getItem, setItem } from '../../lib/storage.js'
+import { getSafeAreaInsetsFromGlobalProps, type SafeAreaInsets } from '../../utils/safeAreaInsets.js'
 
 import { parseSchemeInput, buildSchemeInput } from '../../lib/schemeUrl.js'
 import { getRecentUrls, addRecentUrl, clearRecentUrls } from '../../lib/recentHistory.js'
@@ -152,7 +153,7 @@ const CATEGORIES: Category[] = [
   },
 ]
 
-function HomePage(props: { showPage: boolean; topInset: number }) {
+function HomePage(props: { showPage: boolean; insets: SafeAreaInsets }) {
   const { resolved } = useTheme()
   const { t } = useLocale()
   const [source, setSource] = useState('')
@@ -313,7 +314,12 @@ function HomePage(props: { showPage: boolean; topInset: number }) {
 
   return (
     <scroll-view className="tab-content" scroll-orientation="vertical">
-      <view className={`page ${isDark ? 'page--dark' : 'page--light'}`} style={{ paddingTop: `${props.topInset + 16}px` }}>
+      <view className={`page ${isDark ? 'page--dark' : 'page--light'}`} style={{
+        paddingTop: `${props.insets.top + 16}px`,
+        paddingRight: `${props.insets.right + 20}px`,
+        paddingBottom: `${props.insets.bottom + 20}px`,
+        paddingLeft: `${props.insets.left + 20}px`,
+      }}>
         {/* Header */}
         <view className="home-header">
           <image
@@ -483,7 +489,7 @@ function getOrigin(url: string): string {
   return m ? m[1] : ''
 }
 
-function SettingsPage(props: { showPage: boolean; topInset: number }) {
+function SettingsPage(props: { showPage: boolean; insets: SafeAreaInsets }) {
   const { preference, resolved, setPreference } = useTheme()
   const { state: localeState, locale: currentLocale, setLocale, t } = useLocale()
   const isDark = resolved === 'dark'
@@ -596,7 +602,12 @@ function SettingsPage(props: { showPage: boolean; topInset: number }) {
 
   return (
     <scroll-view className="tab-content" scroll-orientation="vertical">
-      <view className={`page ${isDark ? 'page--dark' : 'page--light'}`} style={{ paddingTop: `${props.topInset + 16}px` }}>
+      <view className={`page ${isDark ? 'page--dark' : 'page--light'}`} style={{
+        paddingTop: `${props.insets.top + 16}px`,
+        paddingRight: `${props.insets.right + 20}px`,
+        paddingBottom: `${props.insets.bottom + 20}px`,
+        paddingLeft: `${props.insets.left + 20}px`,
+      }}>
         <text className={dk('page-title')}>{t('settings.title', '设置')}</text>
 
         {/* Theme Picker */}
@@ -757,16 +768,10 @@ function MainContent() {
   const { resolved } = useTheme()
   const isDark = resolved === 'dark'
 
-  // Read safe area insets directly from globalProps.
-  // Only apply top padding when we're the root page (hide_nav_bar=1, no native nav bar).
-  // When loaded as a sub-page with native nav bar, the native SPKViewController
-  // already offsets the LynxView below the nav bar — applying topHeight again
-  // would create double padding.
-  const gp = (lynx.__globalProps || {}) as Record<string, any>
+  // 安全区已经相对当前容器计算，不再根据导航栏显隐猜测顶部是否需要避让。
+  const gp = (lynx.__globalProps || {}) as Record<string, unknown>
   const queryItems = (gp.queryItems || {}) as Record<string, string>
-  const hasNativeNavBar = queryItems.hide_nav_bar !== '1'
-  const topInset = hasNativeNavBar ? 0 : (Number(gp.topHeight) || 0)
-  const bottomInset = Number(gp.bottomHeight) || 0
+  const insets = getSafeAreaInsetsFromGlobalProps(gp)
 
   // Native Tab Host mode: the host owns tab selection and bottom chrome. Lynx only
   // renders the requested tab content, so an Android Fragment/iOS UIViewController/
@@ -777,19 +782,26 @@ function MainContent() {
       <view
         className={`app-root ${isDark ? 'app-root--dark' : 'app-root--light'}`}
       >
-        <HomePage showPage={nativeTabId === 'home'} topInset={topInset} />
-        <SettingsPage showPage={nativeTabId === 'settings'} topInset={topInset} />
+        <HomePage showPage={nativeTabId === 'home'} insets={insets} />
+        <SettingsPage showPage={nativeTabId === 'settings'} insets={insets} />
       </view>
     )
   }
 
+  // 自绘底栏单独消费 bottom，滚动内容不再次增加同一安全距离。
+  const contentInsets = { ...insets, bottom: 0 }
   return (
     <view
       className={`app-root ${isDark ? 'app-root--dark' : 'app-root--light'}`}
     >
-      <HomePage showPage={activePage === 'home'} topInset={topInset} />
-      <SettingsPage showPage={activePage === 'settings'} topInset={topInset} />
-      <view style={{ paddingBottom: `${bottomInset}px`, backgroundColor: isDark ? '#1c1c1e' : '#ffffff' }}>
+      <HomePage showPage={activePage === 'home'} insets={contentInsets} />
+      <SettingsPage showPage={activePage === 'settings'} insets={contentInsets} />
+      <view style={{
+        paddingBottom: `${insets.bottom}px`,
+        paddingLeft: `${insets.left}px`,
+        paddingRight: `${insets.right}px`,
+        backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+      }}>
         <Navigator activePage={activePage} onNavigate={setActivePage} />
       </view>
     </view>

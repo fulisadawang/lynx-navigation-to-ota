@@ -13,13 +13,9 @@ export type SafeAreaEdge = 'top' | 'bottom' | 'left' | 'right'
 
 export interface SafeAreaViewProps {
   children?: ReactNode
-  /**
-   * Which edges receive padding from globalProps safe-area values. Default: all four.
-   */
+  /** 只为当前内容负责的边设置 padding，避免父子重复消费同一边距。 */
   edges?: SafeAreaEdge[]
-  /**
-   * Optional override (e.g. tests); when omitted, uses `lynx.__globalProps`.
-   */
+  /** 显式传入时覆盖宿主快照。 */
   globalProps?: Record<string, unknown> | null
   className?: string
   style?: Record<string, string | number | undefined>
@@ -52,10 +48,7 @@ function paddingFromInsets(
   return pad
 }
 
-/**
- * Applies safe-area padding from Sparkling `globalProps` so Lynx content stays
- * clear of the status bar and home indicator after native edge-to-edge layout.
- */
+/** 当前 reactive GlobalProps 模式会触发重新渲染，无需再维护一份订阅状态。 */
 export function SafeAreaView(props: SafeAreaViewProps) {
   const {
     children,

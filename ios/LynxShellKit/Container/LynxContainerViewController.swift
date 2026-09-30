@@ -152,11 +152,9 @@ final class LynxContainerViewController: UIViewController {
         super.viewWillAppear(animated)
         let animateChrome = animated &&
             ShellNavigator.shared.allowsSystemChromeAnimation(for: self)
-        let hostManagesNavigationChrome = LynxShell.hostManagesBackGesture()
+        // 宿主接管返回手势不应强制显示原生栏，Lynx 自绘页面仍遵循自身的显隐请求。
         navigationController?.setNavigationBarHidden(
-            hostManagesNavigationChrome
-                ? false
-                : (request.fullscreen || !request.showNavigationBar),
+            request.fullscreen || !request.showNavigationBar,
             animated: animateChrome
         )
         ShellNavigator.shared.updateBackGesture(for: self)

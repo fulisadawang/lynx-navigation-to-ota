@@ -3,6 +3,7 @@ package com.example.lynxshell.runtime
 import android.app.Activity
 import android.graphics.Rect
 import android.view.View
+import android.view.ViewGroup
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.window.layout.FoldingFeature
@@ -25,6 +26,7 @@ data class LynxLayoutSnapshot(
     val windowMode: String,
     val foldingCapability: String,
     val foldingFeature: Map<String, Any>?,
+    private val isNotchScreen: Boolean = safeAreaTopPx > 24 * density.coerceAtLeast(0.1f),
 ) {
     fun signature(): List<Any?> = listOf(
         screenWidthPx,
@@ -40,6 +42,7 @@ data class LynxLayoutSnapshot(
         windowMode,
         foldingCapability,
         foldingFeature?.toString(),
+        isNotchScreen,
     )
 
     fun toGlobalProps(layoutRevision: Long): HashMap<String, Any> {
@@ -56,7 +59,7 @@ data class LynxLayoutSnapshot(
             "bottomHeight" to safeAreaBottomPx / densityValue,
             "statusBarHeight" to safeAreaTopPx / densityValue,
             "navigationBarHeight" to safeAreaBottomPx / densityValue,
-            "isNotchScreen" to (safeAreaTopPx > 24 * densityValue),
+            "isNotchScreen" to isNotchScreen,
             "orientation" to orientation,
             "windowMode" to windowMode,
             "layoutRevision" to layoutRevision,
@@ -111,19 +114,40 @@ data class LynxLayoutSnapshot(
             }
             val widthPx = windowBounds.width().takeIf { it > 0 } ?: displayMetrics.widthPixels
             val heightPx = windowBounds.height().takeIf { it > 0 } ?: displayMetrics.heightPixels
-            val insets = ViewCompat.getRootWindowInsets(activity.window.decorView)
-                ?.getInsets(WindowInsetsCompat.Type.systemBars())
+            val decor = activity.window.decorView as ViewGroup
+            val windowInsets = ViewCompat.getRootWindowInsets(decor)
+            val systemBars = windowInsets?.getInsets(WindowInsetsCompat.Type.systemBars())
+            val insets = windowInsets?.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            )
+            val viewport = if (view != null && view.isAttachedToWindow && view.width > 0 && view.height > 0) {
+                Rect(0, 0, view.width, view.height).also { bounds ->
+                    // 采用布局位置，避免滑入和缩放转场把临时视觉位置计入安全区。
+                    decor.offsetDescendantRectToMyCoords(view, bounds)
+                    val decorLocation = IntArray(2)
+                    decor.getLocationInWindow(decorLocation)
+                    bounds.offset(decorLocation[0], decorLocation[1])
+                }
+            } else {
+                null
+            }
+            val viewportLeft = viewport?.left ?: 0
+            val viewportTop = viewport?.top ?: 0
+            val viewportRight = viewport?.right ?: widthPx
+            val viewportBottom = viewport?.bottom ?: heightPx
+            val viewportWidth = viewport?.width() ?: widthPx
+            val viewportHeight = viewport?.height() ?: heightPx
             val folding = queryFoldingFeature(activity)
             return LynxLayoutSnapshot(
                 screenWidthPx = widthPx,
                 screenHeightPx = heightPx,
-                viewportWidthPx = view?.width?.takeIf { it > 0 },
-                viewportHeightPx = view?.height?.takeIf { it > 0 },
+                viewportWidthPx = viewport?.width(),
+                viewportHeightPx = viewport?.height(),
                 density = displayMetrics.density,
-                safeAreaTopPx = insets?.top ?: 0,
-                safeAreaRightPx = insets?.right ?: 0,
-                safeAreaBottomPx = insets?.bottom ?: 0,
-                safeAreaLeftPx = insets?.left ?: 0,
+                safeAreaTopPx = ((insets?.top ?: 0) - viewportTop).coerceIn(0, viewportHeight),
+                safeAreaRightPx = (viewportRight - (widthPx - (insets?.right ?: 0))).coerceIn(0, viewportWidth),
+                safeAreaBottomPx = (viewportBottom - (heightPx - (insets?.bottom ?: 0))).coerceIn(0, viewportHeight),
+                safeAreaLeftPx = ((insets?.left ?: 0) - viewportLeft).coerceIn(0, viewportWidth),
                 orientation = when {
                     widthPx > heightPx -> "landscape"
                     widthPx < heightPx -> "portrait"
@@ -132,6 +156,7 @@ data class LynxLayoutSnapshot(
                 windowMode = if (isInMultiWindowMode(activity)) "split" else "fullscreen",
                 foldingCapability = folding.first,
                 foldingFeature = folding.second,
+                isNotchScreen = (systemBars?.top ?: 0) > 24 * displayMetrics.density,
             )
         }
 

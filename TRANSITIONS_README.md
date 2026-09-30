@@ -443,6 +443,12 @@ Android 不能在收到 `onFirstScreen` 的同一调用栈里立即抓目标页�
 `targetFrameReady` 硬门禁；未显式传参时 Android 默认动画时长为 `420ms`，
 ready 超时为 `1000ms`。
 
+Android 的 `slide`、`slideUp` 和 `wx://upwards` 在等待首屏期间保持目标内容层
+`alpha=0`，继续显示来源 Window 快照。原首屏与 `targetFrameReady` 门禁成立后，
+在一次 pre-draw 中确认容器尺寸为正，先设置真实屏外起点，再开始入场动画；
+不取消整棵 View 树的绘制。返回、重载、降级和销毁都会移除待执行的回调。
+滑入 fallback 若仍没有有效容器尺寸，则直接恢复可见终态，不使用 1px 假尺寸。
+
 `LynxViewClient.onReceivedError` 也会收到图片等子资源错误。首屏已经成立后，这类错误
 只保留在页面自己的错误链路中，不再把整页 Share Element / Open Container 降级为
 `target_not_ready`。只有首屏建立前的致命加载错误才会取消本次目标页转场。

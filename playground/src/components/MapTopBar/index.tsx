@@ -1,4 +1,5 @@
 import { close } from '../../lib/navigation.js'
+import { getSafeAreaInsetsFromGlobalProps } from '../../utils/safeAreaInsets.js'
 import './index.css'
 
 interface MapTopBarProps {
@@ -9,13 +10,17 @@ interface MapTopBarProps {
 
 /** 地图沉浸式页面共用的返回栏；地图只占返回栏以下的区域。 */
 export function MapTopBar(props: MapTopBarProps) {
+  const insets = getSafeAreaInsetsFromGlobalProps(lynx.__globalProps as unknown as Record<string, unknown>)
   const handleBack = () => {
     'background only'
     close()
   }
 
   return (
-    <view className={`map-top-bar ${props.dark ? 'map-top-bar--dark' : 'map-top-bar--light'}`}>
+    <view className={`map-top-bar ${props.dark ? 'map-top-bar--dark' : 'map-top-bar--light'}`} style={{
+      paddingLeft: `${12 + insets.left}px`,
+      paddingRight: `${12 + insets.right}px`,
+    }}>
       <view
         className="map-top-bar-back"
         bindtap={handleBack}
