@@ -7,12 +7,15 @@ import UIKit
  * 使用系统 UINavigationController，保留 iOS 标准 push/pop 动画和侧滑返回；
  * LynxView 的构造与加载由 LynxNativeRuntime 隔离。
  */
-final class LynxContainerViewController: UIViewController {
+final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
     private(set) var request: LynxPageRequest
     let navigationSessionID: String
     let navigationEntryID: String
     let navigationParentEntryID: String?
     let navigationOrder: Int
+    private let expectedParentSnapshotID: String?
+    private let expectedParentSnapshotAppID: String?
+    var otaNavigationSnapshotID: String? { bundleRuntimeMetadata?["navigationSnapshotId"] as? String }
     let usesSystemSheetPresentation: Bool
     var routeKey: String { request.resolvedRouteKey }
     /** route preset 的 barrier 与 Lynx 内容分层，避免半屏/模态页面退栈后突然铺满全屏。 */
@@ -39,7 +42,12 @@ final class LynxContainerViewController: UIViewController {
     private var monitorScope: LynxMonitorScope?
     private var monitorObserver: LynxMonitorObserver?
     private var monitorVisibility: LynxMonitorVisibility = .hidden
+    let lynxSystemUIState = ShellSystemUIState()
+    var lynxSystemUIView: LynxView? { lynxView }
     private var firstScreenReady = false
+    private var otaHealthGate = LynxOtaHealthGate()
+    private var otaHealthCompletion: ((NSDictionary) -> Void)?
+    private var otaHealthTask: Task<Void, Never>?
     private var firstScreenFailed = false
     private var readinessWaiters: [UUID: (Bool, String?) -> Void] = [:]
     private var otaPrepareTask: Task<Void, Never>?
@@ -47,6 +55,17 @@ final class LynxContainerViewController: UIViewController {
     private var otaRecoveryInFlight = false
 #if DEBUG
     private var debugForcedFirstScreenFailure = false
+    var debugHoldOtaHealthConfirmation = false
+    var debugHealthFacts: (firstScreen: Bool, business: Bool, confirmed: Bool, loaded: Bool, generation: UUID, releaseId: String?, source: String?) {
+        (otaHealthGate.firstScreenReached, otaHealthGate.businessHealthMarked, otaHealthGate.confirmed,
+         lynxView != nil, loadGeneration, bundleRuntimeMetadata?["releaseId"] as? String,
+         bundleRuntimeMetadata?["source"] as? String)
+    }
+    /** Host 测试注入 SDK lifecycle 事件，继续经过实际错误分类和容器恢复路径。 */
+    func debugInjectRuntimeError(_ error: Error) {
+        guard let lynxView else { return }
+        firstScreenObserver?.lynxView(lynxView, didRecieveError: error)
+    }
     private var debugRuntimeStateLabel: UILabel?
     private var debugRollbackMarkerLabel: UILabel?
     private var debugRollbackMarkerTimer: Timer?
@@ -58,6 +77,8 @@ final class LynxContainerViewController: UIViewController {
         navigationEntryID: String = UUID().uuidString,
         navigationParentEntryID: String? = nil,
         navigationOrder: Int = 0,
+        expectedParentSnapshotID: String? = nil,
+        expectedParentSnapshotAppID: String? = nil,
         preparedBundleData: Data? = nil,
         usesSystemSheetPresentation: Bool = false
     ) {
@@ -66,6 +87,8 @@ final class LynxContainerViewController: UIViewController {
         self.navigationEntryID = navigationEntryID
         self.navigationParentEntryID = navigationParentEntryID
         self.navigationOrder = navigationOrder
+        self.expectedParentSnapshotID = expectedParentSnapshotID
+        self.expectedParentSnapshotAppID = expectedParentSnapshotAppID
         self.preparedBundleData = preparedBundleData
         self.usesSystemSheetPresentation = usesSystemSheetPresentation
         super.init(nibName: nil, bundle: nil)
@@ -76,12 +99,15 @@ final class LynxContainerViewController: UIViewController {
     }
 
     deinit {
+        otaHealthTask?.cancel()
+        otaHealthCompletion?(["code": 1002, "message": "页面已销毁"])
 #if DEBUG
         LynxDebugBridge.detach(view: lynxView)
 #endif
         monitorScope?.close(reason: "page_destroyed")
         LynxMonitorViewBinding.unbind(lynxView)
         ShellMessageHub.unregister(pageId: navigationEntryID)
+        if let lynxView { LynxNativeRuntime.destroy(view: lynxView) }
         otaPrepareTask?.cancel()
         templateProvider?.cancel()
         releaseCurrentLease()
@@ -256,14 +282,18 @@ final class LynxContainerViewController: UIViewController {
         scheduleLayoutUpdate()
     }
 
-    override var prefersStatusBarHidden: Bool { request.hideStatusBar }
+    override var prefersStatusBarHidden: Bool { lynxSystemUIState.statusBarHidden ?? request.hideStatusBar }
     override var preferredStatusBarStyle: UIStatusBarStyle {
+        if let style = lynxSystemUIState.statusBarStyle { return style }
         let background = UIColor(shellHex: request.backgroundColor) ?? .systemBackground
         return background.shellIsLightColor ? .darkContent : .lightContent
     }
     override var preferredStatusBarUpdateAnimation: UIStatusBarAnimation { .fade }
 
+    override var prefersHomeIndicatorAutoHidden: Bool { lynxSystemUIState.homeIndicatorHidden ?? false }
+
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        if let mask = lynxSystemUIState.orientationMask { return mask }
         switch request.orientation {
         case .portrait: return .portrait
         case .landscape: return .landscape
@@ -285,6 +315,11 @@ final class LynxContainerViewController: UIViewController {
         layoutPresetContainer()
         rebuildLynxView(resetOtaRecovery: true)
         setNeedsStatusBarAppearanceUpdate()
+    }
+
+    /** 只替换请求中的返回策略；不触发 chrome 更新或 LynxView 重建。 */
+    func setBackGestureEnabled(_ enabled: Bool) {
+        request = request.withBackGestureEnabled(enabled)
     }
 
     /** 当前 NativeModule 是否属于这个真实 Lynx 容器。 */
@@ -507,7 +542,9 @@ final class LynxContainerViewController: UIViewController {
         finishReadiness(success: false, reason: "page_destroyed")
         otaPrepareTask?.cancel()
         otaPrepareTask = nil
+        cancelOtaHealth()
         loadGeneration = UUID()
+        otaHealthGate = LynxOtaHealthGate()
         if resetOtaRecovery {
             otaRecoveryUsed = false
             otaRecoveryInFlight = false
@@ -521,6 +558,7 @@ final class LynxContainerViewController: UIViewController {
         templateProvider?.cancel()
         templateProvider = nil
         ShellMessageHub.unregister(pageId: navigationEntryID)
+        if let lynxView { LynxNativeRuntime.destroy(view: lynxView) }
         lynxView?.removeFromSuperview()
         lynxView = nil
         releaseCurrentLease()
@@ -552,6 +590,7 @@ final class LynxContainerViewController: UIViewController {
             return
         }
         let sessionID = navigationSessionID
+        let recovering = otaRecoveryUsed
         otaPrepareTask = Task { [weak self] in
             var pendingLease: OtaBundleLease?
             var pendingResources: OtaPreparedResources?
@@ -563,8 +602,27 @@ final class LynxContainerViewController: UIViewController {
                 }
             }
             do {
+                if !recovering, let expectedParentSnapshotID = self?.expectedParentSnapshotID,
+                   let snapshotRuntime = runtime as? LynxNavigationSnapshotRuntime,
+                   !(await snapshotRuntime.isNavigationSnapshotActive(expectedParentSnapshotID)) {
+                    await MainActor.run { [weak self] in
+                        guard let self, generation == self.loadGeneration else { return }
+                        self.loadingView.hide()
+                        self.errorView.show(message: "来源页面版本已失效，请返回并重试")
+                        self.markFirstScreenFailed()
+                    }
+                    return
+                }
                 let cached: PreparedOtaBundle?
-                if let snapshotRuntime = runtime as? LynxNavigationSnapshotRuntime {
+                if recovering {
+                    // 故障恢复只重读稳定版本，避免试运行另一个刚下载的候选包。
+                    if let snapshotRuntime = runtime as? LynxNavigationSnapshotRuntime {
+                        cached = try await snapshotRuntime.resolveRecoveredCurrent(lynxAppId: appId,
+                            bundleName: bundleName, navigationSessionID: sessionID)
+                    } else {
+                        cached = try await runtime.resolveCurrent(lynxAppId: appId, bundleName: bundleName)
+                    }
+                } else if let snapshotRuntime = runtime as? LynxNavigationSnapshotRuntime {
                     cached = try await snapshotRuntime.resolvePage(
                         lynxAppId: appId,
                         bundleName: bundleName,
@@ -579,12 +637,13 @@ final class LynxContainerViewController: UIViewController {
                 let prepared: PreparedOtaBundle
                 if let cached {
                     prepared = cached
-                    if cached.source != "embedded_baseline" &&
+                    if !recovering && cached.source != "embedded_baseline" &&
                         cached.source != "candidate_trial" &&
                         cached.source != "ota_snapshot" {
                         await runtime.refreshAppBundleIfNeeded(lynxAppId: appId)
                     }
                 } else {
+                    if recovering { throw LynxOtaError.unreadableBundle("\(appId)/\(bundleName) 恢复后无稳定版本") }
                     await MainActor.run { [weak self] in
                         guard let self, generation == self.loadGeneration,
                               !self.request.transitionSpec.explicitlyRequested else { return }
@@ -604,6 +663,16 @@ final class LynxContainerViewController: UIViewController {
                     }
                 }
                 pendingLease = prepared.releaseLease
+                if !recovering, let expected = self?.expectedParentSnapshotID,
+                   self?.expectedParentSnapshotAppID == appId, prepared.navigationSnapshotID != expected {
+                    await MainActor.run { [weak self] in
+                        guard let self, generation == self.loadGeneration else { return }
+                        self.loadingView.hide()
+                        self.errorView.show(message: "来源页面版本已失效，请返回并重试")
+                        self.markFirstScreenFailed()
+                    }
+                    return
+                }
                 let resources = try await runtime.prepareResources(for: prepared)
                 pendingResources = resources
                 if Task.isCancelled { return }
@@ -780,6 +849,13 @@ final class LynxContainerViewController: UIViewController {
             view: createdView,
             updateLocale: { [weak self] state in
                 self?.synchronizeLocale(state)
+            },
+            markOtaHealthy: { [weak self, weak createdView] completion in
+                guard let self, let createdView else {
+                    completion(["code": 1002, "message": "调用页面已销毁"])
+                    return
+                }
+                self.markOtaHealthy(generation: generation, view: createdView, completion: completion)
             }
         )
 
@@ -872,12 +948,14 @@ final class LynxContainerViewController: UIViewController {
     /** Provider/首屏错误时，OTA 页面只允许一次 previous/embedded 回滚。 */
     private func handleTemplateLoadFailure(generation: UUID, message: String) {
         guard generation == loadGeneration else { return }
+        let mayRecover = !firstScreenReady || (bundleRuntimeMetadata?["source"] as? String == "candidate_trial" && !otaHealthGate.confirmed)
+        otaHealthGate.fail()
         monitorScope?.failed(reason: "template_or_first_screen_failure")
         destroyRuntimeContentAndReleaseLease()
 #if DEBUG
         updateDebugRuntimeState("failure:\(message)")
 #endif
-        if request.isOtaRequest, !firstScreenReady, attemptOtaRecovery(generation: generation, reason: message) {
+        if request.isOtaRequest, mayRecover, attemptOtaRecovery(generation: generation, reason: message) {
             return
         }
         loadingView.hide()
@@ -901,11 +979,14 @@ final class LynxContainerViewController: UIViewController {
         loadingView.show(message: "页面加载失败，正在回滚…", canCancel: false)
         let expectedEpoch = preparedUserIdentityEpoch
         let expectedReleaseId = bundleRuntimeMetadata?["releaseId"] as? String
+        let failedCandidate = bundleRuntimeMetadata?["source"] as? String == "candidate_trial"
         otaPrepareTask?.cancel()
         otaPrepareTask = Task { [weak self] in
             do {
-                let rolledBack = try await runtime.rollback(lynxAppId: appId, reason: reason,
-                                                           expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedEpoch)
+                let rolledBack = failedCandidate
+                    ? try await runtime.recoverFailedCandidate(lynxAppId: appId, expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedEpoch)
+                    : try await runtime.rollback(lynxAppId: appId, reason: reason,
+                        expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedEpoch)
                 await MainActor.run { [weak self] in
                     guard let self, generation == self.loadGeneration else { return }
                     self.otaPrepareTask = nil
@@ -943,7 +1024,7 @@ final class LynxContainerViewController: UIViewController {
             }
             return
         }
-        guard generation == loadGeneration, view === lynxView, !firstScreenReady else { return }
+        guard generation == loadGeneration, view === lynxView else { return }
         handleTemplateLoadFailure(generation: generation, message: error.localizedDescription)
     }
 
@@ -976,10 +1057,11 @@ final class LynxContainerViewController: UIViewController {
         DispatchQueue.main.async { [weak self, weak view] in
             guard let self, let view,
                   generation == self.loadGeneration,
-                  view === self.lynxView else {
+                  view === self.lynxView, !self.otaHealthGate.failed else {
                 return
             }
             self.firstScreenReady = true
+            self.otaHealthGate.markFirstScreen()
             self.firstScreenFailed = false
             self.loadingView.hide()
 #if DEBUG
@@ -992,25 +1074,84 @@ final class LynxContainerViewController: UIViewController {
                let bundleName = self.request.bundleName,
                let runtime = LynxShell.otaRuntime() {
                 let expectedEpoch = self.preparedUserIdentityEpoch
-                let expectedReleaseId = self.bundleRuntimeMetadata?["releaseId"] as? String
                 guard expectedEpoch == nil || expectedEpoch == LynxRouter.otaUserIdentityEpoch else { return }
                 Task { await runtime.reportPageOpen(lynxAppId: appId, bundleName: bundleName, expectedIdentityEpoch: expectedEpoch) }
-                if self.bundleRuntimeMetadata?["source"] as? String == "candidate_trial" {
-                    Task { [weak self] in
-                        let confirmed = try? await runtime.confirmCandidateHealthy(lynxAppId: appId,
-                                                                                  expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedEpoch)
-                        await MainActor.run {
-                            guard confirmed == true, let self, generation == self.loadGeneration,
-                                  expectedEpoch == nil || expectedEpoch == LynxRouter.otaUserIdentityEpoch else { return }
-                            self.bundleRuntimeMetadata?["source"] = "ota_current"
+                self.confirmOtaHealthIfReady(generation: generation)
+            }
+        }
+    }
+
+    private func markOtaHealthy(generation: UUID, view: LynxView, completion: @escaping (NSDictionary) -> Void) {
+        guard generation == loadGeneration, view === lynxView, !otaHealthGate.failed else {
+            completion(["code": 1002, "message": "页面代次已失效"])
+            return
+        }
+        guard bundleRuntimeMetadata?["source"] as? String == "candidate_trial" else {
+            completion(["code": 0, "message": "", "data": ["confirmed": otaHealthGate.confirmed, "reason": "not_candidate"]])
+            return
+        }
+        guard otaHealthCompletion == nil else {
+            completion(["code": 1006, "message": "健康确认正在等待首屏或提交"])
+            return
+        }
+        otaHealthCompletion = completion
+        otaHealthGate.markBusinessHealth()
+        confirmOtaHealthIfReady(generation: generation)
+    }
+
+    private func confirmOtaHealthIfReady(generation: UUID) {
 #if DEBUG
-                            self.updateDebugRuntimeState("ready:\(expectedReleaseId ?? "unknown"):ota_current:promoted")
+        if debugHoldOtaHealthConfirmation || ProcessInfo.processInfo.environment["LYNX_TEST_HOLD_OTA_HEALTH"] == "1" { return }
 #endif
-                        }
+        guard generation == loadGeneration,
+              bundleRuntimeMetadata?["source"] as? String == "candidate_trial",
+              let appId = request.lynxAppId, let runtime = LynxShell.otaRuntime(),
+              otaHealthGate.beginConfirmation() else { return }
+        let epoch = preparedUserIdentityEpoch
+        let releaseId = bundleRuntimeMetadata?["releaseId"] as? String
+        otaHealthTask = Task { [weak self] in
+            do {
+                try Task.checkCancellation()
+                let confirmed = try await runtime.confirmCandidateHealthy(lynxAppId: appId,
+                    expectedReleaseId: releaseId, expectedIdentityEpoch: epoch)
+                await MainActor.run {
+                    guard let self, generation == self.loadGeneration else { return }
+                    guard epoch == nil || epoch == LynxRouter.otaUserIdentityEpoch,
+                          confirmed, self.otaHealthGate.completeConfirmation() else {
+                        self.cancelOtaHealth()
+                        return
                     }
+                    self.otaHealthTask = nil
+                    self.bundleRuntimeMetadata?["source"] = "ota_current"
+                    let callback = self.otaHealthCompletion
+                    self.otaHealthCompletion = nil
+                    callback?(["code": 0, "message": "", "data": ["confirmed": true, "releaseId": releaseId ?? ""]])
+#if DEBUG
+                    self.updateDebugRuntimeState("ready:\(releaseId ?? "unknown"):ota_current:promoted")
+#endif
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard let self, generation == self.loadGeneration else { return }
+                    let callback = self.otaHealthCompletion
+                    self.otaHealthCompletion = nil
+                    self.otaHealthTask = nil
+                    callback?(["code": 1003, "message": error.localizedDescription])
+                    self.handleTemplateLoadFailure(generation: generation, message: "OTA健康确认失败")
                 }
             }
         }
+    }
+
+    private func cancelOtaHealth() {
+        otaHealthTask?.cancel()
+        otaHealthTask = nil
+        let callback = otaHealthCompletion
+        otaHealthCompletion = nil
+        callback?(["code": 1002, "message": "页面已销毁或换包"])
     }
 
     private func markFirstScreenFailed() {
@@ -1049,6 +1190,8 @@ final class LynxContainerViewController: UIViewController {
 
     /** maintainState=false 离场后释放运行时内容，VC/路由元数据仍留在原生栈中。 */
     private func suspendLynxContent() {
+        otaHealthGate.fail()
+        cancelOtaHealth()
         closeMonitoring(reason: "view_suspended")
         finishReadiness(success: false, reason: "page_suspended")
         templateProvider?.cancel()
@@ -1057,17 +1200,21 @@ final class LynxContainerViewController: UIViewController {
         firstScreenReady = false
         firstScreenFailed = false
         ShellMessageHub.unregister(pageId: navigationEntryID)
+        if let lynxView { LynxNativeRuntime.destroy(view: lynxView) }
         lynxView?.removeFromSuperview()
         lynxView = nil
         releaseCurrentLease()
     }
 
     private func destroyRuntimeContentAndReleaseLease() {
+        otaHealthGate.fail()
+        cancelOtaHealth()
         closeMonitoring(reason: "runtime_content_released")
         templateProvider?.cancel()
         templateProvider = nil
         firstScreenObserver = nil
         ShellMessageHub.unregister(pageId: navigationEntryID)
+        if let lynxView { LynxNativeRuntime.destroy(view: lynxView) }
         lynxView?.removeFromSuperview()
         lynxView = nil
         releaseCurrentLease()

@@ -26,8 +26,7 @@ import org.json.JSONObject
 /** 把自有 Module 协议映射到 Android framework；不依赖 Capacitor runtime/plugin。 */
 object NativeCapabilityDispatcher {
     fun requiresBackground(pluginId: String, methodName: String): Boolean =
-        (pluginId == "CapacitorHttp" && methodName in setOf("request", "get", "post")) ||
-            (pluginId == "CapacitorSQLite" && methodName !in setOf("echo", "isAvailable"))
+        NativeExecutionPolicy.lane(pluginId, methodName) != NativeExecutionPolicy.Lane.UI
 
     fun dispatch(activity: Activity, pluginId: String, methodName: String, options: JSONObject): JSONObject {
         // 先经过协议目录闸门，确保所有能力域在进入平台 adapter 前拥有相同的未声明/未实现语义。
@@ -118,7 +117,7 @@ object NativeCapabilityDispatcher {
                 .put("version", packageInfo.versionName ?: "")
                 .put("build", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) packageInfo.longVersionCode else packageInfo.versionCode.toLong())
         }
-        "getState" -> JSONObject().put("isActive", !activity.isFinishing && !activity.isDestroyed)
+        "getState" -> JSONObject().put("isActive", LynxCapacitorRuntime.isAppActive())
         "getLaunchUrl" -> JSONObject().put("url", activity.intent?.dataString ?: JSONObject.NULL)
         else -> failure("UNSUPPORTED", "App.$method 尚未接入当前 Android Module")
     }

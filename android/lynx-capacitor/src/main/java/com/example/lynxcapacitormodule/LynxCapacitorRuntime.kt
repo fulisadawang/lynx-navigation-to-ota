@@ -3,12 +3,16 @@ package com.example.lynxcapacitormodule
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.lynx.react.bridge.Callback
+import com.lynx.tasm.behavior.LynxContext
+import java.lang.ref.WeakReference
+import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONArray
 import org.json.JSONObject
@@ -21,10 +25,19 @@ import org.json.JSONObject
  */
 object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
     private const val TAG = "LynxNativeModule"
-    private const val MODULE_ERROR = "MODULE_UNAVAILABLE"
     private val mainHandler = Handler(Looper.getMainLooper())
     private val currentActivity = AtomicReference<Activity?>(null)
+    // 生命周期在主线程更新，Bridge 只读快照；未销毁的 Activity 不能代表 App 仍在前台。
+    private val resumedActivities = WeakHashMap<Activity, Unit>()
+    @Volatile private var appActive = false
     @Volatile private var eventSender: ((String) -> Unit)? = null
+    private class OwnerBinding(val scope: NativeOwnerScope, val activity: WeakReference<Activity?>) {
+        @Volatile var rawSender: ((String) -> Unit)? = null
+        val sender: (String) -> Unit = { json -> LynxCapacitorRuntime.onMain { if (scope.isActive) rawSender?.invoke(json) } }
+    }
+    private val owners = WeakHashMap<Context, OwnerBinding>()
+    private val destroyedContexts = WeakHashMap<Context, Unit>()
+    private val activeContext = NativeActiveContext<Context>()
     private var installed = false
 
     @Synchronized
@@ -34,9 +47,14 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
         installed = true
     }
 
-    fun handleCall(payload: String, callback: Callback) {
+    fun handleCall(payload: String, callback: Callback, callerContext: Context? = null) {
+        if (payload.length > NativePayloadBudget.REQUEST_BYTES ||
+            payload.toByteArray(Charsets.UTF_8).size > NativePayloadBudget.REQUEST_BYTES) {
+            invokeOnMain(callback, errorEnvelope("-1", "", "", "请求超过 1 MiB 限制", "PAYLOAD_TOO_LARGE").toString())
+            return
+        }
         val request = runCatching { JSONObject(payload) }.getOrElse { error ->
-            callback.invoke(
+            invokeOnMain(callback,
                 errorEnvelope(
                     callbackId = "-1",
                     pluginId = "",
@@ -58,7 +76,7 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
             !request.has("callbackId") || request.isNull("callbackId") -> "-1"
             callbackValue is String && callbackValue.trim().isNotEmpty() -> callbackValue.trim()
             else -> {
-                callback.invoke(
+                invokeOnMain(callback,
                     errorEnvelope(
                         callbackId = "-1",
                         pluginId = pluginId,
@@ -71,7 +89,7 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
             }
         }
         if (invalidIdentityType || pluginId.isEmpty() || methodName.isEmpty()) {
-            callback.invoke(
+            invokeOnMain(callback,
                 errorEnvelope(
                     callbackId = callbackId,
                     pluginId = pluginId,
@@ -86,7 +104,7 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
             !request.has("options") || request.isNull("options") -> JSONObject()
             request.opt("options") is JSONObject -> request.getJSONObject("options")
             else -> {
-                callback.invoke(
+                invokeOnMain(callback,
                     errorEnvelope(
                         callbackId = callbackId,
                         pluginId = pluginId,
@@ -101,7 +119,7 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
         // 在读取 Activity 前先执行公共目录闸门，保证无宿主上下文时未知调用也不会伪装成可用能力。
         val spec = NativeCapabilityCatalog.find(pluginId)
         if (spec == null) {
-            callback.invoke(
+            invokeOnMain(callback,
                 errorEnvelope(
                     callbackId = callbackId,
                     pluginId = pluginId,
@@ -113,7 +131,7 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
             return
         }
         if (methodName !in spec.methods) {
-            callback.invoke(
+            invokeOnMain(callback,
                 errorEnvelope(
                     callbackId = callbackId,
                     pluginId = pluginId,
@@ -125,7 +143,7 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
             return
         }
         if (methodName !in spec.implementedMethods) {
-            callback.invoke(
+            invokeOnMain(callback,
                 errorEnvelope(
                     callbackId = callbackId,
                     pluginId = pluginId,
@@ -136,291 +154,247 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
             )
             return
         }
-        val activity = currentActivity.get()
-        Log.i(TAG, "HANDLE_CALL $pluginId.$methodName activity=${activity?.javaClass?.name}")
-        if (activity == null) {
-            callback.invoke(
-                errorEnvelope(
-                    callbackId = callbackId,
-                    pluginId = pluginId,
-                    methodName = methodName,
-                    message = "No Android Activity is available",
-                    code = MODULE_ERROR,
-                ).toString(),
-            )
+        val binding = synchronized(this) { callerContext?.let { owners[it] } }
+        val activity = if (callerContext == null) currentActivity.get() else activityForContext(callerContext)
+        if (activity == null || binding == null || !binding.scope.isActive) {
+            invokeOnMain(callback, errorEnvelope(callbackId, pluginId, methodName,
+                "当前调用页面未安装或已销毁", "HOST_DESTROYED").toString())
             return
         }
-
-        if (methodName == "requestPermissions") {
-            mainHandler.post {
-                val claimed = NativePermissionCoordinator.request(
-                    activity,
-                    pluginId,
-                    methodName,
-                    options,
-                ) { result ->
-                    deliver(callback, callbackId, pluginId, methodName, result)
-                }
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
+        val owner = binding.scope
+        val call = owner.call {
+            onMain { invokeOnMain(callback, errorEnvelope(callbackId, pluginId, methodName,
+                "调用页面已销毁", "HOST_DESTROYED").toString()) }
         }
-
-        if (pluginId == "Dialog" || pluginId == "ActionSheet") {
-            mainHandler.post {
-                val claimed = NativeInteractiveCapabilities.dispatch(
-                    activity,
-                    pluginId,
-                    methodName,
-                    options,
-                ) { result ->
-                    deliver(callback, callbackId, pluginId, methodName, result)
-                }
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
+        if (!owner.isActive) return
+        val complete: (JSONObject) -> Unit = { result ->
+            encodeResult(owner, call, callback, callbackId, pluginId, methodName, result)
         }
-
-        if (pluginId == "Audio") {
-            mainHandler.post {
-                val claimed = NativeAudioCapabilities.dispatch(
-                    activity,
-                    methodName,
-                    options,
-                ) { result ->
-                    deliver(callback, callbackId, pluginId, methodName, result)
-                }
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
-        }
-
-        if (pluginId == "FileTransfer") {
-            mainHandler.post {
-                val claimed = NativeFileTransferCapabilities.dispatch(
-                    activity,
-                    methodName,
-                    options,
-                    complete = { result ->
-                        deliver(callback, callbackId, pluginId, methodName, result)
-                    },
-                    eventSender = eventSender,
-                )
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
-        }
-
-        if (pluginId == "LocalNotifications" && methodName !in setOf("checkPermissions", "requestPermissions")) {
-            mainHandler.post {
-                val claimed = NativeLocalNotificationCapabilities.dispatch(
-                    activity,
-                    methodName,
-                    options,
-                ) { result ->
-                    deliver(callback, callbackId, pluginId, methodName, result)
-                }
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
-        }
-
-        if (pluginId == "Camera" && methodName in setOf("getPhoto", "pickImages", "chooseFromGallery", "takePhoto")) {
-            mainHandler.post {
-                val claimed = NativeCameraCaptureCapabilities.dispatch(
-                    activity,
-                    methodName,
-                    options,
-                ) { result ->
-                    deliver(callback, callbackId, pluginId, methodName, result)
-                }
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
-        }
-
-        if (pluginId == "Camera" && methodName in setOf("recordVideo", "playVideo")) {
-            mainHandler.post {
-                val claimed = NativeVideoCaptureCapabilities.dispatch(
-                    activity,
-                    methodName,
-                    options,
-                ) { result ->
-                    deliver(callback, callbackId, pluginId, methodName, result)
-                }
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
-        }
-
-        if (pluginId == "Geolocation" && methodName == "getCurrentPosition") {
-            mainHandler.post {
-                val claimed = NativeGeolocationCapabilities.dispatch(
-                    activity,
-                    methodName,
-                    options,
-                ) { result ->
-                    deliver(callback, callbackId, pluginId, methodName, result)
-                }
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
-        }
-
-        if (pluginId == "CapacitorBarcodeScanner" && methodName == "scanBarcode") {
-            mainHandler.post {
-                val claimed = NativeBarcodeCapabilities.dispatch(
-                    activity,
-                    methodName,
-                    options,
-                ) { result ->
-                    deliver(callback, callbackId, pluginId, methodName, result)
-                }
-                if (!claimed) {
-                    deliver(
-                        callback,
-                        callbackId,
-                        pluginId,
-                        methodName,
-                        NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                    )
-                }
-            }
-            return
-        }
-
-        if (NativeCapabilityDispatcher.requiresBackground(pluginId, methodName)) {
-            // 阻塞网络能力不占用 Lynx/Activity 主线程；结果统一切回主线程交付 callback。
-            Thread({
-                val dispatchResult = NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options)
-                mainHandler.post {
-                    deliver(callback, callbackId, pluginId, methodName, dispatchResult)
-                }
-            }, "lynx-native-$pluginId-$methodName").apply {
-                isDaemon = true
-                start()
-            }
-        } else {
-            // Android 的 Window/UI/Provider API 和普通 Lynx callback 在主线程串行化。
-            mainHandler.post {
-                deliver(
-                    callback,
-                    callbackId,
-                    pluginId,
-                    methodName,
-                    NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options),
-                )
-            }
-        }
-    }
-
-    private fun deliver(
-        callback: Callback,
-        callbackId: String,
-        pluginId: String,
-        methodName: String,
-        dispatchResult: JSONObject,
-    ) {
-        val retained = dispatchResult.optBoolean("save", false)
-        val result = if (dispatchResult.has("error")) {
-            dispatchResult.put("success", false).apply {
-                optJSONObject("error")?.let { error ->
-                    if (!error.has("reasonCode")) {
-                        error.put("reasonCode", LynxCapabilitySemantics.errorReasonCode(error.optString("code")))
+        val work = {
+            NativeCallContext.withOwner(owner) {
+                if (NativeHostRegistry.requiresHost(pluginId, methodName)) {
+                    val provider = NativeHostRegistry.provider
+                    if (provider == null || "$pluginId.$methodName" !in NativeHostRegistry.supportedMethods || callerContext == null) {
+                        complete(nativeFailure("HOST_NOT_CONFIGURED", "当前容器未提供 $pluginId.$methodName"))
+                    } else {
+                        val host = provider.resolve(callerContext)
+                        if (host == null) complete(nativeFailure("HOST_DESTROYED", "当前容器已失效或没有实际 LynxView"))
+                        else {
+                            owner.own(provider) { onMain { provider.release(callerContext) } }
+                            host.call(pluginId, methodName, options, complete)
+                        }
+                    }
+                } else {
+                    val claimed = when {
+                        methodName == "requestPermissions" -> NativePermissionCoordinator.request(activity, pluginId, methodName, options, complete)
+                        pluginId in setOf("Dialog", "ActionSheet") -> NativeInteractiveCapabilities.dispatch(activity, pluginId, methodName, options, complete)
+                        pluginId == "Audio" -> NativeAudioCapabilities.dispatch(activity, methodName, options, complete)
+                        pluginId == "FileViewer" && methodName == "openDocumentFromLocalPath" -> {
+                            NativeMediaCapabilities.openDocument(activity, options, complete)
+                            true
+                        }
+                        pluginId == "FileTransfer" -> NativeFileTransferCapabilities.dispatch(activity, methodName, options, complete, binding.sender)
+                        pluginId == "LocalNotifications" && methodName !in setOf("checkPermissions", "requestPermissions") ->
+                            NativeLocalNotificationCapabilities.dispatch(activity, methodName, options, complete)
+                        pluginId == "Camera" && methodName in setOf("getPhoto", "pickImages", "chooseFromGallery", "takePhoto") ->
+                            NativeCameraCaptureCapabilities.dispatch(activity, methodName, options, complete)
+                        pluginId == "Camera" && methodName in setOf("recordVideo", "playVideo") ->
+                            NativeVideoCaptureCapabilities.dispatch(activity, methodName, options, complete)
+                        pluginId == "Geolocation" && methodName == "getCurrentPosition" ->
+                            NativeGeolocationCapabilities.dispatch(activity, methodName, options, complete)
+                        pluginId == "CapacitorBarcodeScanner" && methodName == "scanBarcode" ->
+                            NativeBarcodeCapabilities.dispatch(activity, methodName, options, complete)
+                        else -> false
+                    }
+                    if (!claimed) {
+                        if (pluginId == "Motion") NativeMotionCapabilities.install(activity, binding.sender)
+                        complete(NativeCapabilityDispatcher.dispatch(activity, pluginId, methodName, options))
                     }
                 }
             }
-        } else if (dispatchResult.optBoolean("success", false)) {
-            dispatchResult
-        } else {
-            val data = JSONObject(dispatchResult.toString()).apply { remove("save") }
-            JSONObject().put("success", true).put("data", data)
         }
-        val envelope = result.put("callbackId", callbackId)
-            .put("pluginId", pluginId)
-            .put("methodName", methodName)
-            .put("save", retained)
-        Log.i(TAG, "LNX_RESULT $pluginId.$methodName success=${envelope.optBoolean("success")} save=$retained")
-        callback.invoke(envelope.toString())
+        NativeExecutionPolicy.schedule(pluginId, methodName, owner, ::onMain,
+            { complete(nativeFailure("BUSY", "原生执行队列已满")) }) {
+            try { work() } catch (error: Exception) { complete(exceptionResult(error)) }
+        }
     }
 
+    private fun encodeResult(owner: NativeOwnerScope, call: NativeOwnerScope.Call, callback: Callback,
+        callbackId: String, pluginId: String, methodName: String, raw: JSONObject) {
+        if (!owner.isActive) return
+        val encode = {
+            val json = try {
+                NativeCallContext.checkActive()
+                val retained = raw.optBoolean("save", false)
+                val envelope = when {
+                    raw.has("error") -> raw.put("success", false).apply {
+                        optJSONObject("error")?.let { error ->
+                            if (!error.has("reasonCode")) error.put("reasonCode", LynxCapabilitySemantics.errorReasonCode(error.optString("code")))
+                        }
+                    }
+                    raw.optBoolean("success", false) -> raw
+                    else -> JSONObject().put("success", true).put("data", raw.apply { remove("save") })
+                }.put("callbackId", callbackId).put("pluginId", pluginId).put("methodName", methodName).put("save", retained)
+                val encoded = envelope.toString()
+                NativePayloadBudget.check(encoded.toByteArray(Charsets.UTF_8).size.toLong(), NativePayloadBudget.RESULT_BYTES.toLong(), "RESULT_TOO_LARGE")
+                encoded
+            } catch (error: Exception) {
+                errorEnvelope(callbackId, pluginId, methodName, error.message ?: "原生结果编码失败",
+                    if (error is NativeBudgetExceeded) error.code else if (error is NativeCallCancelled) "HOST_DESTROYED" else "ENCODING_ERROR").toString()
+            }
+            onMain { call.complete { invokeOnMain(callback, json) } }
+        }
+        if (Looper.myLooper() != Looper.getMainLooper()) encode()
+        else NativeIO.local.submit(owner, {
+            onMain { call.complete { invokeOnMain(callback, errorEnvelope(callbackId, pluginId, methodName,
+                "结果编码队列已满", "BUSY").toString()) } }
+        }, encode)
+    }
+
+    fun setHostProvider(provider: LynxCapacitorHostProvider?) = NativeHostRegistry.install(provider)
+
     fun setEventSender(context: Context, sender: (String) -> Unit) {
-        eventSender = sender
-        NativeLocalNotificationCapabilities.setEventSender(context, sender)
-        currentActivity.get()?.let { activity ->
-            NativeMotionCapabilities.install(activity) { eventSender?.invoke(it) }
+        val binding = synchronized(this) {
+            if (destroyedContexts.containsKey(context)) return
+            val existing = owners[context]
+            // Shell 先使用媒体时早建 owner；首次 Cap Module 只补事件出口，不取消已经启动的任务。
+            if (existing != null && existing.rawSender == null && existing.scope.isActive) {
+                existing.rawSender = sender
+                existing
+            } else {
+                existing?.scope?.let(::endOwner)
+                OwnerBinding(NativeOwnerScope(), WeakReference(activityForContext(context))).also {
+                    it.rawSender = sender
+                    owners[context] = it
+                }
+            }
+        }
+        if (synchronized(this) { activeContext.canActivate(context) }) onMain {
+            val stillCurrent = synchronized(this) { owners[context] === binding && activeContext.canActivate(context) }
+            if (binding.scope.isActive && stillCurrent) activate(context)
+        }
+    }
+
+    /** Legacy facade 不加入四入口和能力目录；它与 Cap transport 共用 exact Context owner。 */
+    fun handleLegacyMedia(context: Context, methodName: String, optionsJSON: String, complete: (JSONObject) -> Unit) {
+        val activity = activityForContext(context)
+        val binding = synchronized(this) {
+            if (context !is LynxContext || activity == null || destroyedContexts.containsKey(context)) null
+            else owners[context] ?: OwnerBinding(NativeOwnerScope(), WeakReference(activity)).also { owners[context] = it }
+        }
+        if (activity == null || binding == null || !binding.scope.isActive) {
+            onMain { complete(NativeLegacyMediaCapabilities.failure("当前调用页面未安装或已销毁")) }
+            return
+        }
+        if (methodName == "saveDataURL" && optionsJSON.length > NativeLegacyMediaCapabilities.MAX_DATA_URL_CHARS) {
+            onMain { complete(NativeLegacyMediaCapabilities.failure("Data URL 超过 20 MiB 输入预算")) }
+            return
+        }
+        val admission = if (methodName == "saveDataURL") NativeLegacyMediaCapabilities.admitDataUrl() else null
+        if (methodName == "saveDataURL" && admission == null) {
+            onMain { complete(NativeLegacyMediaCapabilities.failure("已有 Data URL 正在处理")) }
+            return
+        }
+        val owner = binding.scope
+        if (admission != null) owner.own(admission) { admission.release() }
+        val call = owner.call {
+            admission?.release()
+            onMain { complete(NativeLegacyMediaCapabilities.failure("调用页面已销毁")) }
+        }
+        val reply: (JSONObject) -> Unit = { raw ->
+            val finish: (JSONObject) -> Unit = { result -> onMain {
+                val deliver = { call.complete {
+                    if (methodName == "chooseMedia") NativeLegacyMediaCapabilities.finishSelection(raw, result.optInt("code", -1) == 0, owner)
+                    admission?.let { owner.disown(it); it.release() }
+                    complete(result)
+                }; Unit }
+                // 成功文件移交与调用终态共用 owner 锁，销毁不能夹在二者之间删除已交付文件。
+                if (methodName == "chooseMedia") {
+                    try { owner.commit(deliver) } catch (_: NativeCallCancelled) { /* owner 终态已负责失败回包。 */ }
+                } else deliver()
+            } }
+            val encode = {
+                val result = try {
+                    NativeJsonBudget().account(raw)
+                    raw
+                } catch (error: Exception) {
+                    NativeLegacyMediaCapabilities.failure(error.message ?: "原生媒体结果编码失败")
+                }
+                finish(result)
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) NativeIO.local.submit(owner,
+                { finish(NativeLegacyMediaCapabilities.failure("结果执行队列已满")) }, encode)
+            else NativeCallContext.withOwner(owner, encode)
+        }
+        NativeIO.local.submit(owner, { reply(NativeLegacyMediaCapabilities.failure("本地执行队列已满")) }) {
+            try { NativeLegacyMediaCapabilities.dispatch(activity, methodName, optionsJSON, reply) }
+            catch (error: Exception) { reply(NativeLegacyMediaCapabilities.failure(error.message ?: "原生媒体调用失败")) }
+        }
+    }
+
+    /** SDK Module 和 Shell 实际 View 销毁共用此入口；旧 Module 不释放后续同 Context 的新代次。 */
+    fun destroyForContext(context: Context, expectedSender: ((String) -> Unit)? = null) {
+        val binding = synchronized(this) {
+            val current = owners[context]
+            if (expectedSender != null && current?.rawSender !== expectedSender) return
+            destroyedContexts[context] = Unit
+            owners.remove(context)
+            activeContext.release(context)
+            if (eventSender === current?.sender) eventSender = null
+            current
+        } ?: return
+        endOwner(binding.scope)
+        onMain {
+            NativeMotionCapabilities.releaseForSender(binding.sender)
+            NativeFileTransferCapabilities.releaseForSender(binding.sender)
+            NativeLocalNotificationCapabilities.clearEventSender(binding.sender)
         }
     }
 
     fun clearEventSender(sender: (String) -> Unit) {
-        if (eventSender === sender) {
-            eventSender = null
-            NativeLocalNotificationCapabilities.clearEventSender(sender)
+        val contexts = synchronized(this) { owners.entries.filter { it.value.rawSender === sender }.map { it.key } }
+        contexts.forEach { destroyForContext(it, sender) }
+    }
+
+    /** Page/Tab 重新显示时恢复自己的事件出口，跨 owner 的结果始终保留原来的出口。 */
+    fun activate(context: Context) {
+        val activity = activityForContext(context) ?: return
+        val sender = synchronized(this) {
+            if (destroyedContexts.containsKey(context)) return
+            activeContext.activate(context)
+            owners[context]?.sender
         }
+        eventSender?.let { previous -> if (previous !== sender) NativeLocalNotificationCapabilities.clearEventSender(previous) }
+        eventSender = sender
+        attach(activity)
+        if (sender != null) {
+            NativeLocalNotificationCapabilities.setEventSender(context, sender)
+            NativeMotionCapabilities.install(activity, sender)
+        }
+    }
+
+    private fun endOwner(owner: NativeOwnerScope) {
+        owner.end().forEach { Log.e(TAG, "原生 owner 资源清理失败", it) }
+    }
+    private fun invokeOnMain(callback: Callback, json: String) = onMain { callback.invoke(json) }
+    private fun onMain(action: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) action() else mainHandler.post(action)
+    }
+    private fun nativeFailure(code: String, message: String): JSONObject = JSONObject().put("error", JSONObject().put("code", code).put("message", message))
+    private fun exceptionResult(error: Exception): JSONObject = nativeFailure(
+        if (error is NativeBudgetExceeded) error.code else if (error is NativeCallCancelled) "HOST_DESTROYED" else "NATIVE_ERROR",
+        error.message ?: "Android 原生调用失败")
+
+    private fun activityForContext(context: Context): Activity? {
+        var current = context
+        while (current !is Activity) {
+            current = when (current) {
+                is LynxContext -> current.getContext()
+                is ContextWrapper -> current.baseContext
+                else -> return null
+            }
+        }
+        return current.takeUnless { it.isFinishing || it.isDestroyed }
     }
 
     fun pluginHeaders(): String = JSONArray().apply {
@@ -439,23 +413,7 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
         }
     }.toString()
 
-    fun capabilityStatus(): String = JSONArray().apply {
-        NativeCapabilityCatalog.specs.forEach { spec ->
-            put(JSONObject().apply {
-                put("name", spec.id)
-                put("methods", JSONArray(spec.methods))
-                put("implementedMethods", JSONArray(spec.implementedMethods))
-                put("state", spec.state)
-                put("contractVersion", LynxCapabilitySemantics.CONTRACT_VERSION)
-                put("semanticState", spec.semanticState)
-                put("reasonCode", spec.reasonCode)
-                put("reason", spec.reason)
-                put("methodStatus", spec.methodStatus())
-                put("verification", LynxCapabilitySemantics.verification())
-                put("platform", "android")
-            })
-        }
-    }.toString()
+    fun capabilityStatus(): String = NativeCapabilityStatusSnapshot.build()
 
     fun getPlatform(): String = "android"
 
@@ -489,7 +447,7 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
     fun attach(activity: Activity) {
         currentActivity.set(activity)
         Log.i(TAG, "ATTACH_ACTIVITY ${activity.javaClass.name}")
-        NativeMotionCapabilities.install(activity) { eventSender?.invoke(it) }
+        eventSender?.let { NativeMotionCapabilities.install(activity, it) }
     }
 
     override fun onActivityPreCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
@@ -502,12 +460,18 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
         attachIfNoActiveActivity(activity)
     }
 
+    internal fun isAppActive(): Boolean = appActive
+
     override fun onActivityResumed(activity: Activity) {
+        resumedActivities[activity] = Unit
+        appActive = true
         attachIfNoActiveActivity(activity)
         if (currentActivity.get() === activity) NativeMotionCapabilities.start(activity)
     }
 
     override fun onActivityPaused(activity: Activity) {
+        resumedActivities.remove(activity)
+        appActive = resumedActivities.isNotEmpty()
         if (currentActivity.get() === activity) NativeMotionCapabilities.stop(activity)
     }
 
@@ -519,6 +483,10 @@ object LynxCapacitorRuntime : Application.ActivityLifecycleCallbacks {
     ) = Unit
 
     override fun onActivityDestroyed(activity: Activity) {
+        resumedActivities.remove(activity)
+        appActive = resumedActivities.isNotEmpty()
+        val contexts = synchronized(this) { owners.entries.filter { it.value.activity.get() === activity }.map { it.key } }
+        contexts.forEach { destroyForContext(it) }
         NativePermissionCoordinator.release(activity)
         NativeCameraCaptureCapabilities.release(activity)
         NativeVideoCaptureCapabilities.release(activity)

@@ -69,6 +69,7 @@ object NativeBarcodeCapabilities {
     fun complete(requestId: String, result: JSONObject): Boolean {
         val pending = pendingRequests.remove(requestId) ?: return false
         requestIdsByCode.remove(pending.requestCode, requestId)
+        pending.owner?.disown(pending)
         completeOnMain(pending.complete, runCatching { JSONObject(result.toString()) }.getOrElse {
             error("NATIVE_ERROR", "扫码结果无法序列化")
         })
@@ -81,7 +82,8 @@ object NativeBarcodeCapabilities {
             if (pending.activityReference.get() !== activity) return@forEach
             if (!pendingRequests.remove(requestId, pending)) return@forEach
             requestIdsByCode.remove(pending.requestCode, requestId)
-            completeOnMain(pending.complete, error("ACTIVITY_DESTROYED", "Activity 已销毁，扫码请求已取消"))
+            pending.owner?.disown(pending)
+        completeOnMain(pending.complete, error("ACTIVITY_DESTROYED", "Activity 已销毁，扫码请求已取消"))
         }
     }
 
@@ -131,6 +133,14 @@ object NativeBarcodeCapabilities {
             return
         }
         requestIdsByCode[requestCode] = requestId
+        request.owner?.own(request) {
+            mainHandler.post {
+                if (pendingRequests.remove(requestId, request)) {
+                    requestIdsByCode.remove(requestCode, requestId)
+                    activity.finishActivity(requestCode)
+                }
+            }
+        }
 
         val intent = Intent(activity, BarcodeScanActivity::class.java).apply {
             putExtra(EXTRA_REQUEST_ID, requestId)
@@ -146,6 +156,7 @@ object NativeBarcodeCapabilities {
         }.onFailure { throwable ->
             if (pendingRequests.remove(requestId, request)) {
                 requestIdsByCode.remove(requestCode, requestId)
+                request.owner?.disown(request)
                 complete(
                     error(
                         "UNAVAILABLE",
@@ -251,6 +262,7 @@ object NativeBarcodeCapabilities {
         val activityReference: WeakReference<Activity>,
         val requestCode: Int,
         val complete: (JSONObject) -> Unit,
+        val owner: NativeOwnerScope? = NativeCallContext.owner,
     )
 
     private data class PreparedScan(

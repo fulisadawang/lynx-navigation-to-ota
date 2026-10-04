@@ -18,4 +18,5 @@ rootProject.name = "LynxAndroidShell"
 include(":app")
 include(":lynx-shell")
 include(":lynx-map")
+include(":lynx-capacitor")
 include(":lynx-debug-tool")

@@ -64,6 +64,7 @@ open class LynxShellSampleApplication : Application() {
             )
         }
         if (userSelectionDebug != null) OtaUserSelectionDebug.verifyRuntimeStore(this)
+        LynxCapacitorDemoHost.install(this)
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {

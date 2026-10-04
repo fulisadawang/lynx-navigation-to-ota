@@ -25,6 +25,7 @@ protocol OtaReleaseStoreBackend: Sendable {
     func acquireCandidateBundleLease(app: OtaAppID, lynxAppId: String, bundleName: String) async throws -> OtaBundleLease?
     func discardCandidate(app: OtaAppID, lynxAppId: String) async throws
     func recoverInterruptedCandidate(app: OtaAppID, lynxAppId: String) async throws
+    func recoverInterruptedCandidates(app: OtaAppID) async throws
     func activate(app: OtaAppID, lynxAppId: String) async throws -> OtaInstalledRelease
     func registerEmbedded(_ release: OtaInstalledRelease) async throws
     func deleteDownloadedBundles(app: OtaAppID, lynxAppId: String) async throws
@@ -37,6 +38,13 @@ protocol OtaReleaseStoreBackend: Sendable {
 }
 
 extension OtaReleaseStoreBackend {
+    func recoverInterruptedCandidates(app: OtaAppID) async throws {
+        let snapshot = try await storageSnapshot(maxFilesPerTree: 1)
+        for scope in snapshot.apps {
+            try await recoverInterruptedCandidate(app: app, lynxAppId: scope.appId)
+        }
+    }
+
     func recordDecision(app: OtaAppID, lynxAppId: String, decision: OtaLastDecision, selection: OtaStoredSelection?) async throws {
         throw OtaSelectionError.requiresStoreV3
     }

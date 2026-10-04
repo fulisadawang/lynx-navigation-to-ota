@@ -15,16 +15,28 @@ import org.json.JSONObject
 
 /** Camera.playVideo 的自有播放器页面；只接受前一次 native 结果返回的可读 URI。 */
 class VideoPlaybackActivity : AppCompatActivity() {
+    private var player: VideoView? = null
+    private var requestId = ""
+    private var foreground = false
+    private var prepared = false
+    private var reportedReady = false
+    private var resumeOnStart = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestId = intent.getStringExtra(NativeVideoCaptureCapabilities.EXTRA_REQUEST_ID).orEmpty()
+        if (!NativeVideoCaptureCapabilities.attachPlayback(requestId, this)) {
+            finishWith(error("HOST_DESTROYED", "视频所属页面已销毁"))
+            return
+        }
         val rawUri = intent.getStringExtra(EXTRA_URI).orEmpty().trim()
         val uri = runCatching { Uri.parse(rawUri) }.getOrNull()
-        if (rawUri.isEmpty() || uri?.scheme.isNullOrEmpty()) {
+        if (rawUri.isEmpty() || uri == null || !uri.scheme.equals("content", true)) {
             finishWith(error("INVALID_ARGUMENT", "playVideo 需要合法 uri"))
             return
         }
 
-        val player = VideoView(this)
+        val player = VideoView(this).also { this.player = it }
         val status = TextView(this).apply {
             text = "正在准备视频…"
             setTextColor(Color.WHITE)
@@ -44,7 +56,8 @@ class VideoPlaybackActivity : AppCompatActivity() {
         player.setMediaController(MediaController(this).apply { setAnchorView(player) })
         player.setOnPreparedListener {
             status.text = "视频播放中"
-            player.start()
+            prepared = true
+            startPreparedPlayback()
         }
         player.setOnCompletionListener { status.text = "视频播放完成" }
         player.setOnErrorListener { _, what, extra ->
@@ -56,7 +69,38 @@ class VideoPlaybackActivity : AppCompatActivity() {
             .onFailure { throwable -> finishWith(error("PLAYBACK_FAILED", throwable.message ?: "无法打开视频 URI")) }
     }
 
+    override fun onStart() {
+        super.onStart()
+        foreground = true
+        startPreparedPlayback()
+    }
+
+    private fun startPreparedPlayback() {
+        if (!foreground || !prepared || (reportedReady && !resumeOnStart)) return
+        player?.start()
+        resumeOnStart = false
+        if (!reportedReady) {
+            reportedReady = true
+            NativeVideoCaptureCapabilities.playbackReady(requestId)
+        }
+    }
+
+    override fun onStop() {
+        resumeOnStart = player?.isPlaying == true
+        foreground = false
+        player?.pause()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        player?.stopPlayback()
+        player = null
+        NativeVideoCaptureCapabilities.finishPlayback(requestId)
+        super.onDestroy()
+    }
+
     private fun finishWith(result: JSONObject) {
+        NativeVideoCaptureCapabilities.finishPlayback(requestId, result)
         if (result.has("error")) setResult(Activity.RESULT_CANCELED, intent.putExtra(EXTRA_RESULT_JSON, result.toString()))
         finish()
     }

@@ -10,6 +10,7 @@ import LynxMapKit
 import LynxShellDebugKit
 #endif
 import UIKit
+import LynxCapacitorKit
 
 /** Sample 启动时通过显式 Module Interface 准备 Lynx Runtime。 */
 @main
@@ -24,6 +25,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        LynxRouter.registerNativeModule(LynxCapacitorModule.self, onViewDestroy: LynxCapacitorModule.destroy(for:))
+        LynxRouter.installMediaHandler { context, method, optionsJSON, callback in
+            LynxCapacitorModule.handleLegacyMedia(for: context, method: method, optionsJSON: optionsJSON, callback: callback)
+        }
+        LynxCapacitorModule.installHostProvider(LynxCapacitorSampleHost())
+        LynxCapacitorModule.setLaunchUrl((launchOptions?[.url] as? URL)?.absoluteString)
         LynxShell.bootstrap()
 #if DEBUG
 #if canImport(LynxMapKit)
@@ -63,6 +70,24 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
         UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+    }
+
+    /** APNs 的真实成功或失败结果转发给已订阅的能力模块；不伪造 token。 */
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        LynxCapacitorModule.emitPushRegistration(token: deviceToken.map { String(format: "%02x", $0) }.joined())
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        LynxCapacitorModule.emitPushRegistrationError(error.localizedDescription)
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        LynxCapacitorModule.emitPushNotification(userInfo)
+        completionHandler(.noData)
     }
 
 #if DEBUG

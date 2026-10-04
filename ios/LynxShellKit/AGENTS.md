@@ -16,7 +16,7 @@ sibling `LynxMapKit` Module，由 Shell 通过依赖和 `LynxMapModuleRuntime` �
 
 `ios/OtaIOSSDK` 不是业务方需要额外声明的第二个 Pod；其 Sources 由 `LynxShellKit.podspec` 编入 Module，并保留独立 Swift Package 测试边界。`ios/LynxShellSample` 是 Sample App，不属于本目录。
 
-`ios/LynxCapacitorKit/` 是 sibling 原生能力源码，当前尚未加入 `LynxShellKit.podspec` 或默认 Xcode Target。它不属于 Shell/OTA 实现；任务明确涉及该模块时先读 `ios/LynxCapacitorKit/AGENTS.md`，再显式决定 Pod/Target、Module 注册、权限和宿主生命周期接线。
+`ios/LynxCapacitorKit/` 是独立 sibling Pod，默认 Sample 显式接入，不并入 `LynxShellKit.podspec`。它不属于 Shell/OTA 实现；任务明确涉及该模块时先读 `ios/LynxCapacitorKit/AGENTS.md`，再显式决定 Pod/Target、Module 注册、权限和宿主生命周期接线。
 
 `ios/LynxMapKit/` 是已显式接入的地图能力 sibling Module。地图 Element、AMap Provider、Search、Location、Key/隐私状态和地图性能边界都在该目录内；Shell 只能通过 `LynxMapModuleRuntime` 注册 Config 和更新宿主授权状态。
 
@@ -71,7 +71,7 @@ Native/       Objective-C 原生 Runtime 接线
 - embedded Bundle 直接读取 App Bundle URL，不复制到 Application Support。
 - State 不保存下载 Bundle 绝对路径；页面使用 `PreparedOtaBundle + lease`。
 - 同一导航 session 通过 NavigationSnapshot 固定 Manifest；子页不得重新读取 current 造成版本漂移。
-- Native Tab cache-only，不消费 candidate、不因普通切换联网；普通后台不重建。身份/主动刷新完成后按有效 epoch 重读已提交 State 并更新 generation，partial failure 也不能遮蔽已提交决定。
+- Native Tab 普通切换 cache-only、不重建/联网；初次加载及显式刷新可试本地 candidate，以真实首屏和业务健康双信号确认；普通后台不重建。身份/主动刷新完成后按有效 epoch 重读已提交 State 并更新 generation，partial failure 也不能遮蔽已提交决定。
 - candidate 只有 pending/trial/healthy promote 流程；首屏失败丢弃 candidate，不回滚稳定 current。
 - 首屏失败最多回滚一次 previous/embedded，禁止无限循环。
 - 修改 OTA 契约时必须同步修改 OtaIOSSDK Tests、README 和三端协议文档。
@@ -138,7 +138,8 @@ Native/       Objective-C 原生 Runtime 接线
 - 不提交 Pods、DerivedData、xcresult、App/IPA 和生成 Fixture 二进制。
 - 保留用户现有 Xcode 工程、Podfile 和转场协调器改动；禁止 reset/checkout 覆盖。
 - 不修改 `ios/LynxShellSample`，除非任务明确要求 Demo 或 Simulator 验收。
-- 不隐式编译或注册 `ios/LynxCapacitorKit`；默认 Podspec/Xcode Target 尚未包含它。
+- Cap 独立注册，Shell 核心不直接依赖它；宿主通过公开 Host provider 对接容器控制。
+- 当前 SDK 不自动转发普通 Module.destroy；宿主必须注册 onViewDestroy，所有 View 释放统一经过 LynxNativeRuntime.destroy(view:)。
 
 ## 修改后的最低验证
 

@@ -30,11 +30,28 @@ object NativeCameraCaptureCapabilities {
     private const val REQUEST_CODE_END = 47_999
     private const val CAMERA_MIME_TYPE = "image/jpeg"
     private const val CAMERA_RELATIVE_PATH = "Pictures/LynxCamera"
+    internal const val MAX_SELECTED_MEDIA = 16
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val requestCode = java.util.concurrent.atomic.AtomicInteger(REQUEST_CODE_START)
     private val lock = Any()
     private var pendingRequest: PendingRequest? = null
+
+    /** 外部数量仅接受整型 JSON number；0 表示默认多选预算，不表示无限选择。 */
+    internal fun readSelectionCount(options: JSONObject, key: String, default: Int, minimum: Int = 0): Int {
+        if (!options.has(key)) return default
+        val raw = options.opt(key)
+        require(raw is Number) { "$key 必须是整数" }
+        val value = raw.toDouble()
+        require(value.isFinite() && value % 1.0 == 0.0 && value in minimum.toDouble()..MAX_SELECTED_MEDIA.toDouble()) {
+            "$key 必须为 $minimum 到 $MAX_SELECTED_MEDIA 的整数"
+        }
+        return value.toInt()
+    }
+
+    internal fun ownerForRequest(requestId: String): NativeOwnerScope? = synchronized(lock) {
+        pendingRequest?.takeIf { it.requestId == requestId }?.owner
+    }
 
     /** 供自有 Camera Activity 完成当前 pending 请求；同一个 requestId 只允许消费一次。 */
     fun complete(requestId: String, result: JSONObject): Boolean {
@@ -44,7 +61,12 @@ object NativeCameraCaptureCapabilities {
             pendingRequest = null
             current
         } ?: return false
-        complete(request, normalizeResult(request, result))
+        NativeIO.local.submit(request.owner, { complete(request, error("BUSY", "图片结果执行队列已满")) }) {
+            val normalized = runCatching { normalizeResult(request, result) }.getOrElse { throwable ->
+                error(if (throwable is NativeBudgetExceeded) throwable.code else "NATIVE_ERROR", throwable.message ?: "图片结果无效")
+            }
+            complete(request, normalized)
+        }
         return true
     }
 
@@ -70,7 +92,28 @@ object NativeCameraCaptureCapabilities {
      * 返回 true 表示本能力已经认领该方法。异步完成结果通过 complete 回传，结果对象不包
      * success/data envelope。
      */
-    fun dispatch(
+    fun dispatch(activity: Activity, methodName: String, options: JSONObject, complete: (JSONObject) -> Unit): Boolean {
+        if (methodName == METHOD_CHOOSE_FROM_GALLERY || methodName == METHOD_GET_PHOTO) {
+            val source = options.optString("source", if (methodName == METHOD_GET_PHOTO) SOURCE_PROMPT else SOURCE_PHOTOS).uppercase(Locale.US)
+            if (source !in setOf(SOURCE_CAMERA, SOURCE_PHOTOS, SOURCE_PROMPT)) {
+                complete(error("INVALID_ARGUMENT", "source 必须为 PHOTOS、CAMERA 或 PROMPT"))
+                return true
+            }
+            if (methodName == METHOD_CHOOSE_FROM_GALLERY || source == SOURCE_PROMPT) {
+                NativeMediaSourceCapabilities.select(activity, methodName, options, complete)
+                return true
+            }
+        }
+        if (NativeMediaSourceCapabilities.isBusy) {
+            complete(error("BUSY", "已有一个媒体来源或拍摄请求正在进行"))
+            return true
+        }
+        return dispatchResolved(activity, methodName, options, complete)
+    }
+
+    internal fun hasPendingRequest(): Boolean = synchronized(lock) { pendingRequest != null }
+
+    internal fun dispatchResolved(
         activity: Activity,
         methodName: String,
         options: JSONObject,
@@ -78,27 +121,36 @@ object NativeCameraCaptureCapabilities {
     ): Boolean {
         if (methodName !in setOf(METHOD_GET_PHOTO, METHOD_PICK_IMAGES, METHOD_CHOOSE_FROM_GALLERY, METHOD_TAKE_PHOTO)) return false
 
-        val permissionStatus = NativePermissionCoordinator.check(activity, "Camera", options)
+        if (options.has("cameraDirection") && (options.opt("cameraDirection") !is String ||
+                options.optString("cameraDirection").uppercase(Locale.US) !in setOf("FRONT", "BACK"))) {
+            complete(error("INVALID_ARGUMENT", "cameraDirection 必须为 FRONT 或 BACK")); return true
+        }
+
         val source = options.optString("source", SOURCE_PROMPT).uppercase(Locale.US)
         val needsCamera = methodName == METHOD_TAKE_PHOTO ||
             (methodName == METHOD_GET_PHOTO && source != SOURCE_PHOTOS)
-        val needsPhotosOnLegacyPicker = methodName in setOf(METHOD_PICK_IMAGES, METHOD_CHOOSE_FROM_GALLERY) &&
-            Build.VERSION.SDK_INT < 33
-        if (permissionStatus?.has("error") == true) {
-            complete(permissionStatus)
-            return true
-        }
-        if (needsCamera && permissionStatus?.optString("camera") != "granted") {
-            complete(error("PERMISSION_DENIED", "拍照前请先点击 Camera.requestPermissions 授予相机权限"))
-            return true
-        }
-        if (needsPhotosOnLegacyPicker && permissionStatus?.optString("photos") !in setOf("granted", "limited")) {
-            complete(error("PERMISSION_DENIED", "选择照片前请先点击 Camera.requestPermissions 授予照片权限"))
-            return true
+        // 系统选择器按返回 URI 授权；不把全库照片/视频权限当作相册 UI 的前置条件。
+        if (needsCamera) {
+            val permissionOptions = JSONObject().put("permissions", JSONArray().put("camera"))
+                .put("saveToGallery", options.optBoolean("saveToGallery", methodName == METHOD_GET_PHOTO))
+            val permissionStatus = NativePermissionCoordinator.check(activity, "Camera", permissionOptions)
+            if (permissionStatus?.has("error") == true) {
+                complete(permissionStatus)
+                return true
+            }
+            if (permissionStatus?.optString("camera") != "granted") {
+                complete(error("PERMISSION_DENIED", "拍照前请先授予相机权限"))
+                return true
+            }
+            if (permissionOptions.optBoolean("saveToGallery") && permissionStatus?.optString("photosAdd") != "granted") {
+                complete(error("PERMISSION_DENIED", "保存相册前请先授予写入权限")); return true
+            }
         }
 
+        val owner = NativeCallContext.owner
         val run = Runnable {
-            dispatchOnMain(activity, methodName, options, complete)
+            if (owner?.isActive == false) return@Runnable
+            NativeCallContext.withOwner(owner) { dispatchOnMain(activity, methodName, options, complete) }
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             run.run()
@@ -130,20 +182,17 @@ object NativeCameraCaptureCapabilities {
         }
 
         // URI 读取和图片尺寸解析可能触发 provider I/O，不占用 Activity 主线程。
-        Thread({
+        NativeIO.local.submit(request.owner, { complete(request, error("BUSY", "图片结果执行队列已满")) }) {
             val result = runCatching {
                 processActivityResult(request, resultCode, data)
             }.getOrElse { throwable ->
                 cleanupCameraOutput(request)
                 error(
-                    if (throwable is CameraCaptureException) throwable.code else "NATIVE_ERROR",
+                    if (throwable is CameraCaptureException) throwable.code else if (throwable is NativeBudgetExceeded) throwable.code else "NATIVE_ERROR",
                     throwable.message ?: "Android 媒体结果处理失败",
                 )
             }
             complete(request, result)
-        }, "lynx-camera-result").apply {
-            isDaemon = true
-            start()
         }
         return true
     }
@@ -202,7 +251,16 @@ object NativeCameraCaptureCapabilities {
             return
         }
 
+        request.owner?.own(request) {
+            mainHandler.post {
+                val consumed = synchronized(lock) {
+                    if (pendingRequest === request) { pendingRequest = null; true } else false
+                }
+                if (consumed) { cleanupCameraOutput(request); activity.finishActivity(request.requestCode) }
+            }
+        }
         runCatching {
+            NativeCallContext.checkActive()
             @Suppress("DEPRECATION")
             activity.startActivityForResult(request.intent, request.requestCode)
         }.onFailure { throwable ->
@@ -215,6 +273,7 @@ object NativeCameraCaptureCapabilities {
                 }
             }
             if (consumed) {
+                request.owner?.disown(request)
                 cleanupCameraOutput(request)
                 complete(
                     error(
@@ -252,7 +311,7 @@ object NativeCameraCaptureCapabilities {
             putExtra(PhotoCaptureActivity.EXTRA_RESULT_TYPE, if (modern) "URI" else options.optString("resultType", "URI"))
             putExtra(
                 PhotoCaptureActivity.EXTRA_SAVE_TO_GALLERY,
-                if (modern) options.optBoolean("saveToGallery", false) else true,
+                options.optBoolean("saveToGallery", !modern),
             )
             putExtra(
                 PhotoCaptureActivity.EXTRA_LENS_FACING,
@@ -330,10 +389,12 @@ object NativeCameraCaptureCapabilities {
         options: JSONObject,
         complete: (JSONObject) -> Unit,
     ): PendingRequest? {
-        // 旧版 pickImages 的默认 limit 是 0，表示不限数量；显式 limit=1 才走单选。
-        val limit = options.optInt("limit", 0)
+        // 保留旧版默认多选和显式 limit=1 的单选规则；0 使用统一 16 项预算。
+        val limit = try { readSelectionCount(options, "limit", 0) }
+        catch (failure: IllegalArgumentException) { complete(error("INVALID_ARGUMENT", failure.message ?: "选择数量无效")); return null }
         val allowMultiple = options.optBoolean("allowMultiple", false) || limit != 1
-        val pickerIntent = makePhotoPickerIntent(allowMultiple, limit)
+        val pickerIntent = try { makePhotoPickerIntent(allowMultiple, limit) }
+        catch (throwable: IllegalArgumentException) { complete(error("INVALID_ARGUMENT", throwable.message ?: "选择数量无效")); return null }
         if (!hasActivityHandler(activity, pickerIntent)) {
             complete(error("UNAVAILABLE", "设备没有可处理图片选择请求的 Activity"))
             return null
@@ -346,7 +407,7 @@ object NativeCameraCaptureCapabilities {
             kind = RequestKind.PICK_IMAGES,
             intent = pickerIntent,
             outputUri = null,
-            maxCount = if (limit > 0) limit else Int.MAX_VALUE,
+            maxCount = if (limit > 0) limit else MAX_SELECTED_MEDIA,
             complete = complete,
         )
     }
@@ -363,15 +424,17 @@ object NativeCameraCaptureCapabilities {
             is String -> mediaType.trim().toIntOrNull()
             else -> null
         }
-        if (normalizedMediaType != 0) {
-            complete(error("UNAVAILABLE", "Android 当前 Module 的 chooseFromGallery 先支持图片；视频/混合媒体待接入"))
+        if (normalizedMediaType !in setOf(0, 1, 2)) {
+            complete(error("INVALID_ARGUMENT", "mediaType 必须为 0（图片）、1（视频）或 2（混合）"))
             return null
         }
 
-        val allowMultiple = options.optBoolean("allowMultipleSelection", false)
-        val requestedLimit = options.optInt("limit", 0)
-        val maxCount = if (!allowMultiple) 1 else if (requestedLimit > 0) requestedLimit else Int.MAX_VALUE
-        val pickerIntent = makePhotoPickerIntent(allowMultiple, maxCount)
+        val requestedLimit = try { readSelectionCount(options, "limit", 0) }
+        catch (failure: IllegalArgumentException) { complete(error("INVALID_ARGUMENT", failure.message ?: "选择数量无效")); return null }
+        val allowMultiple = options.optBoolean("allowMultipleSelection", false) && requestedLimit != 1
+        val maxCount = if (!allowMultiple) 1 else if (requestedLimit > 0) requestedLimit else MAX_SELECTED_MEDIA
+        val pickerIntent = try { makePhotoPickerIntent(allowMultiple, requestedLimit, requireNotNull(normalizedMediaType)) }
+        catch (throwable: IllegalArgumentException) { complete(error("INVALID_ARGUMENT", throwable.message ?: "选择数量无效")); return null }
         if (!hasActivityHandler(activity, pickerIntent)) {
             complete(error("UNAVAILABLE", "设备没有可处理图片选择请求的 Activity"))
             return null
@@ -388,28 +451,29 @@ object NativeCameraCaptureCapabilities {
             complete = complete,
             resultMode = ResultMode.MODERN_GALLERY,
             includeMetadata = options.optBoolean("includeMetadata", false),
+            mediaType = requireNotNull(normalizedMediaType),
         )
     }
 
-    private fun makePhotoPickerIntent(allowMultiple: Boolean, limit: Int = 1): Intent {
+    private fun makePhotoPickerIntent(allowMultiple: Boolean, limit: Int = 1, mediaType: Int = 0): Intent {
+        val maximum = if (limit == 0) MAX_SELECTED_MEDIA else limit
+        val multiple = allowMultiple && maximum > 1
+        val mimeTypes = when (mediaType) { 0 -> arrayOf("image/*"); 1 -> arrayOf("video/*"); else -> arrayOf("image/*", "video/*") }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return Intent(MediaStore.ACTION_PICK_IMAGES).apply {
-                type = "image/*"
-                if (allowMultiple) {
+                if (mimeTypes.size == 1) type = mimeTypes[0]
+                if (multiple) {
                     val systemMax = MediaStore.getPickImagesMaxLimit()
-                    val requestedMax = if (limit > 1) limit else systemMax
-                    putExtra(
-                        MediaStore.EXTRA_PICK_IMAGES_MAX,
-                        requestedMax.coerceIn(2, systemMax),
-                    )
+                    require(maximum <= systemMax) { "当前系统最多选择 $systemMax 项媒体，请显式降低 limit" }
+                    putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, maximum)
                 }
             }
         }
-
         return Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "image/*"
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
+            type = if (mimeTypes.size == 1) mimeTypes[0] else "*/*"
+            if (mimeTypes.size > 1) putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
     }
@@ -499,14 +563,15 @@ object NativeCameraCaptureCapabilities {
             throw CameraCaptureException("NO_MEDIA_URI", "图片选择器没有返回可读取的 URI")
         }
 
-        val photos = JSONArray()
-        val returnedUris = JSONArray()
+        val budget = NativeJsonBudget()
+        val photos = budget.array()
+        val returnedUris = budget.array()
         uris.forEach { uri ->
             persistUriPermission(request, uri)
             val info = readImageInfo(request, uri)
             val photo = photoResult(uri, info, saved = false).apply { remove("saved") }
-            photos.put(photo)
-            returnedUris.put(uri.toString())
+            budget.append(photos, photo)
+            budget.append(returnedUris, uri.toString())
         }
 
         return JSONObject()
@@ -516,31 +581,33 @@ object NativeCameraCaptureCapabilities {
 
     private fun processModernGalleryResult(request: PendingRequest, data: Intent?): JSONObject {
         val uris = collectUris(data, request.maxCount)
-        if (uris.isEmpty()) {
-            throw CameraCaptureException("NO_MEDIA_URI", "图片选择器没有返回可读取的 URI")
-        }
-
-        val results = JSONArray()
+        if (uris.isEmpty()) throw CameraCaptureException("NO_MEDIA_URI", "媒体选择器没有返回可读取的 URI")
+        val activity = request.activityReference.get()
+            ?: throw CameraCaptureException("ACTIVITY_DESTROYED", "Activity 已销毁")
+        val budget = NativeJsonBudget()
+        val results = budget.array()
+        val returnedUris = budget.array()
         uris.forEach { uri ->
             persistUriPermission(request, uri)
-            val info = readImageInfo(request, uri)
-            val result = JSONObject()
-                .put("type", 0)
-                .put("uri", uri.toString())
-                .put("webPath", uri.toString())
-                .put("saved", false)
-            if (request.includeMetadata) {
-                result.put(
-                    "metadata",
-                    JSONObject()
-                        .put("format", info.format)
-                        .put("resolution", "${info.width}x${info.height}")
-                        .apply { info.size?.let { put("size", it) } },
-                )
+            val media = NativeMediaUri.read(activity, uri, measureSize = false)
+            val type = if (media.mimeType.startsWith("image/")) 0 else if (media.mimeType.startsWith("video/")) 1
+                else throw CameraCaptureException("INVALID_MEDIA", "所选 URI 不是图片或视频")
+            if (request.mediaType != 2 && request.mediaType != type) throw CameraCaptureException("INVALID_MEDIA", "选择器返回了与 mediaType 不一致的媒体")
+            val result = JSONObject().put("type", type).put("mimeType", media.mimeType)
+                .put("uri", uri.toString()).put("webPath", uri.toString()).put("saved", false)
+                .apply { media.size?.let { put("size", it) } }
+            if (type == 0 && request.includeMetadata) {
+                val info = readImageInfo(request, uri)
+                result.put("metadata", JSONObject().put("format", info.format)
+                    .put("resolution", "${info.width}x${info.height}").apply { media.size?.let { put("size", it) } })
+            } else if (request.includeMetadata) {
+                result.put("metadata", JSONObject().put("format", media.mimeType.substringAfter('/'))
+                    .apply { media.size?.let { put("size", it) } })
             }
-            results.put(result)
+            budget.append(results, result)
+            budget.append(returnedUris, uri.toString())
         }
-        return JSONObject().put("results", results)
+        return JSONObject().put("results", results).put("uris", returnedUris)
     }
 
     private fun photoResult(uri: Uri, info: ImageInfo, saved: Boolean): JSONObject = JSONObject()
@@ -605,13 +672,16 @@ object NativeCameraCaptureCapabilities {
     private fun collectUris(data: Intent?, maxCount: Int): List<Uri> {
         if (data == null) return emptyList()
         val result = LinkedHashSet<Uri>()
-        data.clipData?.let { clipData ->
-            for (index in 0 until minOf(clipData.itemCount, maxCount)) {
-                clipData.getItemAt(index).uri?.let(result::add)
-            }
+        val budget = NativeJsonBudget()
+        fun add(uri: Uri?) {
+            if (uri == null || uri in result) return
+            if (result.size >= maxCount) throw CameraCaptureException("INVALID_MEDIA", "选择结果超过请求的数量限制")
+            budget.account(uri.toString())
+            result.add(uri)
         }
-        data.data?.let(result::add)
-        return result.take(maxCount)
+        data.clipData?.let { clip -> for (index in 0 until clip.itemCount) add(clip.getItemAt(index).uri) }
+        add(data.data)
+        return result.toList()
     }
 
     private fun createCameraOutputUri(activity: Activity): Uri? {
@@ -666,6 +736,7 @@ object NativeCameraCaptureCapabilities {
     }
 
     private fun complete(request: PendingRequest, result: JSONObject) {
+        request.owner?.disown(request)
         val deliver = Runnable { runCatching { request.complete(result) } }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             deliver.run()
@@ -707,6 +778,8 @@ object NativeCameraCaptureCapabilities {
         val complete: (JSONObject) -> Unit,
         val resultMode: ResultMode = ResultMode.LEGACY,
         val includeMetadata: Boolean = false,
+        val mediaType: Int = 0,
+        val owner: NativeOwnerScope? = NativeCallContext.owner,
     )
 
     private enum class RequestKind {

@@ -18,6 +18,7 @@ Pod::Spec.new do |spec|
   spec.module_name = 'LynxShellKit'
   spec.static_framework = true
   spec.requires_arc = true
+  spec.resource_bundles = { 'LynxShellKitPrivacy' => ['LynxShellKit/Resources/PrivacyInfo.xcprivacy'] }
   # 生产公开 Pod 默认带地图；本地 E2E 宿主使用独立 Core-only Pod。
   spec.default_subspecs = 'Map'
   # OTA 源码作为 Router 的内部实现一起编译；业务方不需要再引入独立 OTA Pod。

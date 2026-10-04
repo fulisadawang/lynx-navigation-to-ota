@@ -189,6 +189,10 @@ public actor ReleaseTransaction {
         try await canonicalStore.discardCandidate(app: scope.app, lynxAppId: scope.lynxAppId)
     }
 
+    func recoverInterruptedCandidates(app: OtaAppID) async throws {
+        try await canonicalStore.recoverInterruptedCandidates(app: app)
+    }
+
     public func recoverInterruptedCandidate(scope: OtaReleaseScope) async throws {
         try await canonicalStore.recoverInterruptedCandidate(app: scope.app, lynxAppId: scope.lynxAppId)
     }

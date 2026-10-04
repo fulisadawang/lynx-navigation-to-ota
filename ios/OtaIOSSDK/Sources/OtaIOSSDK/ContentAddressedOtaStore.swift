@@ -286,6 +286,14 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
         try commitState(state, app: app, lynxAppId: lynxAppId, operation: "selection_decision")
     }
 
+    /** 仅由 SDK 的首次启动维护调用；正常同步不能清除本进程正在使用的 trial。 */
+    func recoverInterruptedCandidates(app: OtaAppID) async throws {
+        guard fileManager.fileExists(atPath: appsDirectory.path) else { return }
+        for directory in try fileManager.contentsOfDirectory(at: appsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+            try await recoverInterruptedCandidate(app: app, lynxAppId: directory.lastPathComponent)
+        }
+    }
+
     func reconcileUserContext(app: OtaAppID) async throws {
         guard userContext?.enabled == true, fileManager.fileExists(atPath: appsDirectory.path) else { return }
         _ = try selectionContext()
@@ -537,6 +545,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
     }
 
     func confirmCandidate(app: OtaAppID, lynxAppId: String) async throws -> OtaInstalledRelease {
+        try Task.checkCancellation()
         var state = try stateOrThrow(app: app, lynxAppId: lynxAppId)
         if let candidate = state.candidate { try validateCandidate(candidate, state: state) }
         guard let candidate = state.candidate, candidate.status == .trial,
@@ -986,6 +995,7 @@ actor ContentAddressedOtaStore: OtaReleaseStoreBackend {
             }
         }
         try faultInjector.check(.beforeStateCommit)
+        if operation == "candidate_confirm" { try Task.checkCancellation() }
         try writeDurableAtomic(try encoder.encode(state), to: stateURL(lynxAppId: lynxAppId), identity: identity)
         try faultInjector.check(.afterStateCommit)
         if lastOperation == nil || lastOperation?.lynxAppId != lynxAppId {

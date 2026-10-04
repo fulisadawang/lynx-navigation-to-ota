@@ -579,7 +579,10 @@ export class LynxCapacitorModule extends LynxModule {
   }
 
   public static clearHostContext(context: common.UIAbilityContext): void {
-    if (LynxCapacitorModule.hostContext === context) LynxCapacitorModule.hostContext = null;
+    if (LynxCapacitorModule.hostContext === context) {
+      LynxCapacitorModule.instances.slice().forEach((module: LynxCapacitorModule) => module.destroy());
+      LynxCapacitorModule.hostContext = null;
+    }
   }
 
   /**
@@ -630,6 +633,16 @@ export class LynxCapacitorModule extends LynxModule {
         module.emitEvent('App', 'backButton', '{"canGoBack":false}');
         return true;
       }
+    }
+    return false;
+  }
+
+  /** 容器只允许当前 LynxContext 的监听消费返回，后台 Tab/Page 不能抢占。 */
+  public static dispatchBackButtonForContext(context: LynxContext): boolean {
+    const module = LynxCapacitorModule.contextInstances.get(context);
+    if (module !== undefined && module.backButtonHandlerEnabled && module.hasPluginListeners('App', 'backButton')) {
+      module.emitEvent('App', 'backButton', '{"canGoBack":false}');
+      return true;
     }
     return false;
   }

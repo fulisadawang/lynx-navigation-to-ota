@@ -3,12 +3,12 @@ import Lynx
 import UIKit
 
 /** LynxShell 原有容器协议，保留类型边界但不参与 Capacitor plugin dispatch。 */
-protocol LynxCapacitorOrientationHost: AnyObject {
-    func applyCapacitorOrientation(_ value: String) -> Bool
-    func clearCapacitorOrientation()
+public protocol LynxCapacitorOrientationHost: AnyObject {
+    func applyCapacitorOrientation(_ value: String, completion: @escaping (Result<[String: Any], Error>) -> Void)
+    func clearCapacitorOrientation(completion: @escaping (Result<[String: Any], Error>) -> Void)
 }
 
-protocol LynxCapacitorStatusBarHost: AnyObject {
+public protocol LynxCapacitorStatusBarHost: AnyObject {
     func setCapacitorStatusBarVisible(_ visible: Bool)
     func setCapacitorStatusBarStyle(_ value: String) -> Bool
     func setCapacitorStatusBarColor(_ value: String) -> Bool
@@ -16,13 +16,13 @@ protocol LynxCapacitorStatusBarHost: AnyObject {
     func capacitorStatusBarInfo() -> [String: Any]
 }
 
-protocol LynxCapacitorSystemBarsHost: AnyObject {
+public protocol LynxCapacitorSystemBarsHost: AnyObject {
     func setCapacitorSystemBarsStyle(_ value: String) -> Bool
     func setCapacitorSystemBarsVisible(_ visible: Bool)
     func setCapacitorSafeAreaVisible(_ visible: Bool, type: String) -> Bool
 }
 
-protocol LynxCapacitorKeyboardHost: AnyObject {
+public protocol LynxCapacitorKeyboardHost: AnyObject {
     func showCapacitorKeyboard() -> Bool
     func setCapacitorKeyboardStyle(_ value: String) -> Bool
     func setCapacitorKeyboardAccessoryBarVisible(_ visible: Bool) -> Bool
@@ -38,11 +38,18 @@ protocol LynxCapacitorKeyboardHost: AnyObject {
 @objcMembers
 public final class LynxCapacitorModule: NSObject, LynxContextModule {
     private static let moduleTable = NSHashTable<LynxCapacitorModule>.weakObjects()
+    private static let moduleLock = NSLock()
+    private static let runtimeLock = NSLock()
+    private static let runtimes = NSMapTable<LynxContext, LynxNativeCapabilityRuntime>(
+        keyOptions: [.weakMemory, .objectPointerPersonality], valueOptions: .strongMemory)
     private weak var lynxContext: LynxContext?
     private let runtime: LynxNativeCapabilityRuntime
-    private static var initialLaunchURL: String?
 
     public static var name: String { "LynxCapacitorModule" }
+
+    @nonobjc public static func installHostProvider(_ provider: LynxCapacitorHostProvider?) {
+        LynxCapacitorHostRegistry.install(provider)
+    }
 
     public static var methodLookup: [String: String] {
         [
@@ -55,19 +62,17 @@ public final class LynxCapacitorModule: NSObject, LynxContextModule {
 
     public required init(lynxContext: LynxContext) {
         self.lynxContext = lynxContext
-        runtime = LynxNativeCapabilityRuntime(lynxContext: lynxContext)
+        runtime = Self.runtime(for: lynxContext)
         super.init()
-        Self.moduleTable.add(self)
-        runtime.setLaunchURL(Self.initialLaunchURL)
+        Self.register(self)
         runtime.setEventSender { [weak self] raw in self?.deliverEvent(raw) }
     }
 
     public required init(lynxContext: LynxContext, withParam param: Any) {
         self.lynxContext = lynxContext
-        runtime = LynxNativeCapabilityRuntime(lynxContext: lynxContext)
+        runtime = Self.runtime(for: lynxContext)
         super.init()
-        Self.moduleTable.add(self)
-        runtime.setLaunchURL(Self.initialLaunchURL)
+        Self.register(self)
         runtime.setEventSender { [weak self] raw in self?.deliverEvent(raw) }
         _ = param
     }
@@ -75,8 +80,7 @@ public final class LynxCapacitorModule: NSObject, LynxContextModule {
     public init(param: Any) {
         runtime = LynxNativeCapabilityRuntime()
         super.init()
-        Self.moduleTable.add(self)
-        runtime.setLaunchURL(Self.initialLaunchURL)
+        Self.register(self)
         runtime.setEventSender { [weak self] raw in self?.deliverEvent(raw) }
         _ = param
     }
@@ -84,15 +88,52 @@ public final class LynxCapacitorModule: NSObject, LynxContextModule {
     public override init() {
         runtime = LynxNativeCapabilityRuntime()
         super.init()
-        Self.moduleTable.add(self)
-        runtime.setLaunchURL(Self.initialLaunchURL)
+        Self.register(self)
         runtime.setEventSender { [weak self] raw in self?.deliverEvent(raw) }
     }
 
     public func destroy() {
+        Self.moduleLock.lock()
         Self.moduleTable.remove(self)
-        runtime.release()
+        Self.moduleLock.unlock()
+        if let context = lynxContext { Self.removeRuntime(for: context, matching: runtime) }
+        else { runtime.release() }
         lynxContext = nil
+    }
+
+    /** 由宿主统一 View 销毁出口调用；SDK 声明 destroy 不代表当前实现会自动执行。 */
+    @nonobjc public static func destroy(for context: LynxContext) {
+        removeRuntime(for: context)
+        modulesSnapshot().filter { $0.lynxContext === context }.forEach { $0.destroy() }
+    }
+
+    /** 不新增 JS transport；Shell 的旧媒体入口与惰性创建的 Module 共享同一上下文。 */
+    @nonobjc public static func handleLegacyMedia(for context: LynxContext, method: String,
+                                                optionsJSON: String, callback: @escaping LynxCallbackBlock) {
+        runtime(for: context).handleLegacyMedia(method: method, optionsJSON: optionsJSON, callback: callback)
+    }
+
+    @nonobjc private static func runtime(for context: LynxContext) -> LynxNativeCapabilityRuntime {
+        runtimeLock.lock()
+        let runtime: LynxNativeCapabilityRuntime
+        if let existing = runtimes.object(forKey: context) { runtime = existing }
+        else {
+            runtime = LynxNativeCapabilityRuntime(lynxContext: context, deferContextValidation: true)
+            runtimes.setObject(runtime, forKey: context)
+        }
+        runtimeLock.unlock()
+        if context.hasLynxViewDestroyed { removeRuntime(for: context, matching: runtime) }
+        return runtime
+    }
+
+    /** 只在锁内解绑；取消网络、回调和 UIKit 清理不能持 registry 锁。 */
+    @nonobjc private static func removeRuntime(for context: LynxContext, matching expected: LynxNativeCapabilityRuntime? = nil) {
+        runtimeLock.lock()
+        let registered = runtimes.object(forKey: context)
+        let runtime = expected ?? registered
+        if let registered, expected == nil || registered === expected { runtimes.removeObject(forKey: context) }
+        runtimeLock.unlock()
+        runtime?.release()
     }
 
     public func getPluginHeaders() -> String { runtime.getPluginHeaders() }
@@ -105,56 +146,54 @@ public final class LynxCapacitorModule: NSObject, LynxContextModule {
 
     @objc(handleCall:callback:)
     public func handleCall(_ payload: String, callback: @escaping LynxCallbackBlock) {
-        runtime.handleCall(payload) { [weak self] result in
-            guard let raw = result as? String else {
-                callback("{}")
-                return
-            }
-            self?.deliver(raw, callback: callback)
-        }
+        runtime.handleCall(payload, transportCallback: { [weak self] raw, save in
+            if save { self?.deliverEvent(raw) }
+            else { callback(raw) }
+        })
     }
 
     /** 宿主 URL 生命周期入口进入当前自研 Module 的 App 事件通道。 */
     public static func emitAppUrlOpen(_ url: String) {
         guard !url.isEmpty else { return }
-        Self.moduleTable.allObjects.forEach { $0.runtime.emitAppURL(url) }
+        Self.modulesSnapshot().forEach { $0.runtime.emitAppURL(url) }
     }
 
     public static func setLaunchUrl(_ url: String?) {
-        initialLaunchURL = url
-        Self.moduleTable.allObjects.forEach { $0.runtime.setLaunchURL(url) }
+        LynxNativeCapabilityRuntime.publishLaunchURL(url)
     }
 
     /** 保持既有 Sample AppDelegate 的入口；APNs 结果由自研 Module 事件通道发送。 */
     public static func emitPushRegistration(token: String) {
-        Self.moduleTable.allObjects.forEach { $0.runtime.emitPushRegistration(token: token) }
+        Self.modulesSnapshot().forEach { $0.runtime.emitPushRegistration(token: token) }
     }
 
     public static func emitPushRegistrationError(_ message: String) {
-        Self.moduleTable.allObjects.forEach { $0.runtime.emitPushRegistrationError(message) }
+        Self.modulesSnapshot().forEach { $0.runtime.emitPushRegistrationError(message) }
     }
 
     public static func emitPushNotification(_ userInfo: [AnyHashable: Any]) {
-        Self.moduleTable.allObjects.forEach { module in
+        Self.modulesSnapshot().forEach { module in
             module.runtime.emitPushNotification(userInfo)
         }
     }
 
-    private func deliverEvent(_ raw: String) {
-        guard let view = lynxContext?.getLynxView() else { return }
-        DispatchQueue.main.async {
-            view.sendGlobalEvent("lynx-capacitor-result", withParams: [raw])
-        }
+    private static func register(_ module: LynxCapacitorModule) {
+        moduleLock.lock()
+        moduleTable.add(module)
+        moduleLock.unlock()
+        if module.lynxContext?.hasLynxViewDestroyed == true { module.destroy() }
     }
 
-    private func deliver(_ raw: String, callback: @escaping LynxCallbackBlock) {
-        let saved = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any]
-        if saved?["save"] as? Bool == true, let view = lynxContext?.getLynxView() {
-            DispatchQueue.main.async {
-                view.sendGlobalEvent("lynx-capacitor-result", withParams: [raw])
-            }
-            return
+    private static func modulesSnapshot() -> [LynxCapacitorModule] {
+        moduleLock.lock()
+        defer { moduleLock.unlock() }
+        return moduleTable.allObjects
+    }
+
+    private func deliverEvent(_ raw: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.runtime.isActive, let view = self.lynxContext?.getLynxView() else { return }
+            view.sendGlobalEvent("lynx-capacitor-result", withParams: [raw])
         }
-        DispatchQueue.main.async { callback(raw) }
     }
 }

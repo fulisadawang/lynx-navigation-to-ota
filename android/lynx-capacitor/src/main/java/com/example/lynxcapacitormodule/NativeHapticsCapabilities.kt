@@ -28,6 +28,19 @@ object NativeHapticsCapabilities {
         val id: Int,
     )
 
+    private data class OwnedVibration(val owner: NativeOwnerScope, val vibrator: Vibrator)
+    private val activeVibration = java.util.concurrent.atomic.AtomicReference<OwnedVibration?>(null)
+    private fun claim(vibrator: Vibrator) {
+        val owner = NativeCallContext.owner ?: throw HapticsException("HOST_DESTROYED", "当前页面已失效")
+        val token = OwnedVibration(owner, vibrator)
+        activeVibration.getAndSet(token)?.let { previous -> previous.owner.disown(previous.vibrator) }
+        owner.own(vibrator) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (activeVibration.compareAndSet(token, null)) vibrator.cancel()
+            }
+        }
+    }
+
     private val predefinedEffects = listOf(
         PredefinedEffect("TICK", VibrationEffect.EFFECT_TICK),
         PredefinedEffect("CLICK", VibrationEffect.EFFECT_CLICK),
@@ -144,6 +157,7 @@ object NativeHapticsCapabilities {
             play(vibrator, effect, android.os.VibrationAttributes.USAGE_TOUCH)
         } else {
             @Suppress("DEPRECATION")
+            claim(vibrator)
             vibrator.vibrate(durationMs)
         }
         return JSONObject()
@@ -172,6 +186,7 @@ object NativeHapticsCapabilities {
             play(vibrator, effect, android.os.VibrationAttributes.USAGE_TOUCH)
         } else {
             @Suppress("DEPRECATION")
+            claim(vibrator)
             vibrator.vibrate(timings, repeat)
         }
         return JSONObject()
@@ -278,13 +293,17 @@ object NativeHapticsCapabilities {
 
     private fun cancel(activity: Activity): JSONObject {
         val vibrator = vibrator(activity) ?: return JSONObject().put("cancelled", false).put("supported", false)
-        vibrator.cancel()
+        val owned = activeVibration.get()
+        if (owned == null) return JSONObject().put("cancelled", false).put("supported", vibrator.hasVibrator())
+        if (owned.owner !== NativeCallContext.owner) return error("FORBIDDEN", "不能取消其他页面的振动")
+        if (activeVibration.compareAndSet(owned, null)) { owned.owner.disown(owned.vibrator); vibrator.cancel() }
         return JSONObject().put("cancelled", true).put("supported", vibrator.hasVibrator())
     }
 
     @Suppress("NewApi")
     private fun play(vibrator: Vibrator, effect: VibrationEffect, usage: Int) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        claim(vibrator)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val attributes = android.os.VibrationAttributes.Builder().setUsage(usage).build()
             vibrator.vibrate(effect, attributes)
         } else {

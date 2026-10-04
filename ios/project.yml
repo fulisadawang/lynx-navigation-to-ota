@@ -102,6 +102,7 @@ targets:
     deploymentTarget: '14.0'
     sources:
       - path: Tests/UITests/LynxShellUITests.swift
+      - path: Tests/UITests/NativeReadinessTemplateUITests.swift
     dependencies:
       - target: LynxShellE2EHost
     settings:
@@ -110,6 +111,22 @@ targets:
         TARGETED_DEVICE_FAMILY: '1'
         TEST_TARGET_NAME: LynxShellE2EHost
         GENERATE_INFOPLIST_FILE: YES
+  LynxNativeReadinessTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: '14.0'
+    sources:
+      - path: Tests/NativeReadiness
+    dependencies:
+      - target: LynxShellE2EHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.huangbaoche.client.store.native-readiness-tests
+        TARGETED_DEVICE_FAMILY: '1'
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/LynxShellE2EHost.app/LynxShellE2EHost
+        BUNDLE_LOADER: $(TEST_HOST)
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   LynxShellE2EHost:
     build:
@@ -120,6 +137,8 @@ schemes:
           - analyze
         LynxShellE2EUITests:
           - test
+        LynxNativeReadinessTests:
+          - test
       parallelizeBuild: false
       buildImplicitDependencies: true
       buildArchitectures: matchRunDestination
@@ -129,5 +148,7 @@ schemes:
     test:
       config: Debug
       targets:
+        - name: LynxNativeReadinessTests
+          parallelizable: false
         - name: LynxShellE2EUITests
           parallelizable: false

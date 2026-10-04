@@ -23,6 +23,7 @@ import ShellWindowController from '../common/ShellWindowController';
 import XElementRuntime from '../common/XElementRuntime';
 import LynxPageRequest from '../model/LynxPageRequest';
 import { LynxShellModule } from '../module/LynxShellModule';
+import HostNativeModules from '../common/HostNativeModules';
 import LynxNavigator from '../routing/LynxNavigator';
 import ShellMessageHub from '../common/ShellMessageHub';
 import ShellGenericResourceFetcher from '../provider/ShellGenericResourceFetcher';
@@ -100,6 +101,7 @@ export struct LynxContainer {
     }
 
     this.modules.set('LynxShellModule', { moduleClass: LynxShellModule });
+    HostNativeModules.applyTo(this.modules);
     LLog.d(ShellConstants.TAG, 'registered LynxShellModule with full Harmony bridge contract');
     if (!this.request.isOtaRequest()) this.configureClients(this.prepareGeneration);
 
@@ -197,6 +199,9 @@ export struct LynxContainer {
       ShellMessageHub.unregister(this.request.entryID);
       this.cancelPendingRequests();
       if (this.lynxContext === disappearingContext) {
+        if (disappearingContext !== null) {
+          HostNativeModules.destroyForContext(disappearingContext);
+        }
         this.lynxContext = null;
       }
       if (!LynxNavigator.hasSession(this.request.sessionID)) {
@@ -210,6 +215,9 @@ export struct LynxContainer {
   }
 
   onBackPress(): boolean {
+    if (this.lynxContext !== null && HostNativeModules.dispatchBackPress(this.lynxContext)) {
+      return true;
+    }
     // 由壳主动提交返回并同步移除逻辑栈；如果交给系统默认返回，静态 entries 会残留，
     // MessageHub 也无法判断当前 LynxContext 已经被真正移除。
     const result = LynxNavigator.closeResult();
@@ -435,6 +443,7 @@ export struct LynxContainer {
     this.clients[0]?.markDestroyed('view_resources_cancelled');
     if (this.lynxContext !== null) {
       ShellMessageHub.unregister(this.request.entryID);
+      HostNativeModules.destroyForContext(this.lynxContext);
       this.lynxContext = null;
     }
     this.releaseCurrentLease();

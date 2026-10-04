@@ -36,11 +36,11 @@ LynxView + GlobalProps + NativeModules + XElement
 
 | 平台 | Shell Module | 默认页面模型 | Native Tab Demo | OTA Store | LynxCapacitor 当前状态 |
 |---|---|---|---|---|---|
-| Android | `android/lynx-shell` AAR | 一页一个 `LynxShellActivity` | Fragment + BottomNavigation | v3，Android/iOS 可选 candidate | `android/lynx-capacitor` 源码已合入，尚未加入默认 `settings.gradle.kts` 和 Sample |
-| iOS | `LynxShellKit` CocoaPods Module | `UINavigationController + LynxContainerViewController` | UITabBarController + UIViewController | v3，Android/iOS 可选 candidate | `ios/LynxCapacitorKit` 源码已合入，尚未加入默认 Podspec/Xcode Target |
-| HarmonyOS | `@lynx/lynx-shell-kit` HAR | ArkUI `LynxContainer` Page | ArkUI Tabs | v3，仅 current/previous | `@lynx/lynx-capacitor-kit` 源码已合入，尚未加入默认 build profile 和 Entry Demo |
+| Android | `android/lynx-shell` AAR | 一页一个 `LynxShellActivity` | Fragment + BottomNavigation | v3，Android/iOS 可选 candidate | 默认 Sample 已加入构建图并注册；Page/Tab 转发生命周期，Android 媒体 Demo 已构建运行 |
+| iOS | `LynxShellKit` CocoaPods Module | `UINavigationController + LynxContainerViewController` | UITabBarController + UIViewController | v3，Android/iOS 可选 candidate | 独立 Pod 已接普通/Core E2E Sample 并注册；Core E2E 媒体 Demo 已构建运行 |
+| HarmonyOS | `@lynx/lynx-shell-kit` HAR | ArkUI `LynxContainer` Page | ArkUI Tabs | v3，仅 current/previous | 已接默认 build profile、Entry/Page/Tab 注册；本轮未构建或设备验收 |
 
-`LynxCapacitorModule` 目前是独立原生能力交付，不是默认 Shell 已注册能力。业务接入前必须显式把对应 Module 加入构建图、注册到 LynxView，并补宿主权限和生命周期接线。README 不把“源码存在”写成“默认 Sample 已可用”。
+`LynxCapacitorModule` 仍是独立原生能力模块，默认三端 Sample 已显式接入构建图、注册、权限和生命周期；Shell Core 不依赖它。正式业务宿主仍需完成同样接线，方法是否可用以实际 capability/权限/厂商配置为准。Android/iOS 已构建并显示媒体 Demo，Harmony 仅交付既有接线。详见 [宿主接入说明](CAPACITOR_DEMO_INTEGRATION.md) 与 [媒体验收边界](docs/native-media-v1/implementation-report.md)。
 
 开发期调试能力见 [Lynx Debug Tool](docs/LYNX_DEBUG_TOOL.md)：Android 使用仅 Debug 的
 `android/lynx-debug-tool`，iOS 使用仅 Debug configuration 的 `LynxShellDebugKit`。
@@ -93,9 +93,9 @@ lynx-navigation-to-ota/
 | 任务 | 建议环境 |
 |---|---|
 | Playground | Node.js 22/24、pnpm 10.26 |
-| Android Shell | Android Studio、JDK 17、minSdk 24、compileSdk 35 |
-| Android LynxCapacitor | JDK 21、minSdk 26、compileSdk 36，接入方需自行加入构建图 |
-| iOS | Xcode、CocoaPods、iOS 13+ |
+| Android Shell | Android Studio、Gradle 8.11.1 / AGP 8.9.1、JDK 17+（本地用21验证）、minSdk 26 |
+| Android LynxCapacitor | JDK 17+、JVM target 17、minSdk 26、compileSdk 36，默认 Sample 已加入构建图 |
+| iOS | Xcode、CocoaPods；Shell iOS 13+，默认 Sample 接 Cap 后 iOS 14+ |
 | HarmonyOS | DevEco Studio、HarmonyOS SDK 6.1.1(24)、OHPM/Hvigor |
 
 ### 1. 构建 Playground
@@ -120,7 +120,7 @@ assets://bundles/main.lynx.bundle
 
 ### 2. Android
 
-仓库没有提交 Gradle Wrapper。推荐用 Android Studio 打开 `android/`，或使用本机 Gradle：
+仓库没有提交 Gradle Wrapper。推荐用 Android Studio 打开 `android/`，或使用已验证的本机 Gradle 8.11.1（AGP 8.9.1，JDK 17+）：
 
 ```bash
 cd android
@@ -128,11 +128,12 @@ gradle :lynx-shell:testDebugUnitTest --no-daemon
 gradle :app:assembleDebug --no-daemon
 ```
 
-Sample 只依赖 Shell Module：
+Sample 显式组合 Shell 与独立能力 Module，Shell Core 不反向依赖 Cap：
 
 ```kotlin
 dependencies {
     implementation(project(":lynx-shell"))
+    implementation(project(":lynx-capacitor"))
 }
 ```
 
@@ -144,11 +145,12 @@ pod install
 open LynxShell.xcworkspace
 ```
 
-Sample 只声明一个业务 Pod：
+Sample 显式加入 Shell 与 Cap 核心 Pod；地图和 Debug 等其他依赖见 Podfile：
 
 ```ruby
 target 'LynxShell' do
   pod 'LynxShellKit', :path => '.'
+  pod 'LynxCapacitorKit', :path => '.'
 end
 ```
 
@@ -169,10 +171,11 @@ NODE_HOME=/Applications/DevEco-Studio.app/Contents/tools/node \
   assembleApp --no-daemon
 ```
 
-Entry Demo 当前只依赖：
+Entry Demo 显式组合两个独立 HAR：
 
 ```json5
-"@lynx/lynx-shell-kit": "file:../lynx_shell_kit"
+"@lynx/lynx-shell-kit": "file:../lynx_shell_kit",
+"@lynx/lynx-capacitor-kit": "file:../lynx_capacitor_kit"
 ```
 
 不要只安装旧 HAP。涉及 rawfile Bundle 或 Module 更新时，应重新构建完整 App。
@@ -451,9 +454,9 @@ handleCall(payloadJSON, callback)
 当前边界：
 
 - 三端源码、能力目录和诊断 Bundle 已进入仓库。
-- Android 默认 Gradle graph、iOS Podspec/Xcode Target、Harmony root build profile 尚未接入这些 Module。
-- 默认 Shell Sample 尚未注册 `LynxCapacitorModule`，也没有完成权限与宿主生命周期接线。
-- `capacitor-module.lynx.bundle` 和 `capacitor-bridge-diagnostic.lynx.bundle` 已放入三端 Sample 资源，但只有宿主完成 Module 注册后才能得到真实原生结果。
+- 默认三端 Sample 已显式接入能力 Module 的构建图、注册及生命周期；正式宿主仍需同样接线，不能把 Sample 证明扩大为全部能力已验收。
+- 默认 Sample 已注册 `LynxCapacitorModule` 并连接权限/生命周期；平台无等价或未配置厂商能力仍返回真实 partial/unsupported。
+- `capacitor-module.lynx.bundle` 和 `capacitor-bridge-diagnostic.lynx.bundle` 已放入三端 Sample 资源，可在已接线宿主查询真实状态；不是146方法全部运行验收。
 
 这是一条独立接入工作，不属于 OTA Store v3 或 `LynxShellModule` 的隐式能力。
 
@@ -567,7 +570,7 @@ NODE_HOME=/Applications/DevEco-Studio.app/Contents/tools/node \
 - OTA 本地 Fixture 和 TEST 环境通过，不等于生产 CDN/TLS、签名发布包和所有物理设备已经认证。
 - HarmonyOS Store v3 已实现，但 Harmony 原生共享元素/Open Container 仍是明确缺口。
 - Demo 以新 Store v3 schema 为主，不负责线上 Store v2 沙盒的自动迁移。
-- LynxCapacitor 三端源码尚未接入默认 Shell Sample，不能只看到 Bundle 按钮就认为原生能力已经注册。
+- LynxCapacitor 已接入三端默认 Sample；Bundle 按钮存在仍不代表对应硬件/厂商能力或全部146方法已经验收。
 - `worklet:onframe` 当前映射为原生声明式曲线，不执行任意 Skyline Worklet closure。
 - 构建产物、本机 OTA token、OSS 凭证、签名配置和生成 Fixture 二进制不进入仓库。
 

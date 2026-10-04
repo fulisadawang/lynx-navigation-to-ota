@@ -39,9 +39,11 @@ class VideoCaptureActivity : AppCompatActivity() {
     private val completed = AtomicBoolean(false)
 
     private var requestId = ""
+    private var owner: NativeOwnerScope? = null
     private var saveToGallery = false
     private var isPersistent = true
     private var includeMetadata = false
+    private var includeMicrophone: Boolean? = null
     private var cameraOperationAcquired = false
     private var previewView: PreviewView? = null
     private var cameraProvider: ProcessCameraProvider? = null
@@ -61,11 +63,19 @@ class VideoCaptureActivity : AppCompatActivity() {
         saveToGallery = intent.getBooleanExtra(NativeVideoCaptureCapabilities.EXTRA_SAVE_TO_GALLERY, false)
         isPersistent = intent.getBooleanExtra(NativeVideoCaptureCapabilities.EXTRA_IS_PERSISTENT, true)
         includeMetadata = intent.getBooleanExtra(NativeVideoCaptureCapabilities.EXTRA_INCLUDE_METADATA, false)
+        includeMicrophone = if (intent.hasExtra(NativeVideoCaptureCapabilities.EXTRA_INCLUDE_MICROPHONE)) {
+            intent.getBooleanExtra(NativeVideoCaptureCapabilities.EXTRA_INCLUDE_MICROPHONE, false)
+        } else null
         if (requestId.isBlank()) {
             finishWith(error("INVALID_ARGUMENT", "录像 Activity 缺少 requestId"))
             return
         }
 
+        owner = NativeVideoCaptureCapabilities.ownerForRequest(requestId)
+        if (owner?.isActive != true) {
+            finishWith(error("HOST_DESTROYED", "录像所属页面已销毁"))
+            return
+        }
         runCatching {
             setContentView(createContentView())
             onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -140,9 +150,10 @@ class VideoCaptureActivity : AppCompatActivity() {
 
     private fun bindCamera(provider: ProcessCameraProvider) {
         if (completed.get() || isFinishing || isDestroyed) return
-        val selector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
+        val lensFacing = intent.getIntExtra(NativeVideoCaptureCapabilities.EXTRA_LENS_FACING, CameraSelector.LENS_FACING_BACK)
+        val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
         if (!runCatching { provider.hasCamera(selector) }.getOrDefault(false)) {
-            finishWith(error("CAMERA_UNAVAILABLE", "设备没有可用的后置摄像头"))
+            finishWith(error("CAMERA_UNAVAILABLE", "设备没有可用的指定摄像头"))
             return
         }
         val preview = Preview.Builder().build().apply { setSurfaceProvider(previewView?.surfaceProvider) }
@@ -164,8 +175,14 @@ class VideoCaptureActivity : AppCompatActivity() {
 
     private fun startRecording() {
         if (completed.get() || recording != null) return
+        if (owner?.isActive != true) { finishWith(error("HOST_DESTROYED", "录像所属页面已销毁")); return }
         val capture = videoCapture ?: run {
             finishWith(error("CAMERA_UNAVAILABLE", "录像相机尚未准备完成"))
+            return
+        }
+        val microphoneGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (includeMicrophone == true && !microphoneGranted) {
+            finishWith(error("PERMISSION_DENIED", "有声录像需要麦克风权限"))
             return
         }
         val directory = if (isPersistent) filesDir else cacheDir
@@ -175,17 +192,24 @@ class VideoCaptureActivity : AppCompatActivity() {
             return
         }
         val file = File(targetDirectory, "recording-${System.currentTimeMillis()}-${UUID.randomUUID()}.mp4")
-        val output = FileOutputOptions.Builder(file).build()
-        val audioEnabled = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        val pending = capture.output.prepareRecording(this, output).let { prepared ->
-            if (audioEnabled) runCatching { prepared.withAudioEnabled() }.getOrElse { prepared } else prepared
+        val output = FileOutputOptions.Builder(file).setFileSizeLimit(NativePayloadBudget.DOWNLOAD_BYTES).build()
+        var audioEnabled = false
+        val pending = try {
+            val prepared = capture.output.prepareRecording(this, output)
+            // 显式 false 保持无声；缺省只沿用已授予麦克风权限时启用音轨的历史行为。
+            if (includeMicrophone ?: microphoneGranted) prepared.withAudioEnabled().also { audioEnabled = true } else prepared
+        } catch (failure: Exception) {
+            file.delete()
+            finishWith(error(if (failure is SecurityException) "PERMISSION_DENIED" else "RECORDING_FAILED",
+                failure.message ?: "无法启用录像音轨"))
+            return
         }
         recordingFile = file
         recordingStarted = true
         recording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
             when (event) {
                 is VideoRecordEvent.Start -> {
-                    statusView?.text = if (audioEnabled) "录像中（含麦克风）" else "录像中（无麦克风权限）"
+                    statusView?.text = if (audioEnabled) "录像中（含麦克风）" else "录像中（未启用麦克风）"
                     startButton?.isEnabled = false
                     stopButton?.isEnabled = true
                 }
@@ -223,16 +247,22 @@ class VideoCaptureActivity : AppCompatActivity() {
             finishWith(error("RECORDING_FAILED", "CameraX 录像失败（${event.error}）"))
             return
         }
-        runCatching {
-            val sourceUri = if (saveToGallery) publishToGallery(file) else {
-                FileProvider.getUriForFile(this, NativeFileProviderContract.authority(this), file)
+        NativeIO.local.submit(owner, { runOnUiThread { finishWith(error("BUSY", "录像结果执行队列已满")) } }) {
+            try {
+                NativePayloadBudget.check(file.length(), NativePayloadBudget.DOWNLOAD_BYTES)
+                val sourceUri = if (saveToGallery) publishToGallery(file) else {
+                    FileProvider.getUriForFile(this, NativeFileProviderContract.authority(this), file)
+                }
+                val result = mediaResult(sourceUri, file, audioEnabled)
+                if (saveToGallery) file.delete()
+                runOnUiThread {
+                    if (owner?.isActive == true && !isDestroyed && !isFinishing) finishWith(result)
+                }
+            } catch (failure: Exception) {
+                file.delete()
+                runOnUiThread { finishWith(error(if (failure is NativeBudgetExceeded) failure.code else if (failure is NativeCallCancelled) "HOST_DESTROYED" else "IO",
+                    failure.message ?: "无法保存录像结果")) }
             }
-            val result = mediaResult(sourceUri, file, audioEnabled)
-            if (saveToGallery) file.delete()
-            finishWith(result)
-        }.onFailure { throwable ->
-            file.delete()
-            finishWith(error("IO", throwable.message ?: "无法保存录像结果"))
         }
     }
 
@@ -252,10 +282,12 @@ class VideoCaptureActivity : AppCompatActivity() {
         }
         val uri = contentResolver.insert(collection, values) ?: throw IllegalStateException("无法创建 MediaStore 视频")
         try {
-            contentResolver.openOutputStream(uri, "w")?.use { output -> file.inputStream().use { input -> input.copyTo(output) } }
+            contentResolver.openOutputStream(uri, "w")?.use { output -> file.inputStream().use { input -> NativePayloadBudget.copy(input, output, NativePayloadBudget.DOWNLOAD_BYTES) } }
                 ?: throw IllegalStateException("无法写入 MediaStore 视频")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val updated = contentResolver.update(uri, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
+                val updated = NativeCallContext.commit {
+                    contentResolver.update(uri, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
+                }
                 if (updated <= 0) throw IllegalStateException("无法提交 MediaStore 视频")
             }
             return uri

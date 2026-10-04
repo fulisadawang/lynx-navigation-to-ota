@@ -44,6 +44,7 @@ object NativeGeolocationCapabilities {
     /** Activity 销毁时停止 LocationManager 回调，避免单例保留请求和 callback。 */
     fun release(activity: Activity) {
         val request = synchronized(lock) { pendingRequests.remove(activity) } ?: return
+        request.owner?.disown(request)
         request.cancel()
         request.completion.invoke(error("ACTIVITY_DESTROYED", "Activity 已销毁，定位请求已取消"))
     }
@@ -91,9 +92,10 @@ object NativeGeolocationCapabilities {
             }
         }
 
+        lateinit var request: PendingRequest
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
-                finish(activity, locationResult(location))
+                finish(activity, locationResult(location), request)
             }
 
             override fun onProviderEnabled(provider: String) = Unit
@@ -107,7 +109,7 @@ object NativeGeolocationCapabilities {
             .takeIf { it > 0L }
             ?.coerceAtMost(MAX_TIMEOUT_MS)
             ?: DEFAULT_TIMEOUT_MS
-        val request = PendingRequest(manager, listener, completion)
+        request = PendingRequest(manager, listener, completion)
 
         synchronized(lock) {
             if (pendingRequests.containsKey(activity)) {
@@ -117,6 +119,12 @@ object NativeGeolocationCapabilities {
             pendingRequests[activity] = request
         }
 
+        request.owner?.own(request) {
+            mainHandler.post {
+                synchronized(lock) { if (pendingRequests[activity] === request) pendingRequests.remove(activity) }
+                request.cancel()
+            }
+        }
         try {
             var requestedCount = 0
             providers.forEach { provider ->
@@ -127,6 +135,7 @@ object NativeGeolocationCapabilities {
             }
             if (requestedCount == 0) {
                 synchronized(lock) { pendingRequests.remove(activity) }
+                request.owner?.disown(request)
                 request.cancel()
                 completion.invoke(error("LOCATION_REQUEST_FAILED", "无法向 Android LocationManager 注册定位回调"))
                 return
@@ -138,26 +147,30 @@ object NativeGeolocationCapabilities {
                         "NO_LOCATION_FIX",
                         "Android LocationManager 在超时时间内没有返回位置",
                         JSONObject().put("providers", JSONArray(providers)).put("timeout", timeoutMs),
-                    ),
+                    ), request,
                 )
             }
             request.timeout = timeoutTask
             mainHandler.postDelayed(timeoutTask, timeoutMs)
         } catch (error: SecurityException) {
             synchronized(lock) { pendingRequests.remove(activity) }
+            request.owner?.disown(request)
             request.cancel()
             completion.invoke(error("PERMISSION_DENIED", error.message ?: "定位权限不可用"))
         } catch (error: RuntimeException) {
             synchronized(lock) { pendingRequests.remove(activity) }
+            request.owner?.disown(request)
             request.cancel()
             completion.invoke(error("LOCATION_REQUEST_FAILED", error.message ?: "无法发起定位请求"))
         }
     }
 
-    private fun finish(activity: Activity, result: JSONObject) {
+    private fun finish(activity: Activity, result: JSONObject, expected: PendingRequest? = null) {
         val request = synchronized(lock) {
-            pendingRequests.remove(activity)
+            val current = pendingRequests[activity]
+            if (expected != null && current !== expected) null else pendingRequests.remove(activity)
         } ?: return
+        request.owner?.disown(request)
         request.cancel()
         request.completion.invoke(result)
     }
@@ -205,6 +218,7 @@ object NativeGeolocationCapabilities {
         private val manager: LocationManager,
         private val listener: LocationListener,
         val completion: CompletionOnce,
+        val owner: NativeOwnerScope? = NativeCallContext.owner,
     ) {
         var timeout: Runnable? = null
 

@@ -24,7 +24,6 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowInsetsControllerCompat
-import com.lynx.tasm.LynxView
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.lang.ref.WeakReference
@@ -51,16 +50,23 @@ object NativeSystemCapabilities {
     private const val DEFAULT_CONNECT_TIMEOUT_MS = 10_000
     private const val DEFAULT_READ_TIMEOUT_MS = 15_000
     private const val MAX_HTTP_TIMEOUT_MS = 120_000
-    private const val HTTP_MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+    private const val HTTP_MAX_RESPONSE_BYTES = NativePayloadBudget.INLINE_BYTES
     // WindowInsets.Type 在 API 30 才公开；这些是同一组稳定 bit mask，避免 API 26-29 加载该类。
     private const val STATUS_BARS_TYPE = 1
     private const val NAVIGATION_BARS_TYPE = 2
 
     private val inAppBrowserDialog = AtomicReference<Dialog?>(null)
     private val inAppBrowserOwner = AtomicReference<WeakReference<Activity>?>(null)
+    private var browserScope: NativeOwnerScope? = null
+    private val splashOwners = WeakHashMap<Activity, NativeOwnerScope>()
     private val splashLock = Any()
     private val splashOverlays = WeakHashMap<Activity, View>()
-    private val textZoomValues = WeakHashMap<Activity, Float>()
+    private val privacyLeases = NativeBooleanLeases<Window, NativeOwnerScope>(
+        { it.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0 },
+        { window, enabled -> if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) })
+    private val awakeLeases = NativeBooleanLeases<Window, NativeOwnerScope>(
+        { it.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0 },
+        { window, enabled -> if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) })
 
     /** Activity 销毁时释放当前 Module 创建的浏览器 Dialog 和 Splash 遮罩，避免 Window/View 泄漏。 */
     fun release(activity: Activity) {
@@ -68,8 +74,9 @@ object NativeSystemCapabilities {
             val owner = inAppBrowserOwner.get()
             if (owner?.get() === activity && inAppBrowserOwner.compareAndSet(owner, null)) {
                 inAppBrowserDialog.getAndSet(null)?.let { dialog -> runCatching { dialog.dismiss() } }
+                browserScope = null
             }
-            val overlay = synchronized(splashLock) { splashOverlays.remove(activity) }
+            val overlay = synchronized(splashLock) { splashOwners.remove(activity); splashOverlays.remove(activity) }
             overlay?.let { view -> runCatching { (view.parent as? ViewGroup)?.removeView(view) } }
         }
         if (isMainThread()) cleanup.run() else runCatching { activity.runOnUiThread(cleanup) }
@@ -163,6 +170,10 @@ object NativeSystemCapabilities {
         return try {
             connection = (URL(requestUrl).openConnection() as? HttpURLConnection)
                 ?: return nativeError("CapacitorHttp", methodName, IllegalStateException("URL 不是 HttpURLConnection"))
+            val activeConnection = connection
+            val owner = NativeCallContext.owner
+            owner?.own(activeConnection) { activeConnection.disconnect() }
+            NativeCallContext.checkActive()
             connection.requestMethod = method
             connection.connectTimeout = connectTimeout
             connection.readTimeout = readTimeout
@@ -183,6 +194,8 @@ object NativeSystemCapabilities {
             val body = requestBody(options.opt("data"), headers)
             if (body != null && method !in setOf("GET", "HEAD")) {
                 connection.doOutput = true
+                NativePayloadBudget.check(body.size.toLong(), NativePayloadBudget.INLINE_BYTES.toLong())
+                NativeCallContext.checkActive()
                 connection.outputStream.use { it.write(body) }
             }
 
@@ -198,7 +211,7 @@ object NativeSystemCapabilities {
         } catch (error: Exception) {
             nativeError("CapacitorHttp", methodName, error)
         } finally {
-            connection?.disconnect()
+            connection?.let { NativeCallContext.owner?.disown(it); it.disconnect() }
         }
     }
 
@@ -280,24 +293,8 @@ object NativeSystemCapabilities {
         return parts.joinToString("&")
     }
 
-    private fun readLimited(input: InputStream?): ByteArray {
-        if (input == null) return ByteArray(0)
-        input.use { stream ->
-            val output = ByteArrayOutputStream()
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            var total = 0
-            while (true) {
-                val count = stream.read(buffer)
-                if (count < 0) break
-                total += count
-                if (total > HTTP_MAX_RESPONSE_BYTES) {
-                    throw IllegalStateException("HTTP response 超过 ${HTTP_MAX_RESPONSE_BYTES / (1024 * 1024)} MB 限制")
-                }
-                output.write(buffer, 0, count)
-            }
-            return output.toByteArray()
-        }
-    }
+    private fun readLimited(input: InputStream?): ByteArray =
+        input?.use { NativePayloadBudget.read(it, HTTP_MAX_RESPONSE_BYTES) } ?: ByteArray(0)
 
     private fun responseHeaders(fields: Map<String?, List<String>?>?): JSONObject {
         val result = JSONObject()
@@ -398,6 +395,10 @@ object NativeSystemCapabilities {
             "openInWebView" -> onUiThread("InAppBrowser", methodName) {
                 val url = requireUrl("InAppBrowser", methodName, options)
                     ?: return@onUiThread invalidArgument("InAppBrowser", methodName, "url 不能为空")
+                val scope = NativeCallContext.owner
+                if (inAppBrowserDialog.get() != null && browserScope !== scope) {
+                    return@onUiThread errorResult("BUSY", "其他页面正在显示内置浏览器")
+                }
                 inAppBrowserDialog.getAndSet(null)?.dismiss()
                 inAppBrowserOwner.set(null)
                 val webView = WebView(activity)
@@ -416,10 +417,12 @@ object NativeSystemCapabilities {
                     addView(webView, FrameLayout.LayoutParams(-1, -1))
                 })
                 dialog.setOnDismissListener {
+                    scope?.disown(dialog)
                     webView.stopLoading()
                     webView.destroy()
                     if (inAppBrowserDialog.compareAndSet(dialog, null)) {
                         inAppBrowserOwner.compareAndSet(owner, null)
+                        browserScope = null
                     }
                 }
                 dialog.setOnShowListener {
@@ -429,14 +432,20 @@ object NativeSystemCapabilities {
                     )
                 }
                 inAppBrowserOwner.set(owner)
+                browserScope = scope
                 inAppBrowserDialog.set(dialog)
+                scope?.own(dialog) { activity.runOnUiThread { if (inAppBrowserDialog.get() === dialog) dialog.dismiss() } }
                 dialog.show()
                 webView.loadUrl(url)
                 JSONObject().put("opened", true).put("mode", "native-webview")
             }
             "close" -> onUiThread("InAppBrowser", methodName) {
+                if (inAppBrowserDialog.get() != null && browserScope !== NativeCallContext.owner) {
+                    return@onUiThread errorResult("FORBIDDEN", "不能关闭其他页面的内置浏览器")
+                }
                 val dialog = inAppBrowserDialog.getAndSet(null)
                 inAppBrowserOwner.set(null)
+                browserScope = null
                 val wasOpen = dialog != null
                 dialog?.dismiss()
                 JSONObject().put("closed", wasOpen)
@@ -470,37 +479,11 @@ object NativeSystemCapabilities {
             "getPreferred" -> JSONObject().put("value", activity.resources.configuration.fontScale.toDouble())
             "get" -> JSONObject().put(
                 "value",
-                textZoomValues[activity]?.toDouble() ?: activity.resources.configuration.fontScale.toDouble(),
+                activity.resources.configuration.fontScale.toDouble(),
             )
-            "set" -> {
-                val value = options.optDouble("value", Double.NaN)
-                when {
-                    !value.isFinite() || value <= 0.0 || value > 5.0 ->
-                        invalidArgument("TextZoom", methodName, "value 必须是大于 0 且不超过 5 的有限数字")
-                    findLynxViews(activity).isEmpty() ->
-                        unsupported("TextZoom", methodName, "当前 Activity 没有可更新的 LynxView")
-                    else -> {
-                        val views = findLynxViews(activity)
-                        views.forEach { it.updateFontScale(value.toFloat()) }
-                        textZoomValues[activity] = value.toFloat()
-                        JSONObject().put("value", value).put("updatedViews", views.size)
-                    }
-                }
-            }
+            "set" -> errorResult("HOST_NOT_CONFIGURED", "TextZoom.set 需要当前 LynxView 的 Host adapter")
             else -> unsupported("TextZoom", methodName, "不支持的方法")
         }
-    }
-
-    private fun findLynxViews(activity: Activity): List<LynxView> {
-        val result = mutableListOf<LynxView>()
-        fun visit(view: View) {
-            if (view is LynxView) result += view
-            if (view is ViewGroup) {
-                for (index in 0 until view.childCount) visit(view.getChildAt(index))
-            }
-        }
-        visit(activity.window.decorView)
-        return result
     }
 
     private fun keyboard(activity: Activity, methodName: String): JSONObject = when (methodName) {
@@ -531,6 +514,7 @@ object NativeSystemCapabilities {
             "show" -> {
                 val existing = synchronized(splashLock) { splashOverlays[activity] }
                 if (existing?.parent != null) {
+                    if (splashOwners[activity] !== NativeCallContext.owner) return@onUiThread errorResult("BUSY", "其他页面正在显示遮罩")
                     return@onUiThread JSONObject().put("visible", true).put("shown", false)
                 }
                 val background = runCatching {
@@ -545,12 +529,24 @@ object NativeSystemCapabilities {
                     elevation = 100f
                 }
                 root.addView(overlay, ViewGroup.LayoutParams(-1, -1))
-                synchronized(splashLock) { splashOverlays[activity] = overlay }
+                val scope = NativeCallContext.owner
+                synchronized(splashLock) { splashOverlays[activity] = overlay; if (scope != null) splashOwners[activity] = scope }
+                scope?.own(overlay) {
+                    activity.runOnUiThread {
+                        synchronized(splashLock) {
+                            if (splashOverlays[activity] === overlay) { splashOverlays.remove(activity); splashOwners.remove(activity) }
+                        }
+                        (overlay.parent as? ViewGroup)?.removeView(overlay)
+                    }
+                }
                 JSONObject().put("visible", true).put("shown", true)
             }
             "hide" -> {
-                val overlay = synchronized(splashLock) { splashOverlays.remove(activity) }
-                overlay?.let { root.removeView(it) }
+                if (splashOwners[activity] != null && splashOwners[activity] !== NativeCallContext.owner) {
+                    return@onUiThread errorResult("FORBIDDEN", "不能关闭其他页面的遮罩")
+                }
+                val overlay = synchronized(splashLock) { splashOwners.remove(activity); splashOverlays.remove(activity) }
+                overlay?.let { NativeCallContext.owner?.disown(it); root.removeView(it) }
                 JSONObject().put("visible", false).put("hidden", true)
             }
             else -> unsupported("SplashScreen", methodName, "不支持的方法")
@@ -674,18 +670,23 @@ object NativeSystemCapabilities {
         activity.window.decorView.systemUiVisibility = flags
     }
 
-    private fun privacyScreen(activity: Activity, methodName: String): JSONObject = when (methodName) {
+    private fun privacyScreen(activity: Activity, methodName: String): JSONObject = onUiThread("PrivacyScreen", methodName) { when (methodName) {
         "isEnabled" -> JSONObject().put("value", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
         "enable" -> {
-            activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            val owner = NativeCallContext.owner ?: return@onUiThread errorResult("HOST_DESTROYED", "当前页面已失效")
+            val window = activity.window
+            privacyLeases.acquire(window, owner)
+            owner.own(window to "privacy") { activity.runOnUiThread { privacyLeases.release(window, owner) } }
             JSONObject().put("value", true)
         }
         "disable" -> {
-            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            JSONObject().put("value", false)
+            val owner = NativeCallContext.owner ?: return@onUiThread errorResult("HOST_DESTROYED", "当前页面已失效")
+            privacyLeases.release(activity.window, owner)
+            owner.disown(activity.window to "privacy")
+            JSONObject().put("value", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
         }
         else -> unsupported("PrivacyScreen", methodName, "不支持的方法")
-    }
+    } }
 
     private fun screenOrientation(activity: Activity, methodName: String, options: JSONObject): JSONObject = when (methodName) {
         "orientation" -> JSONObject().put("type", currentOrientation(activity))
@@ -723,12 +724,17 @@ object NativeSystemCapabilities {
         "isSupported" -> JSONObject().put("value", true)
         "isKeptAwake" -> JSONObject().put("value", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0)
         "keepAwake" -> onUiThread("KeepAwake", methodName) {
-            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val owner = NativeCallContext.owner ?: return@onUiThread errorResult("HOST_DESTROYED", "当前页面已失效")
+            val window = activity.window
+            awakeLeases.acquire(window, owner)
+            owner.own(window to "awake") { activity.runOnUiThread { awakeLeases.release(window, owner) } }
             JSONObject().put("value", true)
         }
         "allowSleep" -> onUiThread("KeepAwake", methodName) {
-            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            JSONObject().put("value", false)
+            val owner = NativeCallContext.owner ?: return@onUiThread errorResult("HOST_DESTROYED", "当前页面已失效")
+            awakeLeases.release(activity.window, owner)
+            owner.disown(activity.window to "awake")
+            JSONObject().put("value", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0)
         }
         else -> unsupported("KeepAwake", methodName, "不支持的方法")
     }
@@ -847,7 +853,7 @@ object NativeSystemCapabilities {
     )
 
     private fun nativeError(pluginId: String, methodName: String, error: Throwable): JSONObject = errorResult(
-        "NATIVE_ERROR",
+        if (error is NativeBudgetExceeded) error.code else if (error is NativeCallCancelled) "HOST_DESTROYED" else "NATIVE_ERROR",
         "$pluginId.$methodName: ${error.message ?: "Android native call failed"}",
     )
 

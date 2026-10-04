@@ -1,5 +1,11 @@
 {
   "string": [
+    { "name": "notification_permission_reason", "value": "用于创建用户设置的日程提醒" },
+    { "name": "camera_permission_reason", "value": "用于拍摄需要上传的照片或视频" },
+    { "name": "microphone_permission_reason", "value": "用于录制音频和视频中的声音" },
+    { "name": "location_permission_reason", "value": "用于获取当前位置" },
+    { "name": "contacts_permission_reason", "value": "用于用户发起的联系人读取和保存" },
+    { "name": "calendar_permission_reason", "value": "用于读取和创建日历事件" },
     { "name": "module_desc", "value": "Lynx 4.1 HarmonyOS native shell" },
     { "name": "entry_ability_desc", "value": "Lynx Shell Entry Ability" },
     { "name": "entry_ability_label", "value": "Lynx Shell" },

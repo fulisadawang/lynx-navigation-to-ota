@@ -1,5 +1,7 @@
 package com.example.lynxshell.routing
 
+import com.example.lynxshell.LynxShell
+
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -14,6 +16,7 @@ import com.example.lynxshell.transition.LynxTransitionRuntime
 import com.example.lynxshell.transition.LynxSnapshotStore
 import com.example.lynxshell.transition.LynxTransitionSpec
 import com.example.lynxshell.util.JsonObjectCodec
+import com.lynx.tasm.LynxView
 import java.lang.ref.WeakReference
 import java.util.UUID
 import kotlin.math.min
@@ -137,6 +140,7 @@ fun interface SessionExitHandler {
  * 都不会调用 `finishAffinity()`，也不会误清整个 Android task。
  */
 object LynxNavigator {
+    internal const val EXTRA_SOURCE_OTA_SNAPSHOT_ID = "lynx_shell.source_ota_snapshot_id"
     private const val EXTRA_SESSION_ID = "lynx_shell.navigation_session_id"
     private const val EXTRA_ENTRY_ID = "lynx_shell.navigation_entry_id"
     private const val EXTRA_PARENT_ENTRY_ID = "lynx_shell.navigation_parent_entry_id"
@@ -542,6 +546,35 @@ object LynxNavigator {
         )
     }
 
+    /** 只修改调用方当前容器的返回策略，旧 View 或被覆盖页面不能修改新页面。 */
+    fun setBackGestureEnabled(
+        context: Context,
+        enabled: Boolean,
+        sourceLynxView: LynxView?,
+    ): LynxNavigationResult {
+        val activity = context.findActivity() as? LynxShellActivity
+            ?: return failure(1002, "当前 LynxContext 没有关联 Lynx 容器")
+        if (activity.isFinishing || activity.isDestroyed || sourceLynxView == null ||
+            activity.currentLynxView() !== sourceLynxView
+        ) {
+            return failure(1002, "调用页面已失效或不属于当前 Lynx 容器")
+        }
+        val current = LynxNavigationRegistry.entryFor(activity)
+            ?: return failure(1002, "当前页面不在 Lynx 导航会话中")
+        val topEntry = LynxNavigationRegistry.entriesForSession(current.sessionID).lastOrNull()
+        if (topEntry?.entryID != current.entryID) {
+            return failure(1002, "调用页面不是当前 Lynx 会话的栈顶页面")
+        }
+        if (!activity.setBackGestureEnabled(enabled)) {
+            return failure(1006, "上一笔导航或返回手势仍在进行中")
+        }
+        return success(
+            message = "当前页面返回策略已更新",
+            affectedCount = 1,
+            data = mapOf("backGestureEnabled" to enabled),
+        )
+    }
+
     /** 关闭当前页，并把一个 JSON Object 返回给它下面的 Lynx entry。 */
     fun closeWithResult(context: Context, resultJson: String): LynxNavigationResult =
         back(
@@ -657,6 +690,12 @@ object LynxNavigator {
                 .putExtra(EXTRA_ENTRY_ID, entryID)
                 .putExtra(EXTRA_ENTRY_ORDER, order)
                 .putExtra(EXTRA_HAS_HOST_ANCHOR, hasHostAnchor)
+            (context.findActivity() as? LynxShellActivity)?.currentOtaNavigationSnapshotID()?.let { sourceID ->
+                if (LynxShell.activityBundleRuntime()?.isNavigationSnapshotValid(sourceID) == false) {
+                    throw java.util.concurrent.CancellationException("来源页面快照已失效，请重新打开")
+                }
+                intent.putExtra(EXTRA_SOURCE_OTA_SNAPSHOT_ID, sourceID)
+            }
             parentEntryID?.let { intent.putExtra(EXTRA_PARENT_ENTRY_ID, it) }
             options.preparedRouteToken?.let {
                 intent.putExtra(LynxTransitionIntent.EXTRA_PREPARED_ROUTE_TOKEN, it)

@@ -15,6 +15,7 @@ object NativeToastCapabilities {
     private const val TOP_OFFSET_DP = 64
 
     private val activeToasts = WeakHashMap<Activity, Toast>()
+    private val toastOwners = WeakHashMap<Activity, NativeOwnerScope>()
 
     /** Activity 销毁时取消仍由当前 Module 持有的 Toast，避免短生命周期页面残留。 */
     fun release(activity: Activity) {
@@ -64,7 +65,10 @@ object NativeToastCapabilities {
             return error("INVALID_ARGUMENT", "position 只支持 top、center 或 bottom")
         }
 
+        val owner = NativeCallContext.owner
+        if (activeToasts[activity] != null && toastOwners[activity] !== owner) return error("BUSY", "其他页面仍在显示 Toast")
         val previous = synchronized(activeToasts) { activeToasts.remove(activity) }
+        previous?.let { owner?.disown(it) }
         previous?.cancel()
         val toast = Toast.makeText(activity, rawText, duration)
         val positionApplied = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || position == "bottom"
@@ -82,7 +86,18 @@ object NativeToastCapabilities {
             toast.setGravity(gravity, 0, yOffset)
         }
         toast.show()
-        synchronized(activeToasts) { activeToasts[activity] = toast }
+        synchronized(activeToasts) { activeToasts[activity] = toast; if (owner != null) toastOwners[activity] = owner }
+        owner?.own(toast) {
+            activity.runOnUiThread {
+                synchronized(activeToasts) { if (activeToasts[activity] === toast) { activeToasts.remove(activity); toastOwners.remove(activity) } }
+                toast.cancel()
+            }
+        }
+        // API 26-29 无 Toast.Callback；系统标准显示窗口结束后归还持有，避免持有直到页面退出。
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            owner?.disown(toast)
+            synchronized(activeToasts) { if (activeToasts[activity] === toast) { activeToasts.remove(activity); toastOwners.remove(activity) } }
+        }, if (duration == Toast.LENGTH_LONG) 3500L else 2000L)
         return JSONObject()
             .put("shown", true)
             .put("text", rawText)
@@ -107,8 +122,11 @@ object NativeToastCapabilities {
         .put("supportsCancel", true)
 
     private fun cancel(activity: Activity): JSONObject {
+        if (activeToasts[activity] != null && toastOwners[activity] !== NativeCallContext.owner) return error("FORBIDDEN", "不能取消其他页面的 Toast")
         val toast = synchronized(activeToasts) { activeToasts.remove(activity) }
         toast?.cancel()
+        toast?.let { NativeCallContext.owner?.disown(it) }
+        toastOwners.remove(activity)
         return JSONObject().put("cancelled", toast != null)
     }
 

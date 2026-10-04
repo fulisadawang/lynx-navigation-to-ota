@@ -50,6 +50,7 @@ public typealias LynxRouterMessageHandler = (LynxRouterMessage) -> LynxRouterMes
  * 消息投递到旧页面。事件最终都在主线程触发，和 UIKit/Lynx 的线程约束一致。
  */
 enum ShellMessageHub {
+    typealias OtaHealthHandler = (@escaping (NSDictionary) -> Void) -> Void
     static let lifecycleEvent = "lynxRouterLifecycle"
     static let localeEvent = "lynxShellLocaleChanged"
     static let layoutEvent = "lynxShellLayoutChanged"
@@ -58,15 +59,18 @@ enum ShellMessageHub {
         let info: LynxRouterPageInfo
         weak var view: LynxView?
         let updateLocale: ((LynxLocaleState) -> Void)?
+        let markOtaHealthy: OtaHealthHandler?
 
         init(
             info: LynxRouterPageInfo,
             view: LynxView,
-            updateLocale: ((LynxLocaleState) -> Void)?
+            updateLocale: ((LynxLocaleState) -> Void)?,
+            markOtaHealthy: OtaHealthHandler?
         ) {
             self.info = info
             self.view = view
             self.updateLocale = updateLocale
+            self.markOtaHealthy = markOtaHealthy
         }
     }
 
@@ -80,17 +84,28 @@ enum ShellMessageHub {
     static func register(
         info: LynxRouterPageInfo,
         view: LynxView,
-        updateLocale: ((LynxLocaleState) -> Void)? = nil
+        updateLocale: ((LynxLocaleState) -> Void)? = nil,
+        markOtaHealthy: OtaHealthHandler? = nil
     ) {
         endpoints[info.pageId] = Endpoint(
             info: info,
             view: view,
-            updateLocale: updateLocale
+            updateLocale: updateLocale,
+            markOtaHealthy: markOtaHealthy
         )
     }
 
     static func unregister(pageId: String) {
         endpoints.removeValue(forKey: pageId)
+    }
+
+    static func markOtaHealthy(view: LynxView, completion: @escaping (NSDictionary) -> Void) {
+        guard let pageId = pageId(for: view),
+              let handler = endpoints[pageId]?.markOtaHealthy else {
+            completion(["code": 1002, "message": "页面已销毁或没有有效健康确认入口"])
+            return
+        }
+        handler(completion)
     }
 
     static func pages() -> [LynxRouterPageInfo] {

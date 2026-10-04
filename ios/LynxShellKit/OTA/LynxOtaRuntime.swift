@@ -259,6 +259,7 @@ protocol LynxBundleRuntime {
     func confirmCandidateHealthy(lynxAppId: String) async throws -> Bool
     func confirmCandidateHealthy(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool
     func rollback(lynxAppId: String, reason: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool
+    func recoverFailedCandidate(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool
     func reportPageOpen(lynxAppId: String, bundleName: String) async
     func reportPageOpen(lynxAppId: String, bundleName: String, expectedIdentityEpoch: UInt64?) async
     func deleteBundles(lynxAppId: String) async throws
@@ -283,9 +284,15 @@ protocol LynxNavigationSnapshotRuntime: AnyObject {
         navigationSessionID: String
     ) async throws -> PreparedOtaBundle?
     func releaseNavigationSnapshot(navigationSessionID: String) async
+    func resolveRecoveredCurrent(lynxAppId: String, bundleName: String, navigationSessionID: String) async throws -> PreparedOtaBundle?
+    func isNavigationSnapshotActive(_ id: String) async -> Bool
 }
 
 extension LynxBundleRuntime {
+    func recoverFailedCandidate(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool {
+        try await rollback(lynxAppId: lynxAppId, reason: "candidate_failed", expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedIdentityEpoch)
+    }
+
     func prepareResources(for prepared: PreparedOtaBundle) async throws -> OtaPreparedResources? { nil }
     func storageSnapshot() async throws -> OtaStorageSnapshot? { nil }
     func confirmCandidateHealthy(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool {
@@ -405,6 +412,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
     /** 进程内 session -> release 引用；持久化 State 不保存短生命周期的 UI session。 */
     private var navigationSnapshots: [String: NavigationSnapshotEntry] = [:]
     private var closedNavigationSessions: Set<String> = []
+    private var recoveringNavigationKeys: Set<String> = []
 
     public init(configuration: LynxOtaConfiguration) throws {
         let sdkConfiguration = try configuration.makeSDKConfigurationForRuntime()
@@ -615,8 +623,10 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         navigationSessionID: String?
     ) async throws -> PreparedOtaBundle {
         let epoch = sdk.userIdentityEpoch
+        try await reconcileIdentityIfNeeded(epoch: epoch)
         try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
         if let navigationSessionID, closedNavigationSessions.contains(navigationSessionID) { throw CancellationError() }
+        if let navigationSessionID, recoveringNavigationKeys.contains(snapshotKey(sessionID: navigationSessionID, lynxAppId: lynxAppId)) { throw CancellationError() }
         if let navigationSessionID,
            let pinned = try pinnedBundle(
                lynxAppId: lynxAppId,
@@ -687,6 +697,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
      */
     func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle? {
         let epoch = sdk.userIdentityEpoch
+        try await reconcileIdentityIfNeeded(epoch: epoch)
         try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
         guard let lease = try await withSDKRead(expectedIdentityEpoch: epoch, { sdk in
             try await sdk.acquireCurrentBundleLease(lynxAppId: lynxAppId, bundleName: bundleName)
@@ -723,8 +734,10 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         navigationSessionID: String?
     ) async throws -> PreparedOtaBundle? {
         let epoch = sdk.userIdentityEpoch
+        try await reconcileIdentityIfNeeded(epoch: epoch)
         try validateIdentity(lynxAppId: lynxAppId, bundleName: bundleName)
         if let navigationSessionID, closedNavigationSessions.contains(navigationSessionID) { throw CancellationError() }
+        if let navigationSessionID, recoveringNavigationKeys.contains(snapshotKey(sessionID: navigationSessionID, lynxAppId: lynxAppId)) { throw CancellationError() }
         if let navigationSessionID,
            let snapshot = navigationSnapshots[snapshotKey(
                sessionID: navigationSessionID,
@@ -747,11 +760,16 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                guard var candidate = await sdk.candidate(lynxAppId: lynxAppId) else {
                    return nil
                }
-               if candidate.status == .pending {
-                   candidate = try await sdk.beginCandidateTrial(lynxAppId: lynxAppId)
-               }
-               // trial 和 lease 必须在同一短事务内对应同一个 candidate，不能被下一次同步夹断。
+               // 先验证目标包可用，缺包不能把尚未展示的候选提前变成 trial。
                guard let lease = try await sdk.acquireCandidateBundleLease(lynxAppId: lynxAppId, bundleName: bundleName) else { return nil }
+               if candidate.status == .pending {
+                   do {
+                       candidate = try await sdk.beginCandidateTrial(lynxAppId: lynxAppId)
+                   } catch {
+                       await lease.close()
+                       throw error
+                   }
+               }
                guard lease.release.context.releaseId == candidate.release.context.releaseId else {
                    await lease.close()
                    throw OtaSelectionError.staleCandidate
@@ -791,6 +809,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
 
     func releaseNavigationSnapshot(navigationSessionID: String) async {
         closedNavigationSessions.insert(navigationSessionID)
+        recoveringNavigationKeys = recoveringNavigationKeys.filter { !$0.hasPrefix("\(navigationSessionID)::") }
         let keys = navigationSnapshots.keys.filter { $0.hasPrefix("\(navigationSessionID)::") }
         var leasesToClose: [OtaBundleLease] = []
         for key in keys {
@@ -806,6 +825,38 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         for lease in leasesToClose { await lease.close() }
     }
 
+    func resolveRecoveredCurrent(lynxAppId: String, bundleName: String, navigationSessionID: String) async throws -> PreparedOtaBundle? {
+        let key = snapshotKey(sessionID: navigationSessionID, lynxAppId: lynxAppId)
+        recoveringNavigationKeys.insert(key)
+        defer { recoveringNavigationKeys.remove(key) }
+        guard let value = try await resolveCurrent(lynxAppId: lynxAppId, bundleName: bundleName) else { return nil }
+        return try await pinIfNeeded(value, navigationSessionID: navigationSessionID)
+    }
+
+    func isNavigationSnapshotActive(_ id: String) -> Bool {
+        navigationSnapshots.values.contains { $0.id == id && !$0.closing && $0.identityEpoch == sdk.userIdentityEpoch }
+    }
+
+    /** 失效快照停止接纳新页；仍在使用的资源保留到最后一个句柄归还。 */
+    private func retireFailedSnapshots(lynxAppId: String, releaseId: String?, epoch: UInt64, candidateOnly: Bool = true) async {
+        var leases: [OtaBundleLease] = []
+        for key in Array(navigationSnapshots.keys) {
+            guard var entry = navigationSnapshots[key], !entry.closing,
+                  !candidateOnly || entry.source == "candidate_trial",
+                  entry.lynxAppId == lynxAppId, entry.identityEpoch == epoch,
+                  releaseId == nil || entry.release?.context.releaseId == releaseId else { continue }
+            entry.closing = true
+            navigationSnapshots.removeValue(forKey: key)
+            recoveringNavigationKeys.insert(key)
+            if entry.resourceTokens.isEmpty {
+                if let lease = entry.lease { leases.append(lease) }
+            } else {
+                navigationSnapshots[key + "::retired::" + entry.id] = entry
+            }
+        }
+        for lease in leases { await lease.close() }
+    }
+
     /** cache-first 普通页面使用的后台刷新入口；schedulePageRefreshIfNeeded 自带 AppId 门控。 */
     func refreshAppBundleIfNeeded(lynxAppId: String) async {
 #if DEBUG
@@ -815,6 +866,26 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         }
 #endif
         schedulePageRefreshIfNeeded(lynxAppId: lynxAppId)
+    }
+
+    func recoverFailedCandidate(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool {
+        let epoch = expectedIdentityEpoch ?? sdk.userIdentityEpoch
+        guard epoch == sdk.userIdentityEpoch else { throw CancellationError() }
+        try validateAppId(lynxAppId)
+        let recovered = try await withSDK(expectedIdentityEpoch: epoch) { sdk in
+            if let candidate = await sdk.candidate(lynxAppId: lynxAppId),
+               expectedReleaseId == nil || candidate.release.context.releaseId == expectedReleaseId {
+                do {
+                    try await sdk.discardCandidate(lynxAppId: lynxAppId,
+                        expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: epoch)
+                } catch OtaSelectionError.staleCandidate {
+                    // 其他页面已丢弃/确认；不触碰后来候选或已提交 current。
+                }
+            }
+            return await sdk.current(lynxAppId: lynxAppId) != nil
+        }
+        await retireFailedSnapshots(lynxAppId: lynxAppId, releaseId: expectedReleaseId, epoch: epoch)
+        return recovered
     }
 
     /** 首屏失败最多由容器调用一次；恢复 previous/embedded 后重新走 prepare。 */
@@ -827,18 +898,23 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         guard epoch == sdk.userIdentityEpoch else { return false }
         try validateAppId(lynxAppId)
         if candidateActivationEnabled,
-           try await withSDK(expectedIdentityEpoch: epoch, { sdk in await sdk.candidate(lynxAppId: lynxAppId) }) != nil {
+           let candidate = try await withSDK(expectedIdentityEpoch: epoch, { sdk in await sdk.candidate(lynxAppId: lynxAppId) }),
+           expectedReleaseId == nil || candidate.release.context.releaseId == expectedReleaseId {
             try await withSDK(expectedIdentityEpoch: epoch) { sdk in
                 try await sdk.discardCandidate(lynxAppId: lynxAppId, expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: epoch)
             }
             lastPageRefreshAt.removeValue(forKey: lynxAppId)
+            await retireFailedSnapshots(lynxAppId: lynxAppId, releaseId: expectedReleaseId, epoch: epoch)
             return true
         }
         let restoredRemote = try await withSDK(expectedIdentityEpoch: epoch) { sdk in
             if let expectedReleaseId, let current = await sdk.getCurrentRelease(lynxAppId: lynxAppId), current.context.releaseId != expectedReleaseId { throw CancellationError() }
             return try await sdk.rollback(lynxAppId: lynxAppId, reason: reason)
         }
-        if restoredRemote != nil { return true }
+        if restoredRemote != nil {
+            await retireFailedSnapshots(lynxAppId: lynxAppId, releaseId: expectedReleaseId, epoch: epoch, candidateOnly: false)
+            return true
+        }
         guard embeddedBundleRegistry.containsApp(lynxAppId: lynxAppId) else { return false }
 
         // 没有 previous remote release 时丢弃坏的 downloaded current；下一次 prepare
@@ -848,6 +924,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                 try await sdk.deleteDownloadedBundles(lynxAppId: lynxAppId)
             }
             lastPageRefreshAt.removeValue(forKey: lynxAppId)
+            await retireFailedSnapshots(lynxAppId: lynxAppId, releaseId: expectedReleaseId, epoch: epoch, candidateOnly: false)
             return true
         } catch {
             return false
@@ -864,7 +941,12 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         try validateAppId(lynxAppId)
         guard candidateActivationEnabled else { return false }
         let confirmed = try await withSDK(expectedIdentityEpoch: epoch) { sdk in
-            try await sdk.confirmCandidateHealthy(lynxAppId: lynxAppId, expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: epoch)
+            try Task.checkCancellation()
+            if let expectedReleaseId, await sdk.candidate(lynxAppId: lynxAppId) == nil,
+               let current = await sdk.current(lynxAppId: lynxAppId), current.context.releaseId == expectedReleaseId {
+                return current
+            }
+            return try await sdk.confirmCandidateHealthy(lynxAppId: lynxAppId, expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: epoch)
         }
         guard epoch == sdk.userIdentityEpoch else { return false }
         for key in Array(navigationSnapshots.keys) {
@@ -970,13 +1052,15 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
     }
 
     private func releaseNavigationResource(_ retained: (key: String, id: String, token: UUID)) async {
-        guard var entry = navigationSnapshots[retained.key], entry.id == retained.id,
+        let key = navigationSnapshots[retained.key]?.id == retained.id ? retained.key
+            : navigationSnapshots.first(where: { $0.value.id == retained.id })?.key
+        guard let key, var entry = navigationSnapshots[key],
               entry.resourceTokens.remove(retained.token) != nil else { return }
         if entry.closing && entry.resourceTokens.isEmpty {
-            navigationSnapshots.removeValue(forKey: retained.key)
+            navigationSnapshots.removeValue(forKey: key)
             await entry.lease?.close()
         } else {
-            navigationSnapshots[retained.key] = entry
+            navigationSnapshots[key] = entry
         }
     }
 

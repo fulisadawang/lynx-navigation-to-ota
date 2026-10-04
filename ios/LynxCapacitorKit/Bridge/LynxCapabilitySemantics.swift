@@ -80,7 +80,7 @@ enum LynxCapabilitySemantics {
         [
             "source": "verified",
             "build": "not_run",
-            "host": "not_integrated",
+            "host": "configured_not_run",
             "device": "not_run",
         ]
     }
@@ -91,7 +91,7 @@ enum LynxCapabilitySemantics {
         case "INVALID_ARGUMENT": return "INVALID_ARGUMENT"
         case "UNIMPLEMENTED": return "METHOD_GAP"
         case "UNSUPPORTED": return "PLATFORM_UNSUPPORTED"
-        case "PERMISSION_NOT_DECLARED": return "HOST_PERMISSION_CONFIGURATION_REQUIRED"
+        case "PERMISSION_NOT_DECLARED", "HOST_CONFIGURATION_REQUIRED": return "HOST_PERMISSION_CONFIGURATION_REQUIRED"
         case "PERMISSION_DENIED": return "RUNTIME_PERMISSION_DENIED"
         case "MODULE_UNAVAILABLE", "SCENE_UNAVAILABLE", "HOST_UNAVAILABLE": return "RUNTIME_CONTEXT_REQUIRED"
         case "CANCELLED": return "CANCELLED"

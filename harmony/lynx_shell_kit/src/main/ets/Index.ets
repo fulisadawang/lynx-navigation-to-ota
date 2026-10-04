@@ -82,6 +82,8 @@ export {
   OtaStorageStagingSnapshot
 } from './ota/OtaModels';
 export { LynxShellModule } from './module/LynxShellModule';
+export { HostNativeModuleRegistration } from './common/HostNativeModules';
+export { LynxContext } from '@lynx/lynx';
 export {
   ShellViewAppearPayload,
   ShellRouterPageInfo,

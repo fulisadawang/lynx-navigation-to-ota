@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import HostNativeModules, { HostNativeModuleRegistration } from '../common/HostNativeModules';
 import window from '@ohos.window';
 import LynxRuntimeInitializer from '../common/LynxRuntimeInitializer';
 import ShellMessageHub from '../common/ShellMessageHub';
@@ -35,6 +36,11 @@ interface ShellLocaleResultData {
  * 业务只传 Bundle 与 params，不注册 routeId；旧的 LynxNavigator 仍导出给已有宿主使用。
  */
 export default class LynxRouter {
+  /** 宿主在创建首个 Page/Tab 前安装额外 NativeModule。 */
+  static registerNativeModule(registration: HostNativeModuleRegistration): void {
+    HostNativeModules.register(registration);
+  }
+
   private static embeddedBundleRegistry: EmbeddedBundleRegistry | null = null;
   private static hasPendingUser: boolean = false;
   private static pendingUserId: string | undefined = undefined;

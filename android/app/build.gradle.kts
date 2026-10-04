@@ -110,14 +110,21 @@ val kmpAndroidSigningAvailable = kmpAndroidSigningProperties != null &&
 
 android {
     namespace = "com.example.lynxshell.sample"
-    compileSdk = 35
+    compileSdk = 36
+    if (isolatedOtaDeviceTest) {
+        // API 28 后经典测试类来自 SDK 可选库，仅隔离验收 APK 声明，生产宿主不携带。
+        useLibrary("android.test.runner")
+        useLibrary("android.test.base")
+        useLibrary("android.test.mock")
+    }
 
     defaultConfig {
         applicationId = "com.hugboga.custom"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        testInstrumentationRunner = "android.test.InstrumentationTestRunner"
         buildConfigField("String", "LYNX_OTA_CLIENT_TOKEN", "\"$otaClientToken\"")
         buildConfigField("String", "AMAP_API_KEY", "\"$escapedAmapApiKey\"")
         buildConfigField("boolean", "LYNX_OTA_CANDIDATE_MODE", candidateActivationEnabled.toString())
@@ -190,6 +197,7 @@ dependencies {
     // 示例 App 只显式依赖可复用 Lynx Android Library。
     implementation(project(":lynx-shell"))
     implementation(project(":lynx-map"))
+    implementation(project(":lynx-capacitor"))
     // Debug 入口、NativeModule 和面板不进入 Release 依赖图。
     debugImplementation(project(":lynx-debug-tool"))
 

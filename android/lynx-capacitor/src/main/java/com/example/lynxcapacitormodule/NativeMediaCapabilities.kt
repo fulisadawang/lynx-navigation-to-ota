@@ -7,11 +7,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Looper
+import android.os.Handler
 import android.util.Base64
 import androidx.core.content.FileProvider
 import java.io.File
-import java.io.FileOutputStream
-import java.net.URLConnection
 import java.nio.charset.StandardCharsets
 import java.util.Locale
 import org.json.JSONArray
@@ -43,7 +42,7 @@ object NativeMediaCapabilities {
                 else -> null
             }
         }.getOrElse { error ->
-            failure("NATIVE_ERROR", error.message ?: "Android native call failed")
+            failure(if (error is NativeBudgetExceeded) error.code else if (error is NativeCallCancelled) "HOST_DESTROYED" else "NATIVE_ERROR", error.message ?: "Android native call failed")
         }
     }
 
@@ -82,14 +81,14 @@ object NativeMediaCapabilities {
             else -> return failure("UNSUPPORTED_ENCODING", "仅支持 UTF-8 和 Base64 编码")
         }
 
+        NativePayloadBudget.check(bytes.size.toLong(), NativePayloadBudget.INLINE_BYTES.toLong())
         return runCatching {
-            target.parentFile?.mkdirs()
-            FileOutputStream(target).use { it.write(bytes) }
+            NativeAtomicFile.write(target, bytes)
             JSONObject()
                 .put("written", true)
                 .put("uri", target.toURI().toString())
         }.getOrElse { error ->
-            failure("IO_ERROR", error.message ?: "写入文件失败")
+            failure(if (error is NativeBudgetExceeded) error.code else if (error is NativeCallCancelled) "HOST_DESTROYED" else "IO_ERROR", error.message ?: "写入文件失败")
         }
     }
 
@@ -104,7 +103,8 @@ object NativeMediaCapabilities {
         if (!target.isFile) return failure("INVALID_ARGUMENT", "目标路径不是文件")
 
         return runCatching {
-            val bytes = target.readBytes()
+            NativePayloadBudget.check(target.length(), NativePayloadBudget.INLINE_BYTES.toLong())
+            val bytes = target.inputStream().use { NativePayloadBudget.read(it) }
             val data = when (options.optString("encoding", "utf8").trim().lowercase(Locale.US)) {
                 "utf8", "utf-8", "text" -> String(bytes, StandardCharsets.UTF_8)
                 "base64" -> Base64.encodeToString(bytes, Base64.NO_WRAP)
@@ -113,7 +113,7 @@ object NativeMediaCapabilities {
             }
             JSONObject().put("data", data)
         }.getOrElse { error ->
-            failure("IO_ERROR", error.message ?: "读取文件失败")
+            failure(if (error is NativeBudgetExceeded) error.code else if (error is NativeCallCancelled) "HOST_DESTROYED" else "IO_ERROR", error.message ?: "读取文件失败")
         }
     }
 
@@ -121,11 +121,7 @@ object NativeMediaCapabilities {
         if (!target.exists()) return failure("NOT_FOUND", "目录不存在")
         if (!target.isDirectory) return failure("INVALID_ARGUMENT", "目标路径不是目录")
 
-        val children = target.listFiles()
-            ?: return failure("IO_ERROR", "无法读取目录")
-        return JSONObject().put("files", JSONArray().apply {
-            children.sortedBy { it.name }.forEach { put(fileSummary(it)) }
-        })
+        return JSONObject().put("files", NativeDirectoryIO.read(target))
     }
 
     private fun stat(target: File): JSONObject {
@@ -157,14 +153,7 @@ object NativeMediaCapabilities {
         }
     }
 
-    private fun fileSummary(file: File): JSONObject = JSONObject()
-        .put("name", file.name)
-        .put("type", if (file.isDirectory) "directory" else "file")
-        .put("size", if (file.isFile) file.length() else 0L)
-        // Android framework 的 File 不暴露创建时间；ctime 与 mtime 都映射为最后修改时间。
-        .put("ctime", file.lastModified())
-        .put("mtime", file.lastModified())
-        .put("uri", file.toURI().toString())
+    private fun fileSummary(file: File): JSONObject = NativeDirectoryIO.summary(file)
 
     private fun getFileUri(activity: Activity, target: File, options: JSONObject): JSONObject {
         val authority = options.optString("fileProviderAuthority").trim().ifEmpty {
@@ -175,73 +164,53 @@ object NativeMediaCapabilities {
         return JSONObject().put("uri", uri.toString()).put("path", target.absolutePath)
     }
 
-    private fun fileViewer(activity: Activity, methodName: String, options: JSONObject): JSONObject {
-        if (methodName != "openDocumentFromLocalPath") {
-            return failure("UNSUPPORTED", "FileViewer.$methodName 尚未接入当前 Android Module")
+    internal fun openDocument(activity: Activity, options: JSONObject, complete: (JSONObject) -> Unit) {
+        if (options.has("items")) {
+            NativeImagePreviewCapabilities.open(activity, options, complete)
+            return
         }
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            return failure("UI_THREAD_REQUIRED", "打开本地文档必须在 Android 主线程调用")
-        }
-
-        val rawPath = firstNonBlank(options, "path", "localPath", "uri")
-            ?: return failure("INVALID_ARGUMENT", "需要本地 path 或 uri")
-        val parsed = Uri.parse(rawPath)
-        val contentUri = if (parsed.scheme.equals("content", ignoreCase = true)) parsed else null
-        val file = when {
-            contentUri != null -> null
-            parsed.scheme.equals("file", ignoreCase = true) -> {
-                val path = parsed.path ?: return failure("INVALID_ARGUMENT", "file URI 缺少路径")
-                privateFileFromAbsolutePath(activity, path)
-            }
-            parsed.scheme != null -> {
-                return failure("INVALID_ARGUMENT", "FileViewer 只接受本地文件路径或 content URI")
-            }
-            rawPath.startsWith("/") -> privateFileFromAbsolutePath(activity, rawPath)
-            else -> {
-                val root = when (val result = resolveDirectory(activity, options)) {
-                    is DirectoryResolution.Valid -> result.file
-                    is DirectoryResolution.Invalid -> return result.error
+        if (options.has("initialIndex")) { complete(failure("INVALID_ARGUMENT", "initialIndex 只能与 items 一起使用")); return }
+        val owner = NativeCallContext.owner
+        NativeIO.local.submit(owner, { complete(failure("BUSY", "文档读取队列已满")) }) {
+            try {
+                val raw = firstNonBlank(options, "path", "localPath", "uri")
+                    ?: throw IllegalArgumentException("需要本地 path 或 uri")
+                val media = NativeMediaUri.resolve(activity, raw, options.optString("directory", "CACHE"),
+                    options.optString("mimeType").ifBlank { "application/octet-stream" }, measureSize = false)
+                Handler(Looper.getMainLooper()).post {
+                    if (owner?.isActive == false) return@post
+                    NativeCallContext.withOwner(owner) {
+                        val result = openDocumentOnMain(activity, media)
+                        complete(result)
+                    }
                 }
-                safeResolve(root, rawPath, requireNonEmpty = true)
+            } catch (error: Exception) {
+                complete(failure(if (error is NativeBudgetExceeded) error.code else "INVALID_ARGUMENT", error.message ?: "本地文档不可读取"))
             }
-        }
-        if (contentUri == null && (file == null || !file.exists() || !file.isFile)) {
-            return failure("NOT_FOUND", "本地文档不存在")
-        }
-
-        val uri = contentUri ?: runCatching {
-            val authority = options.optString("fileProviderAuthority").trim().ifEmpty {
-                NativeFileProviderContract.authority(activity)
-            }
-            FileProvider.getUriForFile(activity, authority, requireNotNull(file))
-        }.getOrElse {
-            return failure(
-                "FILE_PROVIDER_NOT_CONFIGURED",
-                "宿主未配置可用的 FileProvider，无法安全打开本地文件",
-            )
-        }
-        val mimeType = options.optString("mimeType").trim().ifEmpty {
-            file?.let { URLConnection.guessContentTypeFromName(it.name) } ?: "application/octet-stream"
-        }.ifEmpty { "application/octet-stream" }
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mimeType)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            clipData = ClipData.newRawUri("lynx-document", uri)
-        }
-        if (intent.resolveActivity(activity.packageManager) == null) {
-            return failure("NO_HANDLER", "系统没有可打开该文件类型的应用")
-        }
-        return try {
-            activity.startActivity(intent)
-            JSONObject().put("opened", true).put("uri", uri.toString()).put("mimeType", mimeType)
-        } catch (error: Exception) {
-            failure("OPEN_ERROR", error.message ?: "打开本地文档失败")
         }
     }
 
-    private fun privateFileFromAbsolutePath(activity: Activity, path: String): File? {
-        val candidate = runCatching { File(path).canonicalFile }.getOrNull() ?: return null
-        return if (privateRoots(activity).any { isWithinRoot(candidate, it) }) candidate else null
+    private fun fileViewer(activity: Activity, methodName: String, options: JSONObject): JSONObject {
+        if (methodName != "openDocumentFromLocalPath") return failure("UNSUPPORTED", "FileViewer.$methodName 尚未接入")
+        if (Looper.myLooper() != Looper.getMainLooper()) return failure("UI_THREAD_REQUIRED", "打开文档必须在主线程调用")
+        val raw = firstNonBlank(options, "path", "localPath", "uri") ?: return failure("INVALID_ARGUMENT", "需要本地 path 或 uri")
+        val media = NativeMediaUri.resolve(activity, raw, options.optString("directory", "CACHE"),
+            options.optString("mimeType").ifBlank { "application/octet-stream" }, measureSize = false)
+        return openDocumentOnMain(activity, media)
+    }
+
+    private fun openDocumentOnMain(activity: Activity, media: NativeMediaUri.Media): JSONObject {
+        if (activity.isFinishing || activity.isDestroyed) return failure("HOST_DESTROYED", "文档宿主已销毁")
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(media.uri, media.mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = ClipData.newRawUri("lynx-document", media.uri)
+        }
+        if (intent.resolveActivity(activity.packageManager) == null) return failure("NO_HANDLER", "系统没有可打开该文件类型的应用")
+        return try {
+            activity.startActivity(intent)
+            JSONObject().put("opened", true).put("uri", media.uri.toString()).put("mimeType", media.mimeType)
+        } catch (error: Exception) { failure("OPEN_ERROR", error.message ?: "打开本地文档失败") }
     }
 
     private fun clipboard(activity: Activity, methodName: String, options: JSONObject): JSONObject {
@@ -290,11 +259,6 @@ object NativeMediaCapabilities {
         val candidate = runCatching { File(canonicalRoot, path).canonicalFile }.getOrNull() ?: return null
         return candidate.takeIf { isWithinRoot(it, canonicalRoot) }
     }
-
-    private fun privateRoots(activity: Activity): List<File> = listOf(
-        activity.cacheDir,
-        activity.filesDir,
-    ).mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
 
     private fun isWithinRoot(candidate: File, root: File): Boolean {
         val candidatePath = candidate.path

@@ -6,7 +6,7 @@
 
 `lynx-capacitor` 是项目自研的 Android NativeModule 源码。名称保持 `LynxCapacitorModule`，用于兼容页面调用协议，但不依赖上游 Capacitor Runtime、Plugin Registry、autolink 或 codegen。
 
-当前 main 已包含源码和诊断 Bundle，但默认 `android/settings.gradle.kts`、`android/app` 和 `lynx-shell` 尚未依赖或注册本 Module。源码存在不等于 Sample 已可调用。接入任务必须显式完成：
+当前源码已将独立 Module 加入默认 Gradle graph 和 Sample；Sample 显式安装 Runtime、注册 Module，并通过 Shell 可选 Host 接口转发 Page/Tab owner 和系统回包。Shell 核心不依赖本 Module。源码接线不等于构建/设备验收，接入完整链路为：
 
 ```text
 加入 Gradle graph
@@ -63,10 +63,10 @@
 
 ## 构建约束
 
-- `compileSdk=36`、`minSdk=26`、Java/Kotlin 21。
-- Lynx 4.0 使用 `compileOnly`，宿主 Shell 提供 Runtime，避免打包第二份 Lynx。
+- `compileSdk=36`、`minSdk=26`、Java/Kotlin target 17；JDK 21 用于构建。
+- Lynx 4.1 使用 `compileOnly`，宿主 Shell 提供 Runtime，避免打包第二份 Lynx。
 - CameraX、ML Kit、AndroidX 版本以当前 `build.gradle.kts` 为准，未经明确授权不升级。
-- 当前默认根工程没有 `include(":lynx-capacitor")`。在未显式接入前，不得声称 `:lynx-capacitor:testDebugUnitTest` 或 Sample 构建已经执行。
+- 当前默认根工程包含 `include(":lynx-capacitor")`；Shell/能力 AAR 和组合 Sample 统一 minSdk 26/JVM 17，AGP 8.9.1。未运行命令时不得声称单元测试或 Sample 构建已执行。
 
 ## 安全与工作树
 

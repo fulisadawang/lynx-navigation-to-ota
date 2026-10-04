@@ -444,6 +444,8 @@ final class ShellNavigator: NSObject, UIAdaptivePresentationControllerDelegate {
             navigationEntryID: UUID().uuidString,
             navigationParentEntryID: source?.navigationEntryID,
             navigationOrder: order,
+            expectedParentSnapshotID: source?.otaNavigationSnapshotID,
+            expectedParentSnapshotAppID: source?.request.lynxAppId,
             preparedBundleData: preparedData
         )
         if request.transitionSpec.routeType == .heroSheet,
@@ -496,6 +498,8 @@ final class ShellNavigator: NSObject, UIAdaptivePresentationControllerDelegate {
             navigationEntryID: UUID().uuidString,
             navigationParentEntryID: source?.navigationEntryID,
             navigationOrder: order,
+            expectedParentSnapshotID: source?.otaNavigationSnapshotID,
+            expectedParentSnapshotAppID: source?.request.lynxAppId,
             preparedBundleData: preparedData,
             usesSystemSheetPresentation: true
         )
@@ -1120,6 +1124,38 @@ final class ShellNavigator: NSObject, UIAdaptivePresentationControllerDelegate {
                 "hasHostAnchor": rootNavigationController.viewControllers.first !== controllers.first,
                 "presentation": presentation,
             ]
+        )
+    }
+
+    /** 原位更新真实调用页面的返回策略，并同步 Scene 恢复快照。 */
+    func setBackGestureEnabled(
+        _ enabled: Bool,
+        sourceLynxView: LynxView?
+    ) -> LynxNavigationResult {
+        guard Thread.isMainThread else {
+            return failure(1500, "返回策略更新必须在主线程执行")
+        }
+        guard let rootNavigationController = navigationController else {
+            return failure(1002, "宿主导航器不可用")
+        }
+        let navigationController = operationNavigationController(root: rootNavigationController)
+        guard let current = navigationController.topViewController as? LynxContainerViewController,
+              current.owns(sourceLynxView) else {
+            return failure(1002, "调用页面已失效或不是当前 Lynx 容器")
+        }
+        guard !LynxShell.hostManagesBackGesture() else {
+            return failure(1004, "返回手势由业务宿主管理，壳无法修改")
+        }
+        if transitionCoordinator.isBusy || navigationController.transitionCoordinator != nil {
+            return failure(1006, "上一笔 UIKit 转场或返回手势仍在进行中")
+        }
+        current.setBackGestureEnabled(enabled)
+        updateBackGesture(for: current)
+        persistNavigationSnapshot()
+        return success(
+            "当前页面返回策略已更新",
+            affectedCount: 1,
+            data: ["backGestureEnabled": enabled]
         )
     }
 

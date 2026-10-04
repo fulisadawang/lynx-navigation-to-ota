@@ -10,6 +10,7 @@ import LynxMapKit
 import LynxShellDebugKit
 #endif
 import UIKit
+import LynxCapacitorKit
 
 /**
  * iOS Demo 专用的全局导航承载。
@@ -17,7 +18,12 @@ import UIKit
  * 业务 App 可以选择自己的 UINavigationController；Sample 只提供原生导航栏，返回手势
  * 由 LynxShell 的统一转场协调器管理，保证普通页、Bottom Sheet 和 Hero Sheet 不互相抢手势。
  */
-final class DemoNavigationController: UINavigationController {}
+final class DemoNavigationController: UINavigationController {
+    override var childForStatusBarStyle: UIViewController? { topViewController }
+    override var childForStatusBarHidden: UIViewController? { topViewController }
+    override var childForHomeIndicatorAutoHidden: UIViewController? { topViewController }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { topViewController?.supportedInterfaceOrientations ?? .allButUpsideDown }
+}
 
 /** Scene 只负责建立系统导航栈，并把深链交给统一 Router。 */
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -35,6 +41,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         options connectionOptions: UIScene.ConnectionOptions
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
+        let initialURL = connectionOptions.urlContexts.first?.url ??
+            connectionOptions.userActivities.first?.webpageURL
+        if let initialURL {
+            LynxCapacitorModule.setLaunchUrl(initialURL.absoluteString)
+        }
         // 原生 Launcher 始终作为宿主页锚点；默认冷启动在 Window 就绪后 push OTA 验收首页。
         let rootController = LauncherViewController()
         let navigationController = DemoNavigationController(rootViewController: rootController)
@@ -108,6 +119,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             if let url = connectionOptions.urlContexts.first?.url {
                 // 根控制器完成显示后再执行 push，避免冷启动深链出现层级告警。
                 DispatchQueue.main.async { [weak self] in self?.openDeepLink(url) }
+            } else if let mode = ProcessInfo.processInfo.environment["LYNX_TEST_NATIVE_READINESS_MODE"] {
+#if DEBUG
+                DispatchQueue.main.async { [weak self] in self?.openNativeReadinessTemplate(mode: mode) }
+#endif
             } else if shouldOpenHeroSheetDemo {
 #if DEBUG
                 DispatchQueue.main.async { [weak self] in self?.openHeroSheetDemo() }
@@ -158,12 +173,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         guard let url = URLContexts.first?.url else { return }
+        LynxCapacitorModule.emitAppUrlOpen(url.absoluteString)
         openDeepLink(url)
     }
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
               let url = userActivity.webpageURL else { return }
+        LynxCapacitorModule.emitAppUrlOpen(url.absoluteString)
         openDeepLink(url)
     }
 
@@ -256,6 +273,28 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 )
         }
     }
+
+#if DEBUG
+    /** 测试复用模板真实页面；仅本地测试环境启用，不向正式业务入口加入测试 UI。 */
+    private func openNativeReadinessTemplate(mode: String) {
+        Task { [weak self] in
+            _ = await LynxRouter.refreshAllOtaBundles()
+            await MainActor.run { self?.presentNativeReadinessTemplate(mode: mode) }
+        }
+    }
+
+    private func presentNativeReadinessTemplate(mode: String) {
+        if mode == "tabs" { openNativeTabDemo(); return }
+        do {
+            _ = try LynxRouter.open(
+                lynxAppId: "10020000",
+                bundleName: mode == "ecommerce" ? "OtaEcommercePage.lynx.bundle" : "HomePage.lynx.bundle",
+                params: ["source": "native-readiness-template"],
+                options: ["title": "模板测试", "fullscreen": true, "showNavigationBar": false]
+            )
+        } catch { presentLaunchError(error) }
+    }
+#endif
 
     private func openOtaAcceptanceHome() {
         do {

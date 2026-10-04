@@ -375,3 +375,9 @@ Golden Fixture，以及本地 OTA Server 用于验证真实 URLSession/Manifest/
 Shell 的最终 UI run 为4/4、19张截图，见 [iOS user-gray报告](../../docs/ios-ota-user-gray-test-report.html)；这是宿主UI证据，不把83个Core测试说成设备测试。
 Core不直接依赖UIKit/Lynx，可信Runtime metadata解析仍由Shell负责。旧 [Store v3报告](../../docs/ios-ota-store-v3-test-report.html) 另列历史，不覆盖本次身份协议结论。
 三端匿名内置脚本的iOS命令见 [Module接入](../../MODULE_INTEGRATION.md#三端匿名内置-baseline-下载)，必须传 `--target ios --platform ios --versioncode ... --lynx-sdk-version ...`，不传userId。
+
+## 原生基座补齐契约
+
+本轮启动维护、Page/Tab候选健康、owner取消、执行预算和Host诊断规则见
+[六项测试用例](../../docs/native-readiness-v1/test-cases.md)及
+[iOS实施契约](../../docs/native-readiness-v1/ios-contract.md)。实际结果以本轮测试报告为准。

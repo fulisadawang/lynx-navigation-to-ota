@@ -44,6 +44,18 @@ private final class PendingOtaUser {
  * Bundle 与 params，不需要注册 routeId。旧的 `LynxShell` API 保留，便于已有 App 平滑迁移。
  */
 public enum LynxRouter {
+    /** 旧 Shell 媒体 ABI 由宿主接入同一页面的原生能力 owner。 */
+    @MainActor
+    public static func installMediaHandler(_ handler: LynxShellMediaHandler?) {
+        ShellMediaBridge.shared.install(handler)
+    }
+
+    /** 独立能力 Pod 由宿主显式注册，Shell 的每个 Page/Tab Config 都会安装。 */
+    @MainActor
+    public static func registerNativeModule(_ moduleClass: AnyClass, onViewDestroy: ((LynxContext) -> Void)? = nil) {
+        LynxNativeRuntime.registerNativeModule(moduleClass, onViewDestroy: onViewDestroy)
+    }
+
     /** 原生宿主注册/更新用户；无效值返回 false 且保持当前身份。 */
     @MainActor @discardableResult
     public static func registerOtaUserId(_ userId: String?) -> Bool {

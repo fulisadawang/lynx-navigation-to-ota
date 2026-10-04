@@ -11,9 +11,12 @@ enum LynxNativeInteractiveCapabilities {
     private static let toastLock = NSLock()
     private static var toastView: UIView?
     private static var toastTimer: Timer?
-    private static var hapticEngine: CHHapticEngine?
-    private static var hapticPlayer: CHHapticPatternPlayer?
-    private static var shareController: UIActivityViewController?
+    private final class HapticState {
+        var engine: CHHapticEngine?
+        var player: CHHapticPatternPlayer?
+    }
+    private static var hapticOwners: [String: HapticState] = [:]
+    private static var toastOwnerID: String?
 
     static func dispatch(
         _ call: LynxNativeCapabilityCall,
@@ -28,6 +31,7 @@ enum LynxNativeInteractiveCapabilities {
         }
 
         let run = {
+            guard LynxNativeOwnerScope.isActive(call.ownerID) else { completion(.failure("HOST_DESTROYED", "页面已销毁")); return }
             switch call.pluginId {
             case "Dialog": dispatchDialog(call, presenter: presenter, completion: completion)
             case "ActionSheet": dispatchActionSheet(call, presenter: presenter, completion: completion)
@@ -41,16 +45,14 @@ enum LynxNativeInteractiveCapabilities {
         return true
     }
 
-    static func release() {
-        toastTimer?.invalidate()
-        toastTimer = nil
-        toastView?.removeFromSuperview()
-        toastView = nil
-        try? hapticPlayer?.stop(atTime: CHHapticTimeImmediate)
-        hapticPlayer = nil
-        hapticEngine?.stop(completionHandler: nil)
-        hapticEngine = nil
-        shareController = nil
+    static func release(ownerID: String) {
+        if toastOwnerID == ownerID { cancelToast(); toastOwnerID = nil }
+        if let state = hapticOwners.removeValue(forKey: ownerID) {
+            try? state.player?.stop(atTime: CHHapticTimeImmediate)
+            state.player = nil
+            state.engine?.stop(completionHandler: nil)
+            state.engine = nil
+        }
     }
 
     // MARK: - Dialog / ActionSheet
@@ -64,7 +66,11 @@ enum LynxNativeInteractiveCapabilities {
             completion(.failure("SCENE_UNAVAILABLE", "没有可展示 Dialog 的前台 UIViewController"))
             return
         }
-        let once = CompletionOnce(completion)
+        var resourceID: UUID?
+        let once = CompletionOnce { result in
+            LynxNativeOwnerScope.forget(ownerID: call.ownerID, token: resourceID)
+            completion(result)
+        }
         let alert = UIAlertController(
             title: string(call.options["title"], default: ""),
             message: string(call.options["message"], default: ""),
@@ -111,6 +117,7 @@ enum LynxNativeInteractiveCapabilities {
             return
         }
         alert.view.accessibilityIdentifier = "lynx-native-dialog"
+        resourceID = LynxNativeOwnerScope.retain(ownerID: call.ownerID) { [weak alert] in alert?.dismiss(animated: false) }
         presenter.present(alert, animated: true)
     }
 
@@ -131,7 +138,11 @@ enum LynxNativeInteractiveCapabilities {
             completion(.failure("INVALID_ARGUMENT", "ActionSheet.options 必须包含至少一个选项"))
             return
         }
-        let once = CompletionOnce(completion)
+        var resourceID: UUID?
+        let once = CompletionOnce { result in
+            LynxNativeOwnerScope.forget(ownerID: call.ownerID, token: resourceID)
+            completion(result)
+        }
         let sheet = UIAlertController(
             title: string(call.options["title"], default: ""),
             message: string(call.options["message"], default: ""),
@@ -156,6 +167,7 @@ enum LynxNativeInteractiveCapabilities {
             style: .cancel
         ) { _ in once.call(.success(["index": -1, "cancelled": true])) })
         configurePopover(sheet, presenter: presenter)
+        resourceID = LynxNativeOwnerScope.retain(ownerID: call.ownerID) { [weak sheet] in sheet?.dismiss(animated: false) }
         presenter.present(sheet, animated: true)
     }
 
@@ -191,6 +203,7 @@ enum LynxNativeInteractiveCapabilities {
                 completion(.failure("INVALID_ARGUMENT", "Toast.position 只能是 top、center 或 bottom"))
                 return
             }
+            toastOwnerID = call.ownerID
             showToast(text: text, duration: duration, position: position, in: presenter)
             completion(.success([
                 "shown": true,
@@ -208,7 +221,7 @@ enum LynxNativeInteractiveCapabilities {
                 "positionApplied": true,
             ]))
         case "cancel":
-            cancelToast()
+            if toastOwnerID == call.ownerID { cancelToast(); toastOwnerID = nil }
             completion(.success(["cancelled": true]))
         default:
             completion(.failure("UNSUPPORTED", "Toast.\(call.methodName) 尚未接入当前 iOS Module"))
@@ -265,6 +278,9 @@ enum LynxNativeInteractiveCapabilities {
         _ call: LynxNativeCapabilityCall,
         completion: @escaping Completion
     ) {
+        let owner = call.ownerID ?? "-1"
+        let state = hapticOwners[owner] ?? HapticState()
+        if call.methodName != "getCapabilities" { hapticOwners[owner] = state }
         switch call.methodName {
         case "impact":
             let style = string(call.options["style"], default: "MEDIUM").uppercased()
@@ -299,27 +315,27 @@ enum LynxNativeInteractiveCapabilities {
             completion(.success(["fired": true, "implementation": "UIKitFeedbackGenerator"]))
         case "vibrate":
             let duration = max(1, min(10_000, int(call.options["duration"], default: 40)))
-            completion(playHaptic(duration: Double(duration) / 1000, amplitude: double(call.options["amplitude"], default: 1)))
+            completion(playHaptic(duration: Double(duration) / 1000, amplitude: double(call.options["amplitude"], default: 1), state: state))
         case "vibrateLong":
             let duration = max(1, min(60_000, int(call.options["duration"], default: 1_500)))
-            completion(playHaptic(duration: Double(duration) / 1000, amplitude: double(call.options["amplitude"], default: 1)))
+            completion(playHaptic(duration: Double(duration) / 1000, amplitude: double(call.options["amplitude"], default: 1), state: state))
         case "vibrateWaveform":
-            completion(playWaveform(call.options))
+            completion(playWaveform(call.options, state: state))
         case "vibratePredefined":
             let effect = string(call.options["effectId"], default: "CLICK").uppercased()
             switch effect {
             case "CLICK", "TICK", "DOUBLE_CLICK":
                 let generator = UIImpactFeedbackGenerator(style: effect == "DOUBLE_CLICK" ? .heavy : .light)
                 generator.prepare(); generator.impactOccurred()
-                if effect == "DOUBLE_CLICK" { DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { generator.impactOccurred() } }
+                if effect == "DOUBLE_CLICK" { DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { if LynxNativeOwnerScope.isActive(call.ownerID) { generator.impactOccurred() } } }
                 completion(.success(["fired": true, "effectId": effect, "implementation": "UIKitApproximation"]))
             case "SUCCESS", "WARNING", "ERROR":
-                dispatchHaptics(LynxNativeCapabilityCall(callbackId: "", pluginId: "Haptics", methodName: "notification", options: ["type": effect]), completion: completion)
+                dispatchHaptics(LynxNativeCapabilityCall(callbackId: "", pluginId: "Haptics", methodName: "notification", options: ["type": effect], ownerID: call.ownerID), completion: completion)
             default:
                 completion(.failure("UNSUPPORTED_HAPTIC_EFFECT", "iOS 没有对应的 Android predefined effect: \(effect)"))
             }
         case "vibrateComposition":
-            completion(playComposition(call.options))
+            completion(playComposition(call.options, state: state))
         case "getCapabilities":
             let supports = CHHapticEngine.capabilitiesForHardware().supportsHaptics
             completion(.success([
@@ -331,16 +347,16 @@ enum LynxNativeInteractiveCapabilities {
                 "platform": "ios",
             ]))
         case "cancel":
-            try? hapticPlayer?.stop(atTime: CHHapticTimeImmediate)
-            hapticPlayer = nil
-            hapticEngine?.stop(completionHandler: nil)
+            try? state.player?.stop(atTime: CHHapticTimeImmediate)
+            state.player = nil
+            state.engine?.stop(completionHandler: nil)
             completion(.success(["cancelled": true]))
         default:
             completion(.failure("UNSUPPORTED", "Haptics.\(call.methodName) 尚未接入当前 iOS Module"))
         }
     }
 
-    private static func playHaptic(duration: TimeInterval, amplitude: Double) -> LynxNativeCapabilityResult {
+    private static func playHaptic(duration: TimeInterval, amplitude: Double, state: HapticState) -> LynxNativeCapabilityResult {
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
             if duration <= 0.1 {
                 AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
@@ -349,7 +365,7 @@ enum LynxNativeInteractiveCapabilities {
             return .failure("HARDWARE_UNAVAILABLE", "当前 iOS 设备不支持 Core Haptics 长震动")
         }
         do {
-            let engine = try ensureHapticEngine()
+            let engine = try ensureHapticEngine(state)
             let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(max(0, min(1, amplitude))))
             let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
             let event = CHHapticEvent(
@@ -359,7 +375,7 @@ enum LynxNativeInteractiveCapabilities {
                 duration: duration > 0.1 ? duration : 0
             )
             let player = try engine.makePlayer(with: CHHapticPattern(events: [event], parameters: []))
-            hapticPlayer = player
+            state.player = player
             try player.start(atTime: CHHapticTimeImmediate)
             return .success(["fired": true, "duration": duration * 1000, "implementation": "CoreHaptics"])
         } catch {
@@ -367,7 +383,7 @@ enum LynxNativeInteractiveCapabilities {
         }
     }
 
-    private static func playWaveform(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+    private static func playWaveform(_ options: [String: Any], state: HapticState) -> LynxNativeCapabilityResult {
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
             return .failure("HARDWARE_UNAVAILABLE", "当前 iOS 设备不支持 Core Haptics waveform")
         }
@@ -393,9 +409,9 @@ enum LynxNativeInteractiveCapabilities {
         }
         guard !events.isEmpty else { return .success(["fired": false, "eventCount": 0]) }
         do {
-            let engine = try ensureHapticEngine()
+            let engine = try ensureHapticEngine(state)
             let player = try engine.makePlayer(with: CHHapticPattern(events: events, parameters: []))
-            hapticPlayer = player
+            state.player = player
             try player.start(atTime: CHHapticTimeImmediate)
             return .success(["fired": true, "eventCount": events.count, "repeat": int(options["repeat"], default: -1) >= 0 ? false : true, "implementation": "CoreHapticsApproximation"])
         } catch {
@@ -403,7 +419,7 @@ enum LynxNativeInteractiveCapabilities {
         }
     }
 
-    private static func playComposition(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+    private static func playComposition(_ options: [String: Any], state: HapticState) -> LynxNativeCapabilityResult {
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
             return .failure("HARDWARE_UNAVAILABLE", "当前 iOS 设备不支持 Core Haptics composition")
         }
@@ -425,9 +441,9 @@ enum LynxNativeInteractiveCapabilities {
             time += duration
         }
         do {
-            let engine = try ensureHapticEngine()
+            let engine = try ensureHapticEngine(state)
             let player = try engine.makePlayer(with: CHHapticPattern(events: events, parameters: []))
-            hapticPlayer = player
+            state.player = player
             try player.start(atTime: CHHapticTimeImmediate)
             return .success(["fired": true, "primitiveCount": primitives.count, "implementation": "CoreHapticsApproximation"])
         } catch {
@@ -435,13 +451,13 @@ enum LynxNativeInteractiveCapabilities {
         }
     }
 
-    private static func ensureHapticEngine() throws -> CHHapticEngine {
-        if let hapticEngine { return hapticEngine }
+    private static func ensureHapticEngine(_ state: HapticState) throws -> CHHapticEngine {
+        if let engine = state.engine { return engine }
         let engine = try CHHapticEngine()
-        engine.resetHandler = { hapticEngine = nil }
+        engine.resetHandler = { [weak state] in DispatchQueue.main.async { state?.engine = nil } }
         engine.stoppedHandler = { _ in }
         try engine.start()
-        hapticEngine = engine
+        state.engine = engine
         return engine
     }
 
@@ -454,7 +470,7 @@ enum LynxNativeInteractiveCapabilities {
     ) {
         switch call.methodName {
         case "canShare":
-            completion(.success(["value": presenter != nil && UIActivityViewController.self != nil]))
+            completion(.success(["value": LynxNativeCapabilitySupport.isUsable(presenter)]))
         case "share":
             guard let presenter, LynxNativeCapabilitySupport.isUsable(presenter) else {
                 completion(.failure("SCENE_UNAVAILABLE", "没有可展示 Share Sheet 的前台 UIViewController"))
@@ -479,8 +495,9 @@ enum LynxNativeInteractiveCapabilities {
             let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
             controller.excludedActivityTypes = []
             configurePopover(controller, presenter: presenter)
+            var resourceID: UUID?
             controller.completionWithItemsHandler = { activityType, completed, _, error in
-                shareController = nil
+                LynxNativeOwnerScope.forget(ownerID: call.ownerID, token: resourceID)
                 if let error {
                     completion(.failure("SHARE_FAILED", error.localizedDescription))
                 } else {
@@ -490,7 +507,7 @@ enum LynxNativeInteractiveCapabilities {
                     ]))
                 }
             }
-            shareController = controller
+            resourceID = LynxNativeOwnerScope.retain(ownerID: call.ownerID) { [weak controller] in controller?.dismiss(animated: false) }
             presenter.present(controller, animated: true)
         default:
             completion(.failure("UNSUPPORTED", "Share.\(call.methodName) 尚未接入当前 iOS Module"))

@@ -16,6 +16,12 @@ import UIKit
 final class NativeTabBarDemoViewController: UITabBarController {
     private var tabControllers: [LynxTabViewController] = []
     private var refreshItem: UIBarButtonItem?
+    private let templateReadinessEnabled = ProcessInfo.processInfo.environment["LYNX_TEST_NATIVE_READINESS_MODE"] == "tabs"
+    override var childForStatusBarStyle: UIViewController? { selectedViewController }
+    override var childForStatusBarHidden: UIViewController? { selectedViewController }
+    override var childForHomeIndicatorAutoHidden: UIViewController? { selectedViewController }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { selectedViewController?.supportedInterfaceOrientations ?? .allButUpsideDown }
+
     private let otaV3FixtureEnabled = ProcessInfo.processInfo.environment[
         "LYNX_TEST_OTA_V3_FIXTURE"
     ] == "1"
@@ -88,9 +94,9 @@ final class NativeTabBarDemoViewController: UITabBarController {
 
         // 普通 Playground Tab 直接读取构建同步到 Bundles 根目录的当前 Bundle，
         // 这样调试按钮验收的就是最新前端产物；OTA v3 故障车道仍显式走 Manifest/current。
-        let identity = otaV3FixtureEnabled
-            ? (lynxAppId: "10000001", bundleName: "pages/10000001/bundle-050.lynx.bundle")
-            : nil
+        let identity = templateReadinessEnabled
+            ? (lynxAppId: "10020000", bundleName: "HomePage.lynx.bundle")
+            : (otaV3FixtureEnabled ? (lynxAppId: "10000001", bundleName: "pages/10000001/bundle-050.lynx.bundle") : nil)
         if otaV3FixtureEnabled && identity == nil {
             presentShellAlert(
                 title: "Tab Bundle 不可用",
@@ -104,7 +110,7 @@ final class NativeTabBarDemoViewController: UITabBarController {
         let home = LynxTabViewController(
             spec: LynxTabSpec(
                 tabId: "home",
-                bundleURL: otaV3FixtureEnabled
+                bundleURL: (otaV3FixtureEnabled || templateReadinessEnabled)
                     ? identity?.bundleName ?? ""
                     : "assets://bundles/main.lynx.bundle",
                 title: otaV3FixtureEnabled ? "首页（OTA v3）" : "首页",
@@ -126,8 +132,8 @@ final class NativeTabBarDemoViewController: UITabBarController {
         let settings = LynxTabViewController(
             spec: LynxTabSpec(
                 tabId: "settings",
-                bundleURL: otaV3FixtureEnabled
-                    ? identity?.bundleName ?? ""
+                bundleURL: (otaV3FixtureEnabled || templateReadinessEnabled)
+                    ? templateReadinessEnabled ? "OtaEcommercePage.lynx.bundle" : (identity?.bundleName ?? "")
                     : "assets://bundles/main.lynx.bundle",
                 title: otaV3FixtureEnabled ? "设置（OTA v3）" : "设置",
                 routeKey: "native-tab-settings",
@@ -136,7 +142,7 @@ final class NativeTabBarDemoViewController: UITabBarController {
                     "queryItems": ["native_tab_id": "settings"],
                 ],
                 lynxAppId: tabAppId,
-                bundleName: tabBundleName
+                bundleName: templateReadinessEnabled ? "OtaEcommercePage.lynx.bundle" : tabBundleName
             )
         )
         settings.tabBarItem = UITabBarItem(

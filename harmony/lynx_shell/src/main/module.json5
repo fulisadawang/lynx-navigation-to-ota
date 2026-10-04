@@ -37,6 +37,15 @@
       }
     ],
     "requestPermissions": [
+      { "name": "ohos.permission.CAMERA", "reason": "$string:camera_permission_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
+      { "name": "ohos.permission.MICROPHONE", "reason": "$string:microphone_permission_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
+      { "name": "ohos.permission.APPROXIMATELY_LOCATION", "reason": "$string:location_permission_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
+      { "name": "ohos.permission.READ_CONTACTS", "reason": "$string:contacts_permission_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
+      { "name": "ohos.permission.WRITE_CONTACTS", "reason": "$string:contacts_permission_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
+      { "name": "ohos.permission.READ_CALENDAR", "reason": "$string:calendar_permission_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
+      { "name": "ohos.permission.WRITE_CALENDAR", "reason": "$string:calendar_permission_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
+      { "name": "ohos.permission.VIBRATE" },
+      { "name": "ohos.permission.PUBLISH_AGENT_REMINDER", "reason": "$string:notification_permission_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
       {
         "name": "ohos.permission.INTERNET",
         "reason": "$string:network_permission_reason",

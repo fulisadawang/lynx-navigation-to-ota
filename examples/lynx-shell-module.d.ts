@@ -187,6 +187,11 @@ export interface LynxShellModule {
     callback: (result: NativeResult) => void
   ): void;
   getNavigationState(callback: (result: NativeResult) => void): void;
+  /** 原位更新当前调用页面的返回策略；不重建页面，显式 back/close 保留。 */
+  setBackGestureEnabled(
+    enabled: boolean,
+    callback: (result: NativeResult<{ backGestureEnabled: boolean; affectedCount: number }>) => void
+  ): void;
   closeWithResult(
     resultJSON: string,
     callback: (result: NativeResult) => void
@@ -232,6 +237,8 @@ export interface LynxShellModule {
     transactionID: string,
     callback: (result: NativeResult) => void
   ): void;
+  /** 后台 JS 在业务初始化完成后确认候选健康，旧宿主须先探测方法。 */
+  markOtaHealthy?: (callback: (result: NativeResult<{ confirmed: boolean; releaseId?: string; reason?: 'not_candidate' }>) => void) => void;
   getTransitionState(
     callback: (result: NativeResult<TransitionState>) => void
   ): void;

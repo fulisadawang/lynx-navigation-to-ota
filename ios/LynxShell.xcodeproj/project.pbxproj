@@ -9,27 +9,47 @@
 /* Begin PBXBuildFile section */
 		035DCC5452804B03B387E719 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D535EAB0479812D11B4B6BF9 /* SceneDelegate.swift */; };
 		045E423149AFC95BB8FCF8BA /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = B2B8A488E6FB22D0D77C70C2 /* LaunchScreen.storyboard */; };
+		08CF3787B9AD4473174978A8 /* CapHostStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530B74C1493712546D7B0895 /* CapHostStatusTests.swift */; };
 		0ADB94C5A038C786CE56837A /* UIViewController+ShellAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = D45F73F90995A6FFCC6C446B /* UIViewController+ShellAlert.swift */; };
 		0FFB13F6A08A246141124DF8 /* LynxShellUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27DFEDA91226844127382A87 /* LynxShellUITests.swift */; };
-		224C42D7A54EC3C777DD17FB /* Pods_LynxShellE2EHost.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D46821D82E978F668748AD3A /* Pods_LynxShellE2EHost.framework */; };
-		27E1958AAD631942FD22DE35 /* Pods_LynxShell.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 94699DB7D14D5737BEDBD41C /* Pods_LynxShell.framework */; };
+		1653C5FD80EDAF0612D614AB /* ShellOtaRuntimeReadinessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C33EF42AE6A227DF13D2663 /* ShellOtaRuntimeReadinessTests.swift */; };
+		29E0FED5E5BD331368F31BD0 /* Pods_LynxNativeReadinessTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 323F17216A03F3498DF4DC92 /* Pods_LynxNativeReadinessTests.framework */; };
 		3AD7D1A7722C5C17ADD73D13 /* LauncherViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB68D288FC09A76F8E3ABDBE /* LauncherViewController.swift */; };
+		4066E25806E9111D8D8DA7DC /* CapOwnerRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9636594DC73D65DA265E3843 /* CapOwnerRuntimeTests.swift */; };
+		45C9BB56DE11504879FD1994 /* LynxCapacitorSampleHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74720A64EA13C3DB0A8FCBD /* LynxCapacitorSampleHost.swift */; };
 		49EEF4ED4B79CD4CAB869EE5 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D535EAB0479812D11B4B6BF9 /* SceneDelegate.swift */; };
+		4DFF2FE74896020E838307CF /* ShellOtaHealthGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00CC2FA5E5BBEC344A4186E0 /* ShellOtaHealthGateTests.swift */; };
+		51122FD1FEE6122EB1B42931 /* LynxCapacitorSampleHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74720A64EA13C3DB0A8FCBD /* LynxCapacitorSampleHost.swift */; };
 		58ADC48BCB071EE1158E4052 /* LynxShellUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27DFEDA91226844127382A87 /* LynxShellUITests.swift */; };
+		5C08645A63891DEC93BCF677 /* ShellSDKDestroyIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9A24DBE078479391727179 /* ShellSDKDestroyIntegrationTests.swift */; };
+		5F0DEFA864AE07C1F16596A4 /* CapIOExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9BA060C0333E7B73DD3881E /* CapIOExecutorTests.swift */; };
 		5F6C79E4E81B012D7E2F8EDA /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = B2B8A488E6FB22D0D77C70C2 /* LaunchScreen.storyboard */; };
 		60B9EE6C36D1D16F28EB08CC /* Bundles in Resources */ = {isa = PBXBuildFile; fileRef = 671E23524F850A0312DC1F31 /* Bundles */; };
+		6D06BBC328943D75B6687CD1 /* NativeReadinessTemplateUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 871CA9B8B7A90BDA83863ECD /* NativeReadinessTemplateUITests.swift */; };
 		7B8FA6E773EDB716064AD240 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC72B6468F3396CF46F2562 /* AppDelegate.swift */; };
+		7EC905C4E46C53CEC31CBE2D /* NativeReadinessTemplateUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 871CA9B8B7A90BDA83863ECD /* NativeReadinessTemplateUITests.swift */; };
+		7F6893ED353852D215A7C00F /* Pods_LynxShell.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B03E15BED358FF028066F62 /* Pods_LynxShell.framework */; };
 		888E72CBE73F71B18643E473 /* NativeTabBarDemoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC559492CD3CE5E5564261E /* NativeTabBarDemoViewController.swift */; };
+		92525A3E104E090ECC325C46 /* Pods_LynxShellE2EHost.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 06A1C8B9BC3DB486E558BB04 /* Pods_LynxShellE2EHost.framework */; };
 		9B5CC5128AB238B01153064C /* UIViewController+ShellAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = D45F73F90995A6FFCC6C446B /* UIViewController+ShellAlert.swift */; };
 		B70AB00F1F0A6C0DB6E4BFAF /* OtaUserSelectionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20615DDB29CCC0B6CA568ABB /* OtaUserSelectionUITests.swift */; };
 		B86A5B7A2BE0AFA1F9C1CD1E /* LauncherViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB68D288FC09A76F8E3ABDBE /* LauncherViewController.swift */; };
 		B922420FD8D780F71CA85F57 /* Bundles in Resources */ = {isa = PBXBuildFile; fileRef = 671E23524F850A0312DC1F31 /* Bundles */; };
 		C60B4AEB7B3A6A801143BBB6 /* NativeTabBarDemoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC559492CD3CE5E5564261E /* NativeTabBarDemoViewController.swift */; };
+		CAD57C4AC17AB5A965339F9E /* ShellContainerHealthIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E41A077B5ED07054207B96C4 /* ShellContainerHealthIntegrationTests.swift */; };
 		DBA3449C11D85900F50C72AB /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC72B6468F3396CF46F2562 /* AppDelegate.swift */; };
+		FBBFD6E7E6AEAB9FD113BEF7 /* CapHTTPDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EDFF0C1EA8E761DDE94B320 /* CapHTTPDatabaseTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		57356ABF92676428366F8450 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FDDF8BDF11B6C714A1B0811C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 93FAA71CB4FE289CB16BC663;
+			remoteInfo = LynxShellE2EHost;
+		};
+		57D4E931CD1DAC25CB8BC91B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = FDDF8BDF11B6C714A1B0811C /* Project object */;
 			proxyType = 1;
@@ -46,41 +66,63 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		00CC2FA5E5BBEC344A4186E0 /* ShellOtaHealthGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellOtaHealthGateTests.swift; sourceTree = "<group>"; };
+		06A1C8B9BC3DB486E558BB04 /* Pods_LynxShellE2EHost.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_LynxShellE2EHost.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		08D831E65EC3442566902FB6 /* Pods-LynxNativeReadinessTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxNativeReadinessTests.debug.xcconfig"; path = "Target Support Files/Pods-LynxNativeReadinessTests/Pods-LynxNativeReadinessTests.debug.xcconfig"; sourceTree = "<group>"; };
+		0B03E15BED358FF028066F62 /* Pods_LynxShell.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_LynxShell.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		20615DDB29CCC0B6CA568ABB /* OtaUserSelectionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OtaUserSelectionUITests.swift; sourceTree = "<group>"; };
 		27DFEDA91226844127382A87 /* LynxShellUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LynxShellUITests.swift; sourceTree = "<group>"; };
+		323F17216A03F3498DF4DC92 /* Pods_LynxNativeReadinessTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_LynxNativeReadinessTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EA8ABAA8C91C4088725070A /* LynxShellE2EHost.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LynxShellE2EHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		44AFEE578D23130EA64089E3 /* Pods-LynxShellE2EHost.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShellE2EHost.release.xcconfig"; path = "Target Support Files/Pods-LynxShellE2EHost/Pods-LynxShellE2EHost.release.xcconfig"; sourceTree = "<group>"; };
+		451B298A4D0B1A4EE25E9EBA /* Pods-LynxShellE2EHost.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShellE2EHost.debug.xcconfig"; path = "Target Support Files/Pods-LynxShellE2EHost/Pods-LynxShellE2EHost.debug.xcconfig"; sourceTree = "<group>"; };
+		530B74C1493712546D7B0895 /* CapHostStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapHostStatusTests.swift; sourceTree = "<group>"; };
+		5B4FB3146BC1EDCB1213AC42 /* Pods-LynxNativeReadinessTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxNativeReadinessTests.release.xcconfig"; path = "Target Support Files/Pods-LynxNativeReadinessTests/Pods-LynxNativeReadinessTests.release.xcconfig"; sourceTree = "<group>"; };
 		671E23524F850A0312DC1F31 /* Bundles */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Bundles; path = LynxShellSample/Resources/Bundles; sourceTree = SOURCE_ROOT; };
-		704F5B95532096AD68061350 /* Pods-LynxShellE2EHost.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShellE2EHost.debug.xcconfig"; path = "Target Support Files/Pods-LynxShellE2EHost/Pods-LynxShellE2EHost.debug.xcconfig"; sourceTree = "<group>"; };
-		94699DB7D14D5737BEDBD41C /* Pods_LynxShell.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_LynxShell.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		733EB8F5862AB4FCBEE30596 /* Pods-LynxShell.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShell.release.xcconfig"; path = "Target Support Files/Pods-LynxShell/Pods-LynxShell.release.xcconfig"; sourceTree = "<group>"; };
+		7C33EF42AE6A227DF13D2663 /* ShellOtaRuntimeReadinessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellOtaRuntimeReadinessTests.swift; sourceTree = "<group>"; };
+		7D084C2E2A6A3CAE21831EBE /* Pods-LynxShell.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShell.debug.xcconfig"; path = "Target Support Files/Pods-LynxShell/Pods-LynxShell.debug.xcconfig"; sourceTree = "<group>"; };
+		871CA9B8B7A90BDA83863ECD /* NativeReadinessTemplateUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeReadinessTemplateUITests.swift; sourceTree = "<group>"; };
+		8EDFF0C1EA8E761DDE94B320 /* CapHTTPDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapHTTPDatabaseTests.swift; sourceTree = "<group>"; };
+		9636594DC73D65DA265E3843 /* CapOwnerRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapOwnerRuntimeTests.swift; sourceTree = "<group>"; };
 		A68C9DA63B50DD0DB2D94693 /* LynxShellE2EUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LynxShellE2EUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2B8A488E6FB22D0D77C70C2 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		BDC72B6468F3396CF46F2562 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		C9BA060C0333E7B73DD3881E /* CapIOExecutorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapIOExecutorTests.swift; sourceTree = "<group>"; };
 		CB1F313B2F4077991B8523DA /* LynxShell.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LynxShell.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		CB562204754EF6BACCAF3031 /* Pods-LynxShell.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShell.release.xcconfig"; path = "Target Support Files/Pods-LynxShell/Pods-LynxShell.release.xcconfig"; sourceTree = "<group>"; };
-		D32B1C6AD354CC61448D706D /* Pods-LynxShell.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShell.debug.xcconfig"; path = "Target Support Files/Pods-LynxShell/Pods-LynxShell.debug.xcconfig"; sourceTree = "<group>"; };
+		CD887E9B774654ACF1DC6C68 /* LynxNativeReadinessTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LynxNativeReadinessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CF9A24DBE078479391727179 /* ShellSDKDestroyIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellSDKDestroyIntegrationTests.swift; sourceTree = "<group>"; };
 		D45F73F90995A6FFCC6C446B /* UIViewController+ShellAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIViewController+ShellAlert.swift"; sourceTree = "<group>"; };
-		D46821D82E978F668748AD3A /* Pods_LynxShellE2EHost.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_LynxShellE2EHost.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		D535EAB0479812D11B4B6BF9 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		D74720A64EA13C3DB0A8FCBD /* LynxCapacitorSampleHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LynxCapacitorSampleHost.swift; sourceTree = "<group>"; };
+		E41A077B5ED07054207B96C4 /* ShellContainerHealthIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellContainerHealthIntegrationTests.swift; sourceTree = "<group>"; };
+		E88A8D44CF89959CD5328FF2 /* Pods-LynxShellE2EHost.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-LynxShellE2EHost.release.xcconfig"; path = "Target Support Files/Pods-LynxShellE2EHost/Pods-LynxShellE2EHost.release.xcconfig"; sourceTree = "<group>"; };
 		EB68D288FC09A76F8E3ABDBE /* LauncherViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherViewController.swift; sourceTree = "<group>"; };
 		FDFE6EDFEA96961A72494905 /* LynxShellUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LynxShellUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FEC559492CD3CE5E5564261E /* NativeTabBarDemoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabBarDemoViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		2CD9D52C4A7021DE0A3883BB /* Frameworks */ = {
+		56FF3A029888E06026FC57CD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				224C42D7A54EC3C777DD17FB /* Pods_LynxShellE2EHost.framework in Frameworks */,
+				92525A3E104E090ECC325C46 /* Pods_LynxShellE2EHost.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		37AF65364690A1BDAC9AFC47 /* Frameworks */ = {
+		946ABDB7BB5EAED85F532584 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				27E1958AAD631942FD22DE35 /* Pods_LynxShell.framework in Frameworks */,
+				29E0FED5E5BD331368F31BD0 /* Pods_LynxNativeReadinessTests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB6C6CE7735DF86327948F6C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7F6893ED353852D215A7C00F /* Pods_LynxShell.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,33 +132,13 @@
 		0008A317B9BEEC9C7A94C9C8 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				CD887E9B774654ACF1DC6C68 /* LynxNativeReadinessTests.xctest */,
 				CB1F313B2F4077991B8523DA /* LynxShell.app */,
 				3EA8ABAA8C91C4088725070A /* LynxShellE2EHost.app */,
 				A68C9DA63B50DD0DB2D94693 /* LynxShellE2EUITests.xctest */,
 				FDFE6EDFEA96961A72494905 /* LynxShellUITests.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		14B6B545EDF0B60E4C3EC6AC /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				94699DB7D14D5737BEDBD41C /* Pods_LynxShell.framework */,
-				D46821D82E978F668748AD3A /* Pods_LynxShellE2EHost.framework */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		47242D77E3312DC216844D20 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				D32B1C6AD354CC61448D706D /* Pods-LynxShell.debug.xcconfig */,
-				CB562204754EF6BACCAF3031 /* Pods-LynxShell.release.xcconfig */,
-				704F5B95532096AD68061350 /* Pods-LynxShellE2EHost.debug.xcconfig */,
-				44AFEE578D23130EA64089E3 /* Pods-LynxShellE2EHost.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
 			sourceTree = "<group>";
 		};
 		4FE3E5EEB94B280E2DBF4DD7 /* Supporting */ = {
@@ -131,9 +153,50 @@
 			isa = PBXGroup;
 			children = (
 				BDC72B6468F3396CF46F2562 /* AppDelegate.swift */,
+				D74720A64EA13C3DB0A8FCBD /* LynxCapacitorSampleHost.swift */,
 				D535EAB0479812D11B4B6BF9 /* SceneDelegate.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		70E80808EE4BCA6048153172 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				08D831E65EC3442566902FB6 /* Pods-LynxNativeReadinessTests.debug.xcconfig */,
+				5B4FB3146BC1EDCB1213AC42 /* Pods-LynxNativeReadinessTests.release.xcconfig */,
+				7D084C2E2A6A3CAE21831EBE /* Pods-LynxShell.debug.xcconfig */,
+				733EB8F5862AB4FCBEE30596 /* Pods-LynxShell.release.xcconfig */,
+				451B298A4D0B1A4EE25E9EBA /* Pods-LynxShellE2EHost.debug.xcconfig */,
+				E88A8D44CF89959CD5328FF2 /* Pods-LynxShellE2EHost.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		7D3C5E6EA770422B71AB8DD8 /* NativeReadiness */ = {
+			isa = PBXGroup;
+			children = (
+				530B74C1493712546D7B0895 /* CapHostStatusTests.swift */,
+				8EDFF0C1EA8E761DDE94B320 /* CapHTTPDatabaseTests.swift */,
+				C9BA060C0333E7B73DD3881E /* CapIOExecutorTests.swift */,
+				9636594DC73D65DA265E3843 /* CapOwnerRuntimeTests.swift */,
+				E41A077B5ED07054207B96C4 /* ShellContainerHealthIntegrationTests.swift */,
+				00CC2FA5E5BBEC344A4186E0 /* ShellOtaHealthGateTests.swift */,
+				7C33EF42AE6A227DF13D2663 /* ShellOtaRuntimeReadinessTests.swift */,
+				CF9A24DBE078479391727179 /* ShellSDKDestroyIntegrationTests.swift */,
+			);
+			name = NativeReadiness;
+			path = Tests/NativeReadiness;
+			sourceTree = "<group>";
+		};
+		7F2BDE1303A4C40AB4DEDA9B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				323F17216A03F3498DF4DC92 /* Pods_LynxNativeReadinessTests.framework */,
+				0B03E15BED358FF028066F62 /* Pods_LynxShell.framework */,
+				06A1C8B9BC3DB486E558BB04 /* Pods_LynxShellE2EHost.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		C89ED508A02A75E2433DBBB4 = {
@@ -141,10 +204,11 @@
 			children = (
 				671E23524F850A0312DC1F31 /* Bundles */,
 				E4EF8224AD5989EC30CCFD7D /* LynxShellSample */,
+				7D3C5E6EA770422B71AB8DD8 /* NativeReadiness */,
 				F2F381773CC25F187FF35DBA /* UITests */,
 				0008A317B9BEEC9C7A94C9C8 /* Products */,
-				47242D77E3312DC216844D20 /* Pods */,
-				14B6B545EDF0B60E4C3EC6AC /* Frameworks */,
+				70E80808EE4BCA6048153172 /* Pods */,
+				7F2BDE1303A4C40AB4DEDA9B /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -172,6 +236,7 @@
 			isa = PBXGroup;
 			children = (
 				27DFEDA91226844127382A87 /* LynxShellUITests.swift */,
+				871CA9B8B7A90BDA83863ECD /* NativeReadinessTemplateUITests.swift */,
 				20615DDB29CCC0B6CA568ABB /* OtaUserSelectionUITests.swift */,
 			);
 			name = UITests;
@@ -185,11 +250,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 152B6AADF6121D162A95282E /* Build configuration list for PBXNativeTarget "LynxShell" */;
 			buildPhases = (
-				F6036C39BB4A81C91CF5E02B /* [CP] Check Pods Manifest.lock */,
+				A51CADC92314E8785D8C3D97 /* [CP] Check Pods Manifest.lock */,
 				85EDB69EDB4E62C8A2F5F7C5 /* Sources */,
 				BB93503754F8D1B943BE6CB6 /* Resources */,
-				37AF65364690A1BDAC9AFC47 /* Frameworks */,
-				10E78B1D5EA04ACF370BD671 /* [CP] Copy Pods Resources */,
+				BB6C6CE7735DF86327948F6C /* Frameworks */,
+				A29ECFB0B862CCB9B7089A19 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -204,11 +269,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = D6C81D39346E8F1B124BEE1D /* Build configuration list for PBXNativeTarget "LynxShellE2EHost" */;
 			buildPhases = (
-				2583A46CD6B63BDC0ACCCAC8 /* [CP] Check Pods Manifest.lock */,
+				470F9EC2A6F78E827D6DBE59 /* [CP] Check Pods Manifest.lock */,
 				EA59E7E8830358999A0DEC75 /* Sources */,
 				E961C327FFC19F53D36134BE /* Resources */,
-				2CD9D52C4A7021DE0A3883BB /* Frameworks */,
-				B39340BA47A01A1D58634D2E /* [CP] Copy Pods Resources */,
+				56FF3A029888E06026FC57CD /* Frameworks */,
+				61B0BF2446E74E947C4EBF53 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -250,6 +315,24 @@
 			productName = LynxShellE2EUITests;
 			productReference = A68C9DA63B50DD0DB2D94693 /* LynxShellE2EUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		F4E0BF5F1C16327BC928D901 /* LynxNativeReadinessTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 10CBD5561F722D0D98837FC6 /* Build configuration list for PBXNativeTarget "LynxNativeReadinessTests" */;
+			buildPhases = (
+				74C82958913C2FA2FE2C57CA /* [CP] Check Pods Manifest.lock */,
+				DF89627CA016D81BC1B66266 /* Sources */,
+				946ABDB7BB5EAED85F532584 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3ED9F3C4D581EC714C99FC01 /* PBXTargetDependency */,
+			);
+			name = LynxNativeReadinessTests;
+			productName = LynxNativeReadinessTests;
+			productReference = CD887E9B774654ACF1DC6C68 /* LynxNativeReadinessTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -294,6 +377,7 @@
 				A765ADCE709CBF3C7FED4333 /* LynxShellUITests */,
 				93FAA71CB4FE289CB16BC663 /* LynxShellE2EHost */,
 				DB12F8360AF561223B8FF346 /* LynxShellE2EUITests */,
+				F4E0BF5F1C16327BC928D901 /* LynxNativeReadinessTests */,
 			);
 		};
 /* End PBXProject section */
@@ -320,24 +404,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		10E78B1D5EA04ACF370BD671 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-LynxShell/Pods-LynxShell-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-LynxShell/Pods-LynxShell-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-LynxShell/Pods-LynxShell-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		2583A46CD6B63BDC0ACCCAC8 /* [CP] Check Pods Manifest.lock */ = {
+		470F9EC2A6F78E827D6DBE59 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -359,7 +426,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		B39340BA47A01A1D58634D2E /* [CP] Copy Pods Resources */ = {
+		61B0BF2446E74E947C4EBF53 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -376,7 +443,46 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-LynxShellE2EHost/Pods-LynxShellE2EHost-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		F6036C39BB4A81C91CF5E02B /* [CP] Check Pods Manifest.lock */ = {
+		74C82958913C2FA2FE2C57CA /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-LynxNativeReadinessTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A29ECFB0B862CCB9B7089A19 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-LynxShell/Pods-LynxShell-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-LynxShell/Pods-LynxShell-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-LynxShell/Pods-LynxShell-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A51CADC92314E8785D8C3D97 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -406,6 +512,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0FFB13F6A08A246141124DF8 /* LynxShellUITests.swift in Sources */,
+				6D06BBC328943D75B6687CD1 /* NativeReadinessTemplateUITests.swift in Sources */,
 				B70AB00F1F0A6C0DB6E4BFAF /* OtaUserSelectionUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -416,9 +523,25 @@
 			files = (
 				DBA3449C11D85900F50C72AB /* AppDelegate.swift in Sources */,
 				3AD7D1A7722C5C17ADD73D13 /* LauncherViewController.swift in Sources */,
+				45C9BB56DE11504879FD1994 /* LynxCapacitorSampleHost.swift in Sources */,
 				C60B4AEB7B3A6A801143BBB6 /* NativeTabBarDemoViewController.swift in Sources */,
 				49EEF4ED4B79CD4CAB869EE5 /* SceneDelegate.swift in Sources */,
 				9B5CC5128AB238B01153064C /* UIViewController+ShellAlert.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF89627CA016D81BC1B66266 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FBBFD6E7E6AEAB9FD113BEF7 /* CapHTTPDatabaseTests.swift in Sources */,
+				08CF3787B9AD4473174978A8 /* CapHostStatusTests.swift in Sources */,
+				5F0DEFA864AE07C1F16596A4 /* CapIOExecutorTests.swift in Sources */,
+				4066E25806E9111D8D8DA7DC /* CapOwnerRuntimeTests.swift in Sources */,
+				CAD57C4AC17AB5A965339F9E /* ShellContainerHealthIntegrationTests.swift in Sources */,
+				4DFF2FE74896020E838307CF /* ShellOtaHealthGateTests.swift in Sources */,
+				1653C5FD80EDAF0612D614AB /* ShellOtaRuntimeReadinessTests.swift in Sources */,
+				5C08645A63891DEC93BCF677 /* ShellSDKDestroyIntegrationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -428,6 +551,7 @@
 			files = (
 				7B8FA6E773EDB716064AD240 /* AppDelegate.swift in Sources */,
 				B86A5B7A2BE0AFA1F9C1CD1E /* LauncherViewController.swift in Sources */,
+				51122FD1FEE6122EB1B42931 /* LynxCapacitorSampleHost.swift in Sources */,
 				888E72CBE73F71B18643E473 /* NativeTabBarDemoViewController.swift in Sources */,
 				035DCC5452804B03B387E719 /* SceneDelegate.swift in Sources */,
 				0ADB94C5A038C786CE56837A /* UIViewController+ShellAlert.swift in Sources */,
@@ -439,6 +563,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				58ADC48BCB071EE1158E4052 /* LynxShellUITests.swift in Sources */,
+				7EC905C4E46C53CEC31CBE2D /* NativeReadinessTemplateUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -449,6 +574,11 @@
 			isa = PBXTargetDependency;
 			target = 93FAA71CB4FE289CB16BC663 /* LynxShellE2EHost */;
 			targetProxy = 57356ABF92676428366F8450 /* PBXContainerItemProxy */;
+		};
+		3ED9F3C4D581EC714C99FC01 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 93FAA71CB4FE289CB16BC663 /* LynxShellE2EHost */;
+			targetProxy = 57D4E931CD1DAC25CB8BC91B /* PBXContainerItemProxy */;
 		};
 		4F00C452E8F49DC607D18BD3 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -524,9 +654,28 @@
 			};
 			name = Debug;
 		};
+		26893F77886FC57B8FB30704 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B4FB3146BC1EDCB1213AC42 /* Pods-LynxNativeReadinessTests.release.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.huangbaoche.client.store.native-readiness-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LynxShellE2EHost.app/LynxShellE2EHost";
+			};
+			name = Release;
+		};
 		31285A531E4989310E86C073 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = CB562204754EF6BACCAF3031 /* Pods-LynxShell.release.xcconfig */;
+			baseConfigurationReference = 733EB8F5862AB4FCBEE30596 /* Pods-LynxShell.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -589,7 +738,7 @@
 		};
 		77745A6AD7760BBBD9E75840 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 704F5B95532096AD68061350 /* Pods-LynxShellE2EHost.debug.xcconfig */;
+			baseConfigurationReference = 451B298A4D0B1A4EE25E9EBA /* Pods-LynxShellE2EHost.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -694,7 +843,7 @@
 		};
 		C67C3361DEE0D5D5731E60C1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = D32B1C6AD354CC61448D706D /* Pods-LynxShell.debug.xcconfig */;
+			baseConfigurationReference = 7D084C2E2A6A3CAE21831EBE /* Pods-LynxShell.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -737,9 +886,28 @@
 			};
 			name = Debug;
 		};
+		FC3050807059B2B4A6F43B16 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 08D831E65EC3442566902FB6 /* Pods-LynxNativeReadinessTests.debug.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.huangbaoche.client.store.native-readiness-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LynxShellE2EHost.app/LynxShellE2EHost";
+			};
+			name = Debug;
+		};
 		FDFD20D5373CCF92D13A6C55 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 44AFEE578D23130EA64089E3 /* Pods-LynxShellE2EHost.release.xcconfig */;
+			baseConfigurationReference = E88A8D44CF89959CD5328FF2 /* Pods-LynxShellE2EHost.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -768,6 +936,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		10CBD5561F722D0D98837FC6 /* Build configuration list for PBXNativeTarget "LynxNativeReadinessTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FC3050807059B2B4A6F43B16 /* Debug */,
+				26893F77886FC57B8FB30704 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		152B6AADF6121D162A95282E /* Build configuration list for PBXNativeTarget "LynxShell" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

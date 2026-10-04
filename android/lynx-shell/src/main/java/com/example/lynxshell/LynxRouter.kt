@@ -15,6 +15,8 @@ import com.example.lynxshell.routing.LynxRouteParser
 import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
 import com.example.lynxshell.runtime.LynxLocaleState
 import com.example.lynxshell.runtime.LynxLocaleStore
+import com.example.lynxshell.runtime.LynxSystemUIHandle
+import com.lynx.tasm.behavior.LynxContext
 import com.lynx.tasm.LynxGlobalMemoryUsageCallback
 import com.lynx.tasm.LynxMemoryUsageQuery
 import org.json.JSONObject
@@ -30,6 +32,15 @@ import java.util.concurrent.CopyOnWriteArraySet
  * Activity 的 Intent extra、Registry 或 Provider 细节，也不需要预注册 routeId。
  */
 object LynxRouter {
+    /** 仅接受已注册的真实调用 Context，不猜测 Activity 中的第一个 Tab。 */
+    @JvmStatic
+    fun systemUIHandle(context: Context): LynxSystemUIHandle? {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "System UI Handle 必须在主线程解析" }
+        val view = (context as? LynxContext)?.lynxView ?: return null
+        val activity = ShellMessageHub.activityFor(view) ?: return null
+        return LynxSystemUIHandle(activity, view)
+    }
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val otaUserLock = Any()
     private var hasPendingOtaUser = false

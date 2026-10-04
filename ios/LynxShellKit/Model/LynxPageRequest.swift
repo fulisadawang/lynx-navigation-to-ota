@@ -238,17 +238,35 @@ struct LynxPageRequest {
 
     /** 复制页面请求并冻结一次 open 解析得到的转场配置。 */
     func withTransitionSpec(_ value: ShellTransitionSpec) -> LynxPageRequest {
-        copying(transitionSpec: value, nativeTransition: nativeTransition)
+        copying(
+            transitionSpec: value,
+            nativeTransition: nativeTransition,
+            backGestureEnabled: backGestureEnabled
+        )
     }
 
     /** 复制页面请求并注入本次原生转场上下文。 */
     func withNativeTransition(_ value: ShellNativeTransitionMetadata?) -> LynxPageRequest {
-        copying(transitionSpec: transitionSpec, nativeTransition: value)
+        copying(
+            transitionSpec: transitionSpec,
+            nativeTransition: value,
+            backGestureEnabled: backGestureEnabled
+        )
+    }
+
+    /** 只更新返回策略，保留 Bundle、页面数据和既有转场上下文。 */
+    func withBackGestureEnabled(_ enabled: Bool) -> LynxPageRequest {
+        copying(
+            transitionSpec: transitionSpec,
+            nativeTransition: nativeTransition,
+            backGestureEnabled: enabled
+        )
     }
 
     private func copying(
         transitionSpec: ShellTransitionSpec,
-        nativeTransition: ShellNativeTransitionMetadata?
+        nativeTransition: ShellNativeTransitionMetadata?,
+        backGestureEnabled: Bool
     ) -> LynxPageRequest {
         LynxPageRequest(
             bundleURL: bundleURL,

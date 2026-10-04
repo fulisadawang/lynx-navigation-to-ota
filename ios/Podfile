@@ -11,6 +11,7 @@ target 'LynxShell' do
   # Shell 负责 Router/Runtime；地图实现由独立 LynxMapKit Module 提供。
   pod 'LynxShellKit', :path => '.'
   pod 'LynxMapKit', :path => 'LynxMapKit'
+  pod 'LynxCapacitorKit', :path => '.'
   # AMap 官方 CocoaPods CDN 尚未同步 2.12.3，使用官方下载包的本地 podspec 固定版本。
   pod 'AMapLocation', :podspec => 'LocalPods/AMapLocation.podspec'
   # 仅 Debug 构建链接端内调试工具；Release 不包含 DebugKit、面板或诊断缓存。
@@ -20,6 +21,10 @@ end
 # 只供 Async/i18n OTA UI 验收使用，不链接无 arm64 Simulator slice 的地图 SDK。
 target 'LynxShellE2EHost' do
   pod 'LynxShellKitE2ECore', :path => '.'
+  pod 'LynxCapacitorKit', :path => '.'
+  target 'LynxNativeReadinessTests' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|

@@ -43,6 +43,12 @@ object NativeMotionCapabilities {
         state?.detach()
     }
 
+    /** 同一 Activity 的多个 Tab 拥有独立事件出口，销毁一个 Module 不清理其他 Tab。 */
+    fun releaseForSender(sender: (String) -> Unit) {
+        val snapshot = synchronized(this) { states.values.toList() }
+        snapshot.forEach { it.removeForSender(sender) }
+    }
+
     /**
      * 处理 Motion 业务方法。
      *
@@ -57,8 +63,8 @@ object NativeMotionCapabilities {
             "addListener" -> state.addListener(options)
             "removeListener" -> state.removeListener(options)
             "removeAllListeners" -> state.removeAllListeners()
-            "start" -> state.start()
-            "stop" -> state.stop()
+            "start" -> state.startForSender()
+            "stop" -> state.stopForSender()
             else -> failure("UNSUPPORTED", "Motion.$methodName 尚未接入当前 Android Module")
         }
     }
@@ -77,7 +83,8 @@ object NativeMotionCapabilities {
         private val sensorManager: SensorManager?,
         private var eventSender: (String) -> Unit,
     ) : SensorEventListener {
-        private val listeners = LinkedHashMap<String, Listener>()
+        private val listeners = LinkedHashMap<ListenerKey, Listener>()
+        private val pausedSenders = mutableSetOf<(String) -> Unit>()
         private val registeredSensorTypes = mutableSetOf<Int>()
         private var started = false
         private var lastAccelerationTimestampNanos = 0L
@@ -102,13 +109,14 @@ object NativeMotionCapabilities {
                 ?: return failure("UNSUPPORTED", "当前设备不支持 Motion.$eventName 所需传感器")
 
             val listenerId = listenerId(options)
-            val previous = listeners.put(listenerId, Listener(listenerId, eventName))
+            val key = ListenerKey(eventSender, listenerId)
+            val previous = listeners.put(key, Listener(listenerId, eventName, eventSender))
             val startResult = startLocked(sensor)
             if (startResult != null) {
                 if (previous == null) {
-                    listeners.remove(listenerId)
+                    listeners.remove(key)
                 } else {
-                    listeners[listenerId] = previous
+                    listeners[key] = previous
                 }
                 if (listeners.isEmpty()) stopLocked()
                 return startResult
@@ -129,7 +137,7 @@ object NativeMotionCapabilities {
                 return failure("INVALID_ARGUMENT", "Motion.removeListener 需要 listenerId")
             }
 
-            val removed = listeners.remove(listenerId) != null
+            val removed = listeners.remove(ListenerKey(eventSender, listenerId)) != null
             if (listeners.isEmpty()) stopLocked()
             return JSONObject()
                 .put("listenerId", listenerId)
@@ -140,13 +148,20 @@ object NativeMotionCapabilities {
 
         @Synchronized
         fun removeAllListeners(): JSONObject {
-            val removed = listeners.size
-            listeners.clear()
-            stopLocked()
+            val removed = removeForSender(eventSender)
             return JSONObject()
                 .put("removed", removed)
                 .put("save", false)
                 .put("pending", false)
+        }
+
+        @Synchronized
+        fun removeForSender(sender: (String) -> Unit): Int {
+            pausedSenders.remove(sender)
+            val removed = listeners.values.count { it.sender === sender }
+            listeners.entries.removeAll { it.value.sender === sender }
+            if (listeners.isEmpty()) stopLocked()
+            return removed
         }
 
         @Synchronized
@@ -186,6 +201,16 @@ object NativeMotionCapabilities {
         }
 
         @Synchronized
+        fun startForSender(): JSONObject { pausedSenders.remove(eventSender); return start() }
+
+        @Synchronized
+        fun stopForSender(): JSONObject {
+            pausedSenders.add(eventSender)
+            if (listeners.values.none { it.sender !in pausedSenders }) stopLocked()
+            return JSONObject().put("stopped", true).put("listenerCount", listeners.values.count { it.sender === eventSender })
+        }
+
+        @Synchronized
         fun stop(): JSONObject {
             stopLocked()
             return JSONObject().put("stopped", true).put("listenerCount", listeners.size)
@@ -195,11 +220,12 @@ object NativeMotionCapabilities {
         fun detach() {
             stopLocked()
             listeners.clear()
+            pausedSenders.clear()
         }
 
         override fun onSensorChanged(event: SensorEvent) {
-            val envelopes = synchronized(this) {
-                if (!started) return@synchronized emptyList<String>()
+            val envelopes: List<Pair<(String) -> Unit, String>> = synchronized(this) {
+                if (!started) return@synchronized emptyList()
 
                 val eventName = when (event.sensor.type) {
                     Sensor.TYPE_ACCELEROMETER,
@@ -208,12 +234,12 @@ object NativeMotionCapabilities {
                     Sensor.TYPE_GYROSCOPE -> EVENT_ORIENTATION
                     else -> return@synchronized emptyList()
                 }
-                val matchingListeners = listeners.values.filter { it.eventName == eventName }
+                val matchingListeners = listeners.values.filter { it.eventName == eventName && it.sender !in pausedSenders }
                 if (matchingListeners.isEmpty()) return@synchronized emptyList()
 
                 val interval = intervalMillis(event)
                 matchingListeners.map { listener ->
-                    eventEnvelope(
+                    listener.sender to eventEnvelope(
                         listener = listener,
                         data = when (eventName) {
                             EVENT_ACCEL -> accelerationData(event.values, interval, event.sensor.type)
@@ -224,9 +250,10 @@ object NativeMotionCapabilities {
                 }
             }
 
-            envelopes.forEach { envelope ->
-                val sender = synchronized(this) { eventSender }
-                runCatching { sender(envelope) }
+            envelopes.forEach { (sender, envelope) ->
+                runCatching { sender(envelope) }.onFailure { error ->
+                    android.util.Log.w("LynxNativeModule", "Motion 事件投递失败", error)
+                }
             }
         }
 
@@ -344,7 +371,10 @@ object NativeMotionCapabilities {
     private data class Listener(
         val listenerId: String,
         val eventName: String,
+        val sender: (String) -> Unit,
     )
+
+    private data class ListenerKey(val sender: (String) -> Unit, val listenerId: String)
 
     private fun listenerId(options: JSONObject): String = options.optString("listenerId").trim()
         .ifEmpty { options.optString("callbackId").trim() }

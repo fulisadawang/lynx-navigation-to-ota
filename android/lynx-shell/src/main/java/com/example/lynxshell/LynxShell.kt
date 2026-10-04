@@ -23,6 +23,30 @@ import com.example.lynxshell.transition.PreparedRouteStore
  * 复制壳源码，也不需要 Sparkling autolink。
  */
 object LynxShell {
+    @Volatile
+    private var nativeModuleHost: com.example.lynxshell.runtime.LynxNativeModuleHost? = null
+
+    /** 宿主在首个 LynxView 创建前安装额外能力的生命周期接线。 */
+    fun installNativeModuleHost(host: com.example.lynxshell.runtime.LynxNativeModuleHost) {
+        nativeModuleHost = host
+    }
+
+    internal fun nativeModuleHost(): com.example.lynxshell.runtime.LynxNativeModuleHost? = nativeModuleHost
+
+    @Volatile
+    private var nativeMediaHost: com.example.lynxshell.runtime.LynxNativeMediaHost? = null
+
+    fun installNativeMediaHost(host: com.example.lynxshell.runtime.LynxNativeMediaHost) {
+        nativeMediaHost = host
+    }
+
+    internal fun nativeMediaHost(): com.example.lynxshell.runtime.LynxNativeMediaHost? = nativeMediaHost
+
+    /** 先释放 exact Context 的原生任务，再进入 SDK Module/View 销毁链。 */
+    internal fun destroyView(view: com.lynx.tasm.LynxView) {
+        try { nativeMediaHost?.onViewDestroy(view.lynxContext) } finally { view.destroy() }
+    }
+
     /**
      * 当前宿主注入的 Activity-first OTA runtime。
      *

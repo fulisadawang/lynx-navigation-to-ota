@@ -2,8 +2,8 @@
 
 ## 项目定位
 
-`lynx-navigation-to-ota` 是独立的 Lynx 4.1 三端原生 Router + OTA 源码工程，并包含尚未接入
-默认 Sample 的三端 `LynxCapacitorModule` 原生能力源码。
+`lynx-navigation-to-ota` 是独立的 Lynx 4.1 三端原生 Router + OTA 源码工程，默认 Sample 已完成
+独立 `LynxCapacitorModule` 原生能力模块的源码装配；宿主构建与设备运行仍需单独验收。
 三端 Shell 业务方分别引入一个平台模块：Android AAR、iOS CocoaPods Module、HarmonyOS HAR。
 本仓库不包含旧的 `LynxScreens-Android` 工程，也不依赖 Sparkling 原生 SDK。
 
@@ -77,7 +77,19 @@ android/lynx-shell/
 非 Debug variant 通过 `GenerateProductionSources` 移除共享源码中的显式调试块，Release AAR 和
 `sourceReleaseJar` 都使用生产输入，不保留真实 SPI 或运行时空实现。Sample 调试安装入口位于 `app/src/debug`。
 Runtime 接线还位于 `src/main/kotlin/com/example/lynxshell/ota/`，含 `LynxOtaRuntime`、`LynxOtaConfig` 与 epoch 隔离的 `OtaPageRefreshGate`；Core 的 `OtaSelection/OtaSdk` 负责身份和持久决定。
-`android/lynx-capacitor` 尚未加入默认 `settings.gradle.kts` 和 Sample，必须由宿主显式接入。
+`android/lynx-capacitor` 已加入默认 Gradle graph，由 Sample 显式依赖、安装 Runtime 并注册。
+Shell、能力模块和 Sample 使用 minSdk 26/JVM 17；构建 JDK 为 21、Gradle 8.11.1、AGP 8.9.1。Page/Tab
+通过可选 NativeModuleHost 接线，Shell AAR 不直接依赖具体能力模块。
+Page/Tab 的候选确认需要真实首屏和业务 `markOtaHealthy` 两个信号；首次启动维护清除遗留
+TRIAL，普通同步保留本进程试运行。页面链固定到唯一进程快照和 lease，恢复或身份变化后
+失效快照停止接收新页面，存活页面继续持有自己的资源。当前 Android Lynx 4.1 实际
+`LynxModuleWrapper.destroy()` 会转发能力 Module 销毁，Android 沿用 SDK 链路。
+Cap 提供公开 Host provider；Sample 将容器系统栏、方向和文字缩放适配到 Shell 的中性
+系统 UI handle。状态查询不创建 UI Host 或申请权限。Android 执行结果和未覆盖项见
+`docs/native-readiness-v1/android-test-report.html`。
+原 Shell API 24 声明与 java.time API 26 的不一致已通过明确 API 26 基线纠正；API 26/36
+实际宿主用例分别执行，完整结果以本轮报告为准。公开 Host 接口中的 LynxView 类型由
+Shell 对同一 Lynx 4.1 Core 的 api 依赖导出，消费 App 不必重复声明 SDK。
 
 ### iOS
 
@@ -102,7 +114,12 @@ ios/
 Shell 诊断声明与调用、DebugKit 的 Swift/ObjC 实现均受 `DEBUG` 条件保护；Sample Podfile 还显式
 排除生产配置的诊断源码输入。发布产物检查见 `scripts/check_debug_tool_release.py`。
 `LynxShellKit/OTA/LynxSDKVersionResolver.swift` 解析可信 Lynx 资源/framework metadata；Core 只接收结果，不依赖 UIKit。
-`ios/LynxCapacitorKit` 尚未加入默认 Podspec/Xcode Target，当前只交付原生能力源码。
+`ios/LynxCapacitorKit.podspec` 是独立能力 Pod，普通 Sample 和 Core E2E Sample 均显式依赖。
+App 启动先注册额外 Module，Shell 对全局及每个 Page/Tab 的 Config 都应用这些注册。
+当前 iOS Lynx 4.1 不自动转发普通 NativeModule.destroy；宿主注册 onViewDestroy 后，
+Shell 在换包、错误、退出时按真实 Context 释放能力，再销毁 LynxView。健康确认需要 SDK 首屏
+与业务 markOtaHealthy 双信号；失败快照退休保留活体资源，恢复固定稳定 current。
+本轮 36 项行为用例、证据层级和硬件限制见 docs/native-readiness-v1/。
 
 ### HarmonyOS
 
@@ -118,18 +135,20 @@ harmony/
 └── lynx_shell/                          Entry Demo，只直接依赖 HAR
 ```
 
-`lynx_shell/oh-package.json5` 只声明 `@lynx/lynx-shell-kit`；底层 Lynx、Service、
+`lynx_shell/oh-package.json5` 声明 `@lynx/lynx-shell-kit` 与独立的 `@lynx/lynx-capacitor-kit`；底层 Lynx、Service、
 XElement 和 OTA 依赖由 HAR 管理。
 `ota/OtaUserContext.ets` 提供同步身份 box 与显式 captured context；`OtaSelection*.ets`、JSON/API 与 v3 Store 承载选择协议。Harmony 没有 candidate/trial。
-`harmony/lynx_capacitor_kit` 尚未加入根 build profile 和 Entry Demo 依赖，当前只交付独立 HAR 源码。
+`harmony/lynx_capacitor_kit` 已加入根 build profile 和 Entry Demo；Ability 注入宿主上下文，
+Shell 的普通 Page/Native Tab 通过宿主注册表安装 Module，并在 Context 真正移除时释放。
 当前没有 HarmonyOS Debug HAR；三端调试能力首版先覆盖 Android/iOS，HarmonyOS 保持现有
 LynxMonitor 能力，不把未实现的 Debug Module 写成已接通。
 
 ## LynxCapacitor 当前边界
 
 三端 `LynxCapacitorModule` 统一描述 40 个能力域、146 个方法，平台无等价实现时返回结构化
-`UNSUPPORTED` 或 `UNAVAILABLE`，不返回假成功。当前 main 已包含三端源码与诊断 Bundle，但默认
-Shell Sample 尚未完成构建图、Module 注册、权限和生命周期接线；不能把源码存在视为默认可用。
+`UNSUPPORTED` 或 `UNAVAILABLE`，不返回假成功。默认 Demo 的构建图、Module 注册、权限和
+必要生命周期已完成源码接线；verification.host 为 `configured_not_run`，构建和设备仍为
+`not_run`。这不是所有 146 个方法都已运行验收。接线方式与边界见 [Demo 接入说明](CAPACITOR_DEMO_INTEGRATION.md)。
 
 ## 统一调用边界
 
@@ -179,3 +198,28 @@ DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
 ```
 
 构建产物和本机令牌不进入仓库；详见根目录 `.gitignore`。
+
+
+## Android / iOS 原生媒体统一（2026-10-04）
+
+Shell 的 chooseMedia/uploadFile/uploadImage/downloadFile/saveDataURL 五个旧 ABI 保留；
+ShellMediaBridge 只负责中性宿主媒体接线与原有结果协议，实际选择/上传/下载/落盘归独立
+Cap 媒体后端。Core 不反向依赖 Cap。Android 新增 LynxNativeMediaHost，由 DemoHost 安装；
+iOS AppDelegate 在 bootstrap 前通过 LynxRouter.installMediaHandler 连接 Cap public facade。
+
+两套入口使用 exact LynxContext 的共同 owner/runtime。Shell 先调用、Cap Module 后惰性
+构造时不替换 owner；View 销毁出口也释放没有 Cap Module 实例的 legacy runtime。Android
+所有 Activity/Tab View 销毁先过中性媒体 hook，再过 SDK；iOS继续使用已有注册的销毁hook。
+
+图片/视频/混合选择由系统picker处理。预览复用 Camera.playVideo 与 FileViewer：Android
+VideoView/MediaController、iOS普通AVPlayerViewController；NativeMedia图片预览使用Android内置
+原生图片Activity/iOS Quick Look多项，支持本地图片数组及initialIndex；旧single FileViewer继续
+使用系统ACTION_VIEW/Quick Look。Camera.chooseFromGallery source支持PHOTOS/CAMERA/PROMPT，
+可直接相册/拍摄或显示原生来源菜单，拍摄后才按需申请权限。单次最多16项，direct limit0使用默认多选上限16，legacy count/maxCount
+只接受1...16。新JS包入口为 @cclx/lynx-native-bridge/native-media，模板文档消费公共包，
+不复制自绘picker/player。
+
+源码与专项复审完成后已授权编译，Android/iOS最终宿主与本地模板Bundle已构建安装，
+新Demo与iOS来源菜单可见；实际拍摄、多图滑动与完整媒体验收尚未完成。docs/native-readiness-v1/
+旧六项报告是媒体修改前的软件证据，不代表媒体扩展后的完整回归。接口/预算/平台差异
+及待执行验收见 docs/native-media-v1/；40域146方法和四transport未增加，Harmony未改。

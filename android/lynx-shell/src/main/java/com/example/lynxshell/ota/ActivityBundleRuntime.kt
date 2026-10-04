@@ -81,6 +81,9 @@ interface ActivityBundleRuntime {
 
     /** 导航会话最后一个页面销毁时释放快照引用。 */
     fun releaseNavigationSnapshot(navigationSnapshotID: String?) = Unit
+    fun isNavigationSnapshotValid(navigationSnapshotID: String?): Boolean = true
+    fun resolveRecoveredCurrent(lynxAppId: String, bundleName: String, navigationSnapshotID: String?): PreparedActivityBundle? =
+        resolveCurrent(lynxAppId, bundleName)
 
     /** candidate 页面首屏健康后由容器调用；默认 runtime 没有 candidate。 */
     fun confirmCandidateHealthy(lynxAppId: String): Boolean = false
@@ -96,6 +99,9 @@ interface ActivityBundleRuntime {
 
     fun rollback(lynxAppId: String, reason: String, expectedReleaseId: String?, expectedIdentityEpoch: Long?): Boolean =
         rollback(lynxAppId, reason)
+
+    fun recoverFailedCandidate(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: Long?): Boolean =
+        rollback(lynxAppId, "candidate_failed", expectedReleaseId, expectedIdentityEpoch)
 }
 
 /**

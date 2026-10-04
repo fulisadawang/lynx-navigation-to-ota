@@ -54,7 +54,7 @@ class PhotoCaptureActivity : AppCompatActivity() {
         private const val CAMERA_PERMISSION_REQUEST_CODE = 47_101
         private const val DEFAULT_RELATIVE_PATH = "Pictures/LynxCamera"
         private const val DEFAULT_MIME_TYPE = "image/jpeg"
-        private const val MAX_INLINE_IMAGE_BYTES = 20 * 1024 * 1024
+        private const val MAX_INLINE_IMAGE_BYTES = NativePayloadBudget.INLINE_BYTES
     }
 
     private val completed = AtomicBoolean(false)
@@ -250,17 +250,24 @@ class PhotoCaptureActivity : AppCompatActivity() {
                     // CameraX 先写 cache 文件；只有 saveToGallery=true 才继续发布到 MediaStore。
                     val savedUri = output.uri
                     Log.i(TAG, "PHOTO_CAPTURE_SAVED temp=${output.tempFile.absolutePath} exists=${output.tempFile.exists()} length=${output.tempFile.length()} uri=$savedUri")
-                    runCatching {
-                        if (output.isMediaStore) {
-                            publishOutput(output)
+                    val owner = NativeCameraCaptureCapabilities.ownerForRequest(requestId)
+                    if (owner == null || !owner.isActive) { cleanupPendingOutput(); finishWith(error("HOST_DESTROYED", "调用页面已销毁")); return }
+                    NativeIO.local.submit(owner, { finishWith(error("BUSY", "图片执行队列已满")) }) {
+                        val result = runCatching {
+                            NativeCallContext.checkActive()
+                            if (output.isMediaStore) publishOutput(output)
+                            val value = success(savedUri)
                             finalizeOutput(output)
+                            value
+                        }.getOrElse { throwable ->
+                            cleanupPendingOutput()
+                            error(if (throwable is NativeBudgetExceeded) throwable.code else "IO", throwable.message ?: "无法提交 MediaStore 图片")
                         }
-                        pendingOutput = null
-                        if (output.isMediaStore) output.tempFile.delete()
-                        finishWith(success(savedUri))
-                    }.onFailure { throwable ->
-                        cleanupPendingOutput()
-                        finishWith(error("IO", throwable.message ?: "无法提交 MediaStore 图片"))
+                        runOnUiThread {
+                            pendingOutput = null
+                            if (output.isMediaStore) output.tempFile.delete()
+                            finishWith(result)
+                        }
                     }
                 }
 
@@ -333,25 +340,26 @@ class PhotoCaptureActivity : AppCompatActivity() {
         val target = contentResolver.openOutputStream(output.uri, "w")
             ?: throw IllegalStateException("无法打开 MediaStore 图片输出流")
         output.tempFile.inputStream().use { input ->
-            target.use { outputStream -> input.copyTo(outputStream) }
+            target.use { outputStream ->
+                NativePayloadBudget.copy(input, outputStream)
+            }
         }
     }
 
     private fun finalizeOutput(output: PendingOutput) {
-        if (!output.isPending) return
-        val updated = contentResolver.update(
-            output.uri,
-            ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) },
-            null,
-            null,
-        )
-        if (updated <= 0) throw IllegalStateException("无法提交 MediaStore 图片")
+        NativeCallContext.commit {
+            if (output.isPending) {
+                val updated = contentResolver.update(output.uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+                if (updated <= 0) throw IllegalStateException("无法提交 MediaStore 图片")
+            }
+            output.committed.set(true)
+        }
     }
 
     private fun cleanupPendingOutput() {
         pendingOutput?.let { output ->
-            runCatching { contentResolver.delete(output.uri, null, null) }
-            runCatching { output.tempFile.delete() }
+            if (!output.committed.get()) runCatching { contentResolver.delete(output.uri, null, null) }
+            if (!output.committed.get() || output.isMediaStore) runCatching { output.tempFile.delete() }
         }
         pendingOutput = null
     }
@@ -391,6 +399,7 @@ class PhotoCaptureActivity : AppCompatActivity() {
             .put("height", dimensions.second)
             .put("saved", saveToGallery)
         if (resultType == "BASE64" || resultType == "DATA_URL") {
+            NativePayloadBudget.checkImage(dimensions.first, dimensions.second)
             val encoded = Base64.encodeToString(readImageBytes(uri), Base64.NO_WRAP)
             if (resultType == "BASE64") result.put("base64", encoded)
             if (resultType == "DATA_URL") result.put("dataUrl", "data:$outputMimeType;base64,$encoded")
@@ -399,29 +408,8 @@ class PhotoCaptureActivity : AppCompatActivity() {
     }
 
     private fun readImageBytes(uri: Uri): ByteArray {
-        val descriptorLength = runCatching {
-            contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
-        }.getOrNull() ?: -1L
-        if (descriptorLength > MAX_INLINE_IMAGE_BYTES) {
-            throw IllegalStateException("图片超过内联结果大小限制")
-        }
-        val bytes = contentResolver.openInputStream(uri)?.use { input ->
-            val output = java.io.ByteArrayOutputStream(
-                if (descriptorLength in 1..MAX_INLINE_IMAGE_BYTES) descriptorLength.toInt() else 16 * 1024,
-            )
-            val buffer = ByteArray(16 * 1024)
-            var total = 0
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                total += count
-                if (total > MAX_INLINE_IMAGE_BYTES) throw IllegalStateException("图片超过内联结果大小限制")
-                output.write(buffer, 0, count)
-            }
-            output.toByteArray()
-        } ?: throw IllegalStateException("无法读取拍照图片")
-        if (bytes.isEmpty()) throw IllegalStateException("拍照图片为空")
-        return bytes
+        return contentResolver.openInputStream(uri)?.use { NativePayloadBudget.read(it, MAX_INLINE_IMAGE_BYTES) }
+            ?: throw IllegalStateException("无法读取拍照图片")
     }
 
     private fun readDimensions(uri: Uri): Pair<Int, Int> {
@@ -497,5 +485,6 @@ class PhotoCaptureActivity : AppCompatActivity() {
         val tempFile: File,
         val isPending: Boolean,
         val isMediaStore: Boolean,
+        val committed: AtomicBoolean = AtomicBoolean(false),
     )
 }
