@@ -11,6 +11,8 @@ class OtaSdk {
   private val releaseTransaction: OtaReleaseStore
   private val bundleRuntime: BundleRuntime
   private val sidecarStore: ContentAddressedOtaStore?
+  private val startupLock = Any()
+  private var startupMaintenanceCompleted = false
 
   constructor(configuration: OtaModels.Configuration) : this(
     configuration,
@@ -64,9 +66,21 @@ class OtaSdk {
     return withUserIdentity(userContext.operation().identityEpoch, operation)
   }
 
-  fun reconcileUserContext() = identityScope { releaseTransaction.reconcileUserContext() }
+  fun reconcileUserContext() = identityScope {
+    ensureStartupMaintenance()
+    releaseTransaction.reconcileUserContext()
+  }
+
+  /** 首次本地读取前恢复遗留 trial；本进程新开 trial 不会被后续身份整理误清。 */
+  private fun ensureStartupMaintenance() = synchronized(startupLock) {
+    if (!startupMaintenanceCompleted) {
+      releaseTransaction.recoverInterruptedCandidates(scopeFor(configuration.lynxAppId ?: OtaModels.DEFAULT_LYNX_APP_ID))
+      startupMaintenanceCompleted = true
+    }
+  }
 
   fun acquireCandidateTrialBundleLease(lynxAppId: String, bundleName: String): ReleaseTransaction.BundleLease? = identityScope {
+    ensureStartupMaintenance()
     releaseTransaction.acquireCandidateTrialBundleLease(scopeFor(lynxAppId), bundleName)
   }
 
@@ -372,6 +386,7 @@ class OtaSdk {
   @Throws(IOException::class, OtaSdkException::class)
   fun beginCandidateTrial(lynxAppId: String): OtaModels.CandidateSnapshot {
     return identityScope {
+      ensureStartupMaintenance()
       return@identityScope releaseTransaction.beginCandidateTrial(scopeFor(lynxAppId))
     }
   }
@@ -380,6 +395,7 @@ class OtaSdk {
   @Throws(IOException::class, OtaSdkException::class)
   @JvmOverloads
   fun confirmCandidateHealthy(lynxAppId: String, expectedReleaseId: String? = null, expectedIdentityEpoch: Long? = null): OtaModels.InstalledRelease {
+    if (Thread.currentThread().isInterrupted) throw InterruptedException("候选健康确认已取消")
     return identityScope {
       val identity = userContext.operation()
       if (expectedIdentityEpoch != null && expectedIdentityEpoch != identity.identityEpoch) throw OtaSelectionException("stale_identity")

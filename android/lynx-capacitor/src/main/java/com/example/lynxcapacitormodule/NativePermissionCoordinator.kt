@@ -41,6 +41,7 @@ object NativePermissionCoordinator {
         val pending: PendingPermission,
         val activity: WeakReference<Activity>,
         val plan: PermissionPlan,
+        val owner: NativeOwnerScope? = NativeCallContext.owner,
     )
 
     private const val REQUEST_CODE_FIRST = 0x5200
@@ -54,6 +55,7 @@ object NativePermissionCoordinator {
     private val requestedPermissionHistory = HashSet<String>()
     private val requestedPermissionCounts = HashMap<String, Int>()
     private var nextRequestCode = REQUEST_CODE_FIRST
+    private val retiredRequestCodes = HashSet<Int>()
 
     /**
      * 申请指定 plugin 当前能力所需的 Android 权限。
@@ -137,7 +139,14 @@ object NativePermissionCoordinator {
             Allocation.InProgress -> callback(error("PERMISSION_REQUEST_IN_PROGRESS", "当前 Activity 已有权限请求未完成"))
             Allocation.Exhausted -> callback(error("PERMISSION_REQUEST_LIMIT", "权限请求编号暂时耗尽，请稍后重试"))
             is Allocation.Created -> {
+                val entry = synchronized(lock) { pendingRequests[allocation.requestCode] }
+                entry?.owner?.own(entry) {
+                    synchronized(lock) {
+                        if (pendingRequests[allocation.requestCode] === entry) removePendingLocked(allocation.requestCode, retire = true)
+                    }
+                }
                 try {
+                    NativeCallContext.checkActive()
                     activity.requestPermissions(permissionsToRequest.toTypedArray(), allocation.requestCode)
                 } catch (throwable: RuntimeException) {
                     val removed = synchronized(lock) { removePendingLocked(allocation.requestCode) }
@@ -160,7 +169,7 @@ object NativePermissionCoordinator {
         permissions: Array<out String>,
         grantResults: IntArray,
     ): Boolean {
-        val entry = synchronized(lock) { removePendingLocked(requestCode) }
+        val entry = synchronized(lock) { retiredRequestCodes.remove(requestCode); removePendingLocked(requestCode) }
         Log.i(TAG, "PERMISSION_RESULT requestCode=$requestCode known=${entry != null} permissions=${permissions.contentToString()} grantResults=${grantResults.contentToString()}")
         entry ?: return false
         val activity = entry.activity.get()
@@ -286,7 +295,7 @@ object NativePermissionCoordinator {
                 "pickImages", "chooseFromGallery" -> listOf("photos")
                 else -> listOf("camera", "photos")
             },
-            accepted = setOf("camera", "photos", "video", "videos"),
+            accepted = setOf("camera", "photos", "video", "videos", "photosadd"),
         )
         val includeVideos = options.optBoolean("includeVideos", false) ||
             requested.any { it == "video" || it == "videos" }
@@ -294,6 +303,13 @@ object NativePermissionCoordinator {
         if (requested.contains("camera")) fields["camera"] = listOf(Manifest.permission.CAMERA)
         if (requested.any { it == "photos" || it == "video" || it == "videos" }) {
             fields["photos"] = photoPermissions(includeVideos)
+        }
+        if (options.optBoolean("includeMicrophone", false)) fields["microphone"] = listOf(Manifest.permission.RECORD_AUDIO)
+        if (options.optBoolean("saveToGallery", false) || requested.contains("photosadd")) {
+            // Android 9及以下写入共享相册仍需要写权限；新系统创建自己的媒体不需此权限。
+            fields["photosAdd"] = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            } else emptyList()
         }
         return PermissionPlan(
             pluginId = "Camera",
@@ -378,6 +394,9 @@ object NativePermissionCoordinator {
         plan.fields.forEach { (field, permissions) ->
             put(field, fieldState(activity, plan, field, permissions))
         }
+        if (plan.pluginId == "Camera" && !plan.fields.containsKey("microphone")) {
+            put("microphone", fieldState(activity, plan, "microphone", listOf(Manifest.permission.RECORD_AUDIO)))
+        }
     }
 
     private fun fieldState(
@@ -449,7 +468,7 @@ object NativePermissionCoordinator {
         repeat(REQUEST_CODE_LAST - REQUEST_CODE_FIRST + 1) {
             val candidate = nextRequestCode
             nextRequestCode = if (nextRequestCode == REQUEST_CODE_LAST) REQUEST_CODE_FIRST else nextRequestCode + 1
-            if (candidate !in pendingRequests) return candidate
+            if (candidate !in pendingRequests && candidate !in retiredRequestCodes) return candidate
         }
         return null
     }
@@ -463,8 +482,10 @@ object NativePermissionCoordinator {
             .apply()
     }
 
-    private fun removePendingLocked(requestCode: Int): PendingEntry? {
+    private fun removePendingLocked(requestCode: Int, retire: Boolean = false): PendingEntry? {
+        if (retire) retiredRequestCodes.add(requestCode)
         val entry = pendingRequests.remove(requestCode) ?: return null
+        entry.owner?.disown(entry)
         entry.pending.permissions.forEach { permission ->
             val next = requestedPermissionCounts[permission].orZero() - 1
             if (next > 0) requestedPermissionCounts[permission] = next else requestedPermissionCounts.remove(permission)

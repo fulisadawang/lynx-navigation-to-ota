@@ -127,7 +127,7 @@ export default class LynxCapacitorSemantics {
   }
 
   public static verification(): Record<string, Object> {
-    return { source: 'verified', build: 'not_run', host: 'not_integrated', device: 'not_run' };
+    return { source: 'verified', build: 'not_run', host: 'configured_not_run', device: 'not_run' };
   }
 
   public static errorReasonCode(code: string): string {

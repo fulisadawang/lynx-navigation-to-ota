@@ -77,6 +77,16 @@ object NativeAudioCapabilities {
     ): Boolean {
         if (methodName !in HANDLED_METHODS) return false
 
+        val owner = NativeCallContext.owner
+        if (methodName != METHOD_GET_STATE) {
+            NativeIO.local.submit(owner, { completeSafely(complete, error("BUSY", "音频执行队列已满")) }) {
+                try { dispatchOwned(activity, methodName, options, complete) }
+                catch (failure: Exception) {
+                    completeSafely(complete, error(if (failure is NativeCallCancelled) "HOST_DESTROYED" else "NATIVE_ERROR", failure.message ?: "音频初始化失败"))
+                }
+            }
+            return true
+        }
         val run = Runnable {
             if (activity.isFinishing || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed)) {
                 release(activity)
@@ -85,7 +95,7 @@ object NativeAudioCapabilities {
             }
 
             registerLifecycleCallbacks(activity)
-            dispatchOnMain(activity, methodName, options, complete)
+            dispatchOwned(activity, methodName, options, complete)
         }
 
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -117,6 +127,7 @@ object NativeAudioCapabilities {
             AudioState.RECORDING -> stopRecordingInternal(activity)
             AudioState.PREPARING,
             AudioState.PLAYING,
+            AudioState.STOPPING,
             -> stopPlaybackInternal(activity)
             AudioState.IDLE -> stateResult(activity)
         }
@@ -130,6 +141,7 @@ object NativeAudioCapabilities {
         val session = synchronized(lock) {
             sessions.remove(activity)
         } ?: return
+        session.owner?.disown(session)
 
         val recorderSnapshot = synchronized(lock) {
             val current = session.recorder
@@ -144,6 +156,7 @@ object NativeAudioCapabilities {
             session.player = null
             session.playbackCompletion = null
             session.state = AudioState.IDLE
+            session.owner?.disown(session)
             session.recordingOutputFile = null
             session.playbackFile = null
             Pair(currentPlayer, pendingCompletion)
@@ -159,6 +172,25 @@ object NativeAudioCapabilities {
         recorderSnapshot.first?.let(::releaseRecorder)
         playerAndCompletion.first?.let(::releasePlayer)
         playerAndCompletion.second?.invoke(error("ACTIVITY_DESTROYED", "Activity 已销毁，Audio 操作已取消"))
+    }
+
+    private fun dispatchOwned(activity: Activity, methodName: String, options: JSONObject, complete: (JSONObject) -> Unit) {
+        val foreign = synchronized(lock) {
+            sessions[activity]?.let { it.state != AudioState.IDLE && it.owner !== NativeCallContext.owner } ?: false
+        }
+        if (foreign) { completeSafely(complete, error("BUSY", "其他页面正在使用音频资源")); return }
+        NativeCallContext.checkActive()
+        dispatchOnMain(activity, methodName, options, complete)
+    }
+
+    private fun ownSession(activity: Activity, session: AudioSession) {
+        val owner = NativeCallContext.owner
+        session.owner = owner
+        owner?.own(session) {
+            activity.runOnUiThread {
+                if (synchronized(lock) { sessions[activity] === session && session.owner === owner }) release(activity)
+            }
+        }
     }
 
     private fun dispatchOnMain(
@@ -184,8 +216,14 @@ object NativeAudioCapabilities {
         }
 
         val session = synchronized(lock) {
-            val current = sessions.getOrPut(activity) { AudioSession() }
-            if (current.state != AudioState.IDLE) return@synchronized null
+            val previous = sessions[activity]
+            if (previous != null && previous.state != AudioState.IDLE) return@synchronized null
+            val current = AudioSession().apply {
+                lastRecordingFile = previous?.lastRecordingFile
+                state = AudioState.PREPARING
+                owner = NativeCallContext.owner
+            }
+            sessions[activity] = current
             current.apply {
                 lastError = null
                 recordingOutputFile = null
@@ -197,7 +235,9 @@ object NativeAudioCapabilities {
             return
         }
 
-        val outputFile = runCatching { createRecordingFile(activity) }.getOrElse { throwable ->
+        ownSession(activity, session)
+        synchronized(lock) { session.state = AudioState.PREPARING }
+        val outputFile = runCatching { NativeCallContext.checkActive(); createRecordingFile(activity) }.getOrElse { throwable ->
             val code = (throwable as? AudioException)?.code ?: "FILE_ERROR"
             recordFailure(session, code, throwable.message ?: "无法创建录音文件")
             completion.invoke(error(code, "无法创建录音文件"))
@@ -219,6 +259,7 @@ object NativeAudioCapabilities {
                 handleRecorderError(session, recorder, what, extra)
             }
             recorder.prepare()
+            NativeCallContext.checkActive()
             recorder.start()
         }
         if (recorderStarted.isFailure) {
@@ -236,6 +277,7 @@ object NativeAudioCapabilities {
             // Activity 可能在 recorder.start() 期间销毁；此时不能把孤立 recorder 放入状态表。
             if (sessions[activity] !== session || activity.isFinishing || isDestroyed(activity)) {
                 session.state = AudioState.IDLE
+                session.owner?.disown(session)
                 activityLost = true
             } else {
                 session.recorder = recorder
@@ -263,8 +305,14 @@ object NativeAudioCapabilities {
     ) {
         val completion = CompletionOnce(complete)
         val session = synchronized(lock) {
-            val current = sessions.getOrPut(activity) { AudioSession() }
-            if (current.state != AudioState.IDLE) return@synchronized null
+            val previous = sessions[activity]
+            if (previous != null && previous.state != AudioState.IDLE) return@synchronized null
+            val current = AudioSession().apply {
+                lastRecordingFile = previous?.lastRecordingFile
+                state = AudioState.PREPARING
+                owner = NativeCallContext.owner
+            }
+            sessions[activity] = current
             current.apply { lastError = null }
         }
         if (session == null) {
@@ -272,6 +320,8 @@ object NativeAudioCapabilities {
             return
         }
 
+        ownSession(activity, session)
+        synchronized(lock) { session.state = AudioState.PREPARING }
         val file = resolvePlaybackFile(activity, session, options)
         if (file.error != null) {
             val details = file.error.optJSONObject("error")
@@ -314,6 +364,7 @@ object NativeAudioCapabilities {
                 handlePlayerError(session, failedPlayer, what, extra)
                 true
             }
+            NativeCallContext.checkActive()
             player.setDataSource(playbackFile.absolutePath)
             // prepareAsync 不阻塞主线程；成功/失败均由 MediaPlayer listener 回到主线程。
             player.prepareAsync()
@@ -367,6 +418,7 @@ object NativeAudioCapabilities {
             session.player = null
             session.playbackFile = null
             session.state = AudioState.IDLE
+            session.owner?.disown(session)
             session.lastError = null
         }
         releasePlayer(player)
@@ -394,6 +446,7 @@ object NativeAudioCapabilities {
             session.player = null
             session.playbackFile = null
             session.state = AudioState.IDLE
+            session.owner?.disown(session)
             session.lastError = ErrorInfo(code, message)
         }
         releasePlayer(player)
@@ -411,7 +464,7 @@ object NativeAudioCapabilities {
             val duration = android.os.SystemClock.elapsedRealtime() - session.recordingStartedAt
             session.recorder = null
             session.recordingOutputFile = null
-            session.state = AudioState.IDLE
+            session.state = AudioState.STOPPING
             RecordingStopSnapshot(session, recorder, outputFile, duration)
         }
 
@@ -422,6 +475,7 @@ object NativeAudioCapabilities {
 
         val stopFailure = runCatching { actual.recorder.stop() }.exceptionOrNull()
         releaseRecorder(actual.recorder)
+        synchronized(lock) { actual.session.state = AudioState.IDLE; actual.session.owner?.disown(actual.session) }
         val outputFile = actual.outputFile
         if (stopFailure != null) {
             outputFile?.delete()
@@ -474,7 +528,7 @@ object NativeAudioCapabilities {
             session.player = null
             session.playbackCompletion = null
             session.playbackFile = null
-            session.state = AudioState.IDLE
+            session.state = AudioState.STOPPING
             session.lastError = null
             PlaybackStopSnapshot(session, player, pendingCompletion, true, file)
         }
@@ -485,6 +539,7 @@ object NativeAudioCapabilities {
                 .put("state", actual.session.state.wireValue)
         }
         actual.player?.let(::releasePlayer)
+        synchronized(lock) { actual.session.state = AudioState.IDLE; actual.session.owner?.disown(actual.session) }
         actual.pendingCompletion?.invoke(error("CANCELLED", "播放准备已停止"))
         return JSONObject()
             .put("state", AudioState.IDLE.wireValue)
@@ -507,7 +562,7 @@ object NativeAudioCapabilities {
     private fun stateResult(session: AudioSession): JSONObject {
         val currentFile = when (session.state) {
             AudioState.RECORDING -> session.recordingOutputFile
-            AudioState.PREPARING, AudioState.PLAYING -> session.playbackFile
+            AudioState.PREPARING, AudioState.PLAYING, AudioState.STOPPING -> session.playbackFile
             AudioState.IDLE -> session.lastRecordingFile
         }
         return JSONObject()
@@ -577,6 +632,7 @@ object NativeAudioCapabilities {
         synchronized(lock) {
             session.lastError = ErrorInfo(code, message)
             session.state = AudioState.IDLE
+            session.owner?.disown(session)
         }
     }
 
@@ -588,6 +644,7 @@ object NativeAudioCapabilities {
             session.recorder = null
             session.recordingOutputFile = null
             session.state = AudioState.IDLE
+            session.owner?.disown(session)
             session.lastError = ErrorInfo("RECORDER_ERROR", "MediaRecorder 发生错误（$what/$extra）")
         }
         releaseRecorder(recorder)
@@ -637,6 +694,7 @@ object NativeAudioCapabilities {
     private class AudioException(val code: String, message: String) : Exception(message)
 
     private class AudioSession {
+        var owner: NativeOwnerScope? = null
         var state: AudioState = AudioState.IDLE
         var recorder: MediaRecorder? = null
         var player: MediaPlayer? = null
@@ -671,6 +729,7 @@ object NativeAudioCapabilities {
         IDLE("idle"),
         RECORDING("recording"),
         PREPARING("preparing"),
+        STOPPING("stopping"),
         PLAYING("playing"),
     }
 

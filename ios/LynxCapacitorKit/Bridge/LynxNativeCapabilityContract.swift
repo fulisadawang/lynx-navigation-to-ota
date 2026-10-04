@@ -75,6 +75,7 @@ struct LynxNativeCapabilityResult {
     let data: [String: Any]?
     let error: [String: Any]?
     let save: Bool
+    private var encodedEnvelope: String? = nil
 
     static func success(_ data: [String: Any] = [:], save: Bool = false) -> Self {
         Self(success: true, data: data, error: nil, save: save)
@@ -102,18 +103,53 @@ struct LynxNativeCapabilityResult {
             }
             value["error"] = LynxNativeJSON.normalize(error)
         }
-        return LynxNativeJSON.encode(value) ?? "{}"
+        if let raw = LynxNativeJSON.encode(value) { return raw }
+        return LynxNativeJSON.encode([
+            "callbackId": call.callbackId, "pluginId": call.pluginId, "methodName": call.methodName,
+            "success": false, "save": false,
+            "error": ["code": "ENCODING_FAILED", "reasonCode": "NATIVE_ERROR", "message": "原生结果不是合法 JSON"],
+        ])!
+    }
+
+    func boundedEnvelope(for call: LynxNativeCapabilityCall) -> String {
+        if let encodedEnvelope { return encodedEnvelope }
+        return preEncoded(for: call).encodedEnvelope!
+    }
+
+    /** IO adapter 在线程内完成 JSON，owner 门禁在主线程只交付已编码结果。 */
+    func preEncoded(for call: LynxNativeCapabilityCall) -> Self {
+        guard LynxNativeJSON.isWithinLimit(data ?? error ?? [:], bytes: LynxNativePayloadLimits.outputJSONBytes) else {
+            var failure = Self.failure("PAYLOAD_TOO_LARGE", "原生结果超过内联上限，请使用 URI 或缩小查询范围")
+            failure.encodedEnvelope = failure.envelope(for: call)
+            return failure
+        }
+        guard JSONSerialization.isValidJSONObject(LynxNativeJSON.normalize(data ?? error ?? [:])) else {
+            var failure = Self.failure("ENCODING_FAILED", "原生结果不是合法 JSON")
+            failure.encodedEnvelope = failure.envelope(for: call)
+            return failure
+        }
+        let raw = envelope(for: call)
+        guard raw.utf8.count <= LynxNativePayloadLimits.outputJSONBytes else {
+            var failure = Self.failure("PAYLOAD_TOO_LARGE", "原生结果超过 JSON 上限")
+            failure.encodedEnvelope = failure.envelope(for: call)
+            return failure
+        }
+        var value = self
+        value.encodedEnvelope = raw
+        return value
     }
 }
 
 enum LynxNativeCapabilityError: LocalizedError {
     case invalidPayload
     case invalidArgument(String)
+    case payloadTooLarge
 
     var errorDescription: String? {
         switch self {
         case .invalidPayload: return "Invalid bridge payload"
         case let .invalidArgument(message): return message
+        case .payloadTooLarge: return "原生请求超过 JSON 内联上限"
         }
     }
 
@@ -121,11 +157,31 @@ enum LynxNativeCapabilityError: LocalizedError {
         switch self {
         case .invalidPayload: return "INVALID_PAYLOAD"
         case .invalidArgument: return "INVALID_ARGUMENT"
+        case .payloadTooLarge: return "PAYLOAD_TOO_LARGE"
         }
     }
 }
 
 enum LynxNativeJSON {
+    static func isWithinLimit(_ value: Any, bytes: Int) -> Bool {
+        var remaining = bytes
+        func consume(_ value: Any) -> Bool {
+            if let text = value as? String { remaining -= text.utf8.count + 2 }
+            else if let data = value as? Data { remaining -= ((data.count + 2) / 3) * 4 + 2 }
+            else if let values = value as? [String: Any] {
+                remaining -= 2
+                for (key, value) in values {
+                    remaining -= key.utf8.count + 3
+                    if remaining < 0 || !consume(value) { return false }
+                }
+            } else if let values = value as? [Any] {
+                remaining -= max(0, values.count - 1) + 2
+                for value in values { if remaining < 0 || !consume(value) { return false } }
+            } else { remaining -= 1 }
+            return remaining >= 0
+        }
+        return consume(value)
+    }
     static func encode(_ value: Any) -> String? {
         let normalized = normalize(value)
         guard JSONSerialization.isValidJSONObject(normalized),

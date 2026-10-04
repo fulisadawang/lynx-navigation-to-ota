@@ -20,6 +20,7 @@ import { ShellViewAppearPayload } from '../common/ShellTypes';
 import XElementRuntime from '../common/XElementRuntime';
 import LynxPageRequest from '../model/LynxPageRequest';
 import { LynxShellModule } from '../module/LynxShellModule';
+import HostNativeModules from '../common/HostNativeModules';
 import ShellMessageHub from '../common/ShellMessageHub';
 import ShellGenericResourceFetcher from '../provider/ShellGenericResourceFetcher';
 import ShellMediaResourceFetcher from '../provider/ShellMediaResourceFetcher';
@@ -106,6 +107,7 @@ export struct LynxTabContainer {
     this.initialized = true;
     OtaUserContextEvents.subscribe(this.userListener);
     this.modules.set('LynxShellModule', { moduleClass: LynxShellModule });
+    HostNativeModules.applyTo(this.modules);
     this.configureForLoad();
     this.startLoad();
   }
@@ -218,6 +220,7 @@ export struct LynxTabContainer {
     if (this.lynxContext !== null) {
       this.lynxContext.onEnterBackground();
       ShellMessageHub.sendLifecycle(this.request.entryID, 'destroyed', reason);
+      HostNativeModules.destroyForContext(this.lynxContext);
     }
     ShellMessageHub.unregister(this.request.entryID);
     this.lynxContext = null;

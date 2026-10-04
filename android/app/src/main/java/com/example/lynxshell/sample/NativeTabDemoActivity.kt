@@ -395,6 +395,22 @@ class NativeTabDemoActivity : AppCompatActivity() {
         }
     }
 
+    @Deprecated("沿用独立能力模块的 Activity Result 协议")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        LynxCapacitorDemoHost.onActivityResult(this, requestCode, resultCode, data)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        LynxCapacitorDemoHost.onRequestPermissionsResult(this, requestCode, permissions, grantResults)
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        LynxCapacitorDemoHost.onNewIntent(this, intent)
+    }
+
     override fun onResume() {
         super.onResume()
         LynxEnvironmentCoordinator.synchronize(this)

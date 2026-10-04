@@ -80,7 +80,9 @@ def expected_files() -> None:
         "android/lynx-shell/src/main/java/com/example/lynxshell/bridge/LynxShellModule.kt",
         "android/lynx-shell/src/main/java/com/example/lynxshell/bridge/ShellMessageHub.kt",
         "android/lynx-shell/src/main/java/com/example/lynxshell/bridge/ShellMediaBridge.kt",
-        "android/lynx-shell/src/main/java/com/example/lynxshell/bridge/ShellMediaPickerActivity.kt",
+        "android/lynx-shell/src/main/java/com/example/lynxshell/runtime/LynxNativeMediaHost.kt",
+        "android/lynx-capacitor/src/main/java/com/example/lynxcapacitormodule/NativeLegacyMediaCapabilities.kt",
+        "ios/LynxCapacitorKit/Capabilities/LynxNativeLegacyMediaCapabilities.swift",
         "android/lynx-shell/src/main/java/com/example/lynxshell/transition/LynxColorParser.kt",
         "android/lynx-shell/src/main/java/com/example/lynxshell/transition/LynxCompatEdgeBackLayout.kt",
         "android/lynx-shell/src/main/java/com/example/lynxshell/transition/LynxElementResolver.kt",
@@ -415,7 +417,8 @@ def versions() -> None:
         flags=re.DOTALL,
     )
     require(
-        sum("-ObjC" in setting for setting in ldflags_settings) == 2,
+        len(ldflags_settings) == 2 * pbxproj.count('productType = "com.apple.product-type.application";')
+        and all("-ObjC" in setting for setting in ldflags_settings),
         "iOS Debug/Release Target 均包含 -ObjC",
     )
 
@@ -448,6 +451,7 @@ def bridge_contract() -> None:
         "reLaunch",
         "redirect",
         "getNavigationState",
+        "setBackGestureEnabled",
         "closeWithResult",
         "consumeNavigationResult",
         # 三端统一消息协议：页面 -> 宿主、全局广播、按 pageId 定向发送。
@@ -477,7 +481,7 @@ def bridge_contract() -> None:
     # Android/iOS Router 都暴露 OTA 磁盘清理能力；Harmony 的 ArkTS Router 使用
     # 宿主级 API，不通过这个 LynxShellModule methodLookup 暴露。OTA 仍是可选扩展，
     # 不改变三端基础 Bridge 契约。
-    ota_methods = {"deleteOtaBundles", "deleteAllOtaBundles"}
+    ota_methods = {"deleteOtaBundles", "deleteAllOtaBundles", "markOtaHealthy"}
     android = read("android/lynx-shell/src/main/java/com/example/lynxshell/bridge/LynxShellModule.kt")
     ios = read("ios/LynxShellKit/Bridge/LynxShellModule.swift")
     typescript = read("examples/lynx-shell-module.d.ts")
@@ -542,6 +546,7 @@ def bridge_contract() -> None:
         "reLaunch",
         "redirect",
         "getNavigationState",
+        "setBackGestureEnabled",
         "closeWithResult",
         "consumeNavigationResult",
     }
@@ -1028,7 +1033,7 @@ def route_and_provider() -> None:
         and "setNavigationBarHidden(true, animated: false)" in ios_launcher
         and "原生壳" in ios_launcher
         and "OTA 验收入口" in ios_launcher
-        and "override var prefersStatusBarHidden: Bool { request.hideStatusBar }" in ios_container
+        and "override var prefersStatusBarHidden: Bool { lynxSystemUIState.statusBarHidden ?? request.hideStatusBar }" in ios_container
         and "shellIsLightColor" in ios_container,
         "iOS Bundle 默认无导航栏、状态栏透明可见且 LynxView edge-to-edge",
     )

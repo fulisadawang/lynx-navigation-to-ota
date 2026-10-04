@@ -42,6 +42,14 @@ declare let NativeModules: {
     getNavigationState(
       callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void,
     ): void;
+    setBackGestureEnabled(
+      enabled: boolean,
+      callback: (result: {
+        code: number;
+        message?: string;
+        data?: { backGestureEnabled: boolean; affectedCount: number };
+      }) => void,
+    ): void;
     closeWithResult(
       resultJSON: string,
       callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void,
@@ -92,6 +100,8 @@ declare let NativeModules: {
       transactionID: string,
       callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void,
     ): void;
+    /** 后台 JS 的 OTA 业务健康信号，不等同于动画 ready。 */
+    markOtaHealthy?: (callback: (result: { code: number; message: string; data?: { confirmed: boolean; releaseId?: string; reason?: 'not_candidate' } }) => void) => void;
     getTransitionState(
       callback: (result: { code: number; message?: string; msg?: string; data?: any }) => void,
     ): void;

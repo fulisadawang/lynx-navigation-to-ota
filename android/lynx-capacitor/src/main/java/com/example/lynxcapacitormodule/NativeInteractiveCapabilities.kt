@@ -13,6 +13,7 @@ import org.json.JSONObject
 object NativeInteractiveCapabilities {
     private const val DIALOG = "Dialog"
     private const val ACTION_SHEET = "ActionSheet"
+    private val dialogs = java.util.WeakHashMap<Activity, CompletionOnce>()
 
     /**
      * 接管交互能力请求。
@@ -29,13 +30,17 @@ object NativeInteractiveCapabilities {
     ): Boolean {
         if (pluginId != DIALOG && pluginId != ACTION_SHEET) return false
 
-        val completion = CompletionOnce(complete)
+        val completion = CompletionOnce(activity, complete)
         val show = Runnable {
             if (!isActivityUsable(activity)) {
                 completion.invoke(error("ACTIVITY_UNAVAILABLE", "Activity 已销毁或正在结束"))
                 return@Runnable
             }
 
+            if (dialogs[activity] != null) {
+                completion.invoke(error("BUSY", "当前 Activity 已有原生交互界面"))
+                return@Runnable
+            }
             runCatching {
                 when (pluginId) {
                     DIALOG -> dispatchDialog(activity, methodName, options, completion)
@@ -85,7 +90,7 @@ object NativeInteractiveCapabilities {
             .setOnCancelListener { cancelled() }
             // Activity 因生命周期结束而 dismiss 时未必经过 onCancel，作为兜底仍返回一次取消结果。
             .setOnDismissListener { cancelled() }
-            .show()
+            .show().also(completion::track)
     }
 
     private fun showConfirm(
@@ -104,7 +109,7 @@ object NativeInteractiveCapabilities {
             }
             .setOnCancelListener { cancelled() }
             .setOnDismissListener { cancelled() }
-            .show()
+            .show().also(completion::track)
     }
 
     private fun showPrompt(
@@ -139,7 +144,7 @@ object NativeInteractiveCapabilities {
             }
             .setOnCancelListener { cancelled() }
             .setOnDismissListener { cancelled() }
-            .show()
+            .show().also(completion::track)
     }
 
     private fun dispatchActionSheet(
@@ -169,7 +174,7 @@ object NativeInteractiveCapabilities {
             }
             .setOnCancelListener { cancelled() }
             .setOnDismissListener { cancelled() }
-            .show()
+            .show().also(completion::track)
     }
 
     private fun actionTitles(options: JSONObject): List<String>? {
@@ -198,12 +203,21 @@ object NativeInteractiveCapabilities {
         .put("error", JSONObject().put("code", code).put("message", message))
 
     /** 防止按钮、遮罩、返回键和 Activity dismiss 路径重复交付结果。 */
-    private class CompletionOnce(private val complete: (JSONObject) -> Unit) {
+    private class CompletionOnce(activity: Activity, private val complete: (JSONObject) -> Unit) {
+        private val activityReference = java.lang.ref.WeakReference(activity)
         private val completed = AtomicBoolean(false)
+        private val owner = NativeCallContext.owner
+        fun track(dialog: AlertDialog) {
+            if (completed.get()) return
+            activityReference.get()?.let { dialogs[it] = this }
+            owner?.own(this) { android.os.Handler(Looper.getMainLooper()).post { dialog.dismiss() } }
+        }
 
         fun invoke(result: JSONObject) {
             if (!completed.compareAndSet(false, true)) return
-            runCatching { complete(result) }
+            owner?.disown(this)
+            activityReference.get()?.let { if (dialogs[it] === this) dialogs.remove(it) }
+            complete(result)
         }
     }
 }

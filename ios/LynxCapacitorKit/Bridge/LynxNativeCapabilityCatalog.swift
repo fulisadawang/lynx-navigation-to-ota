@@ -80,21 +80,60 @@ enum LynxNativeCapabilityCatalog {
         return LynxNativeJSON.encode(value) ?? "[]"
     }
 
-    static func statusJSON(platform: String = "ios") -> String {
+    static let hostRequirements: [String: [String]] = [
+        "StatusBar": ["setStyle", "hide", "show"],
+        "SystemBars": ["setStyle"],
+        "SafeArea": ["setSystemBarsStyle", "hideSystemBars", "showSystemBars"],
+        "ScreenOrientation": ["orientation", "lock", "unlock"],
+        "Keyboard": ["setStyle"],
+    ]
+
+    static func statusJSON(platform: String = "ios", hostMethods: [String: [String]] = [:]) -> String {
         let value = specs.map { spec in
-            [
+            let required = hostRequirements[spec.id] ?? []
+            let provided = hostMethods[spec.id] ?? []
+            let actual = spec.methods.filter { method in
+                required.contains(method) ? provided.contains(method) : spec.implementedMethods.contains(method)
+            }
+            let usesHost = !required.isEmpty
+            let configured = required.contains { provided.contains($0) }
+            let state = usesHost ? (actual.isEmpty ? "unsupported" : "partial") : spec.state
+            let methodStatus = spec.methods.map { method -> [String: Any] in
+                let implemented = actual.contains(method)
+                if required.contains(method) {
+                    return ["name": method, "state": implemented ? "partial" : "unsupported",
+                            "reasonCode": implemented ? "RUNTIME_CONTEXT_REQUIRED" : "HOST_PROVIDER_REQUIRED",
+                            "hostConfigured": implemented,
+                            "runtimeAvailability": implemented ? "checkRequired" : "unavailable"]
+                }
+                return ["name": method, "state": implemented ? "native" : "unsupported",
+                        "reasonCode": LynxCapabilitySemantics.methodReasonCode(for: spec.id, method: method, implemented: implemented)]
+            }
+            var entry: [String: Any] = [
                 "name": spec.id,
                 "methods": spec.methods,
-                "implementedMethods": spec.implementedMethods,
-                "state": spec.state,
+                "implementedMethods": actual,
+                "state": state,
                 "contractVersion": LynxCapabilitySemantics.contractVersion,
-                "semanticState": spec.semanticState,
-                "reasonCode": spec.reasonCode,
-                "reason": spec.reason,
-                "methodStatus": spec.methodStatus,
+                "semanticState": LynxCapabilitySemantics.semanticState(state),
+                "reasonCode": usesHost ? (configured ? "RUNTIME_CONTEXT_REQUIRED" : "HOST_PROVIDER_REQUIRED") : spec.reasonCode,
+                "reason": usesHost ? (configured ? "宿主已配置；当前页面、窗口和执行状态在调用时检查。" : "当前宿主尚未安装该容器控制能力。") : spec.reason,
+                "methodStatus": methodStatus,
                 "verification": LynxCapabilitySemantics.verification(),
                 "platform": platform,
-            ] as [String: Any]
+            ]
+            if usesHost {
+                entry["hostConfigured"] = configured
+                entry["runtimeAvailability"] = actual.isEmpty ? "unavailable" : "checkRequired"
+            }
+            if spec.id == "SystemBars" {
+                entry["scope"] = "status_bar_only"
+                if configured {
+                    entry["reasonCode"] = "SEMANTIC_VARIANT"
+                    entry["reason"] = "iOS 仅控制状态栏样式；Home Indicator 由系统管理，当前页面可用性在调用时检查。"
+                }
+            }
+            return entry
         }
         return LynxNativeJSON.encode(value) ?? "[]"
     }

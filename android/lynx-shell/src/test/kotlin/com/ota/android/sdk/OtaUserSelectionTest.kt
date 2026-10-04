@@ -123,7 +123,8 @@ class OtaUserSelectionTest {
   @Test fun `C10 previous exactly A gray cannot be restored by B rollback`() = fixture().use { f ->
     val sdk = f.sdk("A"); f.install(sdk, "5", OtaSelectionKind.GRAY, "1")
     sdk.registerUserId("B"); f.install(sdk, "6", revision = "2")
-    assertEquals("5", OtaJson.asObject(f.state()["previous"], "previous")["releaseId"])
+    // B 的选择决定先移除不可读 A 灰度，再安装 full6；可回退基线必须仍适用于 B。
+    assertEquals("embedded", OtaJson.asObject(f.state()["previous"], "previous")["releaseId"])
     assertEquals("embedded", sdk.rollback(APP, "B recovery", "6", sdk.userIdentityEpoch)?.context?.releaseId)
     assertNull(sdk.acquireBundleLeaseForRelease(APP, "5", BUNDLE))
   }

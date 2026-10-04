@@ -6,7 +6,7 @@
 
 `LynxCapacitorKit` 是项目自研的 iOS NativeModule 实现。`LynxCapacitorModule` 这个名称只用于页面协议兼容，不表示链接了上游 Capacitor Runtime、Plugin Registry、autolink 或 codegen。
 
-当前 main 已包含 Swift 源码和诊断 Bundle，但默认 `LynxShellKit.podspec`、`project.yml`、Xcode Target 和 Sample 尚未编译或注册本目录。接入任务必须显式决定独立 Pod/Target 或并入宿主，然后补 Module 注册、Info.plist 权限、App/Scene 生命周期和设备验证。
+当前源码通过独立 `ios/LynxCapacitorKit.podspec` 接入普通/Core E2E Sample，App 先安装额外 Module，Shell 将其应用到全局和每个 View Config；Info.plist 和 URL/APNs 回调已配置。未执行 pod install、编译或设备验证，不能把源码接线描述为全部能力可用。
 
 ## 开工前必须读取
 
@@ -53,7 +53,7 @@
 
 ## 构建边界
 
-- 当前目录没有独立 Podspec，也不属于默认 Xcode Target。
+- 当前目录由独立 `LynxCapacitorKit.podspec` 编译，普通与 Core E2E Sample 均显式依赖；不进入 Shell/OTA Pod 的源码输入。
 - 未完成显式 wiring 前，不得声称 CocoaPods 安装、Xcode build 或设备运行覆盖了本目录。
 - 接入时保留 `LynxShellKit` 作为唯一 Shell/OTA Module；是否新建独立 `LynxCapacitorKit` Pod 需要由任务明确决定。
 - 不手改 Pods、DerivedData 或 project.pbxproj 生成内容来伪造源码接入。

@@ -50,13 +50,16 @@ class LynxOtaRuntime(
     private val fullSyncWaiters = ArrayList<(Boolean) -> Unit>()
     private val navigationSnapshotLock = Any()
     private val navigationSnapshots = LinkedHashMap<String, NavigationSnapshot>()
+    private val sessionSnapshots = LinkedHashMap<String, String>()
 
     private data class NavigationSnapshot(
+        val sessionID: String,
         val lynxAppId: String,
         val releaseId: String,
         var activityCount: Int,
         val identityEpoch: Long,
         var source: String,
+        var retired: Boolean = false,
     )
 
     private fun newRefreshExecutor(): ExecutorService = Executors.newSingleThreadExecutor { runnable ->
@@ -304,6 +307,7 @@ class LynxOtaRuntime(
     }
 
     override fun prepare(lynxAppId: String, bundleName: String): PreparedActivityBundle = withIdentity {
+        reconcileIdentity(userIdentityEpoch)
         // 解析与 lease 登记在同一个 Store 临界区内，后台更新不能在两者之间删掉旧 Release。
         val currentLease = runCatching { sdk.acquireCurrentBundleLease(lynxAppId, bundleName) }.getOrNull()
         if (currentLease != null && currentLease.file.isFile && currentLease.file.canRead()) {
@@ -331,31 +335,34 @@ class LynxOtaRuntime(
         bundleName: String,
         navigationSnapshotID: String?,
     ): PreparedActivityBundle = withIdentity {
+        reconcileIdentity(userIdentityEpoch)
+        if (isRestoredSnapshot(navigationSnapshotID)) {
+            return@withIdentity resolveRecoveredCurrent(lynxAppId, bundleName, navigationSnapshotID)
+                ?: throw IllegalStateException("进程恢复后没有稳定 Bundle")
+        }
         val pinnedReleaseId = navigationSnapshotRelease(navigationSnapshotID, lynxAppId)
         if (pinnedReleaseId != null) {
+            resolvePinnedEmbedded(lynxAppId, bundleName, navigationSnapshotID, pinnedReleaseId)?.let { return@withIdentity it }
             val pinnedLease = runCatching {
                 sdk.acquireBundleLeaseForRelease(lynxAppId, pinnedReleaseId, bundleName)
             }.getOrNull()
             if (pinnedLease != null && pinnedLease.file.isFile && pinnedLease.file.canRead()) {
-                return@withIdentity prepared(
-                    lynxAppId,
-                    bundleName,
-                    pinnedLease,
-                    source = navigationSnapshotSource(navigationSnapshotID),
-                    navigationSnapshotID = navigationSnapshotID,
-                )
+                return@withIdentity preparedPinned(lynxAppId, bundleName, pinnedLease, navigationSnapshotID)
             }
+            throw IllegalStateException("导航快照中的目标 Bundle 不可用：$lynxAppId/$bundleName")
         }
         val value = prepare(lynxAppId, bundleName)
-        pinNavigationSnapshot(navigationSnapshotID, value)
-        value.copy(navigationSnapshotID = navigationSnapshotID)
+        value.copy(navigationSnapshotID = pinNavigationSnapshot(navigationSnapshotID, value))
     }
 
-    /** 普通 Activity 页面可消费 candidate；Native Tab 仍只调用 resolveCurrent。 */
+    /** Page/Tab 首次加载或显式刷新可消费本地 candidate；普通 Tab 切换复用现有内容。 */
     override fun resolvePage(
         lynxAppId: String,
         bundleName: String,
-    ): PreparedActivityBundle? = withIdentity { resolvePageUnpinned(lynxAppId, bundleName) }
+    ): PreparedActivityBundle? = withIdentity {
+        reconcileIdentity(userIdentityEpoch)
+        resolvePageUnpinned(lynxAppId, bundleName)
+    }
 
     /** 路由页按 session 固定 release；current 后续变化不会让子路由换 Bundle。 */
     override fun resolvePage(
@@ -363,25 +370,22 @@ class LynxOtaRuntime(
         bundleName: String,
         navigationSnapshotID: String?,
     ): PreparedActivityBundle? = withIdentity {
+        reconcileIdentity(userIdentityEpoch)
+        if (isRestoredSnapshot(navigationSnapshotID)) return@withIdentity resolveRecoveredCurrent(lynxAppId, bundleName, navigationSnapshotID)
         if (navigationSnapshotID.isNullOrBlank()) return@withIdentity resolvePageUnpinned(lynxAppId, bundleName)
         val pinnedReleaseId = navigationSnapshotRelease(navigationSnapshotID, lynxAppId)
         if (pinnedReleaseId != null) {
+            resolvePinnedEmbedded(lynxAppId, bundleName, navigationSnapshotID, pinnedReleaseId)?.let { return@withIdentity it }
             val pinnedLease = runCatching {
                 sdk.acquireBundleLeaseForRelease(lynxAppId, pinnedReleaseId, bundleName)
             }.getOrNull()
             if (pinnedLease != null && pinnedLease.file.isFile && pinnedLease.file.canRead()) {
-                return@withIdentity prepared(
-                    lynxAppId,
-                    bundleName,
-                    pinnedLease,
-                    source = navigationSnapshotSource(navigationSnapshotID),
-                    navigationSnapshotID = navigationSnapshotID,
-                )
+                return@withIdentity preparedPinned(lynxAppId, bundleName, pinnedLease, navigationSnapshotID)
             }
+            throw IllegalStateException("导航快照中的目标 Bundle 不可用：$lynxAppId/$bundleName")
         }
         val prepared = resolvePageUnpinned(lynxAppId, bundleName) ?: return@withIdentity null
-        pinNavigationSnapshot(navigationSnapshotID, prepared)
-        prepared.copy(navigationSnapshotID = navigationSnapshotID)
+        prepared.copy(navigationSnapshotID = pinNavigationSnapshot(navigationSnapshotID, prepared))
     }
 
     private fun resolvePageUnpinned(
@@ -409,7 +413,11 @@ class LynxOtaRuntime(
         synchronized(navigationSnapshotLock) {
             val snapshot = navigationSnapshots[navigationSnapshotID] ?: return
             snapshot.activityCount -= 1
-            if (snapshot.activityCount <= 0) navigationSnapshots.remove(navigationSnapshotID)
+            if (snapshot.activityCount <= 0) {
+                navigationSnapshots.remove(navigationSnapshotID)
+                val key = "${snapshot.sessionID}::${snapshot.lynxAppId}"
+                if (sessionSnapshots[key] == navigationSnapshotID) sessionSnapshots.remove(key)
+            }
         }
     }
 
@@ -419,21 +427,60 @@ class LynxOtaRuntime(
     override fun confirmCandidateHealthy(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: Long?): Boolean {
         if (!config.candidateActivationEnabled) return false
         val epoch = expectedIdentityEpoch ?: userIdentityEpoch
-        return runCatching {
-            withIdentity(epoch) { sdk.confirmCandidateHealthy(lynxAppId, expectedReleaseId, epoch) }
+        val confirmed = withIdentity(epoch) {
+            if (Thread.currentThread().isInterrupted) throw InterruptedException("健康确认已取消")
+            val current = sdk.current(lynxAppId)
+            if (expectedReleaseId != null && sdk.candidate(lynxAppId) == null && current?.context?.releaseId == expectedReleaseId) current
+            else sdk.confirmCandidateHealthy(lynxAppId, expectedReleaseId, epoch)
+        }
             synchronized(navigationSnapshotLock) {
-                navigationSnapshots.values.filter { it.lynxAppId == lynxAppId && it.identityEpoch == epoch && it.releaseId == expectedReleaseId }
+                navigationSnapshots.values.filter { !it.retired && it.lynxAppId == lynxAppId && it.identityEpoch == epoch && it.releaseId == confirmed.context.releaseId }
                     .forEach { it.source = "ota_snapshot" }
             }
             clearPageRefreshGate(lynxAppId, epoch)
-            true
-        }.getOrDefault(false)
+        return true
+    }
+
+    override fun recoverFailedCandidate(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: Long?): Boolean {
+        val epoch = expectedIdentityEpoch ?: userIdentityEpoch
+        val restored = withIdentity(epoch) {
+            val candidate = sdk.candidate(lynxAppId)
+            if (candidate != null && (expectedReleaseId == null || candidate.release.context.releaseId == expectedReleaseId)) {
+                sdk.discardCandidate(lynxAppId, expectedReleaseId, epoch)
+            }
+            sdk.current(lynxAppId) != null || embeddedBundleRegistry.containsApp(lynxAppId)
+        }
+        retireSnapshots(lynxAppId, expectedReleaseId, epoch, candidateOnly = true)
+        return restored
+    }
+
+    override fun isNavigationSnapshotValid(navigationSnapshotID: String?): Boolean = synchronized(navigationSnapshotLock) {
+        if (navigationSnapshotID.isNullOrBlank()) true
+        else navigationSnapshots[navigationSnapshotID]?.let { !it.retired && it.identityEpoch == userIdentityEpoch }
+            ?: !navigationSnapshotID.startsWith(SNAPSHOT_PREFIX)
+    }
+
+    override fun resolveRecoveredCurrent(lynxAppId: String, bundleName: String, navigationSnapshotID: String?): PreparedActivityBundle? {
+        val current = resolveCurrent(lynxAppId, bundleName) ?: return null
+        return current.copy(navigationSnapshotID = pinNavigationSnapshot(navigationSnapshotID, current, allowRetiredSource = true))
+    }
+
+    private fun retireSnapshots(appId: String, releaseId: String?, epoch: Long, candidateOnly: Boolean) = synchronized(navigationSnapshotLock) {
+        navigationSnapshots.forEach { (id, snapshot) ->
+            if (!snapshot.retired && snapshot.lynxAppId == appId && snapshot.identityEpoch == epoch &&
+                (releaseId == null || snapshot.releaseId == releaseId) && (!candidateOnly || snapshot.source == "candidate_trial")) {
+                snapshot.retired = true
+                val key = "${snapshot.sessionID}::$appId"
+                if (sessionSnapshots[key] == id) sessionSnapshots.remove(key)
+            }
+        }
     }
 
     override fun resolveCurrent(
         lynxAppId: String,
         bundleName: String,
     ): PreparedActivityBundle? = withIdentity {
+        reconcileIdentity(userIdentityEpoch)
         val lease = runCatching { sdk.acquireCurrentBundleLease(lynxAppId, bundleName) }.getOrNull()
         if (lease != null && lease.file.isFile && lease.file.canRead()) {
             return@withIdentity prepared(lynxAppId, bundleName, lease)
@@ -446,19 +493,22 @@ class LynxOtaRuntime(
     override fun rollback(lynxAppId: String, reason: String, expectedReleaseId: String?, expectedIdentityEpoch: Long?): Boolean {
         val epoch = expectedIdentityEpoch ?: userIdentityEpoch
         return withIdentity(epoch) {
-        if (config.candidateActivationEnabled && runCatching { sdk.candidate(lynxAppId) }.getOrNull() != null) {
-            return@withIdentity runCatching {
+        val candidate = sdk.candidate(lynxAppId)
+        if (config.candidateActivationEnabled && candidate != null && (expectedReleaseId == null || candidate.release.context.releaseId == expectedReleaseId)) {
                 // candidate/trial 失败时只丢弃候选，不回滚掉仍然稳定的 current。
                 sdk.discardCandidate(lynxAppId, expectedReleaseId, epoch)
                 clearPageRefreshGate(lynxAppId, epoch)
-                true
-            }.getOrDefault(false)
+                retireSnapshots(lynxAppId, expectedReleaseId, epoch, candidateOnly = true)
+                return@withIdentity true
         }
         if (expectedReleaseId != null && sdk.current(lynxAppId)?.context?.releaseId != expectedReleaseId) {
             throw CancellationException("失败回调不属于当前 OTA Release")
         }
         val restoredRemote = sdk.rollback(lynxAppId, reason, expectedReleaseId, epoch)
-        if (restoredRemote != null) return@withIdentity true
+        if (restoredRemote != null) {
+            retireSnapshots(lynxAppId, expectedReleaseId, epoch, candidateOnly = false)
+            return@withIdentity true
+        }
         // Store 在一次事务内完成 previous/embedded 回退，不在探测后再次删除新提交的 current。
         embeddedBundleRegistry.containsApp(lynxAppId)
         }
@@ -545,37 +595,98 @@ class LynxOtaRuntime(
     private fun navigationSnapshotRelease(snapshotID: String?, lynxAppId: String): String? {
         if (snapshotID.isNullOrBlank()) return null
         synchronized(navigationSnapshotLock) {
-            val snapshot = navigationSnapshots[snapshotID]?.takeIf { it.lynxAppId == lynxAppId } ?: return null
-            if (snapshot.identityEpoch != userIdentityEpoch) throw CancellationException("旧用户导航会话不能打开新页面")
+            val session = sourceSession(snapshotID)
+            val id = sessionSnapshots["$session::$lynxAppId"] ?: return null
+            val snapshot = navigationSnapshots[id] ?: return null
+            if (snapshot.retired || snapshot.identityEpoch != userIdentityEpoch) throw CancellationException("旧导航快照不能打开新页面")
             return snapshot.releaseId
         }
+    }
+
+    /** 销毁后的唯一来源 ID 不能重新解释成新的逻辑 session。 */
+    private fun sourceSession(id: String, allowRetired: Boolean = false): String {
+        val source = navigationSnapshots[id]
+        if (source == null) {
+            if (id.startsWith(SNAPSHOT_PREFIX)) {
+                val parts = id.split(':', limit = 4)
+                if (parts.size == 4 && parts[1] != PROCESS_NONCE) return parts[2]
+                throw CancellationException("来源导航快照已释放")
+            }
+            return id
+        }
+        if (source.identityEpoch != userIdentityEpoch || (!allowRetired && source.retired)) throw CancellationException("来源导航快照已失效")
+        return source.sessionID
+    }
+
+    private fun isRestoredSnapshot(id: String?): Boolean {
+        if (id == null || !id.startsWith(SNAPSHOT_PREFIX)) return false
+        val parts = id.split(':', limit = 4)
+        return parts.size == 4 && parts[1] != PROCESS_NONCE
+    }
+
+    private fun actualSnapshotID(sourceID: String?, appId: String): String? = synchronized(navigationSnapshotLock) {
+        if (sourceID.isNullOrBlank()) return@synchronized null
+        val id = sessionSnapshots["${sourceSession(sourceID)}::$appId"] ?: return@synchronized null
+        if (id != sourceID) navigationSnapshots[id]?.let { it.activityCount += 1 }
+        id
     }
 
     private fun navigationSnapshotSource(snapshotID: String?): String = synchronized(navigationSnapshotLock) {
         navigationSnapshots[snapshotID]?.source ?: "ota_snapshot"
     }
 
-    private fun pinNavigationSnapshot(snapshotID: String?, prepared: PreparedActivityBundle) {
-        if (snapshotID.isNullOrBlank() || prepared.source == "embedded_baseline") return
-        val releaseId = prepared.releaseId?.takeIf { it.isNotBlank() } ?: return
+    private fun preparedPinned(appId: String, bundleName: String, lease: com.ota.android.sdk.ReleaseTransaction.BundleLease, sourceID: String?): PreparedActivityBundle {
+        try {
+            val id = actualSnapshotID(sourceID, appId)
+            return prepared(appId, bundleName, lease, source = navigationSnapshotSource(id), navigationSnapshotID = id)
+        } catch (error: Exception) {
+            lease.close()
+            throw error
+        }
+    }
+
+    private fun resolvePinnedEmbedded(appId: String, bundleName: String, sourceID: String?, releaseId: String): PreparedActivityBundle? {
+        val embedded = synchronized(navigationSnapshotLock) {
+            sourceID != null && sessionSnapshots["${sourceSession(sourceID)}::$appId"]?.let { navigationSnapshots[it]?.source == "embedded_baseline" } == true
+        }
+        if (!embedded) return null
+        val value = resolveEmbedded(appId, bundleName)
+            ?: throw IllegalStateException("内置导航快照缺少目标 Bundle：$appId/$bundleName")
+        check(value.releaseId == releaseId) { "内置导航快照身份已变化" }
+        return value.copy(navigationSnapshotID = actualSnapshotID(sourceID, appId))
+    }
+
+    private fun pinNavigationSnapshot(snapshotID: String?, prepared: PreparedActivityBundle, allowRetiredSource: Boolean = false): String? {
+        if (snapshotID.isNullOrBlank()) return null
+        val releaseId = prepared.releaseId?.takeIf { it.isNotBlank() } ?: return null
         val epoch = prepared.userIdentityEpoch ?: userIdentityEpoch
         if (epoch != userIdentityEpoch) {
             runCatching { prepared.releaseLease?.close() }
             throw CancellationException("旧用户 Bundle 不能固定到新导航会话")
         }
         synchronized(navigationSnapshotLock) {
-            val existing = navigationSnapshots[snapshotID]
+            val sessionID = sourceSession(snapshotID, allowRetiredSource)
+            val key = "$sessionID::${prepared.lynxAppId}"
+            val existingID = sessionSnapshots[key]
+            val existing = existingID?.let { navigationSnapshots[it] }
             if (existing == null) {
-                navigationSnapshots[snapshotID] = NavigationSnapshot(prepared.lynxAppId, releaseId, 1, epoch,
-                    if (prepared.source == "candidate_trial") "candidate_trial" else "ota_snapshot")
-            } else if (existing.lynxAppId == prepared.lynxAppId && (existing.releaseId != releaseId || existing.identityEpoch != epoch)) {
+                val id = "$SNAPSHOT_PREFIX$PROCESS_NONCE:$sessionID:${java.util.UUID.randomUUID()}"
+                navigationSnapshots[id] = NavigationSnapshot(sessionID, prepared.lynxAppId, releaseId, 1, epoch,
+                    when (prepared.source) { "candidate_trial" -> "candidate_trial"; "embedded_baseline" -> "embedded_baseline"; else -> "ota_snapshot" })
+                sessionSnapshots[key] = id
+                return id
+            } else if (existing.retired || existing.releaseId != releaseId || existing.identityEpoch != epoch) {
                 runCatching { prepared.releaseLease?.close() }
                 throw CancellationException("导航会话已固定其他 Release 或身份")
             }
+            if (existingID != snapshotID) existing.activityCount += 1
+            return existingID
         }
     }
 
     private companion object {
         const val TAG = "LynxOtaRuntime"
+        const val SNAPSHOT_PREFIX = "ota-snapshot:"
+        val PROCESS_NONCE: String = java.util.UUID.randomUUID().toString()
     }
 }

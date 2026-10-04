@@ -47,7 +47,7 @@ object NativeDatabaseCapabilities {
         } catch (error: CapabilityException) {
             failure(error.code, error.message ?: "SQLite 参数错误")
         } catch (error: Exception) {
-            failure("NATIVE_ERROR", error.message ?: "Android SQLite 操作失败")
+            failure(if (error is NativeBudgetExceeded) error.code else if (error is NativeCallCancelled) "HOST_DESTROYED" else "NATIVE_ERROR", error.message ?: "Android SQLite 操作失败")
         }
     }
 
@@ -70,6 +70,7 @@ object NativeDatabaseCapabilities {
             }
 
             // Context.openOrCreateDatabase 只能在 app 私有 databases 目录中创建该文件。
+            NativeCallContext.checkActive()
             val sqlite = activity.openOrCreateDatabase(database, Context.MODE_PRIVATE, null)
             try {
                 sqlite.version = version
@@ -127,13 +128,15 @@ object NativeDatabaseCapabilities {
             sqlite.beginTransaction()
             try {
                 statements.forEachIndexed { index, statement ->
+                    NativeCallContext.checkActive()
                     if (index == 0 && values.length() > 0) {
                         sqlite.execSQL(statement, bindArguments(values))
                     } else {
                         sqlite.execSQL(statement)
                     }
                 }
-                sqlite.setTransactionSuccessful()
+                NativeCallContext.checkActive()
+                NativeCallContext.commit { sqlite.setTransactionSuccessful() }
             } finally {
                 sqlite.endTransaction()
             }
@@ -150,7 +153,8 @@ object NativeDatabaseCapabilities {
         val bindValues = values(options)
 
         return withConnection(database) { sqlite ->
-            val compiled = sqlite.compileStatement(sql)
+            sqlite.beginTransaction()
+            val compiled = try { sqlite.compileStatement(sql) } catch (error: Exception) { sqlite.endTransaction(); throw error }
             try {
                 bind(compiled, bindValues)
                 val normalized = sql.trimStart().uppercase(Locale.US)
@@ -166,6 +170,8 @@ object NativeDatabaseCapabilities {
                 } else {
                     compiled.executeUpdateDelete()
                 }
+                NativeCallContext.checkActive()
+                NativeCallContext.commit { sqlite.setTransactionSuccessful() }
                 JSONObject()
                     .put("database", database)
                     .put(
@@ -175,7 +181,7 @@ object NativeDatabaseCapabilities {
                             .put("lastId", if (insertedId >= 0L) insertedId else -1),
                     )
             } finally {
-                compiled.close()
+                try { compiled.close() } finally { sqlite.endTransaction() }
             }
         }
     }
@@ -187,13 +193,13 @@ object NativeDatabaseCapabilities {
 
         return withConnection(database) { sqlite ->
             sqlite.rawQuery(sql, selectionArgs).use { cursor ->
-                val columns = JSONArray()
-                cursor.columnNames.forEach(columns::put)
-                val rows = JSONArray()
+                val budget = NativeJsonBudget()
+                val columns = budget.array()
+                cursor.columnNames.forEach { budget.append(columns, it) }
+                val rows = budget.array()
                 while (cursor.moveToNext()) {
-                    val row = JSONArray()
-                    for (index in cursor.columnIndices()) row.put(cursorValue(cursor, index))
-                    rows.put(row)
+                    val row = budget.row(cursor.columnIndices().asSequence().map { cursorValue(cursor, it) })
+                    budget.appendAccountedArray(rows, row)
                 }
                 JSONObject()
                     .put("columns", columns)
@@ -214,6 +220,7 @@ object NativeDatabaseCapabilities {
                 connections.remove(database, sqlite)
                 throw CapabilityException("CONNECTION_CLOSED", "数据库连接已关闭: $database")
             }
+            NativeCallContext.checkActive()
             return action(sqlite)
         }
     }
@@ -315,8 +322,14 @@ object NativeDatabaseCapabilities {
         Cursor.FIELD_TYPE_NULL -> JSONObject.NULL
         Cursor.FIELD_TYPE_INTEGER -> cursor.getLong(index)
         Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(index)
-        Cursor.FIELD_TYPE_BLOB -> Base64.encodeToString(cursor.getBlob(index), Base64.NO_WRAP)
-        else -> cursor.getString(index) ?: JSONObject.NULL
+        Cursor.FIELD_TYPE_BLOB -> {
+            val blob = cursor.getBlob(index)
+            NativePayloadBudget.check(blob.size.toLong(), NativePayloadBudget.INLINE_BYTES.toLong())
+            Base64.encodeToString(blob, Base64.NO_WRAP)
+        }
+        else -> cursor.getString(index)?.also {
+            NativePayloadBudget.check(it.toByteArray(Charsets.UTF_8).size.toLong(), NativePayloadBudget.INLINE_BYTES.toLong())
+        } ?: JSONObject.NULL
     }
 
     /** 按 SQL 引号和注释跳过分号，避免字符串中的分号被错误拆开。 */

@@ -133,6 +133,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (BuildConfig.DEBUG &&
             (BuildConfig.LYNX_OTA_DEVICE_E2E || BuildConfig.LYNX_EMBEDDED_ASSETS_DEVICE_E2E) &&
+            !intent.getBooleanExtra("lynx_shell.show_native_launcher", false) &&
             savedInstanceState == null
         ) {
             openSidecarDevicePage()
@@ -263,6 +264,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        LynxCapacitorDemoHost.onNewIntent(this, intent)
         // reLaunch 的 CLEAR_TOP 会复用当前实例；更新 Intent 方便宿主读取最新主页参数。
         setIntent(intent)
     }

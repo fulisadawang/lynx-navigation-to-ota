@@ -6,7 +6,8 @@
   "author": "Lynx Shell",
   "license": "Apache-2.0",
   "dependencies": {
-    "@lynx/lynx-shell-kit": "file:../lynx_shell_kit"
+    "@lynx/lynx-shell-kit": "file:../lynx_shell_kit",
+    "@lynx/lynx-capacitor-kit": "file:../lynx_capacitor_kit"
   },
   "devDependencies": {},
   "dynamicDependencies": {}

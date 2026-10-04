@@ -177,6 +177,10 @@ class LynxTransitionCoordinator(
         updatePredictiveBackAvailability()
     }
 
+    /** 转场尚未收口时拒绝页面动态开关，避免打断正在驱动返回的手势。 */
+    val isBusy: Boolean
+        get() = entryPending || animator != null || interactiveActive
+
     fun setBackGestureEnabled(enabled: Boolean) {
         backGestureEnabled = enabled
         updatePredictiveBackAvailability()

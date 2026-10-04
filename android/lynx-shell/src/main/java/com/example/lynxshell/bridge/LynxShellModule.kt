@@ -226,6 +226,23 @@ class LynxShellModule(context: Context) : LynxModule(context) {
         ) { LynxNavigator.getNavigationState(hostContext()) }
     }
 
+    /** 原位更新调用页面的系统返回策略，不重建 LynxView，也不影响显式 back/close。 */
+    @LynxMethod
+    fun setBackGestureEnabled(enabled: Boolean, callback: Callback) {
+        postResult(
+            // LYNX_DEBUG_TOOL_BEGIN
+            "setBackGestureEnabled",
+            // LYNX_DEBUG_TOOL_END
+            callback,
+        ) {
+            LynxNavigator.setBackGestureEnabled(
+                hostContext(),
+                enabled,
+                (mContext as? LynxContext)?.lynxView,
+            )
+        }
+    }
+
     /**
      * 关闭当前页并向下一个 Lynx entry 返回 JSON Object。
      *
@@ -259,6 +276,19 @@ class LynxShellModule(context: Context) : LynxModule(context) {
             // LYNX_DEBUG_TOOL_END
             callback,
         ) { LynxNavigator.consumeNavigationResult(hostContext()) }
+    }
+
+    /** 业务初始化完成后报告健康；实际首屏和候选提交由调用 View 的容器确认。 */
+    @LynxMethod
+    fun markOtaHealthy(callback: Callback) {
+        val sourceView = (mContext as? LynxContext)?.lynxView
+        ShellMessageHub.markOtaHealthy(sourceView) { reply ->
+            callback.invoke(nativeMap(hashMapOf(
+                "code" to reply.code,
+                "message" to reply.message,
+                "data" to payloadMap(reply.data),
+            )))
+        }
     }
 
     /** 页面向宿主发送同步消息；处理器返回值会通过同一 callback 回到 Lynx。 */
@@ -562,31 +592,31 @@ class LynxShellModule(context: Context) : LynxModule(context) {
     /** 调系统相册/相机选择媒体；权限和 Activity Result 生命周期由媒体桥处理。 */
     @LynxMethod
     fun chooseMedia(optionsJSON: String, callback: Callback) {
-        ShellMediaBridge.chooseMedia(hostContext(), optionsJSON, callback)
+        ShellMediaBridge.call(mContext, "chooseMedia", optionsJSON, callback)
     }
 
     /** 上传本地文件；与 uploadImage 共用受大小限制的网络实现。 */
     @LynxMethod
     fun uploadFile(optionsJSON: String, callback: Callback) {
-        ShellMediaBridge.upload(optionsJSON, callback)
+        ShellMediaBridge.call(mContext, "uploadFile", optionsJSON, callback)
     }
 
     /** 兼容 Playground 的图片上传方法名。 */
     @LynxMethod
     fun uploadImage(optionsJSON: String, callback: Callback) {
-        ShellMediaBridge.upload(optionsJSON, callback)
+        ShellMediaBridge.call(mContext, "uploadImage", optionsJSON, callback)
     }
 
     /** 下载远程文件到 App 私有缓存目录。 */
     @LynxMethod
     fun downloadFile(optionsJSON: String, callback: Callback) {
-        ShellMediaBridge.download(hostContext(), optionsJSON, callback)
+        ShellMediaBridge.call(mContext, "downloadFile", optionsJSON, callback)
     }
 
     /** 把 Data URL 解码到 App 私有缓存目录，不直接写公共相册。 */
     @LynxMethod
     fun saveDataURL(optionsJSON: String, callback: Callback) {
-        ShellMediaBridge.saveDataUrl(hostContext(), optionsJSON, callback)
+        ShellMediaBridge.call(mContext, "saveDataURL", optionsJSON, callback)
     }
 
     /**

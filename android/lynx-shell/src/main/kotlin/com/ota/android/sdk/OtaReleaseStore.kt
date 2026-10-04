@@ -14,10 +14,12 @@ interface OtaReleaseStore {
     throw OtaSelectionException("requires_store_v3")
   }
   fun reconcileUserContext() {}
+  fun recoverInterruptedCandidates(scope: ReleaseTransaction.ReleaseScope)
   fun acquireCandidateTrialBundleLease(scope: ReleaseTransaction.ReleaseScope, bundleName: String): ReleaseTransaction.BundleLease? {
     if (candidate(scope) == null) return null
-    beginCandidateTrial(scope)
-    return acquireCandidateBundleLease(scope, bundleName)
+    val lease = acquireCandidateBundleLease(scope, bundleName) ?: return null
+    try { beginCandidateTrial(scope); return lease }
+    catch (error: Exception) { lease.close(); throw error }
   }
   @Throws(IOException::class, OtaSdkException::class)
   fun registerEmbeddedRelease(release: OtaModels.InstalledRelease)
@@ -114,6 +116,7 @@ internal class LegacyOtaReleaseStore(
   override fun confirmCandidate(scope: ReleaseTransaction.ReleaseScope) = delegate.confirmCandidate(scope)
   override fun discardCandidate(scope: ReleaseTransaction.ReleaseScope) = delegate.discardCandidate(scope)
   override fun recoverInterruptedCandidate(scope: ReleaseTransaction.ReleaseScope) = delegate.recoverInterruptedCandidate(scope)
+  override fun recoverInterruptedCandidates(scope: ReleaseTransaction.ReleaseScope) = delegate.recoverInterruptedCandidates(scope)
   override fun candidateBundle(scope: ReleaseTransaction.ReleaseScope, bundleName: String) = delegate.candidateBundle(scope, bundleName)
   override fun acquireCurrentBundleLease(scope: ReleaseTransaction.ReleaseScope, bundleName: String) = delegate.acquireCurrentBundleLease(scope, bundleName)
   override fun acquireCandidateBundleLease(scope: ReleaseTransaction.ReleaseScope, bundleName: String) = delegate.acquireCandidateBundleLease(scope, bundleName)

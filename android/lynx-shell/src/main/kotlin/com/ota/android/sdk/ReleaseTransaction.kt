@@ -467,6 +467,7 @@ class ReleaseTransaction @JvmOverloads constructor(
         previous = previous?.takeUnless { it == record.release },
       )
       faultInjector.check(TransactionFaultPoint.BEFORE_STATE_COMMIT)
+      if (Thread.currentThread().isInterrupted) throw InterruptedException("候选健康确认在提交前取消")
       writeStateAtomic(next)
       faultInjector.check(TransactionFaultPoint.AFTER_STATE_COMMIT)
       removeCandidateAtomic(scope.lynxAppId)
@@ -496,6 +497,16 @@ class ReleaseTransaction @JvmOverloads constructor(
     ensureCandidateScope(record, scope)
     if (record.status == OtaModels.CandidateStatus.TRIAL) {
       discardCandidate(scope)
+    }
+  }
+
+  fun recoverInterruptedCandidates(scope: ReleaseScope) = withStorageLock {
+    appsRoot().listFiles().orEmpty().filter { it.isDirectory && APP_ID_PATTERN.matches(it.name) }.forEach { directory ->
+      val candidate = readCandidate(directory.name) ?: return@forEach
+      if (candidate.scope.env == scope.env && candidate.scope.hostApp == scope.hostApp && candidate.scope.platform == scope.platform
+          && candidate.status == OtaModels.CandidateStatus.TRIAL) {
+        discardCandidate(candidate.scope)
+      }
     }
   }
 

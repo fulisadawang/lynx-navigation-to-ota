@@ -13,7 +13,7 @@ object LynxCapabilitySemantics {
     const val CONTRACT_VERSION = "1.1"
     const val SOURCE_VERIFICATION = "verified"
     const val BUILD_VERIFICATION = "not_run"
-    const val HOST_VERIFICATION = "not_integrated"
+    const val HOST_VERIFICATION = "configured_not_run"
     const val DEVICE_VERIFICATION = "not_run"
 
     fun semanticState(state: String): String = when (state) {
@@ -91,6 +91,10 @@ object LynxCapabilitySemantics {
         "PERMISSION_NOT_DECLARED" -> "HOST_PERMISSION_CONFIGURATION_REQUIRED"
         "PERMISSION_DENIED" -> "RUNTIME_PERMISSION_DENIED"
         "MODULE_UNAVAILABLE", "SCENE_UNAVAILABLE", "HOST_UNAVAILABLE" -> "RUNTIME_CONTEXT_REQUIRED"
+        "HOST_NOT_CONFIGURED" -> "HOST_INTEGRATION_REQUIRED"
+        "PAYLOAD_TOO_LARGE", "RESULT_TOO_LARGE", "IMAGE_TOO_LARGE" -> "PAYLOAD_TOO_LARGE"
+        "BUSY" -> "RESOURCE_BUSY"
+        "ENCODING_ERROR" -> "ENCODING_ERROR"
         "CANCELLED" -> "CANCELLED"
         "ACTIVITY_DESTROYED", "HOST_DESTROYED" -> "HOST_DESTROYED"
         else -> "NATIVE_ERROR"

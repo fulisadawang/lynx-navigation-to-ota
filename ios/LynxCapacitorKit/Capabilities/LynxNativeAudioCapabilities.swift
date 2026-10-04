@@ -21,15 +21,27 @@ enum LynxNativeAudioCapabilities {
         completion: @escaping Completion
     ) -> Bool {
         guard call.pluginId == "Audio" else { return false }
-        lock.withLock { if activeOwnerID == nil { activeOwnerID = call.ownerID } }
         let run = {
+            guard LynxNativeOwnerScope.isActive(call.ownerID) else { completion(.failure("HOST_DESTROYED", "页面已销毁")); return }
+            if ["record", "play", "stopRecording", "stopPlayback"].contains(call.methodName) {
+                let allowed = lock.withLock { () -> Bool in
+                    guard state == "idle" || activeOwnerID == call.ownerID else { return false }
+                    if state == "idle", ["record", "play"].contains(call.methodName) { activeOwnerID = call.ownerID }
+                    return true
+                }
+                guard allowed else { completion(.failure("BUSY", "当前音频操作属于另一个页面")); return }
+            }
+            let finish: Completion = { result in
+                lock.withLock { if state == "idle" { activeOwnerID = nil } }
+                completion(result)
+            }
             switch call.methodName {
             case "checkPermissions": completion(.success(permissionData()))
             case "requestPermissions": requestPermission(presenter: presenter, completion: completion)
-            case "record": startRecording(completion: completion)
-            case "stopRecording": stopRecording(completion: completion)
-            case "play": startPlayback(call.options, completion: completion)
-            case "stopPlayback": stopPlayback(completion: completion)
+            case "record": startRecording(completion: finish)
+            case "stopRecording": stopRecording(completion: finish)
+            case "play": startPlayback(call, completion: finish)
+            case "stopPlayback": stopPlayback(completion: finish)
             case "getState": completion(.success(stateData()))
             default: completion(.failure("UNSUPPORTED", "Audio.\(call.methodName) 尚未接入当前 iOS Module"))
             }
@@ -120,29 +132,52 @@ enum LynxNativeAudioCapabilities {
         completion(.success(["recording": false, "state": "idle", "path": url?.path ?? NSNull(), "uri": url?.absoluteString ?? NSNull()]))
     }
 
-    private static func startPlayback(_ options: [String: Any], completion: @escaping Completion) {
+    private static func startPlayback(_ call: LynxNativeCapabilityCall, completion: @escaping Completion) {
         guard lock.withLock({ state == "idle" }) else { completion(.failure("BUSY", "当前已有录音或播放操作")); return }
-        let path = string(options["path"] ?? options["uri"])
-        guard let url = resolveURL(path: path, directory: string(options["directory"], default: "CACHE")), FileManager.default.fileExists(atPath: url.path) else {
-            completion(.failure("NOT_FOUND", "播放文件不存在")); return
-        }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.allowBluetooth])
-            try session.setActive(true, options: [])
-            let player = try AVAudioPlayer(contentsOf: url)
-            let delegate = AudioPlayerDelegate { success in
-                lock.withLock { state = "idle"; self.player = nil; playerDelegate = nil }
-                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-                _ = success
+        let path = string(call.options["path"] ?? call.options["uri"])
+        lock.withLock { state = "preparing" }
+        LynxNativeIOExecutor.shared.submitAsync(ownerID: call.ownerID, completion: { result in
+            DispatchQueue.main.async {
+                if !result.success { lock.withLock { if activeOwnerID == call.ownerID && state == "preparing" { state = "idle"; activeOwnerID = nil } } }
+                completion(result)
             }
-            player.delegate = delegate
-            player.prepareToPlay()
-            guard player.play() else { completion(.failure("PLAYER_START_FAILED", "AVAudioPlayer 无法开始播放")); return }
-            lock.withLock { self.player = player; playerDelegate = delegate; playbackURL = url; state = "playing" }
-            completion(.success(["playing": true, "state": "playing", "path": url.path, "uri": url.absoluteString]))
-        } catch {
-            completion(.failure("PLAYER_START_FAILED", error.localizedDescription))
+        }) { cancellation, finish in
+            guard lock.withLock({ activeOwnerID == call.ownerID && state == "preparing" }) else { finish(.failure("CANCELLED", "音频准备已取消")); return }
+            guard let url = resolveURL(path: path, directory: string(call.options["directory"], default: "CACHE")), FileManager.default.fileExists(atPath: url.path) else {
+                DispatchQueue.main.async { lock.withLock { if activeOwnerID == call.ownerID { state = "idle"; activeOwnerID = nil } }; finish(.failure("NOT_FOUND", "播放文件不存在")) }
+                return
+            }
+            do {
+                let player = try AVAudioPlayer(contentsOf: url)
+                player.prepareToPlay()
+                DispatchQueue.main.async {
+                    guard !cancellation.isCancelled, LynxNativeOwnerScope.isActive(call.ownerID), lock.withLock({ activeOwnerID == call.ownerID && state == "preparing" }) else {
+                        finish(.failure("HOST_DESTROYED", "音频准备已取消")); return
+                    }
+                    do {
+                        let session = AVAudioSession.sharedInstance()
+                        try session.setCategory(.playback, mode: .default, options: [.allowBluetooth])
+                        try session.setActive(true, options: [])
+                        let delegate = AudioPlayerDelegate { [weak expectedPlayer = player] success in
+                            guard let expectedPlayer else { return }
+                            let owned = lock.withLock { () -> Bool in
+                                guard self.player === expectedPlayer else { return false }
+                                state = "idle"; self.player = nil; playerDelegate = nil; activeOwnerID = nil
+                                return true
+                            }
+                            guard owned else { return }
+                            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                            _ = success
+                        }
+                        player.delegate = delegate
+                        guard player.play() else { state = "idle"; finish(.failure("PLAYER_START_FAILED", "AVAudioPlayer 无法开始播放")); return }
+                        lock.withLock { self.player = player; playerDelegate = delegate; playbackURL = url; state = "playing" }
+                        finish(.success(["playing": true, "state": "playing", "path": url.path, "uri": url.absoluteString]))
+                    } catch { lock.withLock { state = "idle" }; finish(.failure("PLAYER_START_FAILED", error.localizedDescription)) }
+                }
+            } catch {
+                DispatchQueue.main.async { lock.withLock { if activeOwnerID == call.ownerID { state = "idle"; activeOwnerID = nil } }; finish(.failure("PLAYER_START_FAILED", error.localizedDescription)) }
+            }
         }
     }
 

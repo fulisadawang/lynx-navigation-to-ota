@@ -215,6 +215,17 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     }
   }
 
+  override fun recoverInterruptedCandidates(scope: ReleaseTransaction.ReleaseScope) = withStorageLock {
+    appsRoot().listFiles().orEmpty().filter { it.isDirectory && APP_ID_PATTERN.matches(it.name) }.forEach { directory ->
+      val state = readState(directory.name) ?: return@forEach
+      if (state.scope.env == scope.env && state.scope.hostApp == scope.hostApp && state.scope.platform == scope.platform
+          && state.candidate?.status == OtaModels.CandidateStatus.TRIAL) {
+        writeStateAtomic(state.copy(generation = state.generation + 1L, candidate = null))
+        pruneApp(directory.name)
+      }
+    }
+  }
+
   private fun validateDecision(scope: ReleaseTransaction.ReleaseScope, releaseId: String, selection: OtaStoredSelection?) {
     val identity = selectionContext() ?: return
     val decision = readState(scope.lynxAppId)?.lastDecision ?: throw OtaSelectionException("missing_selection_metadata")
@@ -524,6 +535,7 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
         candidate = null,
       )
       faultInjector.check(ContentAddressedFaultPoint.BEFORE_STATE_COMMIT)
+      if (Thread.currentThread().isInterrupted) throw InterruptedException("候选健康确认在提交前取消")
       writeStateAtomic(next)
       faultInjector.check(ContentAddressedFaultPoint.AFTER_STATE_COMMIT)
       pruneApp(scope.lynxAppId)

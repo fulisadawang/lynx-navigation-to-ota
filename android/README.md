@@ -15,7 +15,7 @@
 - `ShellTemplateProvider`：本地 / HTTPS Bundle、安全校验、体积限制、取消和错误回传。
 - `LynxRouteParser`：解析 Intent、`lynxshell`、Sparkling hybrid 和 Explorer local 地址。
 - `LynxShellModule`：Lynx 调宿主的稳定能力协议。
-- `ShellMediaBridge` / `ShellMediaPickerActivity`：媒体选择、上传、下载和 Data URL 落盘。
+- `ShellMediaBridge`：保留五个旧媒体 ABI，经过宿主安装的 `LynxNativeMediaHost` 接到独立 Cap 媒体后端。系统选择器、原生预览、上传/下载及 Data URL 均按实际 View owner 执行；接线与当前验证边界见 [原生媒体统一](../docs/native-media-v1/README.md)。
 
 ## XElement 4.1 全量接入
 

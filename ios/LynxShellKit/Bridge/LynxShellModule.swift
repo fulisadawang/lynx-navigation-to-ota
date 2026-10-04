@@ -43,6 +43,10 @@ public final class LynxShellModule: NSObject, LynxContextModule {
             "reLaunch": NSStringFromSelector(#selector(reLaunch(_:completion:))),
             "redirect": NSStringFromSelector(#selector(redirect(_:optionsJSON:completion:))),
             "getNavigationState": NSStringFromSelector(#selector(getNavigationState(_:))),
+            "setBackGestureEnabled": NSStringFromSelector(
+                #selector(setBackGestureEnabled(_:completion:))
+            ),
+            "markOtaHealthy": NSStringFromSelector(#selector(markOtaHealthy(_:))),
             "closeWithResult": NSStringFromSelector(#selector(closeWithResult(_:completion:))),
             "consumeNavigationResult": NSStringFromSelector(
                 #selector(consumeNavigationResult(_:))
@@ -306,6 +310,36 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         performNavigation(method: "getNavigationState", completion: completion) { ShellNavigator.shared.navigationState() }
     }
 
+    /** 页面必要初始化完成后声明健康；实际确认仍等待同一 View 的真实首屏。 */
+    public func markOtaHealthy(_ completion: @escaping (NSDictionary) -> Void) {
+        let action = { [weak self] in
+            guard let view = self?.lynxContext?.getLynxView() else {
+                completion(Self.result(code: 1002, message: "调用页面已销毁"))
+                return
+            }
+            ShellMessageHub.markOtaHealthy(view: view, completion: completion)
+        }
+        if Thread.isMainThread { action() }
+        else { DispatchQueue.main.async(execute: action) }
+    }
+
+    /** 原位更新调用页面的返回手势策略，不重建 LynxView，也不影响显式 back/close。 */
+    public func setBackGestureEnabled(
+        _ enabled: Bool,
+        completion: @escaping (NSDictionary) -> Void
+    ) {
+        performNavigation(
+            method: "setBackGestureEnabled",
+            params: enabled ? "true" : "false",
+            completion: completion
+        ) { [weak self] in
+            ShellNavigator.shared.setBackGestureEnabled(
+                enabled,
+                sourceLynxView: self?.lynxContext?.getLynxView()
+            )
+        }
+    }
+
     /**
      * 关闭当前页，并把 JSON Object 返回给它下面的 Lynx entry。
      *
@@ -505,7 +539,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         _ optionsJSON: String,
         completion: @escaping LynxCallbackBlock
     ) {
-        ShellMediaBridge.shared.chooseMedia(optionsJSON: optionsJSON, callback: completion)
+        ShellMediaBridge.shared.handle(context: lynxContext, method: "chooseMedia", optionsJSON: optionsJSON, callback: completion)
     }
 
     /** 上传本地文件；与 uploadImage 共用受大小限制的 URLSession 实现。 */
@@ -513,7 +547,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         _ optionsJSON: String,
         completion: @escaping LynxCallbackBlock
     ) {
-        ShellMediaBridge.shared.upload(optionsJSON: optionsJSON, callback: completion)
+        ShellMediaBridge.shared.handle(context: lynxContext, method: "uploadFile", optionsJSON: optionsJSON, callback: completion)
     }
 
     /** 兼容 Playground 的图片上传方法名。 */
@@ -521,7 +555,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         _ optionsJSON: String,
         completion: @escaping LynxCallbackBlock
     ) {
-        ShellMediaBridge.shared.upload(optionsJSON: optionsJSON, callback: completion)
+        ShellMediaBridge.shared.handle(context: lynxContext, method: "uploadImage", optionsJSON: optionsJSON, callback: completion)
     }
 
     /** 下载远程文件到 App temporary directory。 */
@@ -529,7 +563,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         _ optionsJSON: String,
         completion: @escaping LynxCallbackBlock
     ) {
-        ShellMediaBridge.shared.download(optionsJSON: optionsJSON, callback: completion)
+        ShellMediaBridge.shared.handle(context: lynxContext, method: "downloadFile", optionsJSON: optionsJSON, callback: completion)
     }
 
     /** 把 Data URL 解码到 App temporary directory，不直接写系统相册。 */
@@ -537,7 +571,7 @@ public final class LynxShellModule: NSObject, LynxContextModule {
         _ optionsJSON: String,
         completion: @escaping LynxCallbackBlock
     ) {
-        ShellMediaBridge.shared.saveDataURL(optionsJSON: optionsJSON, callback: completion)
+        ShellMediaBridge.shared.handle(context: lynxContext, method: "saveDataURL", optionsJSON: optionsJSON, callback: completion)
     }
 
     /**

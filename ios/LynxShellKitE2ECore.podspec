@@ -15,6 +15,7 @@ Pod::Spec.new do |spec|
   spec.module_name = 'LynxShellKitE2ECore'
   spec.static_framework = true
   spec.requires_arc = true
+  spec.resource_bundles = { 'LynxShellKitPrivacy' => ['LynxShellKit/Resources/PrivacyInfo.xcprivacy'] }
   spec.source_files = [
     'LynxShellKit/**/*.{swift,h,m}',
     'OtaIOSSDK/Sources/OtaIOSSDK/**/*.swift',

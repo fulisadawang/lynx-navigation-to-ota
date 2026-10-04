@@ -16,6 +16,8 @@ import com.example.lynxshell.debug.LynxDebugBridge
 // LYNX_DEBUG_TOOL_END
 import com.example.lynxshell.bridge.LynxRouterPageInfo
 import com.example.lynxshell.bridge.ShellMessageHub
+import com.example.lynxshell.bridge.LynxOtaHealthCompletion
+import com.example.lynxshell.bridge.LynxOtaHealthReply
 import com.example.lynxshell.container.LynxContainerFactory
 import com.example.lynxshell.model.KeyboardBehavior
 import com.example.lynxshell.model.LynxPageRequest
@@ -28,19 +30,24 @@ import com.example.lynxshell.monitoring.LynxViewMonitor
 import com.example.lynxshell.monitoring.Visibility
 import com.example.lynxshell.resource.ShellTemplateProvider
 import com.example.lynxshell.runtime.LynxEnvironmentCoordinator
+import com.example.lynxshell.runtime.LynxOtaHealthGate
+import com.example.lynxshell.runtime.LynxLoadFailure
+import com.example.lynxshell.ota.ActivityBundleRuntime
 import com.example.lynxshell.util.JsonObjectCodec
 import com.lynx.tasm.LynxError
 import com.lynx.tasm.LynxView
 import com.lynx.tasm.LynxViewClient
+import java.lang.ref.WeakReference
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.concurrent.CancellationException
 
 /**
  * 无 TabBar 的 Android Lynx 内容承载能力。
  *
  * Fragment 不负责选中态、BottomNavigation 或业务 Tab 顺序；宿主可以用任意原生导航控件
- * 组合它。OTA Tab 只调用 ActivityBundleRuntime.resolveCurrent，禁止在切 Tab 时联网。
+ * 组合它。首次/显式刷新 cache-only 选择候选，普通切换复用 View，禁止在切 Tab 时联网。
  */
 class LynxTabFragment : Fragment() {
     private var monitoringView: LynxViewMonitor? = null
@@ -53,6 +60,14 @@ class LynxTabFragment : Fragment() {
     private var loadGeneration: Long = 0L
     private var loadFuture: Future<*>? = null
     private var firstScreenReady = false
+    private var loadFailureHandledGeneration: Long? = null
+    private var otaHealthGate = LynxOtaHealthGate()
+    private var healthFuture: Future<*>? = null
+    private var pendingHealthCompletion: LynxOtaHealthCompletion? = null
+    private var bundleRuntimeMetadata: Map<String, Any>? = null
+    private var preparedRuntime: ActivityBundleRuntime? = null
+    private var preparedUserEpoch: Long? = null
+    private var otaRecoveryUsed = false
     private var debugIdentity = ""
     private var debugError = "idle"
     private var loadCount = 0
@@ -110,6 +125,7 @@ class LynxTabFragment : Fragment() {
             lynxView?.onEnterBackground()
         } else {
             lynxView?.onEnterForeground()
+            if (isResumed) lynxView?.let { LynxShell.nativeModuleHost()?.onViewActive(requireActivity(), it) }
             syncColorScheme()
         }
     }
@@ -122,6 +138,7 @@ class LynxTabFragment : Fragment() {
         // LYNX_DEBUG_TOOL_END
         if (!isHidden) {
             lynxView?.onEnterForeground()
+            lynxView?.let { LynxShell.nativeModuleHost()?.onViewActive(requireActivity(), it) }
             syncColorScheme()
         }
     }
@@ -153,7 +170,7 @@ class LynxTabFragment : Fragment() {
     }
 
     /**
-     * 用户主动刷新后重新读取已经提交的 OTA current。
+     * 用户主动刷新后重新读取本地候选或 current；方法名保留兼容。
      *
      * 这个方法不会触发网络请求；网络同步由宿主先显式执行，完成后再调用本方法。
      * 未显示的 Tab 也会被刷新，以便下一次切换时不保留旧 LynxView。
@@ -162,13 +179,18 @@ class LynxTabFragment : Fragment() {
         if (!isAdded) return
         val host = view as? ViewGroup ?: return
         releaseContent(host)
+        otaRecoveryUsed = false
         loadContent(host)
     }
 
-    private fun loadContent(host: ViewGroup) {
+    private fun loadContent(host: ViewGroup, stableRecovery: Boolean = false) {
         val activity = activity ?: return
         val runtime = LynxShell.activityBundleRuntime()
         val epoch = runtime?.userIdentityEpoch
+        preparedRuntime = runtime
+        preparedUserEpoch = epoch
+        otaHealthGate = LynxOtaHealthGate()
+        loadFailureHandledGeneration = null
         val generation = ++loadGeneration
         loadCount += 1
         monitoringView = LynxMonitor.reserve(
@@ -183,9 +205,17 @@ class LynxTabFragment : Fragment() {
             val appId = spec.lynxAppId
             val bundleName = spec.bundleName
             val result = runCatching {
-                if (appId != null && bundleName != null) runtime?.resolveCurrent(appId, bundleName) else null
+                if (appId != null && bundleName != null) {
+                    if (stableRecovery) runtime?.resolveRecoveredCurrent(appId, bundleName, null)
+                    else runtime?.resolvePage(appId, bundleName)
+                } else null
             }
             val resolved = result.getOrNull()
+            if (Thread.currentThread().isInterrupted || result.exceptionOrNull() is InterruptedException ||
+                result.exceptionOrNull() is CancellationException) {
+                runCatching { resolved?.releaseLease?.close() }
+                return@submit
+            }
             activity.runOnUiThread {
                 if (!isAdded || view !== host || generation != loadGeneration ||
                     (spec.lynxAppId != null && (runtime !== LynxShell.activityBundleRuntime() || epoch != runtime?.userIdentityEpoch ||
@@ -235,8 +265,12 @@ class LynxTabFragment : Fragment() {
         loadGeneration += 1
         loadFuture?.cancel(true)
         loadFuture = null
+        cancelOtaHealth("Tab 内容已释放")
         firstScreenReady = false
         debugIdentity = ""
+        bundleRuntimeMetadata = null
+        preparedRuntime = null
+        preparedUserEpoch = null
         unregister()
         templateProvider?.close()
         templateProvider = null
@@ -244,7 +278,7 @@ class LynxTabFragment : Fragment() {
         // LYNX_DEBUG_TOOL_BEGIN
         LynxDebugBridge.detach(lynxView)
         // LYNX_DEBUG_TOOL_END
-        lynxView?.destroy()
+        lynxView?.let(LynxShell::destroyView)
         lynxView = null
         releaseCurrentLease()
         host?.removeAllViews()
@@ -264,6 +298,7 @@ class LynxTabFragment : Fragment() {
             return
         }
         replaceReleaseLease(nextReleaseLease)
+        bundleRuntimeMetadata = bundleMetadata
         renderCount += 1
         val request = LynxPageRequest(
             bundleUrl = spec.bundleUrl,
@@ -290,7 +325,7 @@ class LynxTabFragment : Fragment() {
             monitoring = monitoringView,
             onLoadError = { _, message ->
                 activity.runOnUiThread {
-                    if (isAdded && view === host && generation == loadGeneration && !firstScreenReady) showError(host, message)
+                    if (isAdded && view === host && generation == loadGeneration) handleLoadFailure(host, generation, message)
                 }
             },
         )
@@ -300,13 +335,17 @@ class LynxTabFragment : Fragment() {
                 activity.runOnUiThread {
                     if (isAdded && view === host && generation == loadGeneration) {
                         firstScreenReady = true
+                        otaHealthGate.markFirstScreen()
                         debugError = "ready"
+                        confirmCandidateHealthyIfNeeded(host, generation)
                     }
                 }
             }
             override fun onReceivedError(error: LynxError) {
+                val failure = LynxLoadFailure(error.errorCode, error.subCode, error.isFatal, error.level, error.msg)
+                if (!failure.requiresErrorState) return
                 activity.runOnUiThread {
-                    if (isAdded && view === host && generation == loadGeneration && !firstScreenReady) showError(host, "Lynx Tab 加载失败：$error")
+                    handleLoadFailure(host, generation, "Lynx Tab 失败（${failure.code}/${failure.subCode}）：${failure.message}")
                 }
             }
         }
@@ -331,6 +370,9 @@ class LynxTabFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
+        val owner = WeakReference(this)
+        val source = WeakReference(created)
+        val hostReference = WeakReference(host)
         ShellMessageHub.register(
             info = LynxRouterPageInfo(
                 pageId = pageID,
@@ -340,15 +382,125 @@ class LynxTabFragment : Fragment() {
             ),
             activity = activity,
             view = created,
+            otaHealthHandler = { completion ->
+                val fragment = owner.get()
+                val sourceView = source.get()
+                val contentHost = hostReference.get()
+                if (fragment == null || sourceView == null || contentHost == null) completion(LynxOtaHealthReply(1002, "Tab 页面已销毁"))
+                else fragment.markOtaHealthy(sourceView, contentHost, generation, completion)
+            },
         )
         LynxEnvironmentCoordinator.bind(activity, created)
+        if (isResumed && !isHidden) LynxShell.nativeModuleHost()?.onViewActive(activity, created)
         created.renderTemplateUrl(
             request.bundleUrl,
             JsonObjectCodec.toMap(request.initDataJson, "initData"),
         )
     }
 
+    private fun isCurrentContent(host: ViewGroup, generation: Long): Boolean =
+        isAdded && view === host && generation == loadGeneration
+
+    private fun isPreparedUserCurrent(): Boolean =
+        preparedRuntime === LynxShell.activityBundleRuntime() && preparedUserEpoch == preparedRuntime?.userIdentityEpoch
+
+    private fun markOtaHealthy(sourceView: LynxView, host: ViewGroup, generation: Long, completion: LynxOtaHealthCompletion) {
+        if (!isCurrentContent(host, generation) || sourceView !== lynxView || otaHealthGate.failed ||
+            (spec.lynxAppId != null && !isPreparedUserCurrent())) {
+            completion(LynxOtaHealthReply(1002, "Tab 页面或 OTA 身份已失效"))
+            return
+        }
+        val metadata = bundleRuntimeMetadata
+        if (otaHealthGate.confirmed) {
+            completion(LynxOtaHealthReply(0, data = mapOf("confirmed" to true, "releaseId" to metadata?.get("releaseId"))))
+        } else if (metadata?.get("source") != "candidate_trial") {
+            completion(LynxOtaHealthReply(0, data = mapOf("confirmed" to false, "reason" to "not_candidate")))
+        } else if (pendingHealthCompletion != null || otaHealthGate.confirming) {
+            completion(LynxOtaHealthReply(1006, "Tab 健康确认正在等待首屏或提交"))
+        } else {
+            pendingHealthCompletion = completion
+            otaHealthGate.markBusinessHealth()
+            confirmCandidateHealthyIfNeeded(host, generation)
+        }
+    }
+
+    private fun confirmCandidateHealthyIfNeeded(host: ViewGroup, generation: Long) {
+        if (!isCurrentContent(host, generation) || !isPreparedUserCurrent() || pendingHealthCompletion == null) return
+        val metadata = bundleRuntimeMetadata ?: return
+        if (metadata["source"] != "candidate_trial" || !otaHealthGate.beginConfirmation()) return
+        val appId = spec.lynxAppId ?: return
+        val runtime = preparedRuntime ?: return
+        val epoch = preparedUserEpoch
+        val releaseId = metadata["releaseId"] as? String
+        val sourceView = lynxView
+        val activity = activity ?: return
+        healthFuture = loader.submit {
+            val result = runCatching { runtime.confirmCandidateHealthy(appId, releaseId, epoch) }
+            if (Thread.currentThread().isInterrupted || result.exceptionOrNull() is InterruptedException ||
+                result.exceptionOrNull() is CancellationException) return@submit
+            activity.runOnUiThread {
+                if (!isCurrentContent(host, generation) || sourceView !== lynxView || !isPreparedUserCurrent() || otaHealthGate.failed) return@runOnUiThread
+                healthFuture = null
+                val completion = pendingHealthCompletion
+                pendingHealthCompletion = null
+                if (result.getOrNull() == true && otaHealthGate.completeConfirmation()) {
+                    bundleRuntimeMetadata = metadata + mapOf("source" to "ota_current", "promoted" to true)
+                    debugIdentity = debugIdentity.replace("source=candidate_trial", "source=ota_current")
+                    completion?.invoke(LynxOtaHealthReply(0, data = mapOf("confirmed" to true, "releaseId" to releaseId)))
+                } else {
+                    otaHealthGate.fail()
+                    completion?.invoke(LynxOtaHealthReply(1003, result.exceptionOrNull()?.message ?: "Tab 候选版本健康确认已失效"))
+                }
+            }
+        }
+    }
+
+    private fun cancelOtaHealth(message: String, code: Int = 1002) {
+        otaHealthGate.fail()
+        healthFuture?.cancel(true)
+        healthFuture = null
+        val completion = pendingHealthCompletion
+        pendingHealthCompletion = null
+        completion?.invoke(LynxOtaHealthReply(code, message))
+    }
+
+    private fun handleLoadFailure(host: ViewGroup, generation: Long, message: String) {
+        if (!isCurrentContent(host, generation) || loadFailureHandledGeneration == generation) return
+        loadFailureHandledGeneration = generation
+        val appId = spec.lynxAppId
+        val runtime = preparedRuntime
+        val epoch = preparedUserEpoch
+        val releaseId = bundleRuntimeMetadata?.get("releaseId") as? String
+        val failedCandidate = bundleRuntimeMetadata?.get("source") == "candidate_trial"
+        val canRecover = !otaRecoveryUsed && !otaHealthGate.confirmed &&
+            (failedCandidate || !firstScreenReady) && appId != null && runtime != null && isPreparedUserCurrent()
+        showError(host, message)
+        if (!canRecover) return
+        otaRecoveryUsed = true
+        val activity = activity ?: return
+        loadFuture = loader.submit {
+            val result = runCatching {
+                if (failedCandidate) runtime!!.recoverFailedCandidate(appId!!, releaseId, epoch)
+                else runtime!!.rollback(appId!!, message, releaseId, epoch)
+            }
+            if (Thread.currentThread().isInterrupted || result.exceptionOrNull() is InterruptedException ||
+                result.exceptionOrNull() is CancellationException) return@submit
+            activity.runOnUiThread {
+                if (!isCurrentContent(host, generation) || !isPreparedUserCurrent()) return@runOnUiThread
+                loadFuture = null
+                if (result.getOrNull() == true) {
+                    releaseContent(host)
+                    loadContent(host, stableRecovery = true)
+                } else {
+                    showError(host, "$message；${result.exceptionOrNull()?.message ?: "没有稳定 Bundle 可恢复"}")
+                }
+            }
+        }
+    }
+
     private fun showError(host: ViewGroup, message: String) {
+        cancelOtaHealth("Tab 已进入错误态", 1002)
+        unregister()
         monitoringView?.failed("tab_load_failed")
         monitoringView?.close("load_failed")
         monitoringView = null
@@ -360,7 +512,7 @@ class LynxTabFragment : Fragment() {
         // LYNX_DEBUG_TOOL_BEGIN
         LynxDebugBridge.detach(lynxView)
         // LYNX_DEBUG_TOOL_END
-        lynxView?.destroy()
+        lynxView?.let(LynxShell::destroyView)
         lynxView = null
         releaseCurrentLease()
         host.removeViews(0, host.childCount)

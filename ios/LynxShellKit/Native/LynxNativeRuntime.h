@@ -2,6 +2,7 @@
 #import <UIKit/UIKit.h>
 #import <Lynx/LynxTemplateProvider.h>
 #import <Lynx/LynxView.h>
+#import <Lynx/LynxContext.h>
 #import <Lynx/LynxTemplateResourceFetcher.h>
 #import <Lynx/LynxGenericResourceFetcher.h>
 #import <Lynx/LynxMediaResourceFetcher.h>
@@ -26,6 +27,16 @@ typedef NSURL *_Nullable (^LynxLocalURLBlock)(NSString *);
 @interface LynxNativeRuntime : NSObject
 
 + (void)bootstrap;
+
+/** 宿主额外模块在首个 LynxView 创建前安装；每个 View 的独立 Config 都会注册。 */
++ (void)registerNativeModule:(Class)moduleClass
+    NS_SWIFT_NAME(registerNativeModule(_:));
+
+/** 当前 SDK 不会自动销毁自定义 Module，宿主显式提供对应 Context 的释放入口。 */
++ (void)registerNativeModule:(Class)moduleClass
+              onViewDestroy:(nullable void (^)(LynxContext *))handler
+    NS_SWIFT_NAME(registerNativeModule(_:onViewDestroy:));
++ (void)destroyView:(LynxView *)view NS_SWIFT_NAME(destroy(view:));
 
 + (LynxView *)makeViewWithProvider:(id<LynxTemplateProvider>)provider
                         screenSize:(CGSize)screenSize

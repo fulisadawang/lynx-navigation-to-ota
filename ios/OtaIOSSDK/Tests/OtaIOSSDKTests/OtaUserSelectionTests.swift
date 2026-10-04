@@ -635,6 +635,63 @@ struct OtaUserSelectionTests {
         #expect(failures.first?.reasonCode == OtaReasonCode.latestBundleListDecodeFailed.rawValue)
         #expect(await sdk.candidate()?.release.context.releaseId == "6")
     }
+    @Test("OTA-SEL-03 selected startup maintenance discards interrupted trial without per-App recovery")
+    func startupMaintenanceDiscardsInterruptedTrial() async throws {
+        let f = try SelectionFixture(); defer { f.cleanup() }
+        let stable = try await f.sdk(user: "A")
+        try await f.install("5", revision: "1", sdk: stable)
+        let trialSDK = try await f.sdk(user: "A", candidate: true)
+        try await trialSDK.reconcileUserContext()
+        try await f.install("6", revision: "2", sdk: trialSDK)
+        _ = try await trialSDK.beginCandidateTrial(lynxAppId: f.appId)
+        #expect(await trialSDK.candidate()?.status == .trial)
+
+        let restarted = try await f.sdk(user: "A", candidate: true)
+        try await restarted.reconcileUserContext()
+        #expect(await restarted.candidate() == nil)
+        #expect(await restarted.current()?.context.releaseId == "5")
+    }
+
+    @Test("OTA-SEL-02 startup preserves pending and never promotes it")
+    func startupMaintenancePreservesPending() async throws {
+        let f = try SelectionFixture(); defer { f.cleanup() }
+        let stable = try await f.sdk(user: "A")
+        try await f.install("5", revision: "1", sdk: stable)
+        let candidate = try await f.sdk(user: "A", candidate: true)
+        try await f.install("6", revision: "2", sdk: candidate)
+        let restarted = try await f.sdk(user: "A", candidate: true)
+        try await restarted.reconcileUserContext()
+        #expect(await restarted.candidate()?.status == .pending)
+        #expect(await restarted.current()?.context.releaseId == "5")
+    }
+
+    @Test("OTA-SEL-03 repeated maintenance in the same SDK does not discard its live trial")
+    func startupMaintenanceRunsOncePerSDK() async throws {
+        let f = try SelectionFixture(); defer { f.cleanup() }
+        let stable = try await f.sdk(user: "A")
+        try await f.install("5", revision: "1", sdk: stable)
+        let sdk = try await f.sdk(user: "A", candidate: true)
+        try await sdk.reconcileUserContext()
+        try await f.install("6", revision: "2", sdk: sdk)
+        _ = try await sdk.beginCandidateTrial(lynxAppId: f.appId)
+        try await sdk.reconcileUserContext()
+        #expect(await sdk.candidate()?.status == .trial)
+        #expect(await sdk.current()?.context.releaseId == "5")
+    }
+
+    @Test("OTA-SEL-03 direct SDK begin-trial runs startup maintenance before changing pending")
+    func directSDKTrialSurvivesFirstExplicitReconciliation() async throws {
+        let f = try SelectionFixture(); defer { f.cleanup() }
+        let stable = try await f.sdk(user: "A")
+        try await f.install("5", revision: "1", sdk: stable)
+        let sdk = try await f.sdk(user: "A", candidate: true)
+        try await f.install("6", revision: "2", sdk: sdk)
+        _ = try await sdk.beginCandidateTrial(lynxAppId: f.appId)
+        try await sdk.reconcileUserContext()
+        #expect(await sdk.candidate()?.status == .trial)
+        #expect(await sdk.current()?.context.releaseId == "5")
+    }
+
 }
 
 private actor SelectionLeaseCapture {

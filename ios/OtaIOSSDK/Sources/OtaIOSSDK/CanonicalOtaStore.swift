@@ -344,6 +344,7 @@ actor CanonicalOtaStore {
     }
 
     func confirmCandidate(app: OtaAppID, lynxAppId: String) throws -> OtaInstalledRelease {
+        try Task.checkCancellation()
         guard let candidate = readCandidate(app: app, lynxAppId: lynxAppId) else {
             throw OtaSDKError.missingCandidateRelease
         }
@@ -363,6 +364,7 @@ actor CanonicalOtaStore {
             previous: previous
         )
         try faultInjector.check(.beforeStateCommit)
+        try Task.checkCancellation()
         try writeState(next, app: app, lynxAppId: lynxAppId)
         try faultInjector.check(.afterStateCommit)
         try removeItemIfPresent(candidateURL(app: app, lynxAppId: lynxAppId))

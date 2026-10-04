@@ -20,20 +20,40 @@ enum LynxNativeSystemCapabilities {
     private static let networkLock = NSLock()
     private static var networkMonitor: NWPathMonitor?
     private static var latestNetworkPath: NWPath?
-    private static var activeInAppBrowser: UIViewController?
-    private static var privacyOverlay: UIView?
-    private static var splashOverlay: UIView?
-    private static var privacyEnabled = false
-    private static var privacyObservers: [NSObjectProtocol] = []
+    private final class UIState {
+        var activeInAppBrowser: UIViewController?
+        var privacyOverlay: UIView?
+        var splashOverlay: UIView?
+        var privacyEnabled = false
+        var privacyObservers: [NSObjectProtocol] = []
+    }
+    private static var ownerUI: [String: UIState] = [:]
+    private static var networkOwners = Set<String>()
+    private static let batteryMonitoring = LynxNativeAppBooleanLeases(
+        read: { UIDevice.current.isBatteryMonitoringEnabled },
+        write: { UIDevice.current.isBatteryMonitoringEnabled = $0 })
+    private static let keepAwake = LynxNativeAppBooleanLeases(
+        read: { UIApplication.shared.isIdleTimerDisabled },
+        write: { UIApplication.shared.isIdleTimerDisabled = $0 })
+
+    private static func uiState(_ call: LynxNativeCapabilityCall) -> UIState {
+        let owner = call.ownerID ?? "-1"
+        if let state = ownerUI[owner] { return state }
+        let state = UIState()
+        ownerUI[owner] = state
+        return state
+    }
 
     static func dispatch(
         _ call: LynxNativeCapabilityCall,
         presenter: UIViewController?,
+        host: AnyObject? = nil,
         eventSender: EventSender?,
         completion: @escaping Completion
     ) -> Bool {
         guard supportedPlugins.contains(call.pluginId) else { return false }
         let run = {
+            guard LynxNativeOwnerScope.isActive(call.ownerID) else { completion(.failure("HOST_DESTROYED", "页面已销毁")); return }
             switch call.pluginId {
             case "Device": dispatchDevice(call, completion: completion)
             case "App": dispatchApp(call, completion: completion)
@@ -44,16 +64,16 @@ enum LynxNativeSystemCapabilities {
             case "CapacitorCookies": dispatchCookies(call, completion: completion)
             case "Browser": dispatchBrowser(call, presenter: presenter, completion: completion)
             case "InAppBrowser": dispatchInAppBrowser(call, presenter: presenter, completion: completion)
-            case "StatusBar": dispatchStatusBar(call, presenter: presenter, completion: completion)
-            case "SystemBars": dispatchSystemBars(call, presenter: presenter, completion: completion)
-            case "ScreenOrientation": dispatchScreenOrientation(call, presenter: presenter, completion: completion)
+            case "StatusBar": dispatchStatusBar(call, presenter: presenter, host: host, completion: completion)
+            case "SystemBars": dispatchSystemBars(call, presenter: presenter, host: host, completion: completion)
+            case "ScreenOrientation": dispatchScreenOrientation(call, presenter: presenter, host: host, completion: completion)
             case "ScreenReader": dispatchScreenReader(call, completion: completion)
             case "TextZoom": dispatchTextZoom(call, completion: completion)
-            case "Keyboard": dispatchKeyboard(call, presenter: presenter, completion: completion)
+            case "Keyboard": dispatchKeyboard(call, presenter: presenter, host: host, completion: completion)
             case "SplashScreen": dispatchSplashScreen(call, presenter: presenter, completion: completion)
             case "PrivacyScreen": dispatchPrivacyScreen(call, presenter: presenter, completion: completion)
             case "KeepAwake": dispatchKeepAwake(call, completion: completion)
-            case "SafeArea": dispatchSafeArea(call, presenter: presenter, completion: completion)
+            case "SafeArea": dispatchSafeArea(call, presenter: presenter, host: host, completion: completion)
             default: completion(.failure("UNSUPPORTED", "\(call.pluginId).\(call.methodName) 尚未接入当前 iOS Module"))
             }
         }
@@ -62,19 +82,23 @@ enum LynxNativeSystemCapabilities {
         return true
     }
 
-    static func release() {
-        activeInAppBrowser?.dismiss(animated: false)
-        activeInAppBrowser = nil
-        networkLock.withLock {
-            networkMonitor?.cancel()
-            networkMonitor = nil
-            latestNetworkPath = nil
+    static func release(ownerID: String) {
+        if let state = ownerUI.removeValue(forKey: ownerID) {
+            state.activeInAppBrowser?.dismiss(animated: false)
+            removeOverlay(&state.privacyOverlay)
+            removeOverlay(&state.splashOverlay)
+            state.privacyObservers.forEach(NotificationCenter.default.removeObserver)
         }
-        removeOverlay(&privacyOverlay)
-        removeOverlay(&splashOverlay)
-        privacyObservers.forEach(NotificationCenter.default.removeObserver)
-        privacyObservers.removeAll()
-        privacyEnabled = false
+        keepAwake.release(ownerID: ownerID)
+        batteryMonitoring.release(ownerID: ownerID)
+        networkOwners.remove(ownerID)
+        if networkOwners.isEmpty {
+            networkLock.withLock {
+                networkMonitor?.cancel()
+                networkMonitor = nil
+                latestNetworkPath = nil
+            }
+        }
     }
 
     // MARK: - Device / App / Preferences
@@ -96,19 +120,22 @@ enum LynxNativeSystemCapabilities {
             completion(.success(["identifier": UIDevice.current.identifierForVendor?.uuidString ?? NSNull()]))
         case "getBatteryInfo":
             let device = UIDevice.current
-            device.isBatteryMonitoringEnabled = true
+            batteryMonitoring.acquire(ownerID: call.ownerID ?? "-1")
             let level = device.batteryLevel
+            let state = device.batteryState
+            let available = device.isBatteryMonitoringEnabled && state != .unknown && level >= 0 && level <= 1
             let charging: Any
-            switch device.batteryState {
+            switch state {
             case .charging: charging = true
             case .full: charging = true
             case .unplugged: charging = false
             default: charging = NSNull()
             }
             completion(.success([
-                "batteryLevel": level >= 0 ? level : NSNull(),
-                "isCharging": charging,
-                "batteryState": batteryState(device.batteryState),
+                "available": available,
+                "batteryLevel": available ? level : NSNull(),
+                "isCharging": available ? charging : NSNull(),
+                "batteryState": available ? batteryState(state) : "unknown",
             ]))
         case "getLanguageCode": completion(.success(["value": Locale.preferredLanguages.first.flatMap { $0.split(separator: "-").first.map(String.init) } ?? Locale.current.languageCode ?? "en"]))
         case "getLanguageTag": completion(.success(["value": Locale.preferredLanguages.first ?? Locale.current.identifier]))
@@ -153,6 +180,14 @@ enum LynxNativeSystemCapabilities {
     }
 
     private static func dispatchPreferences(_ call: LynxNativeCapabilityCall, completion: @escaping Completion) {
+        LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { cancellation in
+            var result = LynxNativeCapabilityResult.failure("NATIVE_ERROR", "Preferences 未返回结果")
+            dispatchPreferencesWork(call, cancellation: cancellation) { result = $0 }
+            return result
+        }
+    }
+
+    static func dispatchPreferencesWork(_ call: LynxNativeCapabilityCall, cancellation: LynxNativeIOExecutor.Cancellation, completion: Completion) {
         let key = string(call.options["key"])
         guard !key.isEmpty || call.methodName == "keys" else {
             completion(.failure("INVALID_ARGUMENT", "key 不能为空"))
@@ -166,12 +201,14 @@ enum LynxNativeSystemCapabilities {
                 return
             }
             let value = string(rawValue)
+            guard !cancellation.isCancelled else { completion(.failure("HOST_DESTROYED", "Preferences 写入已取消")); return }
             preferences.set(value, forKey: prefix + key)
             completion(.success(["saved": true]))
         case "get": completion(.success(["value": preferences.object(forKey: prefix + key) ?? NSNull()]))
         case "keys":
             completion(.success(["keys": preferences.dictionaryRepresentation().keys.filter { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }.sorted()]))
         case "remove":
+            guard !cancellation.isCancelled else { completion(.failure("HOST_DESTROYED", "Preferences 删除已取消")); return }
             preferences.removeObject(forKey: prefix + key)
             completion(.success(["removed": true]))
         default: completion(.failure("UNSUPPORTED", "Preferences.\(call.methodName) 尚未接入当前 iOS Module"))
@@ -185,6 +222,7 @@ enum LynxNativeSystemCapabilities {
             completion(.failure("UNSUPPORTED", "Network.\(call.methodName) 尚未接入当前 iOS Module"))
             return
         }
+        if let owner = call.ownerID { networkOwners.insert(owner) }
         let deliver: (NWPath) -> Void = { path in completion(.success(networkData(path))) }
         networkLock.lock()
         if let path = latestNetworkPath {
@@ -200,16 +238,26 @@ enum LynxNativeSystemCapabilities {
         }
         let monitor = networkMonitor
         networkLock.unlock()
+        let resource = LynxNativeOwnedResource(ownerID: call.ownerID)
         let timeout = DispatchWorkItem {
+            resource.finish()
             let path = networkLock.withLock { latestNetworkPath }
             if let path { deliver(path) }
             else { completion(.failure("NETWORK_STATUS_UNAVAILABLE", "NWPathMonitor 尚未返回网络状态")) }
         }
+        resource.attach { timeout.cancel() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: timeout)
         _ = monitor
     }
 
     private static func dispatchHTTP(_ call: LynxNativeCapabilityCall, completion: @escaping Completion) {
+        LynxNativeIOExecutor.network.submitAsync(ownerID: call.ownerID, completion: completion) { cancellation, finish in
+            guard !cancellation.isCancelled else { finish(.failure("HOST_DESTROYED", "HTTP 请求已取消")); return }
+            dispatchHTTPWork(call, completion: finish)
+        }
+    }
+
+    private static func dispatchHTTPWork(_ call: LynxNativeCapabilityCall, completion: @escaping Completion) {
         guard let rawURL = stringOptional(call.options["url"]), let url = URL(string: rawURL), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
             completion(.failure("INVALID_ARGUMENT", "只支持合法的 http/https URL"))
             return
@@ -258,17 +306,14 @@ enum LynxNativeSystemCapabilities {
             connectTimeout > 0 ? connectTimeout / 1000 : 120,
             readTimeout > 0 ? readTimeout / 1000 : 120
         )
-        let session = URLSession(configuration: configuration, delegate: bool(call.options["disableRedirects"], default: false) ? NoRedirectDelegate() : nil, delegateQueue: nil)
-        session.dataTask(with: request) { data, response, error in
-            defer { session.invalidateAndCancel() }
+        var resourceID: UUID?
+        let stream = LynxNativeHTTPStream(limit: LynxNativePayloadLimits.inlineFileBytes,
+            disableRedirects: bool(call.options["disableRedirects"], default: false)) { bytes, response, error in
+            LynxNativeOwnerScope.forget(ownerID: call.ownerID, token: resourceID)
             if let error {
                 let nsError = error as NSError
-                completion(.failure(nsError.code == NSURLErrorTimedOut ? "TIMEOUT" : "HTTP_ERROR", nsError.localizedDescription))
-                return
-            }
-            let bytes = data ?? Data()
-            guard bytes.count <= 10 * 1024 * 1024 else {
-                completion(.failure("RESPONSE_TOO_LARGE", "HTTP response 超过 10 MB 限制"))
+                let code = nsError.domain == LynxNativeHTTPStream.errorDomain ? "PAYLOAD_TOO_LARGE" : (nsError.code == NSURLErrorTimedOut ? "TIMEOUT" : "HTTP_ERROR")
+                completion(.failure(code, nsError.localizedDescription))
                 return
             }
             let http = response as? HTTPURLResponse
@@ -280,7 +325,12 @@ enum LynxNativeSystemCapabilities {
                 "data": responseData(bytes, type: string(call.options["responseType"])),
                 "timeout": ["connectTimeout": connectTimeout, "readTimeout": readTimeout, "connectTimeoutApplied": false],
             ]))
-        }.resume()
+        }
+        let session = URLSession(configuration: configuration, delegate: stream, delegateQueue: nil)
+        let task = session.dataTask(with: request)
+        resourceID = LynxNativeOwnerScope.retain(ownerID: call.ownerID) { task.cancel(); session.invalidateAndCancel() }
+        guard LynxNativeOwnerScope.isActive(call.ownerID) else { task.cancel(); session.invalidateAndCancel(); completion(.failure("HOST_DESTROYED", "HTTP 请求已取消")); return }
+        task.resume()
     }
 
     private static func dispatchCookies(_ call: LynxNativeCapabilityCall, completion: @escaping Completion) {
@@ -333,18 +383,19 @@ enum LynxNativeSystemCapabilities {
     }
 
     private static func dispatchInAppBrowser(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, completion: @escaping Completion) {
+        let state = uiState(call)
         guard let presenter, LynxNativeCapabilitySupport.isUsable(presenter) else { completion(.failure("SCENE_UNAVAILABLE", "没有可展示 InAppBrowser 的前台 UIViewController")); return }
         switch call.methodName {
         case "openInWebView":
             guard let url = urlValue(call.options["url"]) else { completion(.failure("INVALID_ARGUMENT", "url 不能为空或不是合法 URL")); return }
-            guard activeInAppBrowser == nil else { completion(.failure("BUSY", "已有 InAppBrowser 正在显示")); return }
+            guard state.activeInAppBrowser == nil else { completion(.failure("BUSY", "已有 InAppBrowser 正在显示")); return }
             let controller = LynxNativeWebViewController(url: url)
-            activeInAppBrowser = controller
-            controller.onDismiss = { activeInAppBrowser = nil }
+            state.activeInAppBrowser = controller
+            controller.onDismiss = { [weak state] in state?.activeInAppBrowser = nil }
             presenter.present(controller, animated: true) { completion(.success(["opened": true, "url": url.absoluteString])) }
         case "close":
-            let current = activeInAppBrowser
-            activeInAppBrowser = nil
+            let current = state.activeInAppBrowser
+            state.activeInAppBrowser = nil
             current?.dismiss(animated: true)
             completion(.success(["closed": current != nil]))
         default: completion(.failure("UNSUPPORTED", "InAppBrowser.\(call.methodName) 尚未接入当前 iOS Module"))
@@ -353,9 +404,9 @@ enum LynxNativeSystemCapabilities {
 
     // MARK: - System UI
 
-    private static func dispatchStatusBar(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, completion: @escaping Completion) {
+    private static func dispatchStatusBar(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, host: AnyObject?, completion: @escaping Completion) {
         guard let presenter else { completion(.failure("SCENE_UNAVAILABLE", "没有可用的页面控制器")); return }
-        if let host = presenter as? LynxCapacitorStatusBarHost {
+        if let host = (host ?? presenter) as? LynxCapacitorStatusBarHost {
             switch call.methodName {
             case "getInfo": completion(.success(host.capacitorStatusBarInfo()))
             case "setStyle":
@@ -374,22 +425,32 @@ enum LynxNativeSystemCapabilities {
         }
     }
 
-    private static func dispatchSystemBars(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, completion: @escaping Completion) {
+    private static func dispatchSystemBars(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, host: AnyObject?, completion: @escaping Completion) {
         guard call.methodName == "setStyle", let presenter else { completion(.failure("SCENE_UNAVAILABLE", "没有可用的页面控制器")); return }
-        guard let host = presenter as? LynxCapacitorSystemBarsHost else { completion(.failure("UNSUPPORTED_SYSTEM_UI", "当前页面没有实现 Lynx native system bars host")); return }
+        guard let host = (host ?? presenter) as? LynxCapacitorSystemBarsHost else { completion(.failure("UNSUPPORTED_SYSTEM_UI", "当前页面没有实现 Lynx native system bars host")); return }
         let style = string(call.options["style"], default: "DEFAULT").uppercased()
         host.setCapacitorSystemBarsStyle(style) ? completion(.success(["style": style])) : completion(.failure("INVALID_ARGUMENT", "SystemBars.style 无效"))
     }
 
-    private static func dispatchScreenOrientation(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, completion: @escaping Completion) {
+    private static func dispatchScreenOrientation(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, host: AnyObject?, completion: @escaping Completion) {
         guard let presenter else { completion(.failure("SCENE_UNAVAILABLE", "没有可用的页面控制器")); return }
-        guard let host = presenter as? LynxCapacitorOrientationHost else { completion(.failure("UNSUPPORTED_SYSTEM_ORIENTATION", "当前页面没有实现 orientation host")); return }
+        guard let host = (host ?? presenter) as? LynxCapacitorOrientationHost else { completion(.failure("UNSUPPORTED_SYSTEM_ORIENTATION", "当前页面没有实现 orientation host")); return }
+        let finish: (Result<[String: Any], Error>) -> Void = { result in
+            guard LynxNativeOwnerScope.isActive(call.ownerID) else { return }
+            switch result {
+            case let .success(data): completion(.success(data))
+            case let .failure(error):
+                let nativeError = error as NSError
+                completion(.failure("ORIENTATION_FAILED", nativeError.localizedDescription,
+                                    details: ["nativeCode": nativeError.code]))
+            }
+        }
         switch call.methodName {
         case "orientation": completion(.success(["type": orientationName(presenter.view.window?.windowScene?.interfaceOrientation ?? .unknown)]))
         case "lock":
             let value = string(call.options["orientation"], default: "any")
-            host.applyCapacitorOrientation(value) ? completion(.success(["orientation": value])) : completion(.failure("INVALID_ARGUMENT", "orientation 无效"))
-        case "unlock": host.clearCapacitorOrientation(); completion(.success(["unlocked": true]))
+            host.applyCapacitorOrientation(value, completion: finish)
+        case "unlock": host.clearCapacitorOrientation(completion: finish)
         default: completion(.failure("UNSUPPORTED", "ScreenOrientation.\(call.methodName) 尚未接入当前 iOS Module"))
         }
     }
@@ -414,55 +475,60 @@ enum LynxNativeSystemCapabilities {
         }
     }
 
-    private static func dispatchKeyboard(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, completion: @escaping Completion) {
+    private static func dispatchKeyboard(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, host: AnyObject?, completion: @escaping Completion) {
         guard let presenter else { completion(.failure("SCENE_UNAVAILABLE", "没有可用的页面控制器")); return }
         switch call.methodName {
         case "getResizeMode": completion(.success(["resizeMode": "native"]))
         case "hide": presenter.view.endEditing(true); completion(.success(["hidden": true]))
-        case "setStyle": completion(.failure("UNSUPPORTED", "Keyboard.setStyle 在 Android 事实源中未接入当前 Module"))
+        case "setStyle":
+            guard let keyboard = (host ?? presenter) as? LynxCapacitorKeyboardHost else { completion(.failure("UNSUPPORTED_SYSTEM_UI", "当前页面没有安装 keyboard host")); return }
+            let style = string(call.options["style"], default: "DEFAULT").uppercased()
+            keyboard.setCapacitorKeyboardStyle(style) ? completion(.success(["style": style])) : completion(.failure("INVALID_ARGUMENT", "Keyboard.style 无效"))
         default: completion(.failure("UNSUPPORTED", "Keyboard.\(call.methodName) 尚未接入当前 iOS Module"))
         }
     }
 
     private static func dispatchSplashScreen(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, completion: @escaping Completion) {
+        let state = uiState(call)
         guard call.methodName == "hide" || call.methodName == "show" else { completion(.failure("UNSUPPORTED", "SplashScreen.\(call.methodName) 尚未接入当前 iOS Module")); return }
         guard let presenter else { completion(.failure("SCENE_UNAVAILABLE", "没有可用的页面控制器")); return }
         if call.methodName == "show" {
-            if splashOverlay == nil {
+            if state.splashOverlay == nil {
                 let overlay = UIView(frame: presenter.view.bounds)
                 overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                 overlay.backgroundColor = .systemBackground
                 presenter.view.addSubview(overlay)
-                splashOverlay = overlay
+                state.splashOverlay = overlay
             }
-            splashOverlay?.isHidden = false
+            state.splashOverlay?.isHidden = false
         } else {
-            splashOverlay?.isHidden = true
+            state.splashOverlay?.isHidden = true
         }
         completion(.success(["hidden": call.methodName == "hide", "implementation": "RuntimeOverlay"]))
     }
 
     private static func dispatchPrivacyScreen(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, completion: @escaping Completion) {
+        let state = uiState(call)
         switch call.methodName {
-        case "isEnabled": completion(.success(["value": privacyEnabled, "enforcement": "captureDetectionOverlayOnly"]))
+        case "isEnabled": completion(.success(["value": state.privacyEnabled, "enforcement": "captureDetectionOverlayOnly"]))
         case "enable":
-            privacyEnabled = true
-            if let presenter, privacyOverlay == nil {
+            state.privacyEnabled = true
+            if let presenter, state.privacyOverlay == nil {
                 let overlay = UIView(frame: presenter.view.bounds)
                 overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                 overlay.backgroundColor = .systemBackground
                 overlay.isHidden = true
                 presenter.view.addSubview(overlay)
-                privacyOverlay = overlay
+                state.privacyOverlay = overlay
             }
-            installPrivacyObservers()
-            updatePrivacyOverlay()
+            installPrivacyObservers(state)
+            updatePrivacyOverlay(state)
             completion(.success(["enabled": true, "enforcement": "captureDetectionOverlayOnly"]))
         case "disable":
-            privacyEnabled = false
-            privacyObservers.forEach(NotificationCenter.default.removeObserver)
-            privacyObservers.removeAll()
-            removeOverlay(&privacyOverlay)
+            state.privacyEnabled = false
+            state.privacyObservers.forEach(NotificationCenter.default.removeObserver)
+            state.privacyObservers.removeAll()
+            removeOverlay(&state.privacyOverlay)
             completion(.success(["enabled": false]))
         default: completion(.failure("UNSUPPORTED", "PrivacyScreen.\(call.methodName) 尚未接入当前 iOS Module"))
         }
@@ -472,14 +538,14 @@ enum LynxNativeSystemCapabilities {
         switch call.methodName {
         case "isSupported": completion(.success(["value": true]))
         case "isKeptAwake": completion(.success(["value": UIApplication.shared.isIdleTimerDisabled]))
-        case "keepAwake": UIApplication.shared.isIdleTimerDisabled = true; completion(.success(["keptAwake": true]))
-        case "allowSleep": UIApplication.shared.isIdleTimerDisabled = false; completion(.success(["keptAwake": false]))
+        case "keepAwake": keepAwake.acquire(ownerID: call.ownerID ?? "-1"); completion(.success(["keptAwake": true]))
+        case "allowSleep": keepAwake.release(ownerID: call.ownerID ?? "-1"); completion(.success(["keptAwake": UIApplication.shared.isIdleTimerDisabled]))
         default: completion(.failure("UNSUPPORTED", "KeepAwake.\(call.methodName) 尚未接入当前 iOS Module"))
         }
     }
 
-    private static func dispatchSafeArea(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, completion: @escaping Completion) {
-        guard let presenter, let host = presenter as? LynxCapacitorSystemBarsHost else { completion(.failure("UNSUPPORTED_SYSTEM_UI", "当前页面没有实现 safe area host")); return }
+    private static func dispatchSafeArea(_ call: LynxNativeCapabilityCall, presenter: UIViewController?, host: AnyObject?, completion: @escaping Completion) {
+        guard let presenter, let host = (host ?? presenter) as? LynxCapacitorSystemBarsHost else { completion(.failure("UNSUPPORTED_SYSTEM_UI", "当前页面没有实现 safe area host")); return }
         switch call.methodName {
         case "setSystemBarsStyle":
             let style = string(call.options["style"], default: "DEFAULT").uppercased()
@@ -605,40 +671,30 @@ enum LynxNativeSystemCapabilities {
         overlay = nil
     }
 
-    private static func installPrivacyObservers() {
-        guard privacyObservers.isEmpty else { return }
+    private static func installPrivacyObservers(_ state: UIState) {
+        guard state.privacyObservers.isEmpty else { return }
         let center = NotificationCenter.default
-        privacyObservers = [
-            center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
-                updatePrivacyOverlay()
+        state.privacyObservers = [
+            center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak state] _ in
+                guard let state else { return }
+                updatePrivacyOverlay(state)
             },
-            center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-                updatePrivacyOverlay()
+            center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak state] _ in
+                guard let state else { return }
+                updatePrivacyOverlay(state)
             },
-            center.addObserver(forName: UIScreen.capturedDidChangeNotification, object: nil, queue: .main) { _ in
-                updatePrivacyOverlay()
+            center.addObserver(forName: UIScreen.capturedDidChangeNotification, object: nil, queue: .main) { [weak state] _ in
+                guard let state else { return }
+                updatePrivacyOverlay(state)
             },
         ]
     }
 
-    private static func updatePrivacyOverlay() {
-        let shouldHide = privacyEnabled && (
+    private static func updatePrivacyOverlay(_ state: UIState) {
+        let shouldHide = state.privacyEnabled && (
             UIApplication.shared.applicationState != .active || UIScreen.main.isCaptured
         )
-        privacyOverlay?.isHidden = !shouldHide
-    }
-}
-
-private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping (URLRequest?) -> Void
-    ) {
-        _ = session; _ = task; _ = response; _ = request
-        completionHandler(nil)
+        state.privacyOverlay?.isHidden = !shouldHide
     }
 }
 

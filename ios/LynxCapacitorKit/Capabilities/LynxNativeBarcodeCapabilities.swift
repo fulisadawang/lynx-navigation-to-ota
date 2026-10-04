@@ -39,14 +39,14 @@ enum LynxNativeBarcodeCapabilities {
 
         let scan = PendingScan(ownerID: call.ownerID, options: call.options, completion: completion)
         let scanner = BarcodeScannerViewController(options: call.options) { result in
-            finish(result)
+            finish(result, expected: scan)
         }
         lock.withLock {
             pending = scan
             controller = scanner
         }
         scanner.onCancelled = {
-            finish(.failure("CANCELLED", "用户取消了扫码"))
+            finish(.failure("CANCELLED", "用户取消了扫码"), expected: scan)
         }
         presenter.present(scanner, animated: true)
         return true
@@ -77,8 +77,9 @@ enum LynxNativeBarcodeCapabilities {
         values.0?.completion(.failure("MODULE_DESTROYED", "扫码请求已取消"))
     }
 
-    private static func finish(_ result: LynxNativeCapabilityResult) {
+    private static func finish(_ result: LynxNativeCapabilityResult, expected: PendingScan) {
         let values = lock.withLock { () -> (PendingScan?, BarcodeScannerViewController?) in
+            guard pending === expected, LynxNativeOwnerScope.isActive(expected.ownerID) else { return (nil, nil) }
             let current = pending
             let currentController = controller
             pending = nil

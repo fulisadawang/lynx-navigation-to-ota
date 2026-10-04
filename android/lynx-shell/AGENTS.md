@@ -14,7 +14,7 @@
 
 `android/app/` 是验收 Sample，不属于本目录。不要为了修改 Library 而把 Sample 代码复制进 Module，也不要把 Module 实现下沉到 Sample。
 
-`android/lynx-capacitor/` 是 sibling 原生能力 Module，当前尚未加入默认 `settings.gradle.kts` 和 Sample。它不属于 `lynx-shell`，不得把能力实现直接塞进 Router、Container 或 `LynxShellModule`；任务明确涉及该模块时先读 `android/lynx-capacitor/AGENTS.md` 并单独完成构建图、注册、权限与生命周期接线。
+`android/lynx-capacitor/` 是已显式加入 Gradle graph 与 Sample 的 sibling 原生能力 Module。Shell 不直接依赖能力实现；Sample 通过公开 Host provider 对接。修改该模块先读其 AGENTS，并核实注册、权限和生命周期接线。
 
 ## 开工前必须读取
 
@@ -78,7 +78,7 @@ files/lynx-ota-store/apps/<lynxAppId>/
 - Bundle 先校验 size/SHA，再发布 Object 和 Manifest，最后原子提交 State；State 是唯一激活点。
 - embedded Bundle 直接从 APK assets 读取并校验，不复制到私有 Store。
 - `current/previous/candidate/active lease/transaction` 都是 GC roots；禁止只看文件时间或持久化 refcount 删除对象。
-- 普通 Activity 可选 candidate；Native Tab 永远只读 current，不消费 candidate，不因切 Tab 联网。
+- Activity/Tab 首次实际加载和显式刷新可试本地 candidate；普通 Tab 切换复用 View/lease、不联网。候选只有真实首屏与业务 markOtaHealthy 同时到达才确认。
 - 页面打开的 30 分钟门控只控制后台版本检查；缺包、损坏、启动/前台全量同步不受该门控限制。
 - 首屏失败最多回滚一次，禁止无限重试。
 - Store v3 不迁移 v2 Demo 沙盒；需要验证新 schema 时卸载重装。
@@ -128,7 +128,7 @@ files/lynx-ota-store/apps/<lynxAppId>/
 - 不提交 APK、Gradle cache、构建目录和生成的 Fixture 二进制。
 - 工作树可能包含用户改动；禁止 reset、checkout 或格式化无关文件。
 - 不修改 `android/app/`，除非任务明确要求同步 Sample 或运行验收。
-- 不隐式依赖或注册 `android/lynx-capacitor`；默认工程尚未把它加入 Gradle graph。
+- 能力仅由 Sample/正式 Host 显式注册；Shell AAR 不反向依赖 Cap，系统 UI 写操作必须绑定 exact active View。
 
 ## 修改后的最低验证
 

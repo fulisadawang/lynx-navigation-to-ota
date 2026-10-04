@@ -201,6 +201,12 @@ export interface NavigationState {
   affectedCount: number
 }
 
+/** 当前页面保存后的返回策略；不代表强行开启所有平台关闭手势。 */
+export interface BackGestureResult {
+  backGestureEnabled: boolean
+  affectedCount: number
+}
+
 export interface NavigationResultPayload {
   hasResult: boolean
   result?: Record<string, unknown>
@@ -853,6 +859,18 @@ export function getNavigationState(
 ): void {
   shellModule().getNavigationState(
     (result: NativeResult<NavigationState>) => callback(normalizeShellResult(result)),
+  )
+}
+
+/** 原位开启/关闭当前页面返回策略；转场冲突通过原生结果返回。 */
+export function setBackGestureEnabled(
+  enabled: boolean,
+  callback?: Callback<BackGestureResult>,
+): void {
+  'background only'
+  shellModule().setBackGestureEnabled(
+    enabled,
+    (result: NativeResult<BackGestureResult>) => callback?.(normalizeShellResult(result)),
   )
 }
 

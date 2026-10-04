@@ -24,10 +24,5 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".bridge.ShellMediaPickerActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:theme="@style/Theme.LynxShell.MediaPicker" />
     </application>
 </manifest>

@@ -10,8 +10,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -43,9 +41,15 @@ object NativeFileTransferCapabilities {
     ): Boolean {
         if (methodName !in HANDLED_METHODS) return false
         when (methodName) {
-            "downloadFile" -> startDownload(activity, options, complete, eventSender)
+            "downloadFile" -> NativeIO.network.submit(NativeCallContext.owner,
+                { completeSafely(complete, error("BUSY", "网络执行队列已满")) }) {
+                try { startDownload(activity, options, complete, eventSender) }
+                catch (failure: Exception) {
+                    completeSafely(complete, error(if (failure is NativeCallCancelled) "HOST_DESTROYED" else "DOWNLOAD_ERROR", failure.message ?: "下载初始化失败"))
+                }
+            }
             "getStatus" -> completeSafely(complete, getStatus(options))
-            "cancel" -> completeSafely(complete, cancel(activity, options))
+            "cancel" -> completeSafely(complete, cancel(options))
         }
         return true
     }
@@ -53,7 +57,7 @@ object NativeFileTransferCapabilities {
     /** Activity 销毁时取消归属于该 Activity 的任务，并让原始 callback 得到明确结果。 */
     fun release(activity: Activity) {
         val owned = synchronized(lock) {
-            transfers.values.filter { it.activity === activity && !it.completed.get() }
+            transfers.values.filter { !it.completed.get() && it.hasActivity(activity) }
         }
         owned.forEach { transfer ->
             transfer.cancelled.set(true)
@@ -63,6 +67,20 @@ object NativeFileTransferCapabilities {
                 error("ACTIVITY_DESTROYED", "Activity 已销毁，文件下载已取消"),
                 "failed",
             )
+        }
+    }
+
+    /** Module/View 销毁时只取消该事件出口的任务，保留同 Activity 其他 Tab 的下载。 */
+    fun releaseForSender(sender: (String) -> Unit) {
+        val owned = synchronized(lock) {
+            val matching = transfers.values.filter { it.eventSender === sender }
+            transfers.entries.removeAll { it.value.eventSender === sender }
+            matching
+        }
+        owned.filterNot { it.completed.get() }.forEach { transfer ->
+            transfer.cancelled.set(true)
+            transfer.connection?.disconnect()
+            completeTransfer(transfer, error("HOST_DESTROYED", "调用页面已销毁，下载已取消"), "failed")
         }
     }
 
@@ -89,29 +107,23 @@ object NativeFileTransferCapabilities {
             completeSafely(complete, target.error)
             return
         }
-        val targetFile = target.file
-        if (targetFile != null && targetFile.exists() && targetFile.isDirectory) {
+        val targetFile = requireNotNull(target.file)
+        if (targetFile.exists() && targetFile.isDirectory) {
             completeSafely(complete, error("INVALID_ARGUMENT", "下载目标是目录"))
             return
         }
-        val temporaryDirectory = File(activity.cacheDir, "lynx-file-transfer")
-        val parent = targetFile?.parentFile?.canonicalFile ?: temporaryDirectory.canonicalFile
+        val parent = requireNotNull(targetFile.parentFile).canonicalFile
         if (!parent.exists() && !parent.mkdirs()) {
             completeSafely(complete, error("IO_ERROR", "无法创建下载目录"))
             return
         }
         val operationId = UUID.randomUUID().toString()
-        val temporary = if (targetFile != null) {
-            File(parent, ".${targetFile.name}.$operationId.part")
-        } else {
-            File(parent, ".$operationId.part")
-        }
+        val temporary = File(parent, ".${targetFile.name}.$operationId.part")
         val transfer = Transfer(
             operationId = operationId,
             activity = activity,
             url = urlString,
             targetFile = targetFile,
-            targetUri = target.contentUri,
             temporary = temporary,
             complete = complete,
             eventSender = eventSender,
@@ -124,19 +136,22 @@ object NativeFileTransferCapabilities {
             trimHistoryLocked()
         }
         updateStatus(transfer, JSONObject().put("operationId", operationId).put("state", "pending"))
-        Thread({ download(transfer) }, "lynx-file-transfer-$operationId").apply {
-            isDaemon = true
-            start()
+        transfer.owner?.own(transfer) {
+            transfer.cancelled.set(true)
+            transfer.connection?.disconnect()
         }
+        download(transfer)
     }
 
     private fun download(transfer: Transfer) {
         var connection: HttpURLConnection? = null
         try {
+            checkNotCancelled(transfer)
             val opened = URL(transfer.url).openConnection()
             if (opened !is HttpURLConnection) throw TransferException("UNSUPPORTED", "下载连接不是 HTTP 连接")
             connection = opened
             transfer.connection = opened
+            checkNotCancelled(transfer)
             opened.connectTimeout = transfer.timeoutMs
             opened.readTimeout = transfer.timeoutMs
             opened.instanceFollowRedirects = true
@@ -178,24 +193,17 @@ object NativeFileTransferCapabilities {
                 }
             }
             checkNotCancelled(transfer)
-            if (transfer.targetFile != null) {
-                Files.move(
-                    transfer.temporary.toPath(),
-                    transfer.targetFile.toPath(),
-                    StandardCopyOption.REPLACE_EXISTING,
-                )
-            } else {
-                publishToContentUri(transfer)
-            }
-            val resultUri = transfer.targetUri ?: fileProviderUri(transfer.activity, requireNotNull(transfer.targetFile))
+            NativeAtomicFile.publish(transfer.temporary, transfer.targetFile)
+            val resultUri = fileProviderUri(transfer.activity, transfer.targetFile)
             completeTransfer(
                 transfer,
                 JSONObject()
                     .put("operationId", transfer.operationId)
                     .put("state", "completed")
-                    .put("path", transfer.targetFile?.absolutePath ?: resultUri.toString())
+                    .put("path", transfer.targetFile.absolutePath)
                     .put("uri", resultUri.toString())
-                    .put("size", total),
+                    .put("size", total)
+                    .put("httpCode", responseCode),
                 "completed",
             )
         } catch (cancelled: TransferCancelledException) {
@@ -219,15 +227,16 @@ object NativeFileTransferCapabilities {
         if (operationId.isEmpty()) return error("INVALID_ARGUMENT", "getStatus 需要 operationId")
         val transfer = synchronized(lock) { transfers[operationId] }
             ?: return error("NOT_FOUND", "下载任务不存在")
+        if (transfer.owner !== NativeCallContext.owner) return error("FORBIDDEN", "不能读取其他页面的下载任务")
         return JSONObject(transfer.status.toString())
     }
 
-    private fun cancel(activity: Activity, options: JSONObject): JSONObject {
+    private fun cancel(options: JSONObject): JSONObject {
         val operationId = options.optString("operationId").trim()
         if (operationId.isEmpty()) return error("INVALID_ARGUMENT", "cancel 需要 operationId")
         val transfer = synchronized(lock) { transfers[operationId] }
             ?: return error("NOT_FOUND", "下载任务不存在")
-        if (transfer.activity !== activity) return error("FORBIDDEN", "不能取消其他 Activity 的下载任务")
+        if (transfer.owner !== NativeCallContext.owner) return error("FORBIDDEN", "不能取消其他页面的下载任务")
         if (transfer.completed.get()) {
             return JSONObject(transfer.status.toString()).put("cancelled", false)
         }
@@ -247,7 +256,7 @@ object NativeFileTransferCapabilities {
             if (parsed.authority.isNullOrBlank()) {
                 return TargetResolution(error = error("INVALID_ARGUMENT", "content URI 缺少 authority"))
             }
-            return TargetResolution(contentUri = parsed)
+            return TargetResolution(error = error("UNSUPPORTED", "下载目标需为 app 私有文件，以保证原子替换；完成后返回 FileProvider URI"))
         }
         val root = when (parsed.scheme?.lowercase(Locale.US)) {
             null, "" -> directoryRoot(activity, options.optString("directory", "CACHE"))
@@ -288,13 +297,6 @@ object NativeFileTransferCapabilities {
 
     private fun isWithin(file: File, root: File): Boolean =
         file == root || file.path.startsWith(root.path + File.separator)
-
-    private fun publishToContentUri(transfer: Transfer) {
-        val targetUri = transfer.targetUri ?: throw TransferException("INVALID_ARGUMENT", "下载目标 URI 缺失")
-        val output = transfer.activity.contentResolver.openOutputStream(targetUri, "w")
-            ?: throw TransferException("IO_ERROR", "无法打开 content URI 输出流")
-        transfer.temporary.inputStream().use { input -> output.use { input.copyTo(it) } }
-    }
 
     private fun fileProviderUri(activity: Activity, file: File): Uri {
         val authority = NativeFileProviderContract.authority(activity)
@@ -360,11 +362,16 @@ object NativeFileTransferCapabilities {
             result
         }
         transfer.status = status
-        val deliver = Runnable { completeSafely(transfer.complete, result) }
+        transfer.owner?.disown(transfer)
+        val callback = transfer.complete
+        transfer.complete = null
+        transfer.headers = emptyMap()
+        val deliver = Runnable { callback?.let { completeSafely(it, result) } }
         if (Looper.myLooper() == Looper.getMainLooper()) deliver.run() else mainHandler.post(deliver)
     }
 
     private fun checkNotCancelled(transfer: Transfer) {
+        NativeCallContext.checkActive()
         if (transfer.cancelled.get()) throw TransferCancelledException("下载已取消")
     }
 
@@ -386,22 +393,24 @@ object NativeFileTransferCapabilities {
 
     private data class TargetResolution(
         val file: File? = null,
-        val contentUri: Uri? = null,
         val error: JSONObject? = null,
     )
 
     private class Transfer(
         val operationId: String,
-        val activity: Activity,
+        activity: Activity,
         val url: String,
-        val targetFile: File?,
-        val targetUri: Uri?,
+        val targetFile: File,
         val temporary: File,
-        val complete: (JSONObject) -> Unit,
+        var complete: ((JSONObject) -> Unit)?,
         val eventSender: ((String) -> Unit)?,
-        val headers: Map<String, String>,
+        var headers: Map<String, String>,
         val timeoutMs: Int,
     ) {
+        val owner = NativeCallContext.owner
+        private val activityReference = java.lang.ref.WeakReference(activity)
+        fun hasActivity(activity: Activity): Boolean = activityReference.get() === activity
+        val activity: Activity get() = activityReference.get() ?: throw TransferCancelledException("宿主已释放")
         val cancelled = AtomicBoolean(false)
         val completed = AtomicBoolean(false)
         @Volatile var connection: HttpURLConnection? = null

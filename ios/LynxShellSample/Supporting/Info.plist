@@ -81,5 +81,21 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>用于录制音频和视频中的声音</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>用于将图片和视频保存到相册</string>
+    <key>NSContactsUsageDescription</key>
+    <string>用于在用户操作时读取或保存联系人</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>用于读取和创建日历事件</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>用于读取和管理用户选择的日历事件</string>
+    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+    <string>用于将事件添加到日历</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>用于用户授权的位置相关功能</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>用于用户发起的身份验证</string>
 </dict>
 </plist>

@@ -5,6 +5,7 @@ import Want from '@ohos.app.ability.Want';
 import { ConfigurationConstant } from '@kit.AbilityKit';
 import window from '@ohos.window';
 import bundleManager from '@ohos.bundle.bundleManager';
+import { LynxCapacitorModule } from '@lynx/lynx-capacitor-kit';
 import {
   HostContext,
   LocalDiagnosticProvider,
@@ -13,6 +14,7 @@ import {
   LynxOtaConfig,
   LynxRouter
 } from '@lynx/lynx-shell-kit';
+import { LynxContext } from '@lynx/lynx-shell-kit';
 
 /**
  * Stage 模型入口。
@@ -24,6 +26,14 @@ export default class EntryAbility extends UIAbility {
   private lastMonitorSnapshot: string = '';
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    LynxCapacitorModule.setHostContext(this.context);
+    LynxCapacitorModule.setLaunchUrl(want.uri ?? '');
+    LynxRouter.registerNativeModule({
+      name: 'LynxCapacitorModule',
+      props: { moduleClass: LynxCapacitorModule },
+      onContextDestroyed: (context: LynxContext): void => LynxCapacitorModule.destroyForContext(context),
+      onBackPress: (context: LynxContext): boolean => LynxCapacitorModule.dispatchBackButtonForContext(context)
+    });
     this.updateInitialRoute(want);
     const launchParameterKeys = want.parameters === undefined ? '' : Object.keys(want.parameters).join(',');
     // 三端统一入口：HarmonyOS 端 Native Page Stack 由 ArkUI Router Page 承载。
@@ -118,6 +128,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    if (want.uri !== undefined) LynxCapacitorModule.emitAppUrlOpen(want.uri);
     this.updateInitialRoute(want);
     console.info(`[${ShellConstants.TAG}] onNewWant, launchReason=${launchParam.launchReason}`);
   }
@@ -131,7 +142,16 @@ export default class EntryAbility extends UIAbility {
 
   /** 每次回到前台都触发全量 latest-bundle-list，不走页面 30 分钟门控。 */
   onForeground(): void {
+    LynxCapacitorModule.emitAppState(true);
     LynxRouter.onApplicationForeground();
+  }
+
+  onBackground(): void {
+    LynxCapacitorModule.emitAppState(false);
+  }
+
+  onDestroy(): void {
+    LynxCapacitorModule.clearHostContext(this.context);
   }
 
   onConfigurationUpdate(newConfig: Configuration): void {

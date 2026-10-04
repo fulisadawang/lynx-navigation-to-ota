@@ -6,7 +6,7 @@
 
 `@lynx/lynx-capacitor-kit` 是项目自研的 HarmonyOS NativeModule HAR。它使用 HarmonyOS Kit 直接实现 Capacitor-compatible 页面协议，但不依赖上游 Capacitor Runtime、autolink 或生成式 registry。
 
-当前 main 已包含 HAR 源码、module manifest、Hypium 测试和诊断 Bundle，但根 `harmony/build-profile.json5`、`lynx_shell/oh-package.json5` 和默认 LynxContainer 尚未依赖或注册它。接入必须显式完成 Module 加入、OHPM 依赖、modules Map 注册、权限、UIAbilityContext 和生命周期转发。
+当前源码已将 HAR 加入根 build profile 与 Entry 依赖，Ability 安装额外 Module 注册表、上下文和生命周期；普通 Page/Native Tab 都应用注册并在 Context 真正移除时释放。尚未运行 OHPM/Hvigor 或设备验证，不能把配置完成描述为系统能力已验收。
 
 ## 开工前必须读取
 
@@ -48,7 +48,7 @@
 ## 构建边界
 
 - package 名：`@lynx/lynx-capacitor-kit`，版本和 Lynx 依赖以 `oh-package.json5` 为准。
-- 当前根 build profile 未登记该 Module。未完成显式接线前，不得声称默认 `assembleApp` 覆盖了它。
+- 当前根 build profile 已登记该 Module；未经实际构建，不得声称默认 `assembleApp` 已覆盖或通过。
 - 接入时需要同时更新根 build profile、Entry 依赖、LynxView modules Map 和 Ability 生命周期。
 - `BuildProfile.ets` 属于构建生成/宿主配置边界，未经明确任务不要手改或覆盖。
 - 不修改 `oh_modules`、`.hvigor` 或 build 输出替代源码修复。

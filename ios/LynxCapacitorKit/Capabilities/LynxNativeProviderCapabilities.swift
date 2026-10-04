@@ -22,8 +22,6 @@ enum LynxNativeProviderCapabilities {
     private static var pendingOperations: [String: PendingOperation] = [:]
     private static var notificationPermissionRequestID: String?
 
-    private static let contactsQueue = DispatchQueue(label: "lynx.native.contacts", qos: .userInitiated)
-    private static let calendarQueue = DispatchQueue(label: "lynx.native.calendar", qos: .userInitiated)
     private static let notificationQueue = DispatchQueue(label: "lynx.native.notifications", qos: .utility)
 
     private static var locationOwner: LocationOwner?
@@ -251,17 +249,11 @@ enum LynxNativeProviderCapabilities {
         case "requestPermissions":
             requestContactPermission(ownerID: call.ownerID, presenter: presenter, completion: completion)
         case "save":
-            contactsQueue.async {
-                completion(saveContact(call.options))
-            }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { cancellation in saveContact(call.options, cancellation: cancellation) }
         case "find":
-            contactsQueue.async {
-                completion(findContacts(call.options))
-            }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { _ in findContacts(call.options) }
         case "remove":
-            contactsQueue.async {
-                completion(removeContact(call.options))
-            }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { cancellation in removeContact(call.options, cancellation: cancellation) }
         default:
             completion(.failure("UNSUPPORTED", "Contacts.\(call.methodName) 尚未接入当前 iOS Module"))
         }
@@ -375,7 +367,8 @@ enum LynxNativeProviderCapabilities {
         CNContactStore.authorizationStatus(for: .contacts) == .authorized
     }
 
-    private static func saveContact(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+    static func saveContact(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) -> LynxNativeCapabilityResult {
+        guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "写操作已取消") }
         guard canWriteContacts() else {
             return permissionFailure(
                 status: CNContactStore.authorizationStatus(for: .contacts),
@@ -423,6 +416,7 @@ enum LynxNativeProviderCapabilities {
         let request = CNSaveRequest()
         request.add(contact, toContainerWithIdentifier: nil)
         do {
+            guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "联系人写操作已取消") }
             try store.execute(request)
             return .success(["id": contact.identifier])
         } catch let error as NSError {
@@ -535,7 +529,8 @@ enum LynxNativeProviderCapabilities {
         return result
     }
 
-    private static func removeContact(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+    static func removeContact(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) -> LynxNativeCapabilityResult {
+        guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "写操作已取消") }
         guard canWriteContacts() else {
             return permissionFailure(
                 status: CNContactStore.authorizationStatus(for: .contacts),
@@ -554,6 +549,7 @@ enum LynxNativeProviderCapabilities {
             guard let contact else { return .success(["removed": false]) }
             let request = CNSaveRequest()
             request.delete(contact)
+            guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "联系人写操作已取消") }
             try store.execute(request)
             return .success(["removed": true])
         } catch let error as NSError {
@@ -596,17 +592,17 @@ enum LynxNativeProviderCapabilities {
         case "requestPermissions":
             requestCalendarPermission(ownerID: call.ownerID, options: call.options, presenter: presenter, completion: completion)
         case "listCalendars":
-            calendarQueue.async { completion(listCalendars()) }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { _ in listCalendars() }
         case "createCalendar":
-            calendarQueue.async { completion(createCalendar(call.options)) }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { cancellation in createCalendar(call.options, cancellation: cancellation) }
         case "createEvent":
-            calendarQueue.async { completion(createEvent(call.options)) }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { cancellation in createEvent(call.options, cancellation: cancellation) }
         case "findEvents":
-            calendarQueue.async { completion(findEvents(call.options)) }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { _ in findEvents(call.options) }
         case "deleteEvent":
-            calendarQueue.async { completion(deleteEvent(call.options)) }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { cancellation in deleteEvent(call.options, cancellation: cancellation) }
         case "deleteCalendar":
-            calendarQueue.async { completion(deleteCalendar(call.options)) }
+            LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { cancellation in deleteCalendar(call.options, cancellation: cancellation) }
         default:
             completion(.failure("UNSUPPORTED", "Calendar.\(call.methodName) 尚未接入当前 iOS Module"))
         }
@@ -763,7 +759,8 @@ enum LynxNativeProviderCapabilities {
         return .success(["calendars": calendars])
     }
 
-    private static func createCalendar(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+    static func createCalendar(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) -> LynxNativeCapabilityResult {
+        guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "写操作已取消") }
         guard calendarCanWrite() else { return calendarPermissionFailure(action: "创建日历", write: true) }
         let name = stringValue(options["name"]).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return .failure("INVALID_ARGUMENT", "name 不能为空") }
@@ -778,6 +775,7 @@ enum LynxNativeProviderCapabilities {
             calendar.cgColor = color.cgColor
         }
         do {
+            guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "日历写操作已取消") }
             try store.saveCalendar(calendar, commit: true)
             return .success(["id": calendar.calendarIdentifier, "name": name])
         } catch let error as NSError {
@@ -785,7 +783,8 @@ enum LynxNativeProviderCapabilities {
         }
     }
 
-    private static func createEvent(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+    static func createEvent(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) -> LynxNativeCapabilityResult {
+        guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "写操作已取消") }
         guard calendarCanWrite() else { return calendarPermissionFailure(action: "创建日历事件", write: true) }
         let title = stringValue(options["title"]).trimmingCharacters(in: .whitespacesAndNewlines)
         let calendarID = stringValue(options["calendarId"]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -817,6 +816,7 @@ enum LynxNativeProviderCapabilities {
             }
         }
         do {
+            guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "日历写操作已取消") }
             try store.save(event, span: .thisEvent, commit: true)
             return .success(["id": event.eventIdentifier as Any])
         } catch let error as NSError {
@@ -844,13 +844,15 @@ enum LynxNativeProviderCapabilities {
         return .success(["events": events])
     }
 
-    private static func deleteEvent(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+    static func deleteEvent(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) -> LynxNativeCapabilityResult {
+        guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "写操作已取消") }
         guard calendarCanWrite() else { return calendarPermissionFailure(action: "删除日历事件", write: true) }
         let identifier = stringValue(options["id"]).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !identifier.isEmpty else { return .failure("INVALID_ARGUMENT", "id 不能为空") }
         let store = EKEventStore()
         guard let event = store.event(withIdentifier: identifier) else { return .success(["deleted": false]) }
         do {
+            guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "日历写操作已取消") }
             try store.remove(event, span: .thisEvent, commit: true)
             return .success(["deleted": true])
         } catch let error as NSError {
@@ -858,7 +860,8 @@ enum LynxNativeProviderCapabilities {
         }
     }
 
-    private static func deleteCalendar(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+    static func deleteCalendar(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) -> LynxNativeCapabilityResult {
+        guard !cancellation.isCancelled else { return .failure("HOST_DESTROYED", "写操作已取消") }
         guard calendarCanWrite() else { return calendarPermissionFailure(action: "删除日历", write: true) }
         let identifier = stringValue(options["id"]).trimmingCharacters(in: .whitespacesAndNewlines)
         let name = stringValue(options["name"]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -872,7 +875,11 @@ enum LynxNativeProviderCapabilities {
         }
         guard !targets.isEmpty else { return .success(["deleted": false]) }
         do {
-            for target in targets { try store.removeCalendar(target, commit: false) }
+            for target in targets {
+                guard !cancellation.isCancelled else { store.reset(); return .failure("HOST_DESTROYED", "日历删除已取消") }
+                try store.removeCalendar(target, commit: false)
+            }
+            guard !cancellation.isCancelled else { store.reset(); return .failure("HOST_DESTROYED", "日历删除已取消") }
             try store.commit()
             return .success(["deleted": true])
         } catch let error as NSError {
@@ -1165,27 +1172,29 @@ enum LynxNativeProviderCapabilities {
             guard requireScene(presenter, completion: completion) else { return }
             completion(motionState.addListener(call.options, eventSender: eventSender, ownerID: call.ownerID))
         case "removeListener":
-            completion(motionState.removeListener(call.options))
+            completion(motionState.removeListener(call.options, ownerID: call.ownerID))
         case "removeAllListeners":
-            completion(motionState.removeAllListeners())
+            completion(motionState.removeAllListeners(ownerID: call.ownerID))
         case "start":
             guard requireScene(presenter, completion: completion) else { return }
-            completion(motionState.start())
+            completion(motionState.start(ownerID: call.ownerID))
         case "stop":
-            completion(motionState.stop())
+            completion(motionState.stop(ownerID: call.ownerID))
         default:
             completion(.failure("UNSUPPORTED", "Motion.\(call.methodName) 尚未接入当前 iOS Module"))
         }
     }
 
-    private final class MotionState {
+    final class MotionState {
         private let lock = NSLock()
-        private let manager = CMMotionManager()
+        private let manager: CMMotionManager
+        init(manager: CMMotionManager = CMMotionManager()) { self.manager = manager }
         private var listeners: [String: MotionListener] = [:]
         private var started = false
+        private var pausedOwners = Set<String>()
         private var lastTimestamp: TimeInterval?
 
-        private struct MotionListener { let eventName: String; let eventSender: EventSender?; let ownerID: String? }
+        private struct MotionListener { let listenerID: String; let eventName: String; let eventSender: EventSender?; let ownerID: String? }
 
         func addListener(_ options: [String: Any], eventSender: EventSender?, ownerID: String?) -> LynxNativeCapabilityResult {
             let eventName = stringValue(options["eventName"])
@@ -1204,13 +1213,15 @@ enum LynxNativeProviderCapabilities {
                 : stringValue(options["listenerId"] ?? options["callbackId"])
 
             lock.lock()
-            listeners[listenerID] = MotionListener(eventName: eventName, eventSender: eventSender, ownerID: ownerID)
+            let key = "\(ownerID ?? "-1"):\(listenerID)"
+            pausedOwners.remove(ownerID ?? "-1")
+            listeners[key] = MotionListener(listenerID: listenerID, eventName: eventName, eventSender: eventSender, ownerID: ownerID)
             let needsStart = !started
             lock.unlock()
             if needsStart {
                 let startedResult = start()
                 if startedResult.error != nil {
-                    lock.withLock { listeners.removeValue(forKey: listenerID) }
+                    lock.withLock { listeners.removeValue(forKey: key) }
                     return startedResult
                 }
             }
@@ -1221,15 +1232,15 @@ enum LynxNativeProviderCapabilities {
             ], save: true)
         }
 
-        func removeListener(_ options: [String: Any]) -> LynxNativeCapabilityResult {
+        func removeListener(_ options: [String: Any], ownerID: String?) -> LynxNativeCapabilityResult {
             let listenerID = stringValue(options["listenerId"] ?? options["callbackId"])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !listenerID.isEmpty else {
                 return .failure("INVALID_ARGUMENT", "Motion.removeListener 需要 listenerId")
             }
-            let removed = lock.withLock { listeners.removeValue(forKey: listenerID) != nil }
+            let removed = lock.withLock { listeners.removeValue(forKey: "\(ownerID ?? "-1"):\(listenerID)") != nil }
             let count = lock.withLock { listeners.count }
-            if count == 0 { stop() }
+            if count == 0 || lock.withLock({ listeners.values.allSatisfy { pausedOwners.contains($0.ownerID ?? "-1") } }) { stop() }
             return .success([
                 "listenerId": listenerID,
                 "removed": removed,
@@ -1237,29 +1248,36 @@ enum LynxNativeProviderCapabilities {
             ])
         }
 
-        func removeAllListeners() -> LynxNativeCapabilityResult {
+        func removeAllListeners(ownerID: String?) -> LynxNativeCapabilityResult {
             let removed = lock.withLock { () -> Int in
                 let count = listeners.count
-                listeners.removeAll()
-                return count
+                listeners = listeners.filter { $0.value.ownerID != ownerID }
+                pausedOwners.remove(ownerID ?? "-1")
+                return count - listeners.count
             }
-            stop()
+            if lock.withLock({ listeners.values.allSatisfy { pausedOwners.contains($0.ownerID ?? "-1") } }) { stop() }
             return .success(["removed": removed, "pending": false])
         }
 
         func removeListeners(ownerID: String) {
             let shouldStop = lock.withLock { () -> Bool in
                 listeners = listeners.filter { $0.value.ownerID != ownerID }
-                return listeners.isEmpty
+                pausedOwners.remove(ownerID)
+                return listeners.values.allSatisfy { pausedOwners.contains($0.ownerID ?? "-1") }
             }
             if shouldStop { stop() }
+        }
+
+        func start(ownerID: String?) -> LynxNativeCapabilityResult {
+            lock.withLock { pausedOwners.remove(ownerID ?? "-1") }
+            return start()
         }
 
         func start() -> LynxNativeCapabilityResult {
             guard manager.isDeviceMotionAvailable else {
                 return .failure("UNSUPPORTED", "当前设备不支持 CoreMotion device motion")
             }
-            let listenerCount = lock.withLock { listeners.count }
+            let listenerCount = lock.withLock { listeners.values.filter { !pausedOwners.contains($0.ownerID ?? "-1") }.count }
             guard listenerCount > 0 else {
                 return .success(["started": false, "listenerCount": 0])
             }
@@ -1287,6 +1305,15 @@ enum LynxNativeProviderCapabilities {
             return .success(["started": true, "listenerCount": listenerCount])
         }
 
+        func stop(ownerID: String?) -> LynxNativeCapabilityResult {
+            let activeCount = lock.withLock { () -> Int in
+                pausedOwners.insert(ownerID ?? "-1")
+                return listeners.values.filter { !pausedOwners.contains($0.ownerID ?? "-1") }.count
+            }
+            if activeCount == 0 { stop(clearListeners: false) }
+            return .success(["stopped": true, "listenerCount": activeCount])
+        }
+
         func stop() -> LynxNativeCapabilityResult {
             let listenerCount = lock.withLock { listeners.count }
             stop(clearListeners: false)
@@ -1298,14 +1325,14 @@ enum LynxNativeProviderCapabilities {
             lock.withLock {
                 started = false
                 lastTimestamp = nil
-                if clearListeners { listeners.removeAll() }
+                if clearListeners { listeners.removeAll(); pausedOwners.removeAll() }
             }
         }
 
         private func emit(_ motion: CMDeviceMotion) {
             let snapshot: [(String, MotionListener)] = lock.withLock {
                 guard started else { return [] }
-                return listeners.map { ($0.key, $0.value) }
+                return listeners.values.filter { !pausedOwners.contains($0.ownerID ?? "-1") }.map { ($0.listenerID, $0) }
             }
             guard !snapshot.isEmpty else { return }
             let interval: Double = lock.withLock {
@@ -2015,7 +2042,8 @@ enum LynxNativeProviderCapabilities {
         let legacy = infoString("NSCalendarsUsageDescription")?.isEmpty == false
         let readDescription = infoString("NSCalendarsFullAccessUsageDescription")?.isEmpty == false
         let writeDescription = infoString("NSCalendarsWriteOnlyAccessUsageDescription")?.isEmpty == false
-        return (!read || legacy || readDescription) && (!write || legacy || writeDescription)
+        if #available(iOS 17.0, *) { return read ? readDescription : (!write || writeDescription) }
+        return legacy
     }
 
     private static func locationUsageDescriptionPresent(always: Bool) -> Bool {

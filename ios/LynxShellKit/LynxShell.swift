@@ -175,7 +175,7 @@ public struct LynxTabSpec {
  * 宿主可以把它放进 UITabBarController 或普通 UIViewController；它只负责一个 LynxView、
  * 已同步 current 的 cache-only 读取和生命周期，不负责 Tab 选中态或底部导航。
  */
-public final class LynxTabViewController: UIViewController {
+public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
     public let spec: LynxTabSpec
     private let contentView = UIView()
     private var lynxView: LynxView?
@@ -199,7 +199,15 @@ public final class LynxTabViewController: UIViewController {
     private var monitorScope: LynxMonitorScope?
     private var monitorObserver: LynxMonitorObserver?
     private var monitorVisibility: LynxMonitorVisibility = .hidden
+    let lynxSystemUIState = ShellSystemUIState()
+    var lynxSystemUIView: LynxView? { lynxView }
     private var firstScreenReached = false
+    private var otaHealthGate = LynxOtaHealthGate()
+    private var otaHealthCompletion: ((NSDictionary) -> Void)?
+    private var otaHealthTask: Task<Void, Never>?
+    private var currentBundleMetadata: [String: Any]?
+    private var otaRecoveryUsed = false
+    private var recoveringStable = false
 #if DEBUG
     private var debugLoadCount = 0
     private var debugResolveCurrentCount = 0
@@ -214,6 +222,11 @@ public final class LynxTabViewController: UIViewController {
     }
 #endif
 
+    public override var prefersStatusBarHidden: Bool { lynxSystemUIState.statusBarHidden ?? false }
+    public override var preferredStatusBarStyle: UIStatusBarStyle { lynxSystemUIState.statusBarStyle ?? super.preferredStatusBarStyle }
+    public override var prefersHomeIndicatorAutoHidden: Bool { lynxSystemUIState.homeIndicatorHidden ?? false }
+    public override var supportedInterfaceOrientations: UIInterfaceOrientationMask { lynxSystemUIState.orientationMask ?? super.supportedInterfaceOrientations }
+
     public init(spec: LynxTabSpec) {
         self.spec = spec
         self.pageID = "lynx-tab-\(spec.tabId)-\(UUID().uuidString)"
@@ -226,6 +239,8 @@ public final class LynxTabViewController: UIViewController {
     }
 
     deinit {
+        otaHealthTask?.cancel()
+        otaHealthCompletion?(["code": 1002, "message": "Tab已销毁"])
 #if DEBUG
         LynxDebugBridge.detach(view: lynxView)
 #endif
@@ -236,6 +251,7 @@ public final class LynxTabViewController: UIViewController {
         loadTask?.cancel()
         ShellMessageHub.unregister(pageId: pageID)
         templateProvider?.cancel()
+        if let lynxView { LynxNativeRuntime.destroy(view: lynxView) }
         lynxView = nil
         releaseCurrentLease()
     }
@@ -322,8 +338,17 @@ public final class LynxTabViewController: UIViewController {
         synchronizeColorScheme()
     }
 
-    /** 用户主动刷新 OTA 后，销毁当前 LynxView 并重新读取已提交 current；不触发 Tab 网络请求。 */
+    /** 用户主动刷新可试本地 candidate；普通切换复用实例，不触发 Tab 网络请求。 */
     public func refreshFromCurrent() {
+        reloadContent(recovering: false)
+    }
+
+    private func reloadContent(recovering: Bool) {
+        cancelOtaHealth()
+        otaHealthGate = LynxOtaHealthGate()
+        currentBundleMetadata = nil
+        recoveringStable = recovering
+        if !recovering { otaRecoveryUsed = false }
         closeMonitoring(reason: "tab_refreshed")
         loadTask?.cancel()
         loadTask = nil
@@ -338,6 +363,7 @@ public final class LynxTabViewController: UIViewController {
         debugBundleIdentity = "release=none;source=none"
 #endif
         ShellMessageHub.unregister(pageId: pageID)
+        if let lynxView { LynxNativeRuntime.destroy(view: lynxView) }
         lynxView?.removeFromSuperview()
         lynxView = nil
         currentRequest = nil
@@ -402,11 +428,11 @@ public final class LynxTabViewController: UIViewController {
                     try? await Task.sleep(nanoseconds: delayMilliseconds * 1_000_000)
                 }
 #endif
-                // Native Tab 只读取已经提交的 current；缺失时不 repair、不请求网络。
-                guard let prepared = try await runtime.resolveCurrent(
-                    lynxAppId: appId,
-                    bundleName: bundleName
-                ) else {
+                // 初次/主动刷新可试本地候选；普通 Tab 切换仍复用实例，不触发网络。
+                let resolved = self?.recoveringStable == true
+                    ? try await runtime.resolveCurrent(lynxAppId: appId, bundleName: bundleName)
+                    : try await runtime.resolvePage(lynxAppId: appId, bundleName: bundleName)
+                guard let prepared = resolved else {
                     throw NSError(
                         domain: "LynxTabViewController",
                         code: 404,
@@ -426,6 +452,7 @@ public final class LynxTabViewController: UIViewController {
                     "loadPolicy": "cache_only",
                     "bundleName": prepared.bundleName
                 ]
+                metadata["_identityEpoch"] = prepared.userIdentityEpoch
                 metadata["selectionKind"] = prepared.selectionKind
                 metadata["releaseSequence"] = prepared.releaseSequence
                 let accepted: Bool = await MainActor.run { [weak self] in
@@ -453,7 +480,7 @@ public final class LynxTabViewController: UIViewController {
 #endif
                 await MainActor.run { [weak self] in
                     guard let self, self.loadGeneration.accepts(generation) else { return }
-                    self.showError("Tab 加载失败：\(error.localizedDescription)")
+                    self.handleTabFailure(generation: generation, message: "Tab 加载失败：\(error.localizedDescription)")
                 }
             }
         }
@@ -466,6 +493,7 @@ public final class LynxTabViewController: UIViewController {
         preparedResources: OtaPreparedResources? = nil,
         generation: UUID
     ) {
+        currentBundleMetadata = bundleMetadata
         guard lynxView == nil else {
             if let preparedResources {
                 preparedResources.close(releasing: releaseLease)
@@ -552,7 +580,10 @@ public final class LynxTabViewController: UIViewController {
                 onFirstScreen: { [weak self] observedGeneration, view in
                     DispatchQueue.main.async { [weak self, weak view] in
                         guard let self, let view, self.loadGeneration.accepts(observedGeneration), view === self.lynxView else { return }
+                        guard !self.otaHealthGate.failed else { return }
                         self.firstScreenReached = true
+                        self.otaHealthGate.markFirstScreen()
+                        self.confirmOtaHealthIfReady(generation: observedGeneration)
 #if DEBUG
                         self.debugLastError = "ready"
 #endif
@@ -560,8 +591,8 @@ public final class LynxTabViewController: UIViewController {
                 },
                 onFirstScreenError: { [weak self] observedGeneration, _, error in
                     DispatchQueue.main.async { [weak self] in
-                        guard let self, self.loadGeneration.accepts(observedGeneration), !self.firstScreenReached else { return }
-                        self.showError("Tab 首屏失败：\(error.localizedDescription)")
+                        guard let self, self.loadGeneration.accepts(observedGeneration) else { return }
+                        self.handleTabFailure(generation: observedGeneration, message: "Tab运行失败：\(error.localizedDescription)")
                     }
                 },
                 onErrorObserved: errorMonitor.map { monitor in { error in monitor.receivedError(error) } }
@@ -607,6 +638,13 @@ public final class LynxTabViewController: UIViewController {
                 view: created,
                 updateLocale: { [weak self] state in
                     self?.synchronizeLocale(state)
+                },
+                markOtaHealthy: { [weak self, weak created] completion in
+                    guard let self, let created else {
+                        completion(["code": 1002, "message": "调用Tab已销毁"])
+                        return
+                    }
+                    self.markOtaHealthy(generation: generation, view: created, completion: completion)
                 }
             )
             LynxNativeRuntime.load(url: request.bundleURL, initData: request.initialData, in: created)
@@ -615,13 +653,116 @@ public final class LynxTabViewController: UIViewController {
         }
     }
 
+    private func markOtaHealthy(generation: UUID, view: LynxView, completion: @escaping (NSDictionary) -> Void) {
+        guard loadGeneration.accepts(generation), view === lynxView, !otaHealthGate.failed else {
+            completion(["code": 1002, "message": "Tab代次已失效"])
+            return
+        }
+        guard currentBundleMetadata?["source"] as? String == "candidate_trial" else {
+            completion(["code": 0, "message": "", "data": ["confirmed": otaHealthGate.confirmed, "reason": "not_candidate"]])
+            return
+        }
+        guard otaHealthCompletion == nil else {
+            completion(["code": 1006, "message": "健康确认正在等待首屏或提交"])
+            return
+        }
+        otaHealthCompletion = completion
+        otaHealthGate.markBusinessHealth()
+        confirmOtaHealthIfReady(generation: generation)
+    }
+
+    private func confirmOtaHealthIfReady(generation: UUID) {
+        guard loadGeneration.accepts(generation),
+              currentBundleMetadata?["source"] as? String == "candidate_trial",
+              let appId = spec.lynxAppId, let runtime = LynxShell.otaRuntime(),
+              otaHealthGate.beginConfirmation() else { return }
+        let releaseId = currentBundleMetadata?["releaseId"] as? String
+        let epoch = currentBundleMetadata?["_identityEpoch"] as? UInt64
+        otaHealthTask = Task { [weak self] in
+            do {
+                try Task.checkCancellation()
+                let confirmed = try await runtime.confirmCandidateHealthy(lynxAppId: appId,
+                    expectedReleaseId: releaseId, expectedIdentityEpoch: epoch)
+                await MainActor.run {
+                    guard let self, self.loadGeneration.accepts(generation) else { return }
+                    guard confirmed, epoch == nil || epoch == LynxRouter.otaUserIdentityEpoch,
+                          self.otaHealthGate.completeConfirmation() else {
+                        self.cancelOtaHealth()
+                        return
+                    }
+                    self.otaHealthTask = nil
+                    self.currentBundleMetadata?["source"] = "ota_current"
+                    let callback = self.otaHealthCompletion
+                    self.otaHealthCompletion = nil
+                    callback?(["code": 0, "message": "", "data": ["confirmed": true, "releaseId": releaseId ?? ""]])
+#if DEBUG
+                    self.debugBundleIdentity = "release=\(releaseId ?? "unknown");source=ota_current"
+#endif
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard let self, self.loadGeneration.accepts(generation) else { return }
+                    let callback = self.otaHealthCompletion
+                    self.otaHealthCompletion = nil
+                    self.otaHealthTask = nil
+                    callback?(["code": 1003, "message": error.localizedDescription])
+                    self.handleTabFailure(generation: generation, message: "OTA健康确认失败")
+                }
+            }
+        }
+    }
+
+    private func cancelOtaHealth() {
+        otaHealthTask?.cancel()
+        otaHealthTask = nil
+        let callback = otaHealthCompletion
+        otaHealthCompletion = nil
+        callback?(["code": 1002, "message": "Tab已销毁或换包"])
+    }
+
+    private func handleTabFailure(generation: UUID, message: String) {
+        guard loadGeneration.accepts(generation) else { return }
+        let mayRecover = !firstScreenReached || (currentBundleMetadata?["source"] as? String == "candidate_trial" && !otaHealthGate.confirmed)
+        let releaseId = currentBundleMetadata?["releaseId"] as? String
+        let epoch = currentBundleMetadata?["_identityEpoch"] as? UInt64
+        let failedCandidate = currentBundleMetadata?["source"] as? String == "candidate_trial"
+        showError(message)
+        guard mayRecover, !otaRecoveryUsed, let appId = spec.lynxAppId,
+              let runtime = LynxShell.otaRuntime() else { return }
+        otaRecoveryUsed = true
+        loadTask = Task { [weak self] in
+            do {
+                let recovered = failedCandidate
+                    ? try await runtime.recoverFailedCandidate(lynxAppId: appId, expectedReleaseId: releaseId, expectedIdentityEpoch: epoch)
+                    : try await runtime.rollback(lynxAppId: appId, reason: message,
+                        expectedReleaseId: releaseId, expectedIdentityEpoch: epoch)
+                await MainActor.run {
+                    guard let self, self.loadGeneration.accepts(generation), recovered else { return }
+                    self.reloadContent(recovering: true)
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self, self.loadGeneration.accepts(generation) else { return }
+                    self.showError("\(message)；恢复失败：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     private func showError(_ message: String) {
         guard isViewLoaded else { return }
+        otaHealthGate.fail()
+        cancelOtaHealth()
+        ShellMessageHub.unregister(pageId: pageID)
         monitorScope?.failed(reason: "tab_template_or_first_screen_failure")
         closeMonitoring(reason: "tab_content_released")
         templateProvider?.cancel()
         templateProvider = nil
         firstScreenObserver = nil
+        if let lynxView { LynxNativeRuntime.destroy(view: lynxView) }
         lynxView?.removeFromSuperview()
         lynxView = nil
         runtimeGlobalProps = nil

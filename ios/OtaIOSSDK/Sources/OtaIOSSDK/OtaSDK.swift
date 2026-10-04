@@ -210,9 +210,15 @@ public actor OtaSDK {
         return identity
     }
 
+    private var startupMaintenanceCompleted = false
+
     public func reconcileUserContext() async throws {
         let identity = try operationIdentity()
         try await OtaOperationContext.$identity.withValue(identity) {
+            if !startupMaintenanceCompleted {
+                try await releaseTransaction.recoverInterruptedCandidates(app: configuration.app)
+                try userContextBox.withCurrent(identity) { startupMaintenanceCompleted = true }
+            }
             try await releaseTransaction.reconcileUserContext(app: configuration.app)
         }
         try userContextBox.withCurrent(identity) { lifecycleState = .idle(current: nil) }
@@ -309,6 +315,7 @@ public actor OtaSDK {
 
     /// 健康确认成功后，原子地把 candidate promote 为 current，旧 current 进入 previous。
     public func confirmCandidateHealthy(lynxAppId: String? = nil, expectedReleaseId: String? = nil, expectedIdentityEpoch: UInt64? = nil) async throws -> OtaInstalledRelease {
+        try Task.checkCancellation()
         _ = try operationIdentity()
         if OtaOperationContext.identity == nil {
             let identity = try userContextBox.capture()
@@ -349,6 +356,7 @@ public actor OtaSDK {
                 try await beginCandidateTrial(lynxAppId: lynxAppId)
             }
         }
+        if !startupMaintenanceCompleted { try await reconcileUserContext() }
         let resolvedLynxAppId = lynxAppId ?? configuration.lynxAppId
         let candidate = try await releaseTransaction.beginCandidateTrial(
             scope: OtaReleaseScope(app: configuration.app, lynxAppId: resolvedLynxAppId)

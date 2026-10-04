@@ -50,6 +50,16 @@
           "applyToProducts": ["default"]
         }
       ]
+    },
+    {
+      "name": "lynx_capacitor_kit",
+      "srcPath": "./lynx_capacitor_kit",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": ["default"]
+        }
+      ]
     }
   ]
 }

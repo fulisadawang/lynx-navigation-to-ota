@@ -485,6 +485,10 @@ ShellNavigator.shared.clearSavedNavigationState()
 - `backGestureEnabled=true`：允许 iOS 侧滑和 Android 系统 Back；
 - `backGestureEnabled=false`：系统返回被禁用，但原生导航栏返回和 Module API 保留。
 
+页面显示后可通过 `NativeModules.LynxShellModule.setBackGestureEnabled(enabled, callback)` 原位切换当前页策略；Playground 的同名 wrapper 保留原生结果。成功原始回调为 `code=0`，data 含 `backGestureEnabled`、`affectedCount=1`；Playground 沿用 `code=1` 成功归一化。关闭后显式 `back/close` 仍可退出，不会重载 Bundle。
+
+此接口只作用于真实调用页：旧 View、非栈顶或嵌入容器返回 `1002`；转场/交互返回进行中返回 `1006`，可等待 `onTransitionSettled` 后重试；iOS 宿主接管手势时返回 `1004`。`true` 不绕过现有栈深度和 `popGesture.enabled` 门禁。iOS 系统 Page Sheet 的下拉关闭另由 `barrierDismissible` 管理。
+
 所有手势都有按钮/Module 替代路径，避免页面不可退出。自定义转场的 Toolbar、
 NativeModules 与系统返回最终进入同一个原生状态机，不会再补播第二段系统动画。
 

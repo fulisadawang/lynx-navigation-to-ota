@@ -15,7 +15,6 @@ enum LynxNativeDatabaseCapabilities {
     private static let defaultVersion = 1
     private static let rootLock = NSLock()
     private static var connections: [String: OpaquePointer] = [:]
-    private static let databaseQueue = DispatchQueue(label: "lynx.native.sqlite", qos: .userInitiated)
     private static let transientDestructor = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     static func dispatch(
@@ -23,13 +22,8 @@ enum LynxNativeDatabaseCapabilities {
         completion: @escaping Completion
     ) -> Bool {
         guard call.pluginId == pluginID else { return false }
-        let work = {
-            completion(dispatchSync(call))
-        }
-        if call.methodName == "echo" || call.methodName == "isAvailable" {
-            work()
-        } else {
-            databaseQueue.async(execute: work)
+        LynxNativeIOExecutor.shared.submit(ownerID: call.ownerID, completion: completion) { cancellation in
+            dispatchSync(call, cancellation: cancellation)
         }
         return true
     }
@@ -43,28 +37,31 @@ enum LynxNativeDatabaseCapabilities {
         values.forEach { sqlite3_close($0) }
     }
 
-    private static func dispatchSync(_ call: LynxNativeCapabilityCall) -> LynxNativeCapabilityResult {
+    static func dispatchSync(_ call: LynxNativeCapabilityCall, cancellation: LynxNativeIOExecutor.Cancellation, beforeCommit: (() -> Void)? = nil) -> LynxNativeCapabilityResult {
         do {
+            try cancellation.check()
             switch call.methodName {
             case "echo":
                 return .success(["value": call.options["value"] ?? NSNull()])
             case "isAvailable":
                 return .success(["result": sqlite3_libversion_number() > 0])
             case "createConnection":
-                return try createConnection(call.options)
+                return try createConnection(call.options, cancellation: cancellation)
             case "open":
-                return try open(call.options)
+                return try open(call.options, cancellation: cancellation)
             case "close":
-                return try close(call.options)
+                return try close(call.options, cancellation: cancellation)
             case "execute":
-                return try execute(call.options)
+                return try execute(call.options, cancellation: cancellation, beforeCommit: beforeCommit)
             case "run":
-                return try run(call.options)
+                return try run(call.options, cancellation: cancellation, beforeCommit: beforeCommit)
             case "query":
-                return try query(call.options)
+                return try query(call.options, cancellation: cancellation)
             default:
                 return .failure("UNSUPPORTED", "\(pluginID).\(call.methodName) 尚未接入当前 iOS Module")
             }
+        } catch is LynxNativeIOExecutor.Cancelled {
+            return .failure("HOST_DESTROYED", "SQLite 操作已取消")
         } catch let error as DatabaseError {
             return .failure(error.code, error.message, details: error.details)
         } catch {
@@ -72,12 +69,14 @@ enum LynxNativeDatabaseCapabilities {
         }
     }
 
-    private static func createConnection(_ options: [String: Any]) throws -> LynxNativeCapabilityResult {
+    private static func createConnection(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) throws -> LynxNativeCapabilityResult {
         let database = try requireDatabaseName(options)
         let version = try requireVersion(options)
+        try cancellation.check()
         try ensureDatabaseDirectory()
 
         return try rootLock.withLock {
+            try cancellation.check()
             if let existing = connections[database] {
                 guard sqlite3_db_readonly(existing, nil) == 0 else {
                     throw DatabaseError("CONNECTION_READ_ONLY", "数据库连接是只读的")
@@ -100,7 +99,9 @@ enum LynxNativeDatabaseCapabilities {
                 throw DatabaseError("OPEN_FAILED", message)
             }
             do {
+                try cancellation.check()
                 try setUserVersion(handle, version: version)
+                try cancellation.check()
                 connections[database] = handle
                 return .success(["database": database, "version": version, "created": true])
             } catch {
@@ -110,9 +111,10 @@ enum LynxNativeDatabaseCapabilities {
         }
     }
 
-    private static func open(_ options: [String: Any]) throws -> LynxNativeCapabilityResult {
+    private static func open(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) throws -> LynxNativeCapabilityResult {
         let database = try requireDatabaseName(options)
         return try rootLock.withLock {
+            try cancellation.check()
             guard let handle = connections[database] else {
                 throw DatabaseError("CONNECTION_NOT_FOUND", "数据库连接不存在，请先调用 createConnection")
             }
@@ -127,9 +129,10 @@ enum LynxNativeDatabaseCapabilities {
         }
     }
 
-    private static func close(_ options: [String: Any]) throws -> LynxNativeCapabilityResult {
+    private static func close(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) throws -> LynxNativeCapabilityResult {
         let database = try requireDatabaseName(options)
         return try rootLock.withLock {
+            try cancellation.check()
             guard let handle = connections.removeValue(forKey: database) else {
                 throw DatabaseError("CONNECTION_NOT_FOUND", "数据库连接不存在: \(database)")
             }
@@ -142,7 +145,7 @@ enum LynxNativeDatabaseCapabilities {
         }
     }
 
-    private static func execute(_ options: [String: Any]) throws -> LynxNativeCapabilityResult {
+    private static func execute(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation, beforeCommit: (() -> Void)?) throws -> LynxNativeCapabilityResult {
         let database = try requireDatabaseName(options)
         let rawSQL = stringValue(options["statements"] ?? options["statement"])
         let statements = splitStatements(rawSQL)
@@ -155,9 +158,11 @@ enum LynxNativeDatabaseCapabilities {
         return try withConnection(database) { handle in
             var totalChanges = 0
             var lastID: Int64 = -1
+            try cancellation.check()
             try execSQL(handle, "BEGIN TRANSACTION")
             do {
                 for (index, statement) in statements.enumerated() {
+                    try cancellation.check()
                     if index == 0 && !values.isEmpty {
                         let outcome = try preparedExecution(handle, sql: statement, values: values, returnsRows: false)
                         totalChanges += outcome.changes
@@ -169,6 +174,8 @@ enum LynxNativeDatabaseCapabilities {
                         if candidate >= 0 { lastID = candidate }
                     }
                 }
+                beforeCommit?()
+                try cancellation.check()
                 try execSQL(handle, "COMMIT")
             } catch {
                 _ = try? execSQL(handle, "ROLLBACK")
@@ -182,12 +189,23 @@ enum LynxNativeDatabaseCapabilities {
         }
     }
 
-    private static func run(_ options: [String: Any]) throws -> LynxNativeCapabilityResult {
+    private static func run(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation, beforeCommit: (() -> Void)?) throws -> LynxNativeCapabilityResult {
         let database = try requireDatabaseName(options)
         let sql = try requireSQL(options, preferred: "statement", fallback: "statements")
         let values = try valuesArray(options)
         return try withConnection(database) { handle in
-            let outcome = try preparedExecution(handle, sql: sql, values: values, returnsRows: false)
+            try cancellation.check()
+            try execSQL(handle, "BEGIN TRANSACTION")
+            let outcome: ExecutionOutcome
+            do {
+                outcome = try preparedExecution(handle, sql: sql, values: values, returnsRows: false)
+                beforeCommit?()
+                try cancellation.check()
+                try execSQL(handle, "COMMIT")
+            } catch {
+                _ = try? execSQL(handle, "ROLLBACK")
+                throw error
+            }
             return .success([
                 "database": database,
                 "changes": [
@@ -198,7 +216,7 @@ enum LynxNativeDatabaseCapabilities {
         }
     }
 
-    private static func query(_ options: [String: Any]) throws -> LynxNativeCapabilityResult {
+    private static func query(_ options: [String: Any], cancellation: LynxNativeIOExecutor.Cancellation) throws -> LynxNativeCapabilityResult {
         let database = try requireDatabaseName(options)
         let sql = try requireSQL(options, preferred: "statement", fallback: "statements")
         let values = try valuesArray(options)
@@ -217,10 +235,16 @@ enum LynxNativeDatabaseCapabilities {
                 }
             }
             var rows: [[Any]] = []
+            var resultBytes = 0
             while true {
+                guard !cancellation.isCancelled else { throw DatabaseError("HOST_DESTROYED", "SQLite 查询已取消") }
                 let step = sqlite3_step(statement)
                 if step == SQLITE_ROW {
-                    rows.append((0..<columnCount).map { sqliteValue(statement, index: Int32($0)) })
+                    let row = try (0..<columnCount).map { try sqliteValue(statement, index: Int32($0)) }
+                    guard let raw = LynxNativeJSON.encode(row) else { throw DatabaseError("QUERY_FAILED", "SQLite 行无法编码") }
+                    resultBytes += raw.utf8.count
+                    guard resultBytes <= LynxNativePayloadLimits.outputJSONBytes - 4096 else { throw DatabaseError("PAYLOAD_TOO_LARGE", "SQLite 查询超过结果上限，请使用 LIMIT 分页") }
+                    rows.append(row)
                 } else if step == SQLITE_DONE {
                     break
                 } else {
@@ -316,7 +340,7 @@ enum LynxNativeDatabaseCapabilities {
         }
     }
 
-    private static func sqliteValue(_ statement: OpaquePointer, index: Int32) -> Any {
+    private static func sqliteValue(_ statement: OpaquePointer, index: Int32) throws -> Any {
         switch sqlite3_column_type(statement, index) {
         case SQLITE_INTEGER:
             return sqlite3_column_int64(statement, index)
@@ -324,11 +348,13 @@ enum LynxNativeDatabaseCapabilities {
             return sqlite3_column_double(statement, index)
         case SQLITE_BLOB:
             let length = Int(sqlite3_column_bytes(statement, index))
+            guard length <= LynxNativePayloadLimits.inlineFileBytes else { throw DatabaseError("PAYLOAD_TOO_LARGE", "SQLite BLOB 超过内联上限") }
             guard let pointer = sqlite3_column_blob(statement, index), length > 0 else { return "" }
             return Data(bytes: pointer, count: length).base64EncodedString()
         case SQLITE_NULL:
             return NSNull()
         default:
+            guard sqlite3_column_bytes(statement, index) <= LynxNativePayloadLimits.inlineFileBytes else { throw DatabaseError("PAYLOAD_TOO_LARGE", "SQLite TEXT 超过内联上限") }
             guard let pointer = sqlite3_column_text(statement, index) else { return NSNull() }
             return String(cString: pointer)
         }

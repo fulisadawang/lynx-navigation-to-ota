@@ -8,6 +8,7 @@
 #endif
 #import <SDWebImage/SDWebImage.h>
 #import <SDWebImageWebPCoder/SDWebImageWebPCoder.h>
+#import <objc/runtime.h>
 
 // XElement 4.1 全量组件的公开头文件。
 // 这些 import 是编译期哨兵：Pod 缺少任一 subspec 时，真实 Xcode 编译会立即失败，
@@ -54,6 +55,46 @@
 
 @implementation LynxNativeRuntime
 
+static NSMutableArray<Class> *LynxHostNativeModules(void) {
+  static NSMutableArray<Class> *modules;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{ modules = [NSMutableArray array]; });
+  return modules;
+}
+
++ (void)registerNativeModule:(Class)moduleClass {
+  NSAssert(NSThread.isMainThread, @"原生模块必须在主线程安装");
+  if (![LynxHostNativeModules() containsObject:moduleClass]) {
+    [LynxHostNativeModules() addObject:moduleClass];
+  }
+}
+
+static NSMutableDictionary<NSString *, id> *LynxViewDestroyHandlers(void) {
+  static NSMutableDictionary<NSString *, id> *handlers;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{ handlers = [NSMutableDictionary dictionary]; });
+  return handlers;
+}
+
++ (void)registerNativeModule:(Class)moduleClass onViewDestroy:(void (^)(LynxContext *))handler {
+  [self registerNativeModule:moduleClass];
+  if (handler) { LynxViewDestroyHandlers()[NSStringFromClass(moduleClass)] = [handler copy]; }
+}
+
++ (void)destroyView:(LynxView *)view {
+  NSAssert(NSThread.isMainThread, @"LynxView 必须在主线程销毁");
+  static char destroyedKey;
+  if ([objc_getAssociatedObject(view, &destroyedKey) boolValue]) { return; }
+  objc_setAssociatedObject(view, &destroyedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  LynxContext *context = [view getLynxContext];
+  context.hasLynxViewDestroyed = YES;
+  for (id value in LynxViewDestroyHandlers().allValues.copy) {
+    void (^handler)(LynxContext *) = value;
+    handler(context);
+  }
+  [view clearForDestroy];
+}
+
 static NSString *LynxHostString(NSDictionary *info, NSString *key) {
   id value = info[key];
   if (![value isKindOfClass:[NSString class]]) {
@@ -82,6 +123,9 @@ static NSString *LynxHostString(NSDictionary *info, NSString *key) {
     LynxConfig *globalConfig =
         [[LynxConfig alloc] initWithProvider:[[ShellTemplateProvider alloc] init]];
     [globalConfig registerModule:LynxShellModule.class];
+    for (Class moduleClass in LynxHostNativeModules()) {
+      [globalConfig registerModule:moduleClass];
+    }
 #if defined(LYNX_SHELL_ENABLE_MAP)
     [LynxMapModuleRuntime registerModulesIntoConfig:globalConfig];
 #endif
@@ -126,6 +170,9 @@ static NSString *LynxHostString(NSDictionary *info, NSString *key) {
                       globalProps:(NSDictionary<NSString *, id> *)globalProps {
   LynxConfig *config = [[LynxConfig alloc] initWithProvider:provider];
   [config registerModule:LynxShellModule.class];
+  for (Class moduleClass in LynxHostNativeModules()) {
+    [config registerModule:moduleClass];
+  }
 #if defined(LYNX_SHELL_ENABLE_MAP)
   [LynxMapModuleRuntime registerModulesIntoConfig:config];
   // 每个 LynxView 显式注册，保证普通 Page 与 Native Tab 不依赖静态链接器是否保留 lazy symbol。

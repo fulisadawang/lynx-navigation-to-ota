@@ -33,6 +33,15 @@ data class LynxRouterMessageReply(
 
 typealias LynxRouterMessageHandler = (LynxRouterMessage) -> LynxRouterMessageReply
 
+data class LynxOtaHealthReply(
+    val code: Int,
+    val message: String = "",
+    val data: Map<String, Any?> = emptyMap(),
+)
+
+typealias LynxOtaHealthCompletion = (LynxOtaHealthReply) -> Unit
+typealias LynxOtaHealthHandler = (LynxOtaHealthCompletion) -> Unit
+
 /**
  * Android Activity-first 页面消息中心。
  *
@@ -53,6 +62,7 @@ object ShellMessageHub {
         val info: LynxRouterPageInfo,
         activity: Activity,
         view: LynxView,
+        val otaHealthHandler: LynxOtaHealthHandler?,
     ) {
         val activity = WeakReference(activity)
         val view = WeakReference(view)
@@ -62,10 +72,32 @@ object ShellMessageHub {
         synchronized(lock) { messageHandler = handler }
     }
 
-    fun register(info: LynxRouterPageInfo, activity: Activity, view: LynxView) {
+    fun register(
+        info: LynxRouterPageInfo,
+        activity: Activity,
+        view: LynxView,
+        otaHealthHandler: LynxOtaHealthHandler? = null,
+    ) {
         synchronized(lock) {
-            endpoints[info.pageId] = Endpoint(info, activity, view)
+            endpoints[info.pageId] = Endpoint(info, activity, view, otaHealthHandler)
             pruneLocked()
+        }
+    }
+
+    /** 多个 Tab 共用 Activity，健康信号必须按真实调用 View 寻址。 */
+    fun markOtaHealthy(view: LynxView?, completion: LynxOtaHealthCompletion) {
+        mainHandler.post {
+            val endpoint = synchronized(lock) {
+                pruneLocked()
+                endpoints.values.firstOrNull { view != null && it.view.get() === view }
+            }
+            if (endpoint == null) {
+                completion(LynxOtaHealthReply(1002, "页面已销毁或 LynxView 已失效"))
+            } else {
+                val handler = endpoint.otaHealthHandler
+                if (handler == null) completion(LynxOtaHealthReply(1004, "当前容器未接入 OTA 健康确认"))
+                else handler(completion)
+            }
         }
     }
 
@@ -77,6 +109,14 @@ object ShellMessageHub {
     fun pageIdFor(activity: Activity): String? = synchronized(lock) {
         pruneLocked()
         endpoints.values.firstOrNull { it.activity.get() === activity }?.info?.pageId
+    }
+
+    internal fun isActiveView(view: LynxView): Boolean = activityFor(view) != null
+
+    internal fun activityFor(view: LynxView): Activity? = synchronized(lock) {
+        pruneLocked()
+        endpoints.values.firstOrNull { it.view.get() === view }?.activity?.get()
+            ?.takeUnless { it.isFinishing || it.isDestroyed }
     }
 
     fun pages(): List<LynxRouterPageInfo> = synchronized(lock) {
@@ -144,7 +184,9 @@ object ShellMessageHub {
     }
 
     private fun post(endpoint: Endpoint, eventName: String, payload: Map<String, Any?>) {
-        mainHandler.post {
+        mainHandler.post delivery@{
+            val stillRegistered = synchronized(lock) { endpoints[endpoint.info.pageId] === endpoint }
+            if (!stillRegistered) return@delivery
             endpoint.view.get()?.sendGlobalEvent(
                 eventName,
                 JavaOnlyArray.of(toNativeMap(payload)),

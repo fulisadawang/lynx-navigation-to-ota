@@ -65,7 +65,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        minSdk = 24
+        minSdk = 26
         buildConfigField(
             "String",
             "DEFAULT_BUNDLE_URL",
@@ -117,7 +117,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
 
     // Lynx 4.1 核心与 JS Runtime；官方 4.1 组合使用 PrimJS 4.1.1。
-    implementation("org.lynxsdk.lynx:lynx:4.1.0")
+    // 公开 Host 接缝包含 LynxView 类型，消费 App 的编译类路径必须能解析同一 Runtime。
+    api("org.lynxsdk.lynx:lynx:4.1.0")
     implementation("org.lynxsdk.lynx:lynx-jssdk:4.1.0")
     implementation("org.lynxsdk.lynx:lynx-trace:4.1.0")
     implementation("org.lynxsdk.lynx:primjs:4.1.1")

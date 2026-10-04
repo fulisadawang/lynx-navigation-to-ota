@@ -47,7 +47,7 @@ state 是历史字段，semanticState 是新字段。页面和诊断工具读取
       "verification": {
         "source": "verified",
         "build": "not_run",
-        "host": "not_integrated",
+        "host": "configured_not_run",
         "device": "not_run"
       }
     }
@@ -166,7 +166,7 @@ verification 将证据拆成四层：
 | --- | --- | --- |
 | source | verified | 三端源码、字段和目录已静态核对 |
 | build | not_run | 本分支没有未经授权执行 Gradle、Xcode 或 Hvigor 构建 |
-| host | not_integrated | 默认 Shell 尚未加入 Module 依赖和注册 |
+| host | configured_not_run | 默认 Demo 已完成源码装配和注册，尚未执行宿主构建/运行验收 |
 | device | not_run | 未把源码对齐误报成模拟器或真机能力通过 |
 
 构建图和宿主注册属于后续接入任务，必须在 settings.gradle.kts、Pod/Target、

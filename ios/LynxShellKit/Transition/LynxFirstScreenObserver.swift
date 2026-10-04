@@ -1,6 +1,21 @@
 import Foundation
 import Lynx
 
+/** LynxError 非线程安全；在 SDK 回调内复制后，容器才可切到主线程。 */
+struct LynxRuntimeFailure: LocalizedError {
+    let code: Int
+    let isFatal: Bool
+    let message: String
+    var errorDescription: String? { message }
+
+    init(_ error: Error) {
+        let native = error as? LynxError
+        code = native?.errorCode ?? (error as NSError).code
+        isFatal = native?.isFatal ?? true
+        message = error.localizedDescription
+    }
+}
+
 /**
  * 把 Lynx 首屏事件绑定到一次明确的 load generation。
  *
@@ -36,10 +51,10 @@ final class LynxFirstScreenObserver: NSObject, LynxViewLifecycle {
      */
     func lynxView(_ view: LynxView!, didRecieveError error: (any Error)!) {
         guard let view, let error else { return }
+        let failure = LynxRuntimeFailure(error)
         // SDK 使用无序 client 集合；在现有恢复处理前复制错误，防止回滚先关闭监控实例。
         onErrorObserved?(error)
-        let nsError = error as NSError
-        guard nsError.code != LynxErrorCodeForResourceError else { return }
-        onFirstScreenError(generation, view, error)
+        guard failure.code != LynxErrorCodeForResourceError, failure.isFatal else { return }
+        onFirstScreenError(generation, view, failure)
     }
 }

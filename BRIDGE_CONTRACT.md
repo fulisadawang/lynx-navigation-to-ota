@@ -57,6 +57,27 @@ Android/iOS 的高级导航、直接 NativeModules 调用、launch mode、页面
 高级栈 API；其栈元数据由 `LynxNavigator` 维护并映射到 ArkUI Router，转场状态为明确的
 Router 降级态。
 
+## Android / iOS OTA 业务健康
+
+```ts
+markOtaHealthy(callback: (result: {
+  code: number
+  message: string
+  data?: { confirmed?: boolean; releaseId?: string; reason?: 'not_candidate' }
+}) => void): void
+```
+
+业务必要初始化完成后，由后台 JS 调用。容器将调用绑定到真实来源 LynxView、加载代次和
+身份 epoch；实际 SDK 首屏与业务信号都到达后，才确认本地候选。此接口与只负责转场的
+`markTransitionReady` 分开。成功 `code=0`；普通 current/Direct 返回
+`confirmed=false, reason="not_candidate"`，本页已经确认后的重复调用可幂等返回 true。
+来源失效或加载错误取消确认返回 1002，在途重复确认返回 1006；Runtime/Store 确认失败
+双端均返回 1003 并保留原因。失败时 data
+可省略或为空对象，只有 code=0 的健康结果保证 confirmed。package facade 成功 Promise 返回 data，
+失败抛出保留原生 code 的 ShellNavigationError。
+旧宿主无此方法时，模板自动声明先探测方法；显式 package facade 调用返回 1004。
+Harmony 本轮未新增此入口。用例、平台契约与运行证据见 `docs/native-readiness-v1/`。
+
 ## App 语言
 
 三端宿主统一支持 `zh-CN` 和 `en-US`。语言是 App 级状态，可以独立于系统语言：首次启动
@@ -131,6 +152,7 @@ closeAllWithOptions(optionsJSON: string, callback: Callback): void
 reLaunch(optionsJSON: string, callback: Callback): void
 redirect(url: string, optionsJSON: string, callback: Callback): void
 getNavigationState(callback: Callback): void
+setBackGestureEnabled(enabled: boolean, callback: Callback): void
 closeWithResult(resultJSON: string, callback: Callback): void
 consumeNavigationResult(callback: Callback): void
 prepareRoute(url: string, optionsJSON: string, callback: Callback): void
@@ -145,8 +167,15 @@ getTransitionState(callback: Callback): void
 - `popTo` 找不到 routeKey 返回 `1003`，不会新开目标；
 - `closeAll` 返回当前 session 进入前的宿主页；
 - `reLaunch` 必须由业务宿主注入 Home Handler；
+- `setBackGestureEnabled` 原位更新当前调用页的返回策略，不重建 LynxView；成功 data 为 `{backGestureEnabled, affectedCount: 1}`；
 - 页面结果按目标 entryID 保存，并且只能消费一次；
 - 回调只代表原生导航事务已执行/提交，不代表 Lynx 首帧完成。
+
+### 动态返回策略
+
+`setBackGestureEnabled` 与开页 `backGestureEnabled` 使用同一语义：Android 同时控制系统返回键和返回手势，iOS 控制壳管理的侧滑/自定义返回手势，显式 `back/close` 保留。`true` 仍受栈深度和既有 `popGesture.enabled` 约束；iOS 系统 Sheet 下拉关闭继续由 `barrierDismissible` 控制。
+
+调用方 LynxView 必须属于当前栈顶容器；过期 Module、被覆盖页面和不受壳管理的容器返回 `1002`。原生转场或交互返回尚未收口时返回 `1006`，不排队、不提前写状态；可等待转场终态后重新调用。iOS 宿主启用 `setHostManagedBackGesture(true)` 时返回 `1004`，不回假成功。Android 将新值同步到页面请求/Intent，iOS 同步页面请求/Scene 导航快照，重建和恢复继续使用最新策略。
 
 ### Android callback 编码约束
 
@@ -322,11 +351,37 @@ error.message 之外增加稳定 error.reasonCode。
 [semantic-catalog.json](docs/lynx-capacitor-semantics-v1/semantic-catalog.json)；
 静态检查命令为 python3 scripts/verify_lynx_capacitor_semantics.py。
 
-本契约只收口三端 Module 源码，不代表默认 Android/iOS/HarmonyOS Shell 已完成依赖、
-注册、权限和生命周期接线；verification.host 当前为 not_integrated。
+三端默认 Demo 已完成独立能力模块的依赖、注册、权限及必要生命周期源码接线；
+verification.host 为 `configured_not_run`，build/device 保持 `not_run`，不代表全部能力已验收。
+接线方式与剩余平台 owner/provider 边界见 [Demo 接入说明](CAPACITOR_DEMO_INTEGRATION.md)。
 
 ## 页面侧声明
 
 Android/iOS 见 `examples/lynx-shell-module.d.ts`；HarmonyOS 基础接口见
 `examples/lynx-shell-module.harmony.d.ts`。完整导航说明见
 [NAVIGATION_README.md](NAVIGATION_README.md)。
+
+
+## Android / iOS 统一原生媒体接线
+
+旧 Shell 五个媒体方法保留 optionsJSON 与 code/msg/data ABI，底层经宿主中性 SPI 连接 Cap。
+Android 首个 View 前安装 LynxShell.installNativeMediaHost；iOS bootstrap 前安装
+LynxRouter.installMediaHandler，并继续注册 Cap 的 onViewDestroy。未装 handler 的旧 Shell
+调用返回 code=-1；没有无界旧实现 fallback。Cap 四 transport 与40域146方法不变。
+
+图库选择的 mediaType0/1/2 是图片/视频/混合，最多16项；新 public NativeMedia API 默认单选。
+视频预览用原生播放器；NativeMedia 图片预览用 Android 内置原生图片 Activity / iOS Quick Look。
+Camera.chooseFromGallery 的 source 缺省 PHOTOS，可选 CAMERA / PROMPT；纯类型 CAMERA 直接
+拍照或录像，mixed CAMERA 提供拍照/录像选择，PROMPT 增加相册入口。选择拍摄后才申请
+相机及必要麦克风权限；参数支持 cameraDirection/saveToGallery/includeMicrophone 和
+promptLabelHeader/Photos/TakePhoto/RecordVideo/Cancel。getPhoto 的显式 PROMPT 同样显示来源菜单。
+选择结果保持 Android results / iOS photos；capture 每次一项。iOS 不支持静音录像，只有实际
+选择录像后才返回 UNSUPPORTED，不妨碍来源菜单里的相册选择。
+FileViewer.openDocumentFromLocalPath 新增互斥 items（1...16 个本地图片位置）+ initialIndex
+（缺省0且必须为合法整数）参数；图片列表按顺序左右切换，回执 opened/uri/itemCount/initialIndex。
+旧 single 文档参数继续使用系统文档 handler。NativeMedia.previewImage/previewImages 使用图片
+列表入口，Android 不再依赖外部图片查看应用。图片与菜单绑定当前 Lynx owner，销毁时释放。
+只接受合法本地 URI/应用文件；成功回执不表示完整播放或用户看完。平台的目录、文件
+物化预算、原生音轨支持与结果字段分别写入 docs/native-media-v1/及公共包native-media文档。
+
+最终媒体源码已构建安装并显示Demo/来源菜单；实际拍摄、多图手势与完整用例未验收。旧六项测试证据属于媒体改造前版本。
