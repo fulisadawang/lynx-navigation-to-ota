@@ -34,6 +34,8 @@ export class LynxOtaConfig {
   testPauseToken: string = '';
   storageDirectory: string = '';
   pageRefreshIntervalMillis: number = 30 * 60 * 1000;
+  /** 默认沿用立即激活；启用后必须通过真实首屏与业务健康双信号。 */
+  candidateActivationEnabled: boolean = false;
 
   constructor(apiBaseUrl: string) {
     this.apiBaseUrl = apiBaseUrl;
@@ -232,10 +234,19 @@ export interface OtaReleaseState {
   lynxAppId: string;
   platform: string;
   generation: number;
-  current: OtaReleaseRef;
+  current?: OtaReleaseRef;
+  candidate?: OtaCandidateState;
   previous?: OtaReleaseRef;
   selectionSchemaVersion?: number;
   lastDecision?: OtaLastDecision;
+}
+
+export interface OtaCandidateState {
+  release: OtaReleaseRef;
+  status: 'pending' | 'trial';
+  failureCount: number;
+  createdAt: number;
+  trialStartedAt?: number;
 }
 
 export interface OtaReleaseRef {
@@ -262,22 +273,37 @@ export class OtaBundleLease {
   }
 }
 
+/** 仅 Runtime 内使用的预热身份，正式导航在 claim 时重新取得页面与快照 lease。 */
+export interface OtaPrewarmTicket {
+  navigationSessionID: string;
+  sourceSnapshotID: string;
+  navigationSnapshotID?: string;
+  identityEpoch: number;
+  decision?: OtaLastDecision;
+  /** 远端 repair 决定只在真实消费时提交，不由预热替换本地灰度决定。 */
+  selectionDecision?: OtaLastDecision;
+  currentReleaseId?: string;
+  currentManifestId?: string;
+  candidateReleaseId?: string;
+  candidateManifestId?: string;
+}
+
 /** Router 容器只消费已校验的文件或 rawfile bytes；绝对路径不会写入 ArkUI Router 参数。 */
 export interface PreparedPageBundle {
   lynxAppId: string;
   bundleName: string;
   filePath: string;
-  /** 内置 rawfile 直接读取时使用；远程 OTA 文件保持 bytes 未定义。 */
+  /** 内置 rawfile 或真实消费已校验的预热缓存字节；普通远程文件读取不设置。 */
   bytes?: ArrayBuffer;
   releaseId: string;
-  /** 远程 current 对应的完整 Manifest ID；用于 session 级 NavigationSnapshot。 */
+  /** 远程 Release 对应的完整 Manifest ID；用于 session 级 NavigationSnapshot。 */
   manifestId?: string;
   /** 进程内 session 级快照 ID；不会写入持久化 State。 */
   navigationSnapshotID?: string;
   sha256: string;
-  /** 页面可见的来源标签；不参与 Bundle 解析或 OTA 激活。 */
+  /** 准备来源；预热标记仅由 Runtime 持票复核，正式消费归一为 current/trial。 */
   source?: string;
-  /** 远程 current 的容器级租约；embedded rawfile 不设置。 */
+  /** 远程 Manifest 页面 lease；预热临时 lease 由 Broker 持有，embedded 不设置。 */
   lease?: OtaBundleLease;
   selection?: OtaStoredSelection;
   identityEpoch?: number;
@@ -286,11 +312,16 @@ export interface PreparedPageBundle {
   releaseSequence?: string;
   policyRevision?: string;
   asyncResolver?: OtaAsyncResourceResolver;
+  /** 已读取 bytes 或真实文件 stat 的大小，供有界预热缓存计费。 */
+  actualSizeBytes?: number;
+  /** 进程内预热票据，不进入 Router 参数、GlobalProps 或持久化 State。 */
+  prewarm?: OtaPrewarmTicket;
 }
 
 export enum OtaStorageReleaseRole {
   CURRENT = 'current',
   PREVIOUS = 'previous',
+  CANDIDATE = 'candidate',
   LEASED = 'leased',
   ORPHAN = 'orphan'
 }
@@ -305,6 +336,9 @@ export interface OtaStorageStateSnapshot {
   generation: number;
   currentReleaseId: string;
   currentKind: string;
+  candidateReleaseId?: string;
+  candidateManifestId?: string;
+  candidateStatus?: string;
   previousReleaseId?: string;
   previousKind?: string;
   currentManifestId?: string;
@@ -373,10 +407,16 @@ export class OtaPrepareSignal {
 export interface PageBundleRuntime {
   readonly userIdentityEpoch?: number;
   onApplicationStarted(): void;
+  validateNavigationSource(sourceSnapshotID: string): void;
   onApplicationForeground(): void;
-  prepare(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal, navigationSessionID?: string): Promise<PreparedPageBundle>;
+  prepare(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal, navigationSessionID?: string, sourceSnapshotID?: string): Promise<PreparedPageBundle>;
+  prewarm(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal, navigationSessionID?: string, sourceSnapshotID?: string): Promise<PreparedPageBundle>;
+  claimPrewarmed(prepared: PreparedPageBundle, navigationSessionID: string, sourceSnapshotID: string, signal: OtaPrepareSignal): Promise<PreparedPageBundle>;
+  resolvePage(lynxAppId: string, bundleName: string, navigationSessionID?: string, sourceSnapshotID?: string, signal?: OtaPrepareSignal): Promise<PreparedPageBundle | null>;
+  confirmCandidateHealthy(lynxAppId: string, expectedReleaseId: string, expectedIdentityEpoch?: number, isSourceActive?: () => boolean, expectedManifestId?: string): Promise<boolean>;
+  recoverFailedRelease(lynxAppId: string, reason: string, expectedReleaseId: string, expectedIdentityEpoch: number | undefined, navigationSessionID: string, snapshotID: string, candidate: boolean): Promise<boolean>;
   /** 只读已经提交的 current；Tab 切换禁止触发网络、repair 或后台刷新。 */
-  resolveCurrent(lynxAppId: string, bundleName: string, navigationSessionID?: string): Promise<PreparedPageBundle | null>;
+  resolveCurrent(lynxAppId: string, bundleName: string, navigationSessionID?: string, sourceSnapshotID?: string): Promise<PreparedPageBundle | null>;
   /** 普通页面命中 remote current 后的非阻塞 App ID 级 30 分钟后台检查；Tab 不调用。 */
   refreshAppBundleIfNeeded(lynxAppId: string): void;
   rollback(lynxAppId: string, reason: string, expectedReleaseId?: string, expectedIdentityEpoch?: number): Promise<boolean>;

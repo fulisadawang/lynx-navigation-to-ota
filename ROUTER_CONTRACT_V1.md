@@ -9,14 +9,16 @@
 | --- | --- | --- |
 | Android | `LynxShellActivity` | Activity Task（Activity-first） |
 | iOS | `LynxContainerViewController` | `UINavigationController` |
-| HarmonyOS | `LynxContainer` Page | ArkUI Router（NavPathStack 可替换适配层） |
+| HarmonyOS | `ShellNavigationHost` 中的 `NavDestination + LynxContainer` | `Navigation / NavPathStack` |
 
 Android 的 ViewStack 和 Fragment 不是 v1 的跨端容器：ViewStack 是 Android 可选优化，
 Fragment 只用于旧工程兼容。
 
-鸿蒙当前构建默认使用 `@ohos.router` 的系统 Page 栈承载 `LynxContainer`。公开的
-`LynxRouter` 不暴露 Router 细节，后续如果宿主统一切换到 `NavPathStack`，只需替换
-HarmonyOS 适配层，不会改变 Bundle、params、生命周期和消息契约。
+HarmonyOS 当前源码由宿主挂载 `ShellNavigationHost`，以 `Navigation / NavPathStack` 承载
+真实页面栈。`ShellNavigationAdapter` 对接原生可取消的 transition proxy，`LynxNavigator`
+维护提交后的逻辑 entry；公开 Bundle、params、session、生命周期和消息契约保持。标题栏和
+业务导航仍由 Lynx 自绘，使用原生栈不等于使用原生导航栏。宿主未挂载时返回 `1004`，仅已
+初始化、等待实际 Area-ready 的阶段有界排队。2026-10-05 本轮仅完成源码和独立审查，尚未构建或运行验收。
 
 ## Sample 启动页基线
 
@@ -71,14 +73,14 @@ OTA、不丢 Native Tab 的 lease/generation。折叠 posture/crease 属于 capa
 open("detail.lynx.bundle", { orderId: "123" }, { animated: false })
 ```
 
-- `animated=true` 或省略：沿用 Android Activity、iOS `UINavigationController`、HarmonyOS
-  ArkUI Router 的平台默认转场；
-- `animated=false`：关闭本次打开/替换目标页面的转场，适合首屏重定向、连续跳转和自动化测试；
-- HarmonyOS 当前使用 legacy `@ohos.router`，没有逐次 `pushUrl` 动画参数，因此由
-  `LynxContainer.pageTransition()` 对目标 Page 使用零时长 enter/exit 覆盖默认转场；
-- `clearTop` / `singleTask` 等回到已有页面的操作，其回退动画仍由 HarmonyOS legacy Router
-  控制；若需要所有操作都按命令级开关关闭动画，后续应切换到支持逐次动画参数的 NavPathStack
-  适配层。[待确认]
+- `animated=true` 或省略：Android/iOS 普通页面保留现有平台转场；HarmonyOS 由同一
+  Native coordinator 使用原生时钟与 proxy 驱动普通、preset、Shared/Open 转场；
+- `animated=false`：关闭本次打开、替换或命令回退的动画。HarmonyOS 实际使用 `none` 和
+  零时长时钟，仍等待真实 proxy 终态，不以计时器伪造提交；
+- HarmonyOS `clearTop`、`singleTask`、`back`、`popTo`、`closeAll` 和 `reLaunch` 都经过
+  实际 Native driver。手势取消保留 Context/lease，真实 `onTransitionEnd` 成功后才提交逻辑栈；
+- 命令选项支持 `deduplicate` 和 `deduplicateWindowMs`：默认 `true/350ms`，窗口为
+  `0..5000` 整数，关闭动画时最多 `80ms`。关闭时间窗不允许重入正在进行的 Native 转场。
 
 ## 键盘布局策略
 
@@ -97,8 +99,9 @@ keyboardBehavior: system | resize | pan | nothing
 
 Android 通过 Window soft-input 策略与 edge-to-edge IME Insets 实现，HarmonyOS 通过
 ArkUI `UIContext.setKeyboardAvoidMode()` 实现。该字段只控制布局避让，不承诺在没有输入框焦点时
-强制弹出软键盘；HarmonyOS API 13 对 `nothing` 会降级为默认 `OFFSET`，API 14 及以上才提供
-完全不调整布局的 `NONE`；iOS 适配层暂时保持平台默认行为。
+强制弹出软键盘。HarmonyOS API 13 请求 `nothing`/`none` 会明确拒绝
+`keyboard_behavior_nothing_requires_api14`，不会报告成功再退回 `OFFSET`；API 14 及以上使用
+`NONE`。iOS 适配层暂时保持平台默认行为。
 
 ## Bundle 来源模式
 
@@ -164,10 +167,14 @@ Android/iOS 还可由页面通过可选 `LynxShellModule.deleteOtaBundles`/
 `deleteAllOtaBundles` 调用，HarmonyOS 对应宿主 `LynxRouter` API。令牌不属于页面参数，必须由
 业务安全配置注入。
 
-Harmony 宿主身份始终使用 `platform=harmony`。当前服务端只允许 `android/ios` 时，Demo 可在
-过渡期设置 `serverPlatform=android`，它只影响服务端查询、Manifest 和本地 Release 校验，
-不改变 AppInfo/GlobalProps，也不改变 Harmony Native Page Stack。服务端正式放开 `harmony`
-后删除该兼容值；业务宿主不应长期把 Harmony 发布物伪装成 Android 平台。
+Harmony 宿主、查询、selection、Manifest 和本地 State 的平台身份都固定为 `harmony`。
+当前 `OtaApiClient` 的全量/定向请求实际发送 `platform=harmony`，并校验响应平台；不再通过
+`serverPlatform=android` 伪装发布物。当前 Server/Contracts 已支持 Harmony，旧过渡说明不适用。
+
+Harmony `prepareRoute` 复用真实 Provider 预取字节并返回一次性 token，进程缓存上限为
+4 条、合计 32 MiB、30 秒；绑定路由、session、来源快照、exact Context 和 epoch。预热 OTA
+不进入 TRIAL，页面真实消费才取得独立 lease/候选试运行资格；过期或不匹配记录
+`prepared_route_expired` 后使用正常 Provider。token 不写入持久 current，不携带到磁盘导航参数中的字节或 lease。
 
 ## 统一操作
 
@@ -182,6 +189,8 @@ Harmony 宿主身份始终使用 `platform=harmony`。当前服务端只允许 `
 | `reLaunch` | 清空当前 session 后打开新的目标页面；目标由调用参数提供 |
 
 `launchMode` 的 `push`、`singleTop`、`clearTop`、`singleTask` 在三端保留相同含义。
+Harmony Native SDK 的 `reLaunch(bundle, params, options)` 等待真实清栈提交后再打开新 session；
+旧 Module `reLaunch(optionsJSON)` 仍是返回宿主锚点的 ABI，不凭未知业务 Tab 配置猜主页。
 
 ## Lynx GlobalProps 保留字段
 
@@ -199,6 +208,8 @@ __lynxRouterParams                  当前页面参数对象
 ```
 
 Android beta2 旧字段 `__lynxBundleRouter*` 继续保留为兼容别名。
+Harmony NativeTab 另标记 `native_tab_host / arkui_tab_container`，保留独立消息 Context，
+不将其计算为 Lynx Page 栈中的结果 receiver。
 
 ## 生命周期事件
 
@@ -240,3 +251,13 @@ emitToNative(eventName, payload, callback)
 
 Android 可额外暴露 `openFlow`（无 Fragment ViewStack）和 `openFragmentFlow`（legacy），
 但跨端页面不得依赖它们。三端默认路径始终是 Native Page Stack。
+
+## Harmony 本轮交付边界（2026-10-05）
+
+完整软件 API 与调用链已通过有界独立源码审查；本轮 61 条手工用例全部未执行，未编译、
+未运行 checks、未设备验收。源码闭环不能证明视觉、FPS、GPU 内存峰值或零泄漏。
+NativeTab 是宿主锚点，不计入 Lynx entries，也不是返回结果 receiver：首个 Page
+`closeWithResult` 无上一 Lynx entry 时为 `1005`，回 Tab 消费结果为 `1002`。
+复杂共享元素洞的父 gradient/image 背景无法由代理快照完整复原，preset 默认数值也存在
+平台差异；具体范围见 [转场文档](TRANSITIONS_README.md) 与
+[本轮报告](docs/harmony-native-parity-v1/implementation-report.html)。

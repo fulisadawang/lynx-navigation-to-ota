@@ -1,3 +1,5 @@
+import ShellRoutePresentationSpec from '../transition/ShellRoutePresentationSpec';
+import ShellTransitionSpec from '../transition/ShellTransitionSpec';
 import ShellConstants from '../common/ShellConstants';
 import { ShellPageParams } from '../common/ShellTypes';
 
@@ -13,6 +15,19 @@ export default class LynxPageRequest {
   bundleName: string = '';
   routeKey: string = '';
   sessionID: string = '';
+  sourceSnapshotID: string = '';
+  sourceEntryID: string = '';
+  transitionJSON: string = '';
+  routeConfigJSON: string = '';
+  routeType?: string;
+  routeOptionsJSON: string = '';
+  transparent: boolean = false;
+  preparedRouteToken: string = '';
+  nativeViewID: string = '';
+  sourceNativeViewID: string = '';
+  transitionID: string = '';
+  nativeNavigationHosted: boolean = false;
+  backGestureEnabled: boolean = true;
   entryID: string = '';
   routerIndex: number = 0;
   hasHostAnchor: boolean = true;
@@ -40,6 +55,15 @@ export default class LynxPageRequest {
       bundleName: this.bundleName,
       routeKey: this.routeKey,
       sessionID: this.sessionID,
+      sourceSnapshotID: this.sourceSnapshotID,
+      transitionJSON: this.transitionJSON,
+      routeConfigJSON: this.routeConfigJSON,
+      routeType: this.routeType, routeOptionsJSON: this.routeOptionsJSON, transparent: this.transparent, preparedRouteToken: this.preparedRouteToken,
+      sourceNativeViewID: this.sourceNativeViewID,
+      nativeViewID: this.nativeViewID,
+      transitionID: this.transitionID,
+      nativeNavigationHosted: this.nativeNavigationHosted,
+      backGestureEnabled: this.backGestureEnabled,
       entryID: this.entryID,
       routerIndex: this.routerIndex,
       hasHostAnchor: this.hasHostAnchor,
@@ -67,6 +91,16 @@ export default class LynxPageRequest {
     request.bundleName = params.bundleName ?? request.bundleName;
     request.routeKey = params.routeKey ?? request.routeKey;
     request.sessionID = params.sessionID ?? request.sessionID;
+    request.sourceSnapshotID = params.sourceSnapshotID ?? request.sourceSnapshotID;
+    request.transitionJSON = params.transitionJSON ?? request.transitionJSON;
+    request.routeConfigJSON = params.routeConfigJSON ?? request.routeConfigJSON;
+    request.routeType = params.routeType; request.routeOptionsJSON = params.routeOptionsJSON ?? '';
+    request.transparent = params.transparent ?? false; request.preparedRouteToken = params.preparedRouteToken ?? '';
+    request.sourceNativeViewID = params.sourceNativeViewID ?? '';
+    request.nativeViewID = params.nativeViewID ?? request.nativeViewID;
+    request.transitionID = params.transitionID ?? request.transitionID;
+    request.nativeNavigationHosted = params.nativeNavigationHosted ?? false;
+    request.backGestureEnabled = params.backGestureEnabled ?? request.backGestureEnabled;
     request.entryID = params.entryID ?? request.entryID;
     request.routerIndex = params.routerIndex ?? request.routerIndex;
     request.hasHostAnchor = params.hasHostAnchor ?? request.hasHostAnchor;
@@ -84,6 +118,23 @@ export default class LynxPageRequest {
     request.heightPx = params.heightPx ?? request.heightPx;
     request.allowHttpInDebug = params.allowHttpInDebug ?? request.allowHttpInDebug;
     return request;
+  }
+
+  presentationSpec(): ShellRoutePresentationSpec {
+    return ShellRoutePresentationSpec.parse(this.routeType, this.routeOptionsJSON.length === 0 ? undefined : JSON.parse(this.routeOptionsJSON) as Object,
+      this.routeConfigJSON.length === 0 ? undefined : JSON.parse(this.routeConfigJSON) as Object, this.transparent);
+  }
+  transitionSpec(): ShellTransitionSpec {
+    const raw = this.transitionJSON.length === 0 ? undefined : JSON.parse(this.transitionJSON) as Object;
+    const config = this.routeConfigJSON.length === 0 ? undefined : JSON.parse(this.routeConfigJSON) as Object;
+    const spec = ShellTransitionSpec.parse(raw, config); spec.presentation = this.presentationSpec();
+    const gesture = raw === undefined ? {} : ((raw as Record<string, Object>)['popGesture'] ?? {}) as Record<string, Object>;
+    const route = config === undefined ? {} : config as Record<string, Object>;
+    if (route['fullscreenDrag'] !== undefined || gesture['fullScreen'] === undefined) spec.popGesture.fullScreen = spec.presentation.fullscreenDrag;
+    if (route['popGestureDirection'] !== undefined || gesture['direction'] === undefined) spec.popGesture.direction = spec.presentation.popGestureDirection;
+    // hero表面/滚动由Lynx持有，原生只承载透明全屏，避免双份Sheet手势。
+    if (spec.presentation.mode === 'heroSheet') spec.popGesture.enabled = false;
+    return spec;
   }
 
   isOtaRequest(): boolean {

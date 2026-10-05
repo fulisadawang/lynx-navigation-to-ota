@@ -1,3 +1,4 @@
+import ShellTransitionSpec from '../transition/ShellTransitionSpec';
 import url from '@ohos.url';
 import ShellJson from '../common/ShellJson';
 import ShellSecurityPolicy from '../common/ShellSecurityPolicy';
@@ -184,6 +185,7 @@ export default class LynxRouteParser {
       params.get('screen_orientation') ?? ''
     ]));
     request.animated = LynxRouteParser.parseBoolean(params.get('animated') ?? '', true);
+    request.backGestureEnabled = LynxRouteParser.parseBoolean(params.get('backGestureEnabled') ?? '', true);
     request.keyboardBehavior = LynxRouteParser.normalizeKeyboardBehavior(LynxRouteParser.firstNonEmpty([
       params.get('keyboardBehavior') ?? '',
       params.get('keyboard_behavior') ?? ''
@@ -209,10 +211,25 @@ export default class LynxRouteParser {
       params.get('allow_http') ?? ''
     ]), false);
 
+    request.routeType = params.get('routeType') ?? undefined;
+    request.routeOptionsJSON = params.get('routeOptions') ?? '';
+    request.routeConfigJSON = params.get('routeConfig') ?? '';
+    request.transitionJSON = params.get('transition') ?? '';
+    request.transparent = LynxRouteParser.parseBoolean(params.get('transparent') ?? '', false);
+    request.preparedRouteToken = params.get('preparedRouteToken') ?? '';
     return LynxRouteParser.validateRequest(request);
   }
 
   private static applyOpenOptions(request: LynxPageRequest, options: ShellOpenOptions): void {
+    if (options.routeType !== undefined) request.routeType = options.routeType;
+    if (options.routeOptions !== undefined) request.routeOptionsJSON = JSON.stringify(options.routeOptions);
+    if (options.transparent !== undefined) request.transparent = options.transparent;
+    if (options.preparedRouteToken !== undefined) {
+      if (typeof options.preparedRouteToken !== 'string' || options.preparedRouteToken.trim().length === 0 || options.preparedRouteToken.length > 256) throw new Error('preparedRouteToken 必须是非空有效token');
+      request.preparedRouteToken = options.preparedRouteToken;
+    }
+    if (options.routeConfig !== undefined) { ShellTransitionSpec.parse(options.transition, options.routeConfig); request.routeConfigJSON = JSON.stringify(options.routeConfig); }
+    if (options.transition !== undefined) { ShellTransitionSpec.parse(options.transition, options.routeConfig); request.transitionJSON = JSON.stringify(options.transition); }
     request.title = options.title ?? request.title;
     if (options.initData !== undefined) {
       request.initDataJson = ShellJson.normalizeObjectJson(JSON.stringify(options.initData));
@@ -231,6 +248,7 @@ export default class LynxRouteParser {
       options.orientation ?? options.screenOrientation ?? request.orientation
     );
     request.animated = options.animated ?? request.animated;
+    request.backGestureEnabled = options.backGestureEnabled ?? request.backGestureEnabled;
     request.keyboardBehavior = LynxRouteParser.normalizeKeyboardBehavior(
       options.keyboardBehavior ?? request.keyboardBehavior
     );
@@ -258,6 +276,7 @@ export default class LynxRouteParser {
   }
 
   private static validateRequest(request: LynxPageRequest): LynxRouteResult {
+    try { request.transitionSpec(); } catch (error) { return new LynxRouteResult(null, (error as Error).message); }
     // 再次在校验边界执行 Direct Remote 隔离，防止未来新增 options 字段时绕过上面的清理。
     if (ShellSecurityPolicy.isRemoteUrl(request.bundleUrl)) {
       request.lynxAppId = '';

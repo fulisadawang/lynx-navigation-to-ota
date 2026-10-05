@@ -49,15 +49,13 @@ reportBusinessEvent(
 业务 admission 先预计算最旧 performance/resource 能否腾足空间，足额后才执行删除和 append，否则零删除拒绝；业务不挤已有业务、加载、生命周期或异常事件。系统淘汰顺序为 performance/resource→business→原有兜底。关闭前入队快照保留旧身份可晚排出，关闭后新调用拒绝；同 View reload 沿原 exact_view 降级，不按最新 Bundle 猜归属。
 
 三端 Provider 接口继续使用 `record(event)`，LocalDiagnostic 仍只本地记录。首次需要监控的 View 创建前由宿主安装 Provider，声明并实际处理 business.event；厂商 SDK/后台尚未接入。此扩展完成源码接线，本轮没有编译、测试或设备调用证明。
-Playground 的媒体方法由 Android / iOS 手写宿主实现；HarmonyOS 已导出同名方法，但当前明确返回
-`1004`“尚未接入”，不伪造系统 Picker 或上传下载成功。
+Playground 媒体旧ABI由三端Shell保留；Harmony宿主通过中性media SPI接入同一个Cap Runtime与媒体/流式传输后端，系统选择与拍摄、原生预览、实际保存源码已实施。Harmony本轮未编译和运行，不把接口存在或源码复核作为系统UI/传输成功证明。
 
 Android/iOS 的高级导航、直接 NativeModules 调用、launch mode、页面结果、恢复和
 业务宿主接线见 [NAVIGATION_README.md](NAVIGATION_README.md)。HarmonyOS 也导出这组
-高级栈 API；其栈元数据由 `LynxNavigator` 维护并映射到 ArkUI Router，转场状态为明确的
-Router 降级态。
+高级栈API；本轮内部承载已接入Navigation/NavPathStack与真实原生转场proxy，保持Lynx自绘导航及现有ABI。Shared/OpenContainer、交互提交/取消、preset/透明/Sheet、真实预加载token与命令选项已完成有界独立源码复核。UI命令仅接受真实前台来源Context，busy返回1006、来源失效/被覆盖/后台返回1002；已退休版本的活体Page仍允许退出。具体实现、61项未执行手工用例和系统/视觉差异见[Harmony报告](docs/harmony-native-parity-v1/implementation-report.html)。未编译或运行，不能据源码复核宣称设备、OTA或性能验收通过。
 
-## Android / iOS OTA 业务健康
+## 三端 OTA 业务健康
 
 ```ts
 markOtaHealthy(callback: (result: {
@@ -76,7 +74,7 @@ markOtaHealthy(callback: (result: {
 可省略或为空对象，只有 code=0 的健康结果保证 confirmed。package facade 成功 Promise 返回 data，
 失败抛出保留原生 code 的 ShellNavigationError。
 旧宿主无此方法时，模板自动声明先探测方法；显式 package facade 调用返回 1004。
-Harmony 本轮未新增此入口。用例、平台契约与运行证据见 `docs/native-readiness-v1/`。
+Harmony本轮已新增此入口与候选默认关闭的PENDING/TRIAL源码。其用例与未运行边界见 `docs/harmony-native-parity-v1/`；旧双端证据见 `docs/native-readiness-v1/`，不互相替代。
 
 ## App 语言
 
@@ -110,7 +108,7 @@ getLocale(callback: Callback): void
 
 折叠状态、显示模式、角度和折痕只有在当前平台官方 API 明确可用时才出现在 `fold`；没有
 真实数据时返回 capability `unknown`/`unavailable`，不生成伪造的双栏布局。HarmonyOS
-共享元素转场和业务双栏布局继续延期。
+共享元素转场已在本轮完成源码实施与有界独立复核；业务双栏布局按业务页面需求处理。
 
 ## open
 
@@ -321,7 +319,7 @@ saveDataURL(optionsJSON: string, callback: (result: MediaResult) => void): void
 
 ## HarmonyOS 异步语义
 
-HarmonyOS 当前实现是普通 Module，没有加 `@Sendable`。普通 Module 方法按 Lynx Harmony 的异步 Module 语义执行，需要结果的方法全部通过 callback 返回；存储写入方法本身不依赖 JS 返回值。Entry 模块仅兼容导出 HAR 的 Module，避免两份实现漂移。
+HarmonyOS Shell仍是普通Module，callback代表异步JS调用，但Lynx4.1原生方法进入UI线程。独立Cap的三个syncMethods也在UI线程PostSyncTask真正返回；其constructor和同步查询保持轻量。大文件/编码/大结果使用有界TaskPool，native网络/文件/数据库异步完成不等于整段ArkTS逻辑自动在后台。Entry只装配导出HAR，不复制第二套实现。
 
 ## LynxCapacitor 三端语义契约 v1.1
 

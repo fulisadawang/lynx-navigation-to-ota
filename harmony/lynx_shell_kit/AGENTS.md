@@ -4,9 +4,9 @@
 
 ## 模块定位
 
-`lynx_shell_kit` 是业务方唯一需要接入的 HarmonyOS HAR Module，负责：
+`lynx_shell_kit` 是业务方接入 Router/OTA 的 HarmonyOS HAR Module，负责：
 
-- Lynx 4.0 Runtime、Service、XElement 和模块初始化；
+- Lynx 4.1 Runtime、Service、XElement 和模块初始化；
 - ArkUI `LynxContainer`、Router、原生 Page Stack 与页面状态；
 - `LynxShellModule`、Storage、消息和宿主能力 Bridge；
 - LynxView 监控 Core、七类 Schema 1.0 事件与本地 Diagnostic Provider；
@@ -15,7 +15,7 @@
 
 `harmony/lynx_shell/` 是 Entry Demo，只依赖 HAR，不属于本目录。不要把 Demo 页面、按钮或测试配置放进 HAR 公共实现。
 
-`harmony/lynx_capacitor_kit/` 是 sibling 原生能力 HAR 源码，当前尚未加入根 `build-profile.json5` 和 Entry Demo 依赖。它不属于 Shell/OTA；任务明确涉及该模块时先读 `harmony/lynx_capacitor_kit/AGENTS.md`，再显式处理 Module 注册、权限、UIAbilityContext 和生命周期转发。
+`harmony/lynx_capacitor_kit/` 是独立原生能力 HAR，当前已显式加入根 build profile 和 Entry Demo。Shell不反向依赖Cap，由Entry通过中性HostNativeModules SPI注册并提供真实Ability/UIContext/Window和可见性；跨模块任务先读其AGENTS.md。不要把默认Demo接线误写为未装配，也不要让业务Shell隐式依赖Cap。
 
 ## 开工前必须读取
 
@@ -43,7 +43,8 @@ src/main/ets/
 ├── ota/           API Client、Store v3、Runtime、embedded Registry
 ├── pages/         LynxContainer、LynxTabContainer
 ├── provider/      Bundle/Template Provider
-├── routing/       LynxRouter、LynxNavigator、路由解析和页面栈
+├── routing/       LynxRouter、LynxNavigator、命令选项和逻辑页面栈
+├── transition/    Native Navigation adapter、proxy、Canvas、Shared/Open/preset与预热token
 └── runtime/       Lynx Runtime/Service/XElement 初始化
 ```
 
@@ -61,12 +62,17 @@ src/main/ets/
 
 ### 2. Router 与容器
 
-- 默认是 ArkUI `LynxContainer` Page + `@ohos.router`；公开 `LynxRouter` 不暴露底层 Router 细节。
-- NavPathStack 若以后接入，只替换平台适配层，不改变 Bundle、params、session、生命周期和 Bridge 契约。
-- `animated=false` 由目标 Page 的 `pageTransition()` 使用零时长 enter/exit；不要假设 `router.pushUrl()` 支持逐次动画参数。
-- HarmonyOS 当前没有 Android/iOS 同级的原生共享元素/Open Container 协调器。`getTransitionState` 必须明确返回 Router 降级态，禁止伪造完成。
+- 默认承载是ShellNavigationHost中的Navigation/NavPathStack+NavDestination/LynxContainer，标题与业务导航继续Lynx自绘。公开API不泄露底层物理栈ID。
+- Native proxy是唯一转场owner；真实onTransitionEnd才提交/取消，计时器只能超时拒绝不能假成功。缺Host返回1004，已初始化等待Area-ready有界；销毁结算未完成请求。
+- animated、deduplicate及0..5000ms整数窗口由统一CommandOptions消费；实际push/replace/pop/clear均经过driver。私有复用替换不二次admit。
+- Shared/Open/preset已形成源码闭环，不再固定返回legacy Router degraded。getTransitionState返回当前真实DTO；Native source/target几何在actual UIContext中将px转换vp，不相信JS上报坐标。
+- heroSheet为透明全屏承载，canonical detents=[28,56,100]/初始56由Lynx管理，不添加Native barrier/detent/关闭手势；bottomSheet才消费Native高度档位与手势。
+- 64MiB全局快照预算包括inflight/pending/临时mask和late释放；无法截图采用明确live fallback。复杂洞父gradient/image不可完整复原，不声称像素/FPS一致。
+- covered/hidden不能提前销毁Context/lease；maintainState=false等Native成功后释放，返回onWillShow先加载，cancel恢复同代。解绑用exactContext，NativeTab不作导航结果receiver。
+- prepareRoute真实预取，4条/32MiB/30秒一次token；OTA预热不TRIAL，真实消费claimlease。Source Context/session/snapshot/epoch失效不能交错字节。
+- Window策略按actual top apply/restore，默认fullscreen=false不关闭宿主既有edge布局，保底部系统导航条。API13请求keyboardBehavior nothing/none明确拒绝，API14+才使用NONE。
 - Direct Bundle 与 OTA Bundle 身份严格分离；禁止用 URL 猜 App ID 或把手机路径传入 Router。
-- Page、Native Tabs 和普通 open 使用同一 session/entry/routeKey/结果语义。
+- Page/普通open共用entry与结果语义；NativeTab共用Bundle/runtime/session来源，仅作宿主锚点，不加入Page结果entries，保留独立消息Context。
 - Native Tabs 只是容器能力；HAR 不拥有业务 TabBar 设计或导航配置。
 
 ### 3. OTA Store v3
@@ -82,7 +88,8 @@ src/main/ets/
 └── transactions/<transactionId>/
 ```
 
-- HarmonyOS 不实现 candidate/trial，只保留 `current/previous + active lease + transaction roots`。
+- `candidateActivationEnabled` 默认关闭；开启后完整下载进入 PENDING，真实取包校验并持 lease 才进入 TRIAL，SDK 首屏与业务健康确认双信号后提交 current。旧 State JSON 兼容读取，候选也是 GC root；不把普通 onLoadSuccess 当作健康确认。
+- 进程启动维护仅淘汰旧 TRIAL、保留 PENDING；候选失败恢复稳定 current。缓存读取不得排在完整网络同步之后；校验通过后提交 State 的短临界段仍复核 epoch/decision/精确版本。
 - App ID 物理隔离；相同 SHA 不跨 App ID 共享对象。
 - Manifest 是完整快照；V2 只变化一个 Bundle 时只下载/写入一个缺失对象，不复制另外 99 个。
 - embedded Bundle 直接读取 HAP rawfile；`embedded.json` 只描述身份，不复制 bytes 到 OTA Store。
@@ -141,9 +148,12 @@ src/main/ets/
 - 本地 HTTP 和 fault/pause/capacity 注入只允许在 TEST/显式调试配置下启用。
 - 保留用户已有修改，尤其是 `BuildProfile.ets`；禁止 reset/checkout 覆盖。
 - 不修改 `harmony/lynx_shell`，除非任务明确要求 Demo UI 或 HDC 运行态验收。
-- 不隐式依赖或注册 `harmony/lynx_capacitor_kit`；默认 build profile/Entry 尚未包含它。
+- Shell不得反向依赖Cap；默认build profile/Entry已显式装配独立Cap HAR，只经中性Host SPI接线。
 
 ## 修改后的最低验证
+
+以下命令必须先取得当前任务对应授权。2026-10-05 本轮仅源码实施与有界独立审查，
+61条手工用例全部未执行，未compile/parse/typecheck/checks/测试/设备；源码审查不证明视觉、FPS、GPU峰值或零泄漏。
 
 ```bash
 # HarmonyOS 静态门禁
@@ -172,8 +182,8 @@ docs/harmony-ota-store-v3-test-report.html
 
 受控 capacity/ENOSPC、HDC force-stop、模拟器和本地 Server 证据不能冒充真实断电、真实 OS ENOSPC、签名包或生产 CDN/TLS。
 
-本次 user-gray/versioncode 分包例外：用户取消 Harmony 模拟器测试，真机本轮未验收；仅验证代码、host 自动/真实 HTTP、HAR/App 与 HTML。
-当前host-final3 mode=all 18/18（5真实HTTP）＋Core25/25，0失败/跳过；release HAR/App构建及静态90/0/0通过，见 [当前报告](../../docs/harmony-ota-user-gray-test-report.html)。HTML展示与设备验收须独立记录，历史v3 HDC报告不能充当本次设备证明。
+历史 user-gray/versioncode 分包例外：用户取消 Harmony 模拟器测试，真机本轮未验收；仅验证代码、host 自动/真实 HTTP、HAR/App 与 HTML。
+该历史批次host-final3 mode=all 18/18（5真实HTTP）＋Core25/25，0失败/跳过；release HAR/App构建及静态90/0/0通过，见 [当前报告](../../docs/harmony-ota-user-gray-test-report.html)。HTML展示与设备验收须独立记录，历史v3 HDC报告不能充当本次设备证明。
 匿名内置脚本必须传 `--target harmony --platform harmony --versioncode ... --lynx-sdk-version ...`，不传 userId；命令见 [Module 接入](../../MODULE_INTEGRATION.md#三端匿名内置-baseline-下载)。
 
 ## 交付说明

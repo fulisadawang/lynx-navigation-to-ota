@@ -1,3 +1,6 @@
+/** 旧 Shell 媒体 ABI 保持 code/msg/data，不复用导航 code/message。 */
+export interface ShellMediaResult { code: number; msg: string; data?: Object; }
+
 /** 原生 Bridge 的统一结果对象。 */
 export interface ShellBridgeResult {
   code: number;
@@ -19,6 +22,10 @@ export interface ShellRouterPageInfo {
   containerId: string;
   pageKey: string;
   hostMode: string;
+  navigationSnapshotID?: string;
+  sessionID?: string;
+  lynxAppId?: string;
+  hasHostAnchor?: boolean;
 }
 
 /** 页面发给 HarmonyOS 宿主的消息。 */
@@ -54,6 +61,18 @@ export interface ShellPageParams {
   bundleName?: string;
   routeKey?: string;
   sessionID?: string;
+  sourceSnapshotID?: string;
+  sourceNativeViewID?: string;
+  routeType?: string;
+  routeOptionsJSON?: string;
+  transparent?: boolean;
+  preparedRouteToken?: string;
+  transitionJSON?: string;
+  routeConfigJSON?: string;
+  nativeViewID?: string;
+  transitionID?: string;
+  nativeNavigationHosted?: boolean;
+  backGestureEnabled?: boolean;
   entryID?: string;
   routerIndex?: number;
   hasHostAnchor?: boolean;
@@ -80,6 +99,13 @@ export interface ShellPageParams {
 
 /** Native Module open 的 JSON Options。 */
 export interface ShellOpenOptions {
+  routeType?: string;
+  routeOptions?: Object;
+  transparent?: boolean;
+  preparedRouteToken?: string;
+  transition?: Object;
+  routeConfig?: Object;
+  backGestureEnabled?: boolean;
   launchMode?: string;
   /** 是否使用系统页面转场；未传时默认 true。 */
   animated?: boolean;

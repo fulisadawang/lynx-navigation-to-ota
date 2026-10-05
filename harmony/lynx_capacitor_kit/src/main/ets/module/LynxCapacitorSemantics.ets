@@ -21,7 +21,7 @@ export default class LynxCapacitorSemantics {
   public static definition(name: string): LynxCapabilityStatusDefinition {
     switch (name) {
       case 'Biometrics':
-        return { state: 'unsupported', reasonCode: 'PLATFORM_UNSUPPORTED', reason: '当前平台没有可安全承诺的等价实现。' };
+        return { state: 'partial', reasonCode: 'DEVICE_FEATURE_REQUIRED', reason: 'UserAuthenticationKit 可用性和 owner 认证已接入，无 executor/未登记凭据明确不可用；仍需真实设备验证。' };
       case 'Contacts':
         return { state: 'partial', reasonCode: 'DEVICE_FEATURE_REQUIRED', reason: '联系人 CRUD 和权限分支已接入，账户或系统 Provider 仍需设备验证。' };
       case 'Toast':
@@ -29,15 +29,15 @@ export default class LynxCapacitorSemantics {
       case 'Haptics':
         return { state: 'partial', reasonCode: 'APPROXIMATE_IMPLEMENTATION', reason: '使用 HarmonyOS 触感模式近似映射，不能承诺 Android primitive 硬件等价。' };
       case 'Share':
-        return { state: 'partial', reasonCode: 'SEMANTIC_VARIANT', reason: '文本或 URL 分享已接入，文件 URI 和系统回执语义仍需对齐。' };
+        return { state: 'partial', reasonCode: 'SEMANTIC_VARIANT', reason: '系统原生分享已接入文本、URL 和本地文件，打开回执不伪造用户已完成分享。' };
       case 'Camera':
         return { state: 'partial', reasonCode: 'DEVICE_FEATURE_REQUIRED', reason: '相册、拍照、录像和播放已有入口，权限拒绝、取消和设备行为仍需验证。' };
       case 'Audio':
         return { state: 'partial', reasonCode: 'DEVICE_FEATURE_REQUIRED', reason: 'MediaKit 录音和播放已有入口，麦克风权限与设备音频行为仍需验证。' };
       case 'FileTransfer':
-        return { state: 'partial', reasonCode: 'SEMANTIC_VARIANT', reason: '下载、进度、状态和取消已有入口，网络任务和生命周期语义仍需对账。' };
+        return { state: 'partial', reasonCode: 'SEMANTIC_VARIANT', reason: '流式下载、512 KiB 写入队列、20 MiB 预算、原子发布和 owner 取消已接入，仍需运行验证。' };
       case 'FileViewer':
-        return { state: 'partial', reasonCode: 'RUNTIME_CONTEXT_REQUIRED', reason: '本地文档打开已有 Want 入口，设备查看器仍需验证。' };
+        return { state: 'partial', reasonCode: 'RUNTIME_CONTEXT_REQUIRED', reason: '本地文档 Want 与 owner 原生图片列表预览已接入，设备 UI 仍需验证。' };
       case 'CapacitorCookies':
         return { state: 'partial', reasonCode: 'SECURITY_SCOPE_RESTRICTED', reason: 'WebCookieManager 已接入，Cookie scope 和清理语义仍需对账。' };
       case 'Browser':
@@ -67,7 +67,7 @@ export default class LynxCapacitorSemantics {
       case 'BackgroundRunner':
         return { state: 'partial', reasonCode: 'HOST_PROVIDER_REQUIRED', reason: '权限方法可用，dispatchEvent 需要后台宿主能力。' };
       case 'CapacitorSQLite':
-        return { state: 'partial', reasonCode: 'SEMANTIC_VARIANT', reason: 'ArkData 基础 SQL 已接入，字段和事务边界仍需与 Android 对账。' };
+        return { state: 'partial', reasonCode: 'SEMANTIC_VARIANT', reason: 'ArkData 公共八方法已接入真实 readonly、columns/values、changes/lastId 与同 DB 串行；未配置 SQLCipher。' };
       case 'Filesystem':
         return { state: 'implemented', reasonCode: 'NONE', reason: '公共最小语义在源码中已实现。' };
       case 'Network':
@@ -93,7 +93,6 @@ export default class LynxCapacitorSemantics {
 
   public static unsupportedMethods(name: string): Array<string> {
     switch (name) {
-      case 'Biometrics': return ['isAvailable', 'getBiometryType', 'authenticate'];
       case 'Browser': return ['close'];
       case 'Keyboard': return ['setStyle'];
       case 'PushNotifications': return ['register'];
@@ -134,6 +133,7 @@ export default class LynxCapacitorSemantics {
     switch (code) {
       case 'INVALID_PAYLOAD': return 'INVALID_PAYLOAD';
       case 'INVALID_ARGUMENT': return 'INVALID_ARGUMENT';
+      case 'UNSUPPORTED_ENCODING': return 'INVALID_ARGUMENT';
       case 'UNIMPLEMENTED': return 'METHOD_GAP';
       case 'UNSUPPORTED': return 'PLATFORM_UNSUPPORTED';
       case 'PERMISSION_NOT_DECLARED': return 'HOST_PERMISSION_CONFIGURATION_REQUIRED';
@@ -142,6 +142,9 @@ export default class LynxCapacitorSemantics {
       case 'SCENE_UNAVAILABLE':
       case 'HOST_UNAVAILABLE': return 'RUNTIME_CONTEXT_REQUIRED';
       case 'CANCELLED': return 'CANCELLED';
+      case 'USER_CANCELLED': return 'CANCELLED';
+      case 'HARDWARE_UNAVAILABLE': return 'DEVICE_FEATURE_REQUIRED';
+      case 'NO_HANDLER': return 'HOST_PROVIDER_REQUIRED';
       case 'ACTIVITY_DESTROYED':
       case 'HOST_DESTROYED': return 'HOST_DESTROYED';
       default: return 'NATIVE_ERROR';

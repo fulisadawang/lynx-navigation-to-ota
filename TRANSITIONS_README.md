@@ -1,4 +1,4 @@
-# Lynx Android / iOS Skyline 风格原生容器转场
+# Lynx Android / iOS / HarmonyOS Skyline 风格原生容器转场
 
 本文说明如何在“一页 Lynx 对应一个真实 Activity / UIViewController”的前提下，
 迁移微信 Skyline 的 `preset-route`、`share-element` 与 `open-container` 公开可观察
@@ -10,6 +10,8 @@
 
 - Android 每个 Lynx 页面仍由独立 `LynxShellActivity` 承载；
 - iOS 每个 Lynx 页面仍由独立 `LynxContainerViewController` 承载；
+- HarmonyOS 使用 `ShellNavigationHost + Navigation/NavPathStack` 中的 `NavDestination`，
+  业务导航由 Lynx 自绘，Native proxy/原生时钟负责页面转场；
 - 页面只通过手写 `NativeModules.LynxShellModule` 声明路由，不使用
   `sparkling-method`、autolink 或 codegen；
 - 页面不上传 375/750 设计稿坐标，不用 JS 逐帧驱动原生页面；
@@ -23,7 +25,8 @@
 
 ```text
 transition 未声明或 style=default
-  └─ 平台系统导航动画拥有视觉控制权
+  ├─ Android/iOS：平台系统导航动画拥有视觉控制权
+  └─ HarmonyOS：同一Native proxy/coordinator拥有视觉控制权
 
 routeType 已声明或 style!=default
   └─ 壳的自定义转场协调器拥有唯一视觉控制权
@@ -66,7 +69,7 @@ navigateWithPreset({
 | 页面 preset | 原生 routeType |
 |---|---|
 | `bottomSheet` | `wx://bottom-sheet` |
-| `heroSheet` | `wx://hero-sheet`（壳扩展，多档位 Sheet） |
+| `heroSheet` | `wx://hero-sheet`（壳扩展，Lynx 管理 peek/滚动的透明全屏承载） |
 | `up` / `upwards` | `wx://upwards` |
 | `zoom` | `wx://zoom` |
 | `cupertinoModal` | `wx://cupertino-modal` |
@@ -91,7 +94,7 @@ navigateWithPreset({
   routeConfig: {
     transitionDuration: 300,
     reverseTransitionDuration: 300,
-    barrierColor: '#66000000',
+    barrierColor: '#00000066',
     barrierDismissible: true,
     fullscreenDrag: false,
     popGestureDirection: 'vertical',
@@ -101,9 +104,9 @@ navigateWithPreset({
 
 普通页面不要重复填写这些参数，原生预设已有稳定默认值。
 
-多档位 `heroSheet` 使用同一组 Sheet 参数；`detents` 必须严格递增，单位为 vh，最多
+透明全屏 `heroSheet` 使用同一组 routeOptions 元数据，表面高度由 Lynx 管理；`detents` 必须严格递增，单位为 vh，最多
 4 档。省略 `initialDetent` 时，`bottomSheet` 选择最大档，`heroSheet` 的默认配置为
-`[28, 56, 92]` 并从 `56vh` 打开：
+`[28, 56, 100]` 并从 `56vh` 打开：
 
 ```ts
 navigateWithPreset({
@@ -111,7 +114,7 @@ navigateWithPreset({
   preset: 'heroSheet',
   routeOptions: {
     round: true,
-    detents: [28, 56, 92],
+    detents: [28, 56, 100],
     initialDetent: 56,
   },
 })
@@ -168,7 +171,7 @@ navigateSharedElements({
 })
 ```
 
-最多 8 个元素。调用方应按目标页面的 DOM DFS 顺序传数组；数组越靠后的元素在
+最多 8 个元素。调用方应按目标页面的 Lynx 元素树 DFS 顺序传数组；数组越靠后的元素在
 overlay 中层级越高。当前 NativeModules 适配不会自动扫描整个 Lynx 组件树。
 当前 Playground 使用封面、标题和价格三个元素：来源页是横向商品卡，目标页是带
 大图、评分、商品信息、颜色选择和购买区的完整详情页。商品图以本地
@@ -237,11 +240,15 @@ navigateOpenContainer({
 和阴影的裁剪容器；容器内同时承载关闭态内容与目标页面内容，并按 `fade` 或
 `fadeThrough` 切换。
 
-双端统一接受 `white / black / transparent / darkgray / gray / lightgray / red /
+三端高级转场颜色统一接受 `white / black / transparent / darkgray / gray / lightgray / red /
 green / blue / yellow / cyan / magenta`、`#RRGGBB`、`#RRGGBBAA`、`rgb()` 和
-`rgba()`；非法颜色在 Module 参数校验阶段失败，不让两端静默显示成不同颜色。
+`rgba()`；非法颜色在 Module 参数校验阶段失败，不让平台静默显示成不同颜色。
 `middleColor` 为空时直接在关闭色与打开色之间插值；只有 `fadeThrough` 会把非空
 `middleColor` 作为中间色。
+
+高级 wire 时长/超时/降级字段为 `durationMs`、`readyTimeoutMs`、`fallbackStyle`；
+旧单项 `transition.sharedElement` 仍兼容，`openContainer.contentTransition` 是
+`transitionType` 的旧别名。Harmony 先严格解析再交 Native coordinator，不把未知字段猜成配置。
 
 ## 3. Share Element 声明式原生语义
 
@@ -262,6 +269,8 @@ interface SharedElementSpec {
     | 'elasticIn' | 'elasticOut' | 'elasticInOut'
     | 'bounceIn' | 'bounceOut' | 'bounceInOut'
     | `cubic-bezier(${string})`
+  sourceStyle?: { backgroundColor?: string; cornerRadius?: number; elevation?: number }
+  targetStyle?: { backgroundColor?: string; cornerRadius?: number; elevation?: number }
 }
 ```
 
@@ -331,7 +340,7 @@ pop 与其严格反向；跟手返回时由同一个 progress 驱动，取消后
 ## 5. Preset Route 与 heroSheet
 
 七种官方 routeType 与壳扩展 `heroSheet` 都先归一化为原生
-`ShellPresetRouteSpec`，再由 Android/iOS 各自的 renderer 绘制。`routeConfig` 支持：
+`ShellPresetRouteSpec`，再由 Android/iOS/HarmonyOS 各自的 renderer 绘制。`routeConfig` 支持：
 
 ```ts
 interface SkylineRouteConfig {
@@ -359,7 +368,7 @@ interface SkylineRouteConfig {
 坐标。
 
 `hero-sheet` 保留 `detents=[28,56,100]`、初始 `56vh` 的跨端 routeOptions contract，
-但它不是原生高度 Sheet：目标页由透明全屏 Activity/VC 承载，页面自身通过顶部 peek spacer
+但它不是原生高度 Sheet：目标页由透明全屏 Activity/VC/Harmony NavDestination 承载，页面自身通过顶部 peek spacer
 和 `scroll-view` 连续上移到状态栏下方。Lynx 自己控制 surface 的底部入场、顶部导航渐变、
 下拉退出和取消回弹；原生只在退出动画完成后无动画移除承载层，来源页保持原位，不做缩放、
 下移或“后退”遮罩。
@@ -374,6 +383,9 @@ main-thread touch handler 跟手完成，不参与上滑内容滚动。
 - iOS 的 `heroSheet` 使用普通全屏透明 VC；原生不执行 hero 位移和 dismiss pan，Lynx
   surface/`scroll-view` 控制底部入场、peek、连续上滑、顶部导航渐变和下拉退出。
   `bottomSheet` 才进入 `UISheetPresentationController`/iOS 13/14 fallback。
+- HarmonyOS 的 `heroSheet` 使用透明全屏 `NavDestination + LynxContainer`；不将 `56vh`
+  当作 Native 裁剪高度，不绘制 Native barrier/detent，不抢 Lynx 滚动。普通 bottomSheet
+  才使用 Native 高度档位、圆角、遮罩和垂直手势。
 - Android 的 `heroSheet` 使用全屏透明 `liveContent`；原生不修改 hero 内容高度、不添加抓手、
   不缩放或下移来源页，纵向触摸直接交给 Lynx 页面。普通 `bottomSheet` 继续保留来源页
   `0.94` 缩放、下沉和 detent 速度投影。
@@ -383,9 +395,9 @@ main-thread touch handler 跟手完成，不参与上滑内容滚动。
 | 字段 | 本壳行为 |
 |---|---|
 | `transitionDuration / reverseTransitionDuration` | 原生 push/pop 精确使用，范围 `0..5000ms` |
-| `opaque / barrier* / fullscreenDrag / popGestureDirection` | 由双端原生容器、遮罩与手势消费 |
+| `opaque / barrier* / fullscreenDrag / popGestureDirection` | 由三端原生容器、遮罩与手势消费；hero 的 surface/滚动仍归 Lynx |
 | `canTransitionTo / canTransitionFrom` | 只控制相邻页面的 secondary 联动，不关闭当前页自己的 primary 动画 |
-| `maintainState=false` | iOS 释放被覆盖页的 LynxView 并在返回时重建；Android 若无法安全释放 Activity 内容会报告平台边界 reason |
+| `maintainState=false` | iOS 释放被覆盖页并返回重建；Harmony 等真实成功隐藏后释放、onWillShow 提前加载，cancel 保 Context/lease；Android 无法安全释放时报告边界 reason |
 | `allow*RouteSnapshotting=false` | 普通页面可不用快照；跨 Activity/VC 的 share/open/透明半屏若必须依赖快照，会明确降级，不静默丢底图 |
 
 `cupertino-modal-inside` 与 `modal-navigation` 当前迁移的是公开可观察的卡片几何、
@@ -394,7 +406,8 @@ main-thread touch handler 跟手完成，不参与上滑内容滚动。
 
 ## 6. `onRouteDone` 与壳终态事件
 
-NativeModules 的 callback 只表示路由事务已接受，不代表动画结束。需要在路由真正
+Android/iOS 的 NativeModules callback 与 Harmony 的同步返回命令仅表示事务已接受；
+Harmony `open/redirect` 等异步入口等待 Native proxy 的真实提交。统一判断动画终态仍应使用事件。需要在路由真正
 settle 后恢复状态时：
 
 ```ts
@@ -475,6 +488,35 @@ markTransitionReady(transactionID)
 WebView、视频、Surface/Metal 或受保护内容不保证可生成高质量快照，但页面导航不能
 因此失败。
 
+### Harmony 原生闭环（2026-10-05）
+
+Harmony 共用同一 `NavigationTransitionProxy`、`UIContext.createAnimator` 与原生 Canvas/活体
+容器帧；只有实际 `onTransitionEnd(success)` 才提交/回退逻辑 entries。Shared/Open、
+preset、自动 pop 与交互 cancel 使用同一 progress，不按 `duration` timer 伪造完成。
+
+source body/最多 8 个 ID selector 元素在真正 push 前预捕；SDK 首屏后等待实际绘制再抓
+target。SDK `getRectangleById/getComponentSnapshot` 在真实 UI-owner 作用域调用，px 明确
+转换到当前 UIContext 的 vp。临时容器 opacity/presentation 保存原值，cancel 原样恢复；
+source/target Context、lease 保活，过期 Context 不会转交新代。
+
+每 scene 独立模型，64 MiB 全局预算包含 pending、实际 PixelMap 和 mask/ImageBitmap；
+取消后晚到快照真实释放才归还额度。截图及 mask 可在预算内有限下采样，超限或不可截图
+时走有 reason 的真实活体 `fade/slide/none`，不造假图，不让合法导航因 snapshot 失败而阻塞。
+部分页 pop 临时归一 underlay 前先用事务期完整 viewport 快照遮挡；稳态只保存标量，
+不常驻整屏 PixelMap。Window 尺寸/密度变化取消并恢复；系统栏/方向策略在预捕前实际生效，
+回 Home/Tab 恢复基线，默认保留宿主沉浸布局和系统底部导航条。
+
+Shared 的 body hole 使用独立 offscreen `destination-out` 并集，不以重叠矩形的 evenodd
+异或实现。它无法完整复原洞后复杂父 gradient/image 背景；受保护 Surface/特殊 NativeElement
+的可截图性也需运行验证，不能宣称所有场景像素等价。普通 request 背景沿既有 Native ARGB；
+高级 wire 颜色按 `#RRGGBBAA` 转 rgba。Material arc、preset 几何/曲线默认数值在双端本就
+不同，Harmony 保持公开交互语义，不声称像素和数值完全相同。
+
+`prepareRoute` 是真实 Provider 字节预热：4 条/32 MiB/30 秒、单调时钟过期，一次消费并
+绑定路由/session/exact Context/来源快照/epoch；不创建 LynxView。OTA 预热不提前 TRIAL，
+页面消费才 claim lease；过期/不匹配记录 `prepared_route_expired` 后正常 Provider 加载。
+NativeTab 是宿主锚点，不是 Page 返回结果 receiver；Page→Page 的结果只在 Native commit 后发布。
+
 ## 8. 手势与返回提交
 
 默认完成判定：
@@ -545,7 +587,7 @@ NativeModules.LynxShellModule.open(
 )
 ```
 
-转场扩展方法仍全部由双端手写 Module 导出：
+转场扩展方法仍全部由三端手写 Module 导出：
 
 ```ts
 prepareRoute(url, optionsJSON, callback)
@@ -590,7 +632,8 @@ transition-gallery.lynx.bundle
 
 ## 12. 验收边界
 
-构建通过只证明协议与原生代码可编译，不能单独证明动画视觉质量。本轮 iOS 在 iPhone
+构建通过只证明协议与原生代码可编译，不能单独证明动画视觉质量。以下是既有双端历史记录，
+不代表 2026-10-05 Harmony 扩展的运行结果：历史 iOS 在 iPhone
 16 Pro Simulator 运行并确认透明 hero 的来源页快照；Android 在 OnePlus 8 / Android 13
 真机确认 hero 的底部入场、来源页固定、Lynx 上滑到全屏、状态栏导航渐变，以及普通 fade
 恢复 source snapshot 后不再白闪。其它高级转场仍按下表区分代码/构建证据与完整设备矩阵。
@@ -619,6 +662,11 @@ transition-gallery.lynx.bundle
 - 60/90/120 Hz 帧耗时、快照内存与泄漏。
 
 未完成真机矩阵前，真机手势、帧率、内存和双端视觉一致性仍标记为 `[待确认]`。
+
+Harmony 2026-10-05 的完整软件 API 源码闭环通过有界独立审查，61 条手工用例全未执行。
+本轮未编译、未运行 checks、未设备验收；未提供视觉、FPS、物理 GPU 峰值或零泄漏证明。
+当前状态见 [Harmony 实施报告](docs/harmony-native-parity-v1/implementation-report.html)，
+历史双端运行证据不能替代本轮 Harmony 验收。
 
 ## 13. 官方参考
 

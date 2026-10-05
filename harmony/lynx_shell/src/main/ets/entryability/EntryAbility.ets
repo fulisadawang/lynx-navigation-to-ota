@@ -4,23 +4,36 @@ import UIAbility from '@ohos.app.ability.UIAbility';
 import Want from '@ohos.app.ability.Want';
 import { ConfigurationConstant } from '@kit.AbilityKit';
 import window from '@ohos.window';
+import { UIContext } from '@ohos.arkui.UIContext';
 import bundleManager from '@ohos.bundle.bundleManager';
-import { LynxCapacitorModule } from '@lynx/lynx-capacitor-kit';
+import { LynxCapacitorModule, LynxCapacitorHosts } from '@lynx/lynx-capacitor-kit';
 import {
   HostContext,
   LocalDiagnosticProvider,
   LynxMonitor,
   ShellConstants,
+  ShellTransitionRuntime,
+  ShellPreparedRouteStore,
   LynxOtaConfig,
   LynxRouter
 } from '@lynx/lynx-shell-kit';
 import { LynxContext } from '@lynx/lynx-shell-kit';
+
+interface NativeContextAttachment {
+  context: LynxContext;
+  uiContext: UIContext;
+  isVisible: () => boolean;
+}
 
 /**
  * Stage 模型入口。
  * 只负责进程初始化、窗口管理和深链暂存；实际路由解析统一交给 LynxRouteParser。
  */
 export default class EntryAbility extends UIAbility {
+  private nativeWindow: window.Window | null = null;
+  private nativeForeground: boolean = false;
+  private windowGeneration: number = 0;
+  private nativeAttachments: Map<LynxContext, NativeContextAttachment> = new Map();
   private localMonitorProvider: LocalDiagnosticProvider | null = null;
   private monitorSnapshotTimer: number = -1;
   private lastMonitorSnapshot: string = '';
@@ -31,7 +44,20 @@ export default class EntryAbility extends UIAbility {
     LynxRouter.registerNativeModule({
       name: 'LynxCapacitorModule',
       props: { moduleClass: LynxCapacitorModule },
-      onContextDestroyed: (context: LynxContext): void => LynxCapacitorModule.destroyForContext(context),
+      onContextAttached: (context: LynxContext, uiContext: UIContext, isVisible: () => boolean): void => {
+        const attachment: NativeContextAttachment = { context: context, uiContext: uiContext, isVisible: isVisible };
+        this.nativeAttachments.set(context, attachment);
+        this.bindNativeAttachment(attachment);
+      },
+      onContextDestroyed: (context: LynxContext): void => {
+        this.nativeAttachments.delete(context);
+        LynxCapacitorModule.destroyForContext(context);
+        LynxCapacitorHosts.unbind(context);
+      },
+      onMediaCall: (context: LynxContext, method: string, optionsJSON: string, callback: (resultJSON: string) => void): void =>
+        LynxCapacitorModule.handleLegacyMedia(context, method, optionsJSON, callback),
+      onContextVisibilityChanged: (context: LynxContext): void => LynxCapacitorModule.onHostVisibilityChanged(context),
+      onContextIsVisible: (context: LynxContext): boolean => this.nativeForeground && this.nativeAttachments.get(context)?.isVisible() === true,
       onBackPress: (context: LynxContext): boolean => LynxCapacitorModule.dispatchBackButtonForContext(context)
     });
     this.updateInitialRoute(want);
@@ -45,6 +71,7 @@ export default class EntryAbility extends UIAbility {
     // TEST OTA，避免把设备验收开关混入正常宿主配置。
     const embeddedOnly = ((want.parameters?.lynx_embedded_only as string) ?? '').trim() === '1';
     const otaConfig = new LynxOtaConfig(launchBaseUrl);
+    otaConfig.candidateActivationEnabled = ((want.parameters?.lynx_ota_candidate_mode as string) ?? '').trim() === '1';
     otaConfig.environment = 'TEST';
     otaConfig.hostApp = 'capp';
     // 服务端已支持 Harmony；不再通过 serverPlatform 覆盖为 Android。
@@ -112,8 +139,12 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
+    const generation = ++this.windowGeneration;
     AppStorage.setOrCreate(ShellConstants.STORAGE_WINDOW_STAGE, windowStage);
     windowStage.getMainWindow().then((currentWindow: window.Window) => {
+      if (generation !== this.windowGeneration) return;
+      this.nativeWindow = currentWindow;
+      this.nativeAttachments.forEach((attachment: NativeContextAttachment): void => this.bindNativeAttachment(attachment));
       LynxRouter.attachWindow(currentWindow);
       currentWindow.setPreferredOrientation(window.Orientation.AUTO_ROTATION_RESTRICTED);
     }).catch((error: Error) => {
@@ -134,6 +165,10 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageDestroy(): void {
+    this.windowGeneration += 1;
+    ShellPreparedRouteStore.shared.clear();
+    ShellTransitionRuntime.shared.destroy();
+    this.clearNativeAttachments();
     this.stopLocalMonitorSnapshotLogging();
     LynxMonitor.shared().close();
     LynxRouter.detachWindow();
@@ -142,15 +177,24 @@ export default class EntryAbility extends UIAbility {
 
   /** 每次回到前台都触发全量 latest-bundle-list，不走页面 30 分钟门控。 */
   onForeground(): void {
+    this.nativeForeground = true;
     LynxCapacitorModule.emitAppState(true);
     LynxRouter.onApplicationForeground();
   }
 
   onBackground(): void {
+    this.nativeForeground = false;
+    ShellTransitionRuntime.shared.cancel('app_background');
     LynxCapacitorModule.emitAppState(false);
   }
 
   onDestroy(): void {
+    this.nativeForeground = false;
+    this.windowGeneration += 1;
+    ShellPreparedRouteStore.shared.clear();
+    ShellTransitionRuntime.shared.destroy();
+    this.clearNativeAttachments();
+    this.stopLocalMonitorSnapshotLogging();
     LynxCapacitorModule.clearHostContext(this.context);
   }
 
@@ -222,5 +266,25 @@ export default class EntryAbility extends UIAbility {
     clearInterval(this.monitorSnapshotTimer);
     this.monitorSnapshotTimer = -1;
     this.lastMonitorSnapshot = '';
+  }
+
+  private bindNativeAttachment(attachment: NativeContextAttachment): void {
+    const currentWindow = this.nativeWindow;
+    if (currentWindow === null) return;
+    LynxCapacitorHosts.bind(attachment.context, {
+      abilityContext: this.context,
+      uiContext: attachment.uiContext,
+      window: currentWindow,
+      isVisible: (): boolean => this.nativeForeground && attachment.isVisible()
+    });
+  }
+
+  private clearNativeAttachments(): void {
+    this.nativeAttachments.forEach((attachment: NativeContextAttachment): void => {
+      LynxCapacitorModule.destroyForContext(attachment.context);
+      LynxCapacitorHosts.unbind(attachment.context);
+    });
+    this.nativeAttachments.clear();
+    this.nativeWindow = null;
   }
 }

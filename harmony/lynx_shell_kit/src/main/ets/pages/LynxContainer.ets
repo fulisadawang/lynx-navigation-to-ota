@@ -1,3 +1,8 @@
+import ShellRoutePresentationSpec from '../transition/ShellRoutePresentationSpec';
+import ShellPreparedRouteStore from '../transition/ShellPreparedRouteStore';
+import ShellTransitionRuntime from '../transition/ShellTransitionRuntime';
+import { ShellPageParams } from '../common/ShellTypes';
+import LynxOtaHealthGate from '../runtime/LynxOtaHealthGate';
 import router from '@ohos.router';
 import { display } from '@kit.ArkUI';
 import {
@@ -11,7 +16,7 @@ import {
   SendableModuleClassWrapper,
   TemplateData
 } from '@lynx/lynx';
-import ShellLynxViewClient from '../client/ShellLynxViewClient';
+import ShellLynxViewClient, { ShellLynxLoadFailure } from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
 import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
 import ShellThemeState from '../common/ShellTheme';
@@ -42,10 +47,22 @@ import PageBundleRuntimeRegistry, {
  */
 @Component
 export struct LynxContainer {
+  @Prop nativeParams: ShellPageParams = {};
+  @Prop @Watch('nativeVisibilityChanged') nativeShown: boolean = true;
+  @State @Watch('nativeVisibilityChanged') private navigationCovered: boolean = false;
+  @State private transitionOpacity: number = 1;
+  @State private transitionX: number = 0;
+  @State private transitionY: number = 0;
+  @State private transitionScale: number = 1;
+  private alive: boolean = true;
+  private nativeInitialized: boolean = false;
   @State private isLoading: boolean = true;
   @State private errorMessage: string = '';
   @State private showLynxView: boolean = false;
 
+  private visible: boolean = false;
+  private preparedSnapshotID: string = '';
+  private healthGate: LynxOtaHealthGate = new LynxOtaHealthGate(() => false);
   private request: LynxPageRequest = LynxPageRequest.fromRouterParams(router.getParams());
   private modules: Map<string, ModuleClassWrapper> = new Map();
   private sendableModules: Map<string, SendableModuleClassWrapper> = new Map();
@@ -60,6 +77,9 @@ export struct LynxContainer {
     new TemplateData(ShellGlobalPropsFactory.build(this.request.globalPropsJson, this.request))
   );
   private extraTiming: LynxExtraTiming = new LynxExtraTiming();
+  private presentation: ShellRoutePresentationSpec = new ShellRoutePresentationSpec();
+  private currentTransitionMetadataKey: string = '';
+  private currentBundleMetadata?: ShellBundleMetadata;
   private lynxContext: LynxContext | null = null;
   private prepareSignal: OtaPrepareSignal = new OtaPrepareSignal();
   private prepareGeneration: number = 0;
@@ -67,6 +87,7 @@ export struct LynxContainer {
   private releaseLease: OtaBundleLease | null = null;
   private rollbackAttempted: boolean = false;
   private rollbackInProgress: boolean = false;
+  private pendingRecoveryLoad: boolean = false;
   private preparedRuntime: PageBundleRuntime | null = null;
   private preparedEpoch: number | undefined = undefined;
   private preparedReleaseId: string | undefined = undefined;
@@ -74,6 +95,7 @@ export struct LynxContainer {
   private nextLoadKind: 'initial' | 'retry' | 'reload' = 'initial';
   private contextCreated: (context: LynxContext) => void = () => {};
   private readonly userListener: (epoch: number) => void = () => {
+    if (this.request.isOtaRequest() && !this.isPreparedUserCurrent()) this.healthGate.fail('OTA 用户身份已变化');
     if (this.request.isOtaRequest() && this.preparedRuntime !== null && !this.firstScreenReached && !this.isPreparedUserCurrent()) {
       this.cancelPendingRequests();
       this.cancelViewResources();
@@ -85,10 +107,21 @@ export struct LynxContainer {
   private viewHeight: number | string = '100%';
 
   aboutToAppear(): void {
+    if (!this.nativeInitialized && this.nativeParams.nativeNavigationHosted === true) { this.request = LynxPageRequest.fromRouterParams(this.nativeParams); this.nativeInitialized = true; }
+    this.presentation = this.request.presentationSpec();
+    this.alive = true;
+    this.visible = this.request.nativeNavigationHosted ? this.nativeShown && !this.navigationCovered : true;
+    if (this.lynxContext !== null) HostNativeModules.contextVisibilityChanged(this.lynxContext);
     OtaUserContextEvents.subscribe(this.userListener);
     LynxNavigator.register(this.request);
     // 页面级 keyboardBehavior 在 Window/UIContext 层生效；LynxView 不需要重复计算键盘高度。
-    ShellWindowController.apply(this.request);
+    if (!this.request.nativeNavigationHosted || !ShellTransitionRuntime.shared.isBusy()) ShellWindowController.apply(this.request);
+
+    if (this.pendingRecoveryLoad) {
+      this.pendingRecoveryLoad = false;
+      this.prepareOtaBundle();
+      return;
+    }
 
     // 被下一页覆盖时保留 LynxView 和 LynxContext；返回当前 Page 后恢复前台事件。
     // 首次创建仍由 LynxView.onCreate 完成 register/viewAppear，避免重复注册。
@@ -103,7 +136,12 @@ export struct LynxContainer {
     this.modules.set('LynxShellModule', { moduleClass: LynxShellModule });
     HostNativeModules.applyTo(this.modules);
     LLog.d(ShellConstants.TAG, 'registered LynxShellModule with full Harmony bridge contract');
-    if (!this.request.isOtaRequest()) this.configureClients(this.prepareGeneration);
+    if (!this.request.isOtaRequest()) {
+      // Native params接收后重建direct输入，避免旧ArkUI Router数据污染独立页面。
+      this.templateFetcher = new ShellTemplateResourceFetcher(this.request.allowHttpInDebug);
+      this.metaData = new MetaData(new TemplateData(this.request.initDataJson), new TemplateData(ShellGlobalPropsFactory.build(this.request.globalPropsJson, this.request)));
+      this.configureClients(this.prepareGeneration);
+    }
 
     const density = display.getDefaultDisplaySync().densityPixels;
     if (this.request.widthPx > 0) {
@@ -121,42 +159,65 @@ export struct LynxContainer {
     if (this.request.isOtaRequest()) {
       this.prepareOtaBundle();
     } else {
-      this.extraTiming.prepareTemplateEnd = new Date().getTime();
-      this.clients[0]?.markBundleUnavailable('direct_bundle_identity_unavailable', this.request.bundleUrl);
-      this.clients[0]?.markLoadStarted();
-      this.showLynxView = true;
+      this.prepareDirectBundle();
     }
   }
 
   aboutToBeDeleted(): void {
+    this.alive = false;
+    ShellTransitionRuntime.shared.unbind(this.transitionViewID(), this.lynxContext ?? undefined);
     OtaUserContextEvents.unsubscribe(this.userListener);
     this.cancelPendingRequests();
     this.cancelViewResources();
+    if (this.request.nativeNavigationHosted) {
+      LynxNavigator.reconcileWithDriver();
+      if (!LynxNavigator.hasSession(this.request.sessionID, this.request.lynxAppId) && !ShellMessageHub.hasContextsForSession(this.request.sessionID, undefined, this.request.lynxAppId)) {
+        PageBundleRuntimeRegistry.current()?.releaseNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
+      }
+    }
   }
 
   private configureClients(generation: number): void {
+    this.healthGate.fail();
+    this.transitionOpacity = 1;
+    this.healthGate = new LynxOtaHealthGate(() => generation === this.prepareGeneration &&
+      (!this.request.isOtaRequest() || this.isPreparedUserCurrent()));
     this.clients[0]?.markDestroyed('view_reconfigured');
     if (this.lynxContext !== null) {
-      ShellMessageHub.unregister(this.request.entryID);
+      ShellMessageHub.unregisterContext(this.request.entryID, this.lynxContext!);
+      HostNativeModules.destroyForContext(this.lynxContext);
       this.lynxContext = null;
     }
     let monitorClient: ShellLynxViewClient | null = null;
     this.contextCreated = (context: LynxContext) => {
       if (generation !== this.prepareGeneration || (this.request.isOtaRequest() && !this.isPreparedUserCurrent())) {
-        context.onEnterBackground(); return;
+        context.onEnterBackground();
+        HostNativeModules.destroyForContext(context);
+        return;
       }
+      if (this.lynxContext === context) return;
       this.lynxContext = context;
+      HostNativeModules.attachContext(context, this.getUIContext(), () => this.visible);
       monitorClient?.markCreated();
-      monitorClient?.markVisible();
+      if (this.visible) monitorClient?.markVisible(); else monitorClient?.markHidden();
       // Harmony LynxView 的 colorScheme 字段由 SDK 保持私有；Context 建立后立即使用
       // 官方动态 API 设定首值，早于壳层登记和前台事件，不重载 Bundle。
       context.updateColorScheme(ShellThemeState.colorScheme());
       ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
-        pageKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.request.bundleUrl, hostMode: 'arkui_page' }, context);
+        pageKey: this.request.routeKey.length > 0 ? this.request.routeKey : this.request.bundleUrl, hostMode: 'arkui_page', lynxAppId: this.request.lynxAppId, sessionID: this.request.sessionID, hasHostAnchor: this.request.hasHostAnchor, navigationSnapshotID: this.preparedSnapshotID }, context);
+      ShellMessageHub.bindHealth(this.request.entryID, this.healthGate);
+      ShellMessageHub.bindVisibility(this.request.entryID, () => this.visible && LynxNavigator.isCurrentEntry(this.request.entryID));
+      ShellMessageHub.bindBackGestureEnabled(this.request.entryID, this.request.backGestureEnabled, (enabled: boolean) => {
+        this.request.backGestureEnabled = enabled;
+        LynxNavigator.updateBackGesture(this.transitionViewID(), enabled);
+      });
       monitorClient?.bindContext(context, this.request.entryID);
+      this.bindTransitionView(generation);
       context.onEnterForeground();
-      context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
-      ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_page_appear');
+      if (this.visible) {
+        context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
+        ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_page_appear');
+      }
       const rawScreen = ShellLayoutState.rawScreenSize();
       const layout = ShellLayoutState.snapshot(this.request.entryID);
       context.updateScreenMetrics(rawScreen.width, rawScreen.height);
@@ -165,12 +226,14 @@ export struct LynxContainer {
     };
     monitorClient = new ShellLynxViewClient(
       (url: string) => { if (generation === this.prepareGeneration) this.handleLoadSuccess(url); },
-      (message: string) => { if (generation === this.prepareGeneration) this.handleLoadError(message); },
+      (failure: ShellLynxLoadFailure) => { if (generation === this.prepareGeneration) this.handleLoadError(failure); },
       () => { if (generation === this.prepareGeneration) this.handleFirstScreen(); },
-      'page'
+      'page',
+      this.contextCreated
     );
     monitorClient.setLoadKind(this.nextLoadKind);
     this.clients = [monitorClient];
+    this.bindTransitionView(generation);
   }
 
   private isPreparedUserCurrent(): boolean {
@@ -178,6 +241,13 @@ export struct LynxContainer {
   }
 
   aboutToDisappear(): void {
+    if (this.request.nativeNavigationHosted) {
+      this.visible = false;
+      if (this.lynxContext !== null) { this.lynxContext.onEnterBackground(); this.clients[0]?.markHidden(); HostNativeModules.contextVisibilityChanged(this.lynxContext); }
+      return;
+    }
+    this.visible = false;
+    if (this.lynxContext !== null) HostNativeModules.contextVisibilityChanged(this.lynxContext);
     const disappearingContext = this.lynxContext;
     const disappearingClient = this.clients[0];
     if (disappearingContext !== null) {
@@ -196,7 +266,7 @@ export struct LynxContainer {
       }
       ShellMessageHub.sendLifecycle(this.request.entryID, 'destroyed', 'arkui_page_removed');
       disappearingClient?.markDestroyed('arkui_page_removed');
-      ShellMessageHub.unregister(this.request.entryID);
+      if (disappearingContext !== null) ShellMessageHub.unregisterContext(this.request.entryID, disappearingContext);
       this.cancelPendingRequests();
       if (this.lynxContext === disappearingContext) {
         if (disappearingContext !== null) {
@@ -204,7 +274,7 @@ export struct LynxContainer {
         }
         this.lynxContext = null;
       }
-      if (!LynxNavigator.hasSession(this.request.sessionID)) {
+      if (!LynxNavigator.hasSession(this.request.sessionID, this.request.lynxAppId)) {
         PageBundleRuntimeRegistry.current()?.releaseNavigationSnapshot(
           this.request.sessionID,
           this.request.lynxAppId
@@ -215,6 +285,7 @@ export struct LynxContainer {
   }
 
   onBackPress(): boolean {
+    if (!ShellMessageHub.backGestureEnabled(this.request.entryID)) return true;
     if (this.lynxContext !== null && HostNativeModules.dispatchBackPress(this.lynxContext)) {
       return true;
     }
@@ -236,21 +307,27 @@ export struct LynxContainer {
   }
 
   private handleLoadSuccess(url: string): void {
-    this.isLoading = false;
-    this.errorMessage = '';
+    // 首屏必须由 SDK 真正完成布局的回调收敛，load success 不等于首帧。
   }
 
   private handleFirstScreen(): void {
     if (this.request.isOtaRequest() && !this.isPreparedUserCurrent()) return;
     this.firstScreenReached = true;
+    ShellTransitionRuntime.shared.firstScreen(this.transitionViewID());
+    this.healthGate.markFirstScreen();
     this.isLoading = false;
   }
 
-  private handleLoadError(message: string): void {
-    if (this.request.isOtaRequest() && this.isPreparedUserCurrent() && !this.firstScreenReached && !this.rollbackAttempted && !this.rollbackInProgress) {
-      this.attemptRollback(message.length > 0 ? message : 'Lynx 首屏加载失败');
+  private handleLoadError(failure: ShellLynxLoadFailure): void {
+    if (!failure.requiresErrorState()) return;
+    const message = failure.message;
+    const candidate = this.healthGate.isCandidateTrial();
+    this.healthGate.fail('页面发生终止性加载错误');
+    if (this.request.isOtaRequest() && this.isPreparedUserCurrent() && (candidate || !this.firstScreenReached) && !this.rollbackAttempted && !this.rollbackInProgress) {
+      this.attemptRollback(message.length > 0 ? message : 'Lynx 首屏加载失败', candidate);
       return;
     }
+    ShellTransitionRuntime.shared.failure(this.transitionViewID());
     this.clients[0]?.markLoadFailed('lynx_load_error');
     this.cancelViewResources();
     this.isLoading = false;
@@ -259,6 +336,8 @@ export struct LynxContainer {
 
   private retry(): void {
     this.cancelPendingRequests();
+    this.cancelViewResources();
+    this.currentTransitionMetadataKey = '';
     this.isLoading = true;
     this.errorMessage = '';
     this.showLynxView = false;
@@ -270,11 +349,29 @@ export struct LynxContainer {
       this.prepareOtaBundle();
       return;
     }
-    setTimeout(() => {
+    this.templateFetcher = new ShellTemplateResourceFetcher(this.request.allowHttpInDebug);
+    this.metaData = new MetaData(new TemplateData(this.request.initDataJson), new TemplateData(ShellGlobalPropsFactory.build(this.request.globalPropsJson, this.request)));
+    this.prepareDirectBundle();
+  }
+
+  private prepareDirectBundle(): void {
+    const generation = this.prepareGeneration; const signal = this.prepareSignal;
+    const token = this.request.preparedRouteToken; this.request.preparedRouteToken = '';
+    const prepared = token.length > 0 ? ShellPreparedRouteStore.shared.consume(token, this.request, signal) : Promise.resolve<PreparedPageBundle | null>(null);
+    prepared.then((bundle: PreparedPageBundle | null) => {
+      if (!this.alive || generation !== this.prepareGeneration || signal.cancelled) { bundle?.lease?.close(); return; }
+      if (bundle !== null) {
+        this.templateFetcher.cancelAll();
+        this.templateFetcher = new ShellTemplateResourceFetcher(this.request.allowHttpInDebug, this.request.bundleUrl, '', '', bundle.bytes ?? null, bundle.asyncResolver);
+      } else if (token.length > 0) { this.clients[0]?.markBundleUnavailable('prepared_route_expired', this.request.bundleUrl); }
+      this.extraTiming.prepareTemplateEnd = Date.now();
       this.clients[0]?.markBundleUnavailable('direct_bundle_identity_unavailable', this.request.bundleUrl);
-      this.clients[0]?.markLoadStarted();
-      this.showLynxView = true;
-    }, 0);
+      this.clients[0]?.markLoadStarted(); this.showLynxView = true;
+    }).catch((error: Error) => {
+      if (!this.alive || generation !== this.prepareGeneration || signal.cancelled) return;
+      this.isLoading = false; this.errorMessage = `预置Bundle消费失败：${error.message}`;
+      ShellTransitionRuntime.shared.failure(this.transitionViewID());
+    });
   }
 
   /** OTA 页面必须先拿到已校验文件，再创建 LynxView，避免下载期间出现白/黑闪屏。 */
@@ -304,8 +401,13 @@ export struct LynxContainer {
     const epoch = this.preparedEpoch;
     this.configureClients(generation);
     let pendingLease: OtaBundleLease | null = null;
-    runtime.resolveCurrent(this.request.lynxAppId, this.request.bundleName, this.request.sessionID)
-      .then((cached: PreparedPageBundle | null) => {
+    const token = this.request.preparedRouteToken; this.request.preparedRouteToken = '';
+    const preloaded = token.length > 0 ? ShellPreparedRouteStore.shared.consume(token, this.request, signal) : Promise.resolve<PreparedPageBundle | null>(null);
+    preloaded.then((prepared: PreparedPageBundle | null) => {
+      if (prepared !== null) return prepared;
+      if (token.length > 0) this.clients[0]?.markBundleUnavailable('prepared_route_expired', this.request.bundleUrl);
+      return runtime.resolvePage(this.request.lynxAppId, this.request.bundleName, this.request.sessionID, this.request.sourceSnapshotID, signal);
+    }).then((cached: PreparedPageBundle | null) => {
         if (signal.cancelled || generation !== this.prepareGeneration || !this.isPreparedUserCurrent() ||
           (cached?.userIdentityEpoch !== undefined && cached.userIdentityEpoch !== epoch)) {
           cached?.lease?.close();
@@ -318,7 +420,7 @@ export struct LynxContainer {
           return cached;
         }
         this.isLoading = true;
-        return runtime.prepare(this.request.lynxAppId, this.request.bundleName, signal, this.request.sessionID);
+        return runtime.prepare(this.request.lynxAppId, this.request.bundleName, signal, this.request.sessionID, this.request.sourceSnapshotID);
       })
       .then((prepared: PreparedPageBundle) => {
         pendingLease = prepared.lease ?? null;
@@ -330,6 +432,8 @@ export struct LynxContainer {
           return;
         }
         this.preparedReleaseId = prepared.releaseId;
+        this.preparedSnapshotID = prepared.navigationSnapshotID ?? '';
+        this.healthGate.configure(runtime, prepared);
         this.templateFetcher.cancelAll();
         this.templateFetcher = new ShellTemplateResourceFetcher(
           this.request.allowHttpInDebug,
@@ -356,6 +460,7 @@ export struct LynxContainer {
           bundleName: prepared.bundleName,
           sha256: prepared.sha256
         };
+        this.currentBundleMetadata = bundleMetadata;
         this.metaData = new MetaData(
           new TemplateData(this.request.initDataJson),
           new TemplateData(ShellGlobalPropsFactory.build(
@@ -377,6 +482,7 @@ export struct LynxContainer {
         this.releaseCurrentLease();
         this.releaseLease = prepared.lease ?? null;
         pendingLease = null;
+        this.isLoading = true;
         this.showLynxView = true;
       })
       .catch((error: Error) => {
@@ -392,13 +498,16 @@ export struct LynxContainer {
   }
 
   /** 首屏失败时按 appId 自动回滚一次；回滚成功后重新 prepare，第二次失败直接进入错误页。 */
-  private attemptRollback(reason: string): void {
+  private attemptRollback(reason: string, candidate: boolean): void {
     const runtime: PageBundleRuntime | null = PageBundleRuntimeRegistry.current();
     if (runtime === null || !this.isPreparedUserCurrent()) {
       this.isLoading = false;
       this.errorMessage = reason;
       return;
     }
+    // recover调用先同步取得确切失败版本票据，后续Native取消/节点删除不能抹掉恢复身份。
+    const recovery = runtime.recoverFailedRelease(this.request.lynxAppId, reason, this.preparedReleaseId ?? '', this.preparedEpoch, this.request.sessionID, this.preparedSnapshotID, candidate);
+    ShellTransitionRuntime.shared.failure(this.transitionViewID());
     this.rollbackAttempted = true;
     this.rollbackInProgress = true;
     this.isLoading = true;
@@ -406,9 +515,7 @@ export struct LynxContainer {
     this.showLynxView = false;
     this.cancelViewResources();
     const generation = this.prepareGeneration;
-    const epoch = this.preparedEpoch;
-    runtime.rollback(this.request.lynxAppId, reason, this.preparedReleaseId, epoch)
-      .then((restored: boolean) => {
+    recovery.then((restored: boolean) => {
         if (generation !== this.prepareGeneration || !this.isPreparedUserCurrent()) return;
         this.rollbackInProgress = false;
         if (!restored) {
@@ -416,7 +523,8 @@ export struct LynxContainer {
           this.errorMessage = `${reason}；没有可回滚的上一版本`;
           return;
         }
-        runtime.resetNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
+        this.request.sourceSnapshotID = '';
+        if (!this.visible) { this.pendingRecoveryLoad = true; return; }
         this.prepareOtaBundle();
       })
       .catch((error: Error) => {
@@ -429,6 +537,7 @@ export struct LynxContainer {
 
   /** 避免旧页面请求在新页面/重试后继续回调。 */
   private cancelPendingRequests(): void {
+    this.healthGate.fail();
     this.prepareSignal.cancel();
     this.prepareGeneration += 1;
     this.preparing = false;
@@ -438,11 +547,13 @@ export struct LynxContainer {
   }
 
   private cancelViewResources(): void {
+    ShellTransitionRuntime.shared.unbind(this.transitionViewID(), this.lynxContext ?? undefined);
+    this.healthGate.fail();
     this.templateFetcher.cancelAll();
     this.genericFetcher.cancelAll();
     this.clients[0]?.markDestroyed('view_resources_cancelled');
     if (this.lynxContext !== null) {
-      ShellMessageHub.unregister(this.request.entryID);
+      ShellMessageHub.unregisterContext(this.request.entryID, this.lynxContext!);
       HostNativeModules.destroyForContext(this.lynxContext);
       this.lynxContext = null;
     }
@@ -455,12 +566,61 @@ export struct LynxContainer {
     lease?.close();
   }
 
+  private nativeBodyBackground(): string { return this.presentation.opaque ? this.request.backgroundColor : '#00000000'; }
+  private transitionViewID(): string { return this.request.nativeViewID.length > 0 ? this.request.nativeViewID : this.request.entryID; }
+  private transitionHolderID(): string { return `lynx-page-body-${this.transitionViewID()}`; }
+  private bindTransitionView(generation: number): void {
+    if (!this.alive) return;
+    ShellTransitionRuntime.shared.bind({ entryID: this.request.entryID, viewID: this.transitionViewID(), context: this.lynxContext ?? undefined,
+      ui: this.getUIContext(), holderID: this.transitionHolderID(), sessionID: this.request.sessionID,
+      applyWindowPolicy: () => { if (this.alive && generation === this.prepareGeneration) ShellWindowController.apply(this.request); },
+      setCovered: (covered: boolean) => { if (this.alive && generation === this.prepareGeneration) this.navigationCovered = covered; },
+      presentationSpec: this.presentation, updateTransition: (id: string) => {
+        if (!this.alive || generation !== this.prepareGeneration || this.lynxContext === null) return;
+        const state = ShellTransitionRuntime.shared.currentState();
+        const key = `${id}:${state.effectiveTransition}:${state.direction}:${state.reason}`;
+        if (key === this.currentTransitionMetadataKey) return;
+        this.currentTransitionMetadataKey = key; this.request.transitionID = id;
+        this.lynxContext.updateMetaData(new MetaData(undefined, new TemplateData(ShellGlobalPropsFactory.build(this.request.globalPropsJson, this.request, this.currentBundleMetadata))));
+      },
+      loadGeneration: generation, identityEpoch: this.preparedEpoch, backgroundColor: this.nativeBodyBackground(), firstScreen: this.firstScreenReached,
+      isActive: () => this.alive && generation === this.prepareGeneration,
+      getPresentation: () => ({ x: this.transitionX, y: this.transitionY, scale: this.transitionScale }),
+      setPresentation: (value) => { if (this.alive && generation === this.prepareGeneration) { this.transitionX = value.x; this.transitionY = value.y; this.transitionScale = value.scale; } },
+      getOpacity: () => this.transitionOpacity, setOpacity: (value: number) => { if (this.alive && generation === this.prepareGeneration) this.transitionOpacity = value; } });
+  }
+  private nativeVisibilityChanged(): void {
+    if (!this.request.nativeNavigationHosted) return;
+    this.visible = this.nativeShown && !this.navigationCovered;
+    const context = this.lynxContext;
+    if (context !== null) {
+      if (this.visible) {
+        ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID, pageKey: this.request.routeKey,
+          hostMode: 'arkui_page', lynxAppId: this.request.lynxAppId, sessionID: this.request.sessionID, hasHostAnchor: this.request.hasHostAnchor, navigationSnapshotID: this.preparedSnapshotID }, context);
+        ShellMessageHub.bindHealth(this.request.entryID, this.healthGate);
+        ShellMessageHub.bindBackGestureEnabled(this.request.entryID, this.request.backGestureEnabled, (enabled: boolean) => {
+          this.request.backGestureEnabled = enabled; LynxNavigator.updateBackGesture(this.transitionViewID(), enabled);
+        });
+        ShellMessageHub.bindVisibility(this.request.entryID, () => this.visible && LynxNavigator.isCurrentEntry(this.request.entryID));
+        context.onEnterForeground(); this.clients[0]?.markVisible();
+        context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
+        ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'native_navigation_shown');
+        if (!this.request.nativeNavigationHosted || !ShellTransitionRuntime.shared.isBusy()) ShellWindowController.apply(this.request);
+      } else { context.onEnterBackground(); this.clients[0]?.markHidden(); ShellMessageHub.sendLifecycle(this.request.entryID, 'covered', 'native_navigation_hidden'); }
+      HostNativeModules.contextVisibilityChanged(context);
+    }
+    if (this.visible && this.pendingRecoveryLoad) { this.pendingRecoveryLoad = false; this.prepareOtaBundle(); }
+  }
+
   /** 外层 ArkUI 区域是当前 LynxView 的 viewport；只提交尺寸，更新由状态层合帧处理。 */
   private onAreaChanged(area: Area): void {
     ShellLayoutState.updateViewport(
       this.request.entryID,
       Number(area.width),
-      Number(area.height)
+      Number(area.height),
+      Number(area.globalPosition.x),
+      Number(area.globalPosition.y),
+      this.getUIContext().vp2px(1)
     );
   }
 
@@ -524,14 +684,18 @@ export struct LynxContainer {
           .borderRadius(16)
         }
       }
+      .id(this.transitionHolderID())
+      .opacity(this.transitionOpacity)
+      .translate({ x: this.transitionX, y: this.transitionY })
+      .scale({ x: this.transitionScale, y: this.transitionScale })
       .width('100%')
       .layoutWeight(1)
       .onAreaChange((oldValue: Area, newValue: Area) => this.onAreaChanged(newValue))
-      .backgroundColor(this.request.backgroundColor)
+      .backgroundColor(this.nativeBodyBackground())
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(this.request.backgroundColor)
+    .backgroundColor(this.nativeBodyBackground())
   }
 
 }

@@ -4,6 +4,7 @@ import ShellThemeState from './ShellTheme';
 import ShellLocaleState, { ShellLocaleStateValue } from './ShellLocale';
 import ShellLayoutState from './ShellLayoutState';
 import LynxPageRequest from '../model/LynxPageRequest';
+import ShellTransitionRuntime from '../transition/ShellTransitionRuntime';
 
 /** 页面可见的真实 Bundle 身份；loadPolicy 与 source 分离，避免把 cache-only 当成来源。 */
 export interface ShellBundleMetadata {
@@ -32,7 +33,7 @@ export default class ShellGlobalPropsFactory {
     const parsed = ShellJson.parseObject(businessJson) as Record<string, Object | null>;
     const business: Record<string, Object | null> = {};
     Object.keys(parsed).forEach((key: string) => {
-      if (key !== '__lynxI18n') business[key] = parsed[key];
+      if (key !== '__lynxI18n' && key !== 'nativeTransition') business[key] = parsed[key];
     });
     const pageId = request?.entryID ?? '';
     const environment = ShellGlobalPropsFactory.environmentProps(pageId, localeState);
@@ -50,6 +51,10 @@ export default class ShellGlobalPropsFactory {
       queryItems['fullscreen'] = request.fullscreen ? '1' : '0';
       queryItems['hide_nav_bar'] = request.hideNavigationBar ? '1' : '0';
       queryItems['hide_status_bar'] = request.hideStatusBar ? '1' : '0';
+      if (request.routeType.length > 0) queryItems['routeType'] = request.routeType;
+      if (request.routeOptionsJSON.length > 0) queryItems['routeOptions'] = ShellJson.parseObject(request.routeOptionsJSON);
+      if (request.routeConfigJSON.length > 0) queryItems['routeConfig'] = ShellJson.parseObject(request.routeConfigJSON);
+      queryItems['transparent'] = request.transparent;
     }
     const resolvedLocale = localeState ?? ShellLocaleState.current();
     queryItems['locale'] = resolvedLocale.locale;
@@ -68,6 +73,18 @@ export default class ShellGlobalPropsFactory {
     business['__lynxRouterNavigationModel'] = 'native_page_stack';
     business['__lynxRouterPlatformContainer'] = 'arkui_page';
     business['__lynxRouterParams'] = queryItems;
+    if (request !== undefined && request.transitionID.length > 0) {
+      const transition = ShellTransitionRuntime.shared.currentState();
+      if (ShellTransitionRuntime.shared.isBusy() && transition.transactionID === request.transitionID) {
+        const metadata: Record<string, Object> = {
+          transactionID: transition.transactionID, requestedTransition: transition.requestedTransition,
+          effectiveTransition: transition.effectiveTransition, direction: transition.direction
+        };
+        if (transition.reason.length > 0) metadata['reason'] = transition.reason;
+        // 沿双端现有globalProps.nativeTransition，目标首屏可直接报告当前事务ready。
+        business['nativeTransition'] = metadata;
+      }
+    }
     if (bundleMetadata !== undefined) {
     business['__lynxBundleMeta'] = bundleMetadata;
     }

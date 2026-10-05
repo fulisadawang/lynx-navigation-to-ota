@@ -3,6 +3,7 @@ import {
   OtaAsyncBundleManifestRef,
   OtaAsyncBundleResource,
   OtaBundleArtifact,
+  OtaCandidateState,
   OtaLatestBundleLists,
   OtaLocalManifest,
   OtaReleaseRef,
@@ -82,10 +83,9 @@ export default class OtaJson {
       throw new Error('OTA state schemaVersion 不支持');
     }
     const parsedCurrent = OtaJson.parseRef(root['current']);
-    if (parsedCurrent === undefined) {
-      throw new Error('OTA state current 不合法');
-    }
-    const current: OtaReleaseRef = parsedCurrent;
+    const candidate = OtaJson.parseCandidate(root['candidate']);
+    if (parsedCurrent === undefined && candidate === undefined) throw new Error('OTA state 没有 current 或 candidate');
+    const current: OtaReleaseRef | undefined = parsedCurrent;
     const previous: OtaReleaseRef | undefined = OtaJson.parseRef(root['previous']);
     return {
       schemaVersion: schemaVersion,
@@ -96,6 +96,7 @@ export default class OtaJson {
       generation: OtaJson.numberValue(root, 'generation'),
       current,
       previous,
+      candidate,
       selectionSchemaVersion: OtaJson.optionalNumber(root, 'selectionSchemaVersion'),
       lastDecision: root['lastDecision'] === undefined ? undefined : OtaJson.parseDecision(root['lastDecision'])
     };
@@ -210,6 +211,23 @@ export default class OtaJson {
       });
     });
     return bundles;
+  }
+
+  private static parseCandidate(value: Object | undefined): OtaCandidateState | undefined {
+    if (value === undefined || value === null) return undefined;
+    const root = OtaJson.objectValue(value, 'OTA candidate');
+    const release = OtaJson.parseRef(root['release']);
+    const status = OtaJson.stringValue(root, 'status');
+    const failureCount = OtaJson.numberValue(root, 'failureCount');
+    const createdAt = OtaJson.numberValue(root, 'createdAt');
+    const trialStartedAt = OtaJson.optionalNumber(root, 'trialStartedAt');
+    if (release?.kind !== 'downloaded' || release.manifestId === undefined ||
+      (status !== 'pending' && status !== 'trial') || !Number.isSafeInteger(failureCount) || failureCount < 0 ||
+      !Number.isSafeInteger(createdAt) || createdAt < 0 ||
+      (status === 'trial' && (trialStartedAt === undefined || !Number.isSafeInteger(trialStartedAt) || trialStartedAt < 0))) {
+      throw new Error('OTA candidate 不合法');
+    }
+    return { release: release, status: status, failureCount: failureCount, createdAt: createdAt, trialStartedAt: trialStartedAt };
   }
 
   private static parseRef(value: Object | undefined): OtaReleaseRef | undefined {

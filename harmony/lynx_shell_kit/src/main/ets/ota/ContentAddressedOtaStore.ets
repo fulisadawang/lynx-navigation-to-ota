@@ -1,3 +1,4 @@
+import { hashOtaFile } from './OtaFileIO';
 import { statfs } from '@kit.CoreFileKit';
 import fs from '@ohos.file.fs';
 import cryptoFramework from '@ohos.security.cryptoFramework';
@@ -9,9 +10,11 @@ import { OtaLastDecision, OtaLatestSelection, OtaSelection, OtaStoredSelection }
 import {
   LynxOtaConfig,
   OtaBundleArtifact,
+  OtaCandidateState,
   OtaBundleLease,
   OtaLocalManifest,
   OtaPrepareSignal,
+  OtaPrewarmTicket,
   OtaReleaseRef,
   OtaReleaseSnapshot,
   OtaReleaseState,
@@ -35,6 +38,16 @@ interface OtaTreeScan {
 interface OtaTransactionRecord {
   objectIds?: string[];
   manifestId?: string;
+}
+
+export interface OtaFailedReleaseTicket {
+  lynxAppId: string;
+  releaseId: string;
+  manifestId: string;
+  candidate: boolean;
+  identityEpoch: number;
+  decision?: OtaLastDecision;
+  lease: OtaBundleLease;
 }
 
 /**
@@ -84,6 +97,363 @@ export default class ContentAddressedOtaStore {
     this.leaseReleaseScheduler = scheduler;
   }
 
+  /** 第一次读取冷缓存前，真实异步分块 SHA；后续同步解析只消费同 stat 身份的校验缓存。 */
+  async validateCachedObjects(context?: OtaUserContext, forceHash: boolean = false): Promise<void> {
+    this.validateContext(context);
+    if (!this.exists(this.appsRoot())) return;
+    for (const appId of fs.listFileSync(this.appsRoot())) {
+      if (!this.isValidAppId(appId)) continue;
+      const manifests = this.manifestsRoot(appId);
+      if (!this.isDirectory(manifests)) continue;
+      for (const name of fs.listFileSync(manifests)) {
+        if (!name.endsWith('.json')) continue;
+        const manifest = this.readManifest(appId, name.substring(0, name.length - 5));
+        if (manifest === null) continue;
+        for (const artifact of manifest.bundles) {
+          await this.validateObjectAsync(appId, artifact, forceHash);
+          this.validateContext(context);
+        }
+        await this.sidecars.validateManifestObjects(appId, manifest, forceHash);
+        this.validateContext(context);
+      }
+    }
+  }
+
+  private async validateObjectAsync(appId: string, artifact: OtaBundleArtifact, forceHash: boolean = false): Promise<void> {
+    const objectId = artifact.objectId ?? artifact.bundleSha256;
+    if (!forceHash && this.hasUsableObject(appId, objectId, artifact.size)) return;
+    const path = this.objectPath(appId, objectId);
+    if (!this.isRegularFile(path)) return;
+    const stat = fs.statSync(path);
+    if (stat.size !== artifact.size) return;
+    const key = `${appId}|${objectId.toLowerCase()}|${stat.size}|${stat.mtime}|${stat.ctime}|${stat.ino}`;
+    if (forceHash) this.validatedObjects.delete(key);
+    if ((await hashOtaFile(path)).toLowerCase() !== objectId.toLowerCase()) { this.validatedObjects.delete(key); return; }
+    const after = fs.statSync(path);
+    if (stat.size === after.size && stat.mtime === after.mtime && stat.ctime === after.ctime && stat.ino === after.ino) {
+      this.validatedObjects.set(key, new Date().getTime());
+    }
+  }
+
+  /** 缓存读独立于网络写队列；临时 Manifest lease 保护异步校验期间的 main/Async。 */
+  async acquireCachedBundleLease(appId: string, bundleName: string, allowCandidate: boolean,
+    context?: OtaUserContext, isReadActive?: () => boolean, markTrial: boolean = true): Promise<PreparedPageBundle | null> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      this.validateContext(context);
+      const captured = this.contextState(appId, context);
+      if (captured === null) return null;
+      const candidate = allowCandidate && this.config.candidateActivationEnabled && captured.candidate !== undefined &&
+        this.eligible(captured.candidate.release, captured, context) ? captured.candidate.release : undefined;
+      const ref = candidate ?? this.effectiveRef(captured, context);
+      if (ref === undefined || ref.kind !== 'downloaded' || ref.manifestId === undefined) return null;
+      const manifest = this.readManifest(appId, ref.manifestId);
+      if (manifest === null || manifest.releaseId !== ref.releaseId) {
+        return candidate === undefined ? null : this.acquireCachedBundleLease(appId, bundleName, false, context, isReadActive, markTrial);
+      }
+      const validationLease = this.createManifestLease(appId, ref.manifestId, ref.selection);
+      try {
+        await this.validateReadManifest(appId, manifest, context);
+        this.validateContext(context);
+        const live = this.contextState(appId, context);
+        if (live === null) return null;
+        const sameDecision = captured.lastDecision === undefined ? live.lastDecision === undefined :
+          OtaSelection.sameDecision(live.lastDecision, captured.lastDecision);
+        const liveRef = candidate === undefined ? this.effectiveRef(live, context) : live.candidate?.release;
+        if (!sameDecision || liveRef?.releaseId !== ref.releaseId || liveRef.manifestId !== ref.manifestId ||
+          !this.eligible(liveRef, live, context)) continue;
+        if (isReadActive !== undefined && !isReadActive()) throw new Error('OTA 页面准备已取消');
+        // ArkTS 同一事件线程同步提交；从末端复核到 TRIAL State rename 之间没有 await。
+        const prepared = candidate === undefined ? this.acquireCurrentBundleLease(appId, bundleName, context) :
+          this.acquireCandidateTrialBundleLease(appId, bundleName, context, markTrial);
+        if (prepared === null && candidate !== undefined) return this.acquireCachedBundleLease(appId, bundleName, false, context, isReadActive, markTrial);
+        if (prepared !== null && !markTrial && context !== undefined) {
+          try { prepared.prewarm = this.capturePrewarmTicket(appId, context); }
+          catch (error) { prepared.lease?.close(); throw (error as Error); }
+        }
+        return prepared;
+      } finally { validationLease.close(); }
+    }
+    throw new Error('stale_cache_read');
+  }
+
+  async acquirePinnedBundleLease(appId: string, releaseId: string, bundleName: string, manifestId: string,
+    context?: OtaUserContext): Promise<PreparedPageBundle | null> {
+    this.validateContext(context);
+    const manifest = this.readManifest(appId, manifestId);
+    if (manifest === null || manifest.releaseId !== releaseId) return null;
+    const state = this.contextState(appId, context);
+    if (state === null) return null;
+    const key = this.leaseKey(appId, manifestId);
+    const ref: OtaReleaseRef = { kind: 'downloaded', releaseId: releaseId, manifestId: manifestId,
+      selection: ContentAddressedOtaStore.leasedSelections.get(key) };
+    if (!this.activeLeases.has(key) || !this.eligible(ref, state, context)) return null;
+    const validationLease = this.createManifestLease(appId, manifestId, ref.selection);
+    try {
+      await this.validateReadManifest(appId, manifest, context);
+      this.validateContext(context);
+      const live = this.contextState(appId, context);
+      if (live === null || !this.eligible(ref, live, context)) return null;
+      return this.acquireBundleLeaseForRelease(appId, releaseId, bundleName, manifestId, context);
+    } finally { validationLease.close(); }
+  }
+
+  /** 预热固定快照时从其受 lease 保护的完整 Manifest 修复，不查询另一个 latest Release。 */
+  async prewarmPinnedBundleLease(appId: string, releaseId: string, bundleName: string, manifestId: string,
+    signal: OtaPrepareSignal, context: OtaUserContext): Promise<PreparedPageBundle> {
+    this.validateContext(context);
+    signal.throwIfCancelled();
+    const manifest = this.readManifest(appId, manifestId);
+    const key = this.leaseKey(appId, manifestId);
+    const selection = ContentAddressedOtaStore.leasedSelections.get(key);
+    const ref: OtaReleaseRef = { kind: 'downloaded', releaseId: releaseId, manifestId: manifestId, selection: selection };
+    const state = this.contextState(appId, context);
+    if (manifest === null || manifest.releaseId !== releaseId || !this.activeLeases.has(key) ||
+      state === null || !this.eligible(ref, state, context)) throw new Error('stale_navigation_snapshot');
+    const hold = this.createManifestLease(appId, manifestId, selection);
+    let prepared: PreparedPageBundle | null = null;
+    try {
+      const snapshot: OtaReleaseSnapshot = { env: manifest.env, hostApp: manifest.hostApp, lynxAppId: appId,
+        releaseId: releaseId, platform: manifest.platform, status: manifest.status, changedBundles: manifest.bundles,
+        asyncBundleManifest: manifest.asyncBundleManifest, selectionSchemaVersion: context.selectionEnabled ? 1 : undefined,
+        releaseSequence: selection?.releaseSequence, selection: selection === undefined ? undefined : {
+          kind: selection.kind, ruleId: selection.ruleId, policyRevision: selection.policyRevision,
+          reason: selection.kind === 'gray' ? 'matched_gray' : 'latest_full' },
+        versionCodeRange: selection?.versionCodeRange, lynxSdkRange: selection?.lynxSdkRange,
+        minAppVersion: selection?.minAppVersion, maxAppVersion: selection?.maxAppVersion,
+        nativeProtocolVersionRange: selection?.nativeProtocolVersionRange };
+      if (this.manifestId(snapshot) !== manifestId) throw new Error('stale_navigation_snapshot');
+      await this.install(snapshot, signal, context, true);
+      signal.throwIfCancelled();
+      this.validateContext(context);
+      const live = this.contextState(appId, context);
+      if (live === null || !this.eligible(ref, live, context)) throw new Error('stale_decision');
+      prepared = this.acquireBundleLease(ref, appId, bundleName, context);
+      if (prepared === null) throw new Error('pinned_bundle_unavailable');
+      prepared.prewarm = this.capturePrewarmTicket(appId, context);
+      this.retireRecoveredTransactions(appId);
+      this.sidecars.retireTransactions(appId);
+      this.pruneApp(appId);
+      return prepared;
+    } catch (error) { prepared?.lease?.close(); throw (error as Error); }
+    finally { hold.close(); }
+  }
+
+  private async validateReadManifest(appId: string, manifest: OtaLocalManifest, context?: OtaUserContext, forceHash: boolean = false): Promise<void> {
+    for (const artifact of manifest.bundles) {
+      await this.validateObjectAsync(appId, artifact, forceHash);
+      this.validateContext(context);
+    }
+    await this.sidecars.validateManifestObjects(appId, manifest, forceHash);
+    this.validateContext(context);
+  }
+
+  /** 每进程只由 Runtime 启动维护调用一次；pending 是完整下载结果，不能被误清理。 */
+  recoverInterruptedCandidates(context?: OtaUserContext): void {
+    this.validateContext(context);
+    if (!this.exists(this.appsRoot())) return;
+    fs.listFileSync(this.appsRoot()).forEach((appId: string) => {
+      if (!this.isValidAppId(appId)) return;
+      const state = this.contextState(appId, context);
+      if (state?.candidate?.status !== 'trial') return;
+      state.candidate = undefined;
+      state.generation += 1;
+      if (state.current === undefined) this.removeIfPresent(this.statePath(appId));
+      else this.writeState(state, context);
+      this.pruneApp(appId);
+    });
+  }
+
+  acquireCandidateTrialBundleLease(appId: string, bundleName: string, context?: OtaUserContext, markTrial: boolean = true): PreparedPageBundle | null {
+    if (!this.config.candidateActivationEnabled) return null;
+    this.validateContext(context);
+    const state = this.contextState(appId, context);
+    const candidate = state?.candidate;
+    if (state === null || candidate === undefined || !this.eligible(candidate.release, state, context)) return null;
+    const manifest = this.readManifest(appId, candidate.release.manifestId ?? '');
+    if (manifest === null || !this.manifestObjectsUsable(appId, manifest.bundles) || !this.sidecars.verifyBound(appId, manifest)) return null;
+    const prepared = this.acquireBundleLease(candidate.release, appId, bundleName, context);
+    if (prepared === null) return null;
+    try {
+      if (markTrial && candidate.status === 'pending') {
+        candidate.status = 'trial';
+        candidate.trialStartedAt = new Date().getTime();
+        state.generation += 1;
+        this.writeState(state, context, state.lastDecision);
+      }
+      prepared.source = candidate.status === 'trial' ? 'candidate_trial' : 'candidate_pending';
+      return prepared;
+    } catch (error) { prepared.lease?.close(); throw (error as Error); }
+  }
+
+  isTrialCandidate(appId: string, releaseId: string, manifestId: string | undefined, context?: OtaUserContext): boolean {
+    this.validateContext(context);
+    const state = this.contextState(appId, context);
+    return state !== null && state.candidate?.status === 'trial' && state.candidate.release.releaseId === releaseId &&
+      state.candidate.release.manifestId === manifestId && this.eligible(state.candidate.release, state, context);
+  }
+
+  confirmCandidateHealthy(appId: string, expectedReleaseId: string, context?: OtaUserContext, expectedManifestId?: string): boolean {
+    this.validateContext(context);
+    const state = this.contextState(appId, context);
+    if (state === null) return false;
+    const candidate = state.candidate;
+    if (candidate === undefined) return state.current?.releaseId === expectedReleaseId && (expectedManifestId === undefined || state.current?.manifestId === expectedManifestId);
+    if (candidate.status !== 'trial' || candidate.release.releaseId !== expectedReleaseId || (expectedManifestId !== undefined && candidate.release.manifestId !== expectedManifestId) || !this.eligible(candidate.release, state, context)) return false;
+    const manifest = this.readManifest(appId, candidate.release.manifestId ?? '');
+    if (manifest === null || !this.manifestObjectsUsable(appId, manifest.bundles) || !this.sidecars.verifyBound(appId, manifest)) return false;
+    const former = state.current;
+    state.current = candidate.release;
+    if (former?.releaseId !== candidate.release.releaseId) state.previous = former;
+    state.candidate = undefined;
+    state.generation += 1;
+    this.writeState(state, context, state.lastDecision);
+    this.pruneApp(appId);
+    return true;
+  }
+
+  discardCandidate(appId: string, expectedReleaseId?: string, context?: OtaUserContext, expectedManifestId?: string): boolean {
+    this.validateContext(context);
+    const state = this.contextState(appId, context);
+    if (state?.candidate === undefined || (expectedReleaseId !== undefined && state.candidate.release.releaseId !== expectedReleaseId) || (expectedManifestId !== undefined && state?.candidate?.release.manifestId !== expectedManifestId)) return false;
+    state.candidate = undefined;
+    state.generation += 1;
+    if (state.current === undefined) this.removeIfPresent(this.statePath(appId));
+    else this.writeState(state, context, state.lastDecision);
+    this.pruneApp(appId);
+    return true;
+  }
+
+  capturePrewarmTicket(appId: string, context: OtaUserContext): OtaPrewarmTicket {
+    this.validateContext(context);
+    const state = this.contextState(appId, context);
+    return { navigationSessionID: '', sourceSnapshotID: '', identityEpoch: context.identityEpoch,
+      decision: state?.lastDecision, currentReleaseId: state?.current?.releaseId, currentManifestId: state?.current?.manifestId,
+      candidateReleaseId: state?.candidate?.release.releaseId, candidateManifestId: state?.candidate?.release.manifestId };
+  }
+
+  validatePrewarmTicket(appId: string, ticket: OtaPrewarmTicket, context: OtaUserContext): void {
+    this.validateContext(context);
+    if (ticket.identityEpoch !== context.identityEpoch) throw new Error('stale_identity');
+    const state = this.contextState(appId, context);
+    const sameDecision = ticket.decision === undefined ? state?.lastDecision === undefined : OtaSelection.sameDecision(state?.lastDecision, ticket.decision);
+    if (!sameDecision) throw new Error('stale_decision');
+    if (ticket.navigationSnapshotID === undefined && (state?.current?.releaseId !== ticket.currentReleaseId ||
+      state?.current?.manifestId !== ticket.currentManifestId || state?.candidate?.release.releaseId !== ticket.candidateReleaseId ||
+      state?.candidate?.release.manifestId !== ticket.candidateManifestId)) throw new Error('stale_prewarm_release');
+  }
+
+  /** 只为真实消费重新取得页面 lease；旧预热 lease 的所有权仍属于 Broker。 */
+  async claimPrewarmedBundleLease(warm: PreparedPageBundle, context: OtaUserContext, isClaimActive: () => boolean): Promise<PreparedPageBundle> {
+    const ticket = warm.prewarm;
+    if (ticket === undefined || warm.manifestId === undefined) throw new Error('invalid_prewarm_ticket');
+    this.validatePrewarmTicket(warm.lynxAppId, ticket, context);
+    const manifest = this.readManifest(warm.lynxAppId, warm.manifestId);
+    if (manifest === null || manifest.releaseId !== warm.releaseId) throw new Error('stale_prewarm_release');
+    const ref: OtaReleaseRef = { kind: 'downloaded', releaseId: warm.releaseId, manifestId: warm.manifestId, selection: warm.selection };
+    const validationLease = this.createManifestLease(warm.lynxAppId, warm.manifestId, ref.selection);
+    let claimed: PreparedPageBundle | null = null;
+    try {
+      await this.validateReadManifest(warm.lynxAppId, manifest, context, true);
+      await this.validatePrewarmedBytes(warm, context, isClaimActive);
+      this.validatePrewarmTicket(warm.lynxAppId, ticket, context);
+      if (!isClaimActive()) throw new Error('stale_prewarm_source');
+      const live = this.contextState(warm.lynxAppId, context);
+      const staged = warm.source === 'prewarm_staged';
+      if (staged) {
+        if (context.selectionEnabled && (!OtaSelection.compatible(ref.selection, context) || ticket.selectionDecision === undefined ||
+          ticket.selectionDecision.action !== 'use_release' || ticket.selectionDecision.targetReleaseId !== warm.releaseId ||
+          ticket.selectionDecision.clientContextKey !== context.clientContextKey || ticket.selectionDecision.audienceKey !== context.audienceKey ||
+          ticket.selectionDecision.policyRevision !== ref.selection?.policyRevision)) throw new Error('stale_decision');
+        if (ticket.selectionDecision !== undefined && live?.lastDecision !== undefined &&
+          OtaUserContext.compareDecimal(ticket.selectionDecision.policyRevision, live.lastDecision.policyRevision) < 0) throw new Error('stale_decision');
+      } else {
+        if (live === null || !this.eligible(ref, live, context)) throw new Error('stale_prewarm_release');
+        if (ticket.navigationSnapshotID === undefined) {
+          const target = warm.source === 'candidate_pending' || warm.source === 'candidate_trial' ? live.candidate?.release : this.effectiveRef(live, context);
+          if (target?.releaseId !== ref.releaseId || target.manifestId !== ref.manifestId) throw new Error('stale_prewarm_release');
+        }
+      }
+      claimed = this.acquireBundleLease(ref, warm.lynxAppId, warm.bundleName, context);
+      if (claimed === null || claimed.sha256 !== warm.sha256 || claimed.actualSizeBytes !== warm.actualSizeBytes) throw new Error('stale_prewarm_bundle');
+      if (warm.bytes !== undefined) claimed.bytes = warm.bytes;
+      // 页面 lease 已建立，末端来源/epoch/decision 门禁到 State rename 之间不再 await。
+      this.validatePrewarmTicket(warm.lynxAppId, ticket, context);
+      if (!isClaimActive()) throw new Error('stale_prewarm_source');
+      if (staged) {
+        const next: OtaReleaseState = { schemaVersion: ContentAddressedOtaStore.STORE_SCHEMA_VERSION,
+          env: manifest.env, hostApp: manifest.hostApp, lynxAppId: warm.lynxAppId, platform: manifest.platform,
+          generation: (live?.generation ?? 0) + 1, current: live?.current, previous: live?.previous,
+          candidate: live?.candidate, selectionSchemaVersion: context.selectionEnabled ? 1 : live?.selectionSchemaVersion,
+          lastDecision: ticket.selectionDecision ?? live?.lastDecision };
+        if (this.config.candidateActivationEnabled) {
+          const now = new Date().getTime();
+          next.candidate = { release: ref, status: 'trial', failureCount: 0, createdAt: now, trialStartedAt: now };
+          claimed.source = 'candidate_trial';
+        } else {
+          if (live?.current?.releaseId !== ref.releaseId || live?.current?.manifestId !== ref.manifestId) next.previous = live?.current;
+          next.current = ref;
+          next.candidate = undefined;
+          claimed.source = 'ota_current';
+        }
+        // 写入新决定由本次真实 consume 授权；回调仍复核捕获的旧决定，避免覆盖并发同步。
+        this.writeState(next, context, ticket.decision);
+      } else if ((warm.source === 'candidate_pending' || warm.source === 'candidate_trial') &&
+        live?.candidate?.release.releaseId === ref.releaseId && live.candidate.release.manifestId === ref.manifestId) {
+        if (live.candidate.status === 'pending') {
+          live.candidate.status = 'trial';
+          live.candidate.trialStartedAt = new Date().getTime();
+          live.generation += 1;
+          this.writeState(live, context, live.lastDecision);
+        }
+        claimed.source = 'candidate_trial';
+      } else {
+        claimed.source = 'ota_current';
+      }
+      return claimed;
+    } catch (error) { claimed?.lease?.close(); throw (error as Error); }
+    finally { validationLease.close(); }
+  }
+
+  private async validatePrewarmedBytes(warm: PreparedPageBundle, context: OtaUserContext, isClaimActive: () => boolean): Promise<void> {
+    if (warm.bytes === undefined) return;
+    if (warm.bytes.byteLength !== warm.actualSizeBytes) throw new Error('stale_prewarm_bundle');
+    const digest = cryptoFramework.createMd('SHA256');
+    for (let offset = 0; offset < warm.bytes.byteLength; offset += 64 * 1024) {
+      await digest.update({ data: new Uint8Array(warm.bytes, offset, Math.min(64 * 1024, warm.bytes.byteLength - offset)) });
+      this.validateContext(context);
+      if (!isClaimActive()) throw new Error('stale_prewarm_source');
+    }
+    const bytes = (await digest.digest()).data;
+    let hex = '';
+    bytes.forEach((value: number) => { hex += value.toString(16).padStart(2, '0'); });
+    if (`sha256:${hex}`.toLowerCase() !== warm.sha256.toLowerCase()) throw new Error('stale_prewarm_bundle');
+  }
+
+  /** 在调用线程同步受理失败身份；队列等待期间页面 Snapshot 可以正常退休。 */
+  captureFailedRelease(appId: string, releaseId: string, manifestId: string | undefined, candidate: boolean, context: OtaUserContext): OtaFailedReleaseTicket {
+    this.validateContext(context);
+    const state = this.contextState(appId, context);
+    const ref = candidate ? state?.candidate?.release : state?.current;
+    if (state === null || ref?.kind !== 'downloaded' || ref.releaseId !== releaseId || ref.manifestId === undefined ||
+      (manifestId !== undefined && ref.manifestId !== manifestId) || (candidate && state.candidate?.status !== 'trial')) throw new Error('stale_decision');
+    const manifest = this.readManifest(appId, ref.manifestId);
+    if (manifest === null || manifest.releaseId !== releaseId) throw new Error('stale_decision');
+    return { lynxAppId: appId, releaseId: releaseId, manifestId: ref.manifestId, candidate: candidate, identityEpoch: context.identityEpoch,
+      decision: state.lastDecision, lease: this.createManifestLease(appId, ref.manifestId, ref.selection) };
+  }
+
+  validateFailedRelease(ticket: OtaFailedReleaseTicket, context: OtaUserContext): void {
+    this.validateContext(context);
+    if (ticket.identityEpoch !== context.identityEpoch) throw new Error('stale_identity');
+    const state = this.contextState(ticket.lynxAppId, context);
+    const ref = ticket.candidate ? state?.candidate?.release : state?.current;
+    const sameDecision = ticket.decision === undefined ? state?.lastDecision === undefined : OtaSelection.sameDecision(state?.lastDecision, ticket.decision);
+    if (!sameDecision || ref?.releaseId !== ticket.releaseId || ref.manifestId !== ticket.manifestId ||
+      (ticket.candidate && state?.candidate?.status !== 'trial')) throw new Error('stale_decision');
+    const manifest = this.readManifest(ticket.lynxAppId, ticket.manifestId);
+    if (manifest === null || manifest.releaseId !== ticket.releaseId) throw new Error('stale_decision');
+  }
+
   /** 只读取 current；embedded current 返回 null，由 Registry 直接读取 rawfile。 */
   acquireCurrentBundleLease(lynxAppId: string, bundleName: string, context?: OtaUserContext): PreparedPageBundle | null {
     this.validateContext(context);
@@ -118,8 +488,9 @@ export default class ContentAddressedOtaStore {
         selection: ContentAddressedOtaStore.leasedSelections.get(this.leaseKey(lynxAppId, manifestId)) };
       if (this.eligible(pinned, state, context)) return this.acquireBundleLease(pinned, lynxAppId, bundleName, context);
     }
-    const ref = [state.current, state.previous]
-      .find((item: OtaReleaseRef | undefined) => item !== undefined && item.releaseId === releaseId);
+    const ref = [state.current, state.previous, state.candidate?.release]
+      .find((item: OtaReleaseRef | undefined) => item !== undefined && item.releaseId === releaseId &&
+        (manifestId.length === 0 || item.manifestId === manifestId));
     if (ref === undefined) return null;
     if (manifestId.length > 0 && ref.manifestId !== manifestId) return null;
     if (!this.eligible(ref, state, context)) return null;
@@ -132,8 +503,9 @@ export default class ContentAddressedOtaStore {
     const state = this.contextState(lynxAppId, context);
     if (state === null) return null;
     this.ensureScope(state, lynxAppId);
-    const ref = [state.current, state.previous]
-      .find((item: OtaReleaseRef | undefined) => item !== undefined && item.releaseId === releaseId);
+    const ref = [state.current, state.previous, state.candidate?.release]
+      .find((item: OtaReleaseRef | undefined) => item !== undefined && item.releaseId === releaseId &&
+        (manifestId.length === 0 || item.manifestId === manifestId));
     if (ref === undefined || ref.kind !== 'downloaded' || ref.manifestId === undefined) return null;
     if (!this.eligible(ref, state, context)) return null;
     if (manifestId.trim().length > 0 && ref.manifestId !== manifestId) return null;
@@ -148,22 +520,48 @@ export default class ContentAddressedOtaStore {
     lynxAppId: string,
     bundleName: string,
     signal: OtaPrepareSignal,
-    context?: OtaUserContext
+    context?: OtaUserContext,
+    markTrial: boolean = true
   ): Promise<PreparedPageBundle> {
     signal.throwIfCancelled();
     this.validateContext(context);
     const current = this.acquireCurrentBundleLease(lynxAppId, bundleName, context);
-    if (current !== null) return current;
+    if (current !== null) {
+      if (!markTrial && context !== undefined) {
+        try { current.prewarm = this.capturePrewarmTicket(lynxAppId, context); }
+        catch (error) { current.lease?.close(); throw (error as Error); }
+      }
+      return current;
+    }
+    const warmTicket = !markTrial && context !== undefined ? this.capturePrewarmTicket(lynxAppId, context) : undefined;
     const selected = await this.api.fetchLatestSelection(lynxAppId, signal, context);
     signal.throwIfCancelled();
     this.validateContext(context);
-    if (context?.selectionEnabled) this.recordDecision(lynxAppId, selected, context);
+    if (markTrial && context?.selectionEnabled) this.recordDecision(lynxAppId, selected, context);
     if (selected.release === undefined) throw new Error('no_compatible_release');
-    await this.install(selected.release, signal, context);
+    await this.install(selected.release, signal, context, !markTrial);
     signal.throwIfCancelled();
-    const repaired = this.acquireCurrentBundleLease(lynxAppId, bundleName, context);
+    let repaired: PreparedPageBundle | null;
+    if (markTrial) {
+      repaired = this.acquireCandidateTrialBundleLease(lynxAppId, bundleName, context) ?? this.acquireCurrentBundleLease(lynxAppId, bundleName, context);
+    } else {
+      if (warmTicket !== undefined && context !== undefined) this.validatePrewarmTicket(lynxAppId, warmTicket, context);
+      const ref: OtaReleaseRef = { kind: 'downloaded', releaseId: selected.release.releaseId,
+        manifestId: this.manifestId(selected.release), selection: context?.selectionEnabled ? OtaSelection.fromRelease(selected.release, context) : undefined };
+      repaired = this.acquireBundleLease(ref, lynxAppId, bundleName, context);
+      if (repaired !== null) {
+        repaired.source = 'prewarm_staged';
+        repaired.prewarm = warmTicket;
+        if (warmTicket !== undefined && context?.selectionEnabled) warmTicket.selectionDecision = OtaSelection.decision(selected, context);
+        try {
+          this.retireRecoveredTransactions(lynxAppId);
+          this.sidecars.retireTransactions(lynxAppId);
+          this.pruneApp(lynxAppId);
+        } catch (error) { repaired.lease?.close(); throw (error as Error); }
+      }
+    }
     if (repaired === null) {
-      throw new Error(`Release 已激活但 Bundle 无法建立 lease：${lynxAppId}/${bundleName}`);
+      throw new Error(`${markTrial ? 'Release 已激活' : '预热 Release 已下载'}但 Bundle 无法建立 lease：${lynxAppId}/${bundleName}`);
     }
     return repaired;
   }
@@ -174,18 +572,22 @@ export default class ContentAddressedOtaStore {
    * 服务端 changedBundles 是完整快照。每个 artifact 先按 SHA 查 CAS；命中就直接复用，
    * 未命中才下载到 transactions/<tx>/.part，校验后原子发布对象，最后写 Manifest 与 State。
    */
-  async install(snapshot: OtaReleaseSnapshot, signal: OtaPrepareSignal, context?: OtaUserContext): Promise<void> {
+  async install(snapshot: OtaReleaseSnapshot, signal: OtaPrepareSignal, context?: OtaUserContext, prewarmOnly: boolean = false): Promise<void> {
     this.validateContext(context);
     let selected: OtaStoredSelection | undefined;
     let decision: OtaLastDecision | undefined;
     if (context?.selectionEnabled) {
       const value: OtaLatestSelection = { release: snapshot };
       selected = OtaSelection.fromRelease(snapshot, context);
-      decision = OtaSelection.decision(value, context);
-      this.recordDecision(snapshot.lynxAppId, value, context);
+      decision = prewarmOnly ? this.contextState(snapshot.lynxAppId, context)?.lastDecision : OtaSelection.decision(value, context);
+      if (!prewarmOnly) this.recordDecision(snapshot.lynxAppId, value, context);
       if (!OtaSelection.compatible(selected, context)) throw new Error('incompatible_release');
     }
     this.validateSnapshot(snapshot);
+    for (const artifact of snapshot.changedBundles) {
+      await this.validateObjectAsync(snapshot.lynxAppId, artifact, true);
+      signal.throwIfCancelled(); this.validateContext(context);
+    }
     signal.throwIfCancelled();
     this.ensureAppDirectories(snapshot.lynxAppId);
     this.recoverTransactions(snapshot.lynxAppId);
@@ -193,9 +595,10 @@ export default class ContentAddressedOtaStore {
     const oldState = this.readState(snapshot.lynxAppId);
     if (oldState !== null) {
       this.ensureScope(oldState, snapshot.lynxAppId);
-      const currentManifest = oldState.current.manifestId === undefined ? null :
-        this.readManifest(snapshot.lynxAppId, oldState.current.manifestId);
-      if (oldState.current.kind === 'downloaded' && oldState.current.releaseId === snapshot.releaseId &&
+      const target = this.config.candidateActivationEnabled ? (oldState.candidate?.release ?? oldState.current) : oldState.current;
+      const currentManifest = target?.manifestId === undefined ? null :
+        this.readManifest(snapshot.lynxAppId, target.manifestId);
+      if (target?.kind === 'downloaded' && target.releaseId === snapshot.releaseId &&
         currentManifest !== null && this.sameSnapshot(currentManifest, snapshot) &&
         this.manifestObjectsUsable(snapshot.lynxAppId, snapshot.changedBundles, true) &&
         this.sidecars.verifyBound(snapshot.lynxAppId, currentManifest)) {
@@ -256,12 +659,12 @@ export default class ContentAddressedOtaStore {
           continue;
         }
         const part = `${transaction}/object-${index}.part`;
-        const binary = await this.api.downloadBundle(artifact.bundleUrl, signal, context);
+        const byteCount = await this.api.downloadBundleToFile(artifact.bundleUrl, part, signal, context);
+        const digest = await hashOtaFile(part);
         signal.throwIfCancelled();
         this.validateCommit(snapshot.lynxAppId, context, decision);
-        this.ensureDeclaredSize(binary.byteLength, artifact);
-        this.ensureExpectedSha(this.sha256(binary), artifact.bundleSha256, artifact.bundlePath);
-        this.writeBinaryAtomic(part, binary);
+        this.ensureDeclaredSize(byteCount, artifact);
+        this.ensureExpectedSha(digest, artifact.bundleSha256, artifact.bundlePath);
         const objectPath = this.objectPath(snapshot.lynxAppId, artifact.bundleSha256);
         this.ensureParent(objectPath);
         if (this.hasUsableObject(snapshot.lynxAppId, artifact.bundleSha256, artifact.size, true)) {
@@ -277,6 +680,8 @@ export default class ContentAddressedOtaStore {
           this.syncDirectory(objectPath.substring(0, objectPath.lastIndexOf('/')));
           await this.pauseAtTestPoint('after_object_publish');
           this.checkTestFault('after_object_publish');
+          await this.validateObjectAsync(snapshot.lynxAppId, artifact, true);
+          signal.throwIfCancelled(); this.validateContext(context);
           downloadedCount += 1;
         }
       }
@@ -310,16 +715,29 @@ export default class ContentAddressedOtaStore {
       this.checkTestFault('before_manifest_commit');
       this.checkTestFault('enospc_manifest_commit');
       this.writeTextAtomic(this.manifestPath(snapshot.lynxAppId, targetManifestId), JSON.stringify(manifest));
+      for (const artifact of manifest.bundles) {
+        await this.validateObjectAsync(snapshot.lynxAppId, artifact, true);
+        signal.throwIfCancelled(); this.validateContext(context);
+      }
+      await this.sidecars.validateManifestObjects(snapshot.lynxAppId, manifest, true);
+      signal.throwIfCancelled(); this.validateContext(context);
       this.verifyManifestObjects(snapshot.lynxAppId, manifest);
       await this.pauseAtTestPoint('after_manifest_commit');
       this.checkTestFault('after_manifest_commit');
+
+      if (prewarmOnly) {
+        // 事务索引持续保护 main/Async，直到 ensureBundleReady 同步取得预热页面 lease。
+        this.validateCommit(snapshot.lynxAppId, context, decision);
+        this.lastOperation = `prewarm:${snapshot.releaseId}:downloaded=${downloadedCount}:reused=${reusedCount}`;
+        return;
+      }
 
       // 所有 await 之后重新读 State；不能把下载前 oldState 的 previous 写回。
       await this.pauseAtTestPoint('before_state_commit');
       this.validateCommit(snapshot.lynxAppId, context, decision);
       const publishState = this.readState(snapshot.lynxAppId);
       const previous: OtaReleaseRef | undefined = publishState !== null &&
-        publishState.current.releaseId !== snapshot.releaseId ? publishState.current : publishState?.previous;
+        publishState.current?.releaseId !== snapshot.releaseId ? publishState.current : publishState?.previous;
       const state: OtaReleaseState = {
         schemaVersion: ContentAddressedOtaStore.STORE_SCHEMA_VERSION,
         env: snapshot.env,
@@ -330,9 +748,16 @@ export default class ContentAddressedOtaStore {
         current: { kind: 'downloaded', releaseId: snapshot.releaseId, manifestId: targetManifestId,
           selection: selected },
         previous: previous,
+        candidate: undefined,
         selectionSchemaVersion: context?.selectionEnabled ? 1 : publishState?.selectionSchemaVersion,
         lastDecision: decision ?? publishState?.lastDecision
       };
+      if (this.config.candidateActivationEnabled) {
+        state.current = publishState?.current;
+        state.previous = publishState?.previous;
+        state.candidate = { release: { kind: 'downloaded', releaseId: snapshot.releaseId, manifestId: targetManifestId, selection: selected },
+          status: 'pending', failureCount: 0, createdAt: new Date().getTime() };
+      }
       // State 是唯一激活点，必须最后原子写入。
       this.checkTestFault('before_state_commit');
       this.checkTestFault('enospc_state_commit');
@@ -377,7 +802,11 @@ export default class ContentAddressedOtaStore {
       // boolean 保留原接口的“恢复远程 previous”含义；false 也已原子写入 embedded。
       return previous !== undefined;
     }
-    if (state === null || state.previous === undefined || state.previous.kind !== 'downloaded') return false;
+    if (state === null) return false;
+    if (expectedReleaseId !== undefined && state.current?.releaseId !== expectedReleaseId) throw new Error('stale_decision');
+    if (state.previous === undefined || state.previous.kind !== 'downloaded') {
+      state.current = this.embeddedRef(); state.generation += 1; this.writeState(state, context); return false;
+    }
     this.ensureScope(state, lynxAppId);
     const restored = this.resolveRef(state.previous, lynxAppId);
     if (restored === null) return false;
@@ -389,7 +818,8 @@ export default class ContentAddressedOtaStore {
       platform: state.platform,
       generation: state.generation + 1,
       current: state.previous,
-      previous: undefined
+      previous: undefined,
+      candidate: state.candidate
     };
     this.writeState(next);
     this.validatedObjects.clear();
@@ -405,6 +835,7 @@ export default class ContentAddressedOtaStore {
       const state = this.contextState(lynxAppId, context) ?? this.emptyState(lynxAppId, context);
       state.current = this.embeddedRef();
       state.previous = undefined;
+      state.candidate = undefined;
       state.generation += 1;
       state.lastDecision = { action: 'use_embedded', audienceKey: context.audienceKey, clientContextKey: context.clientContextKey,
         policyRevision: state.lastDecision?.policyRevision ?? '0', reason: 'local_delete' };
@@ -461,13 +892,20 @@ export default class ContentAddressedOtaStore {
       OtaUserContext.compareDecimal(decision.policyRevision, old.policyRevision) < 0) throw new Error('stale_decision');
     if (value.release !== undefined) {
       const selected = OtaSelection.fromRelease(value.release, context);
-      if (state.current.releaseId === value.release.releaseId) state.current.selection = selected;
+      if (state.current !== undefined && state.current.releaseId === value.release.releaseId) state.current.selection = selected;
       if (state.previous?.releaseId === value.release.releaseId) state.previous.selection = selected;
     }
     state.selectionSchemaVersion = 1;
     state.lastDecision = decision;
+    if (state.candidate !== undefined) {
+      if (value.release?.releaseId === state.candidate.release.releaseId && value.release !== undefined) {
+        state.candidate.release.selection = OtaSelection.fromRelease(value.release, context);
+      }
+      if (decision.action !== 'use_release' || decision.targetReleaseId !== state.candidate.release.releaseId ||
+        !this.eligible(state.candidate.release, state, context)) state.candidate = undefined;
+    }
     if (decision.action !== 'use_release') {
-      if (state.current.kind === 'downloaded') state.previous = state.current;
+      if (state.current?.kind === 'downloaded') state.previous = state.current;
       state.current = this.embeddedRef();
     } else if (!this.eligible(state.current, state, context)) {
       const replacement = this.effectiveRef(state, context) ?? this.embeddedRef();
@@ -486,7 +924,13 @@ export default class ContentAddressedOtaStore {
     fs.listFileSync(this.appsRoot()).forEach((appId: string) => {
       if (!this.isValidAppId(appId)) return;
       const state = this.contextState(appId, context);
-      if (state === null || this.eligible(state.current, state, context)) return;
+      if (state === null) return;
+      const invalidCandidate = state.candidate !== undefined && !this.eligible(state.candidate.release, state, context);
+      if (invalidCandidate) state.candidate = undefined;
+      if (this.eligible(state.current, state, context)) {
+        if (invalidCandidate) { state.generation += 1; this.writeState(state, context); }
+        return;
+      }
       const replacement = this.effectiveRef(state, context) ?? this.embeddedRef();
       state.previous = state.current;
       state.current = replacement;
@@ -521,7 +965,8 @@ export default class ContentAddressedOtaStore {
 
   private embeddedRef(): OtaReleaseRef { return { kind: 'embedded', releaseId: '__embedded__' }; }
 
-  private eligible(ref: OtaReleaseRef, state: OtaReleaseState, context: OtaUserContext | undefined): boolean {
+  private eligible(ref: OtaReleaseRef | undefined, state: OtaReleaseState, context: OtaUserContext | undefined): boolean {
+    if (ref === undefined) return false;
     if (context === undefined || !context.selectionEnabled || ref.kind === 'embedded') return true;
     if (state.selectionSchemaVersion !== 1 || !OtaSelection.compatible(ref.selection, context)) return false;
     const decision = state.lastDecision;
@@ -574,6 +1019,7 @@ export default class ContentAddressedOtaStore {
           const roles: OtaStorageReleaseRole[] = [];
           if (state?.current?.manifestId === manifestId) roles.push(OtaStorageReleaseRole.CURRENT);
           if (state?.previous?.manifestId === manifestId) roles.push(OtaStorageReleaseRole.PREVIOUS);
+          if (state?.candidate?.release.manifestId === manifestId) roles.push(OtaStorageReleaseRole.CANDIDATE);
           if (leased.has(manifestId)) roles.push(OtaStorageReleaseRole.LEASED);
           if (roles.length === 0) roles.push(OtaStorageReleaseRole.ORPHAN);
           const path = `${manifestRoot}/${name}`;
@@ -605,11 +1051,14 @@ export default class ContentAddressedOtaStore {
     const appScan = this.scanTree(this.appDirectory(appId), maxFilesPerTree);
     const stateSnapshot: OtaStorageStateSnapshot | undefined = state === null ? undefined : {
       generation: state.generation,
-      currentReleaseId: state.current.releaseId,
-      currentKind: state.current.kind,
+      currentReleaseId: state.current?.releaseId ?? '',
+      currentKind: state.current?.kind ?? 'none',
+      candidateReleaseId: state.candidate?.release.releaseId,
+      candidateManifestId: state.candidate?.release.manifestId,
+      candidateStatus: state.candidate?.status,
       previousReleaseId: state.previous?.releaseId,
       previousKind: state.previous?.kind,
-      currentManifestId: state.current.manifestId,
+      currentManifestId: state.current?.manifestId,
       previousManifestId: state.previous?.manifestId
     };
     return {
@@ -709,6 +1158,7 @@ export default class ContentAddressedOtaStore {
       releaseId: ref.releaseId,
       manifestId: ref.manifestId,
       sha256: artifact.bundleSha256,
+      actualSizeBytes: fs.statSync(filePath).size,
       source: 'ota_current'
     };
   }
@@ -750,15 +1200,7 @@ export default class ContentAddressedOtaStore {
     const stat = fs.statSync(path);
     if (stat.size !== expectedSize) return false;
     const key = `${appId}|${objectId.toLowerCase()}|${stat.size}|${stat.mtime}|${stat.ctime}|${stat.ino}`;
-    if (!forceHash && this.validatedObjects.has(key)) return true;
-    try {
-      const matches = this.sha256File(path).toLowerCase() === objectId.toLowerCase();
-      if (matches) this.validatedObjects.set(key, new Date().getTime());
-      else this.validatedObjects.delete(key);
-      return matches;
-    } catch (error) {
-      return false;
-    }
+    return this.validatedObjects.has(key);
   }
 
   private verifyCurrentObject(filePath: string, appId: string, manifestId: string, artifact: OtaBundleArtifact): void {
@@ -792,6 +1234,7 @@ export default class ContentAddressedOtaStore {
       generation: state.generation,
       current: state.current,
       previous: state.previous,
+      candidate: state.candidate,
       selectionSchemaVersion: state.selectionSchemaVersion,
       lastDecision: state.lastDecision
     }), () => this.validateCommit(state.lynxAppId, context, decision));
@@ -836,7 +1279,7 @@ export default class ContentAddressedOtaStore {
       }
       return true;
     };
-    if (!retain(state?.current) || !retain(state?.previous)) return;
+    if (!retain(state?.current) || !retain(state?.previous) || !retain(state?.candidate?.release)) return;
     const activeLeaseManifestIds = this.activeLeasedManifestIds(appId);
     let leaseRootsValid = true;
     activeLeaseManifestIds.forEach((manifestId: string) => {
@@ -1032,19 +1475,6 @@ export default class ContentAddressedOtaStore {
     return `sha256:${hex}`;
   }
 
-  private sha256File(path: string): string {
-    const stat = fs.statSync(path);
-    const file = fs.openSync(path, fs.OpenMode.READ_ONLY | fs.OpenMode.NOFOLLOW);
-    try {
-      const buffer = new ArrayBuffer(stat.size);
-      const count = fs.readSync(file.fd, buffer);
-      if (count !== stat.size) throw new Error(`读取对象不完整：${path}`);
-      return this.sha256(buffer);
-    } finally {
-      fs.closeSync(file);
-    }
-  }
-
   private ensureDeclaredSize(actual: number, artifact: OtaBundleArtifact): void {
     if (artifact.size === undefined || actual !== artifact.size) throw new Error(`Bundle size 校验失败：${artifact.bundlePath}`);
     if (actual <= 0 || actual > ContentAddressedOtaStore.MAX_BUNDLE_BYTES) throw new Error(`Bundle 文件大小越界：${artifact.bundlePath}`);
@@ -1161,15 +1591,6 @@ export default class ContentAddressedOtaStore {
   private ensureParent(path: string): void {
     const index = path.lastIndexOf('/');
     if (index > 0) this.ensureDirectory(path.substring(0, index));
-  }
-
-  private writeBinaryAtomic(path: string, binary: ArrayBuffer): void {
-    this.ensureParent(path);
-    // 调用方已经把 path 放在 transaction 目录并命名为 .part；这里直接 fsync 写入，
-    // 随后由事务线程把这个 part 原子 rename 到 CAS 对象路径，避免生成 .part.part。
-    const temporary = path;
-    const file = fs.openSync(temporary, fs.OpenMode.WRITE_ONLY | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    try { fs.writeSync(file.fd, binary); fs.fsyncSync(file.fd); } finally { fs.closeSync(file); }
   }
 
   private writeTextAtomic(path: string, raw: string, finalGuard?: () => void): void {

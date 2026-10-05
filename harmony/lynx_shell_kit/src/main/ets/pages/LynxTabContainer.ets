@@ -1,3 +1,7 @@
+import LynxNavigator from '../routing/LynxNavigator';
+import ShellWindowController from '../common/ShellWindowController';
+import ShellTransitionRuntime from '../transition/ShellTransitionRuntime';
+import LynxOtaHealthGate from '../runtime/LynxOtaHealthGate';
 import { display } from '@kit.ArkUI';
 import {
   BehaviorRegistryMap,
@@ -10,7 +14,7 @@ import {
   SendableModuleClassWrapper,
   TemplateData
 } from '@lynx/lynx';
-import ShellLynxViewClient from '../client/ShellLynxViewClient';
+import ShellLynxViewClient, { ShellLynxLoadFailure } from '../client/ShellLynxViewClient';
 import ShellConstants from '../common/ShellConstants';
 import ShellGlobalPropsFactory, { ShellBundleMetadata } from '../common/ShellGlobalPropsFactory';
 import ShellThemeState from '../common/ShellTheme';
@@ -25,7 +29,7 @@ import ShellMessageHub from '../common/ShellMessageHub';
 import ShellGenericResourceFetcher from '../provider/ShellGenericResourceFetcher';
 import ShellMediaResourceFetcher from '../provider/ShellMediaResourceFetcher';
 import ShellTemplateResourceFetcher from '../provider/ShellTemplateResourceFetcher';
-import PageBundleRuntimeRegistry, { OtaBundleLease, PageBundleRuntime } from '../ota/OtaModels';
+import PageBundleRuntimeRegistry, { OtaBundleLease, PageBundleRuntime, PreparedPageBundle } from '../ota/OtaModels';
 import OtaUserContextEvents from '../ota/OtaUserContextEvents';
 
 /** 一个原生 Tab 的逻辑描述，不包含 Tabs、TabBar 或选中态。 */
@@ -49,6 +53,7 @@ export interface LynxTabSpec {
  */
 @Component
 export struct LynxTabContainer {
+  @Prop @Watch('hostVisibilityChanged') hostVisible: boolean = true;
   spec: LynxTabSpec = {
     tabId: 'tab',
     bundleUrl: ShellConstants.DEFAULT_ROUTE,
@@ -65,11 +70,24 @@ export struct LynxTabContainer {
   @Prop @Watch('onRefreshGenerationChanged')
   refreshGeneration: number = 0;
 
+  @State @Watch('hostVisibilityChanged') private navigationCovered: boolean = false;
+  @State private transitionOpacity: number = 1;
+  @State private transitionX: number = 0;
+  @State private transitionY: number = 0;
+  @State private transitionScale: number = 1;
+  private alive: boolean = true;
   @State private isLoading: boolean = true;
   @State private errorMessage: string = '';
   @State private showLynxView: boolean = false;
 
   private initialized: boolean = false;
+  private pendingReload: boolean = false;
+  private visible: boolean = false;
+  private preparedBundle: PreparedPageBundle | null = null;
+  private preparedRuntime: PageBundleRuntime | null = null;
+  private rollbackAttempted: boolean = false;
+  private recovering: boolean = false;
+  private healthGate: LynxOtaHealthGate = new LynxOtaHealthGate(() => false);
   private request: LynxPageRequest = new LynxPageRequest();
   private modules: Map<string, ModuleClassWrapper> = new Map();
   private sendableModules: Map<string, SendableModuleClassWrapper> = new Map();
@@ -84,6 +102,8 @@ export struct LynxTabContainer {
     new TemplateData('{}')
   );
   private extraTiming: LynxExtraTiming = new LynxExtraTiming();
+  private currentTransitionMetadataKey: string = '';
+  private currentBundleMetadata?: ShellBundleMetadata;
   private lynxContext: LynxContext | null = null;
   private prepareGeneration: number = 0;
   private consumedRefreshGeneration: number = 0;
@@ -98,8 +118,11 @@ export struct LynxTabContainer {
   };
 
   aboutToAppear(): void {
+    this.visible = this.hostVisible && !this.navigationCovered;
+    if (this.lynxContext !== null) HostNativeModules.contextVisibilityChanged(this.lynxContext);
     this.consumedRefreshGeneration = this.refreshGeneration;
     if (this.initialized) {
+      if (this.pendingReload) { this.pendingReload = false; this.reloadFromCurrent(); return; }
       this.lynxContext?.onEnterForeground();
       this.clients[0]?.markVisible();
       return;
@@ -112,7 +135,23 @@ export struct LynxTabContainer {
     this.startLoad();
   }
 
+  private hostVisibilityChanged(): void {
+    this.visible = this.hostVisible && !this.navigationCovered;
+    const context = this.lynxContext;
+    if (context !== null) {
+      if (this.visible) {
+        context.onEnterForeground(); this.clients[0]?.markVisible();
+        context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
+        ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'native_tab_visible');
+      } else { context.onEnterBackground(); this.clients[0]?.markHidden(); ShellMessageHub.sendLifecycle(this.request.entryID, 'covered', 'native_tab_covered'); }
+      HostNativeModules.contextVisibilityChanged(context);
+    }
+    if (this.visible && this.pendingReload) { this.pendingReload = false; this.reloadFromCurrent(); }
+  }
+
   aboutToDisappear(): void {
+    this.visible = false;
+    if (this.lynxContext !== null) HostNativeModules.contextVisibilityChanged(this.lynxContext);
     this.lynxContext?.onEnterBackground();
     this.clients[0]?.markHidden();
     if (this.lynxContext !== null) {
@@ -121,9 +160,13 @@ export struct LynxTabContainer {
   }
 
   aboutToBeDeleted(): void {
+    this.alive = false;
+    ShellTransitionRuntime.shared.unbind(this.request.entryID, this.lynxContext ?? undefined);
     OtaUserContextEvents.unsubscribe(this.userListener);
-    PageBundleRuntimeRegistry.current()?.releaseNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
     this.disposeCurrentView('arkui_tab_deleted');
+    if (!LynxNavigator.hasSession(this.request.sessionID, this.request.lynxAppId) && !ShellMessageHub.hasContextsForSession(this.request.sessionID, undefined, this.request.lynxAppId)) {
+      PageBundleRuntimeRegistry.current()?.releaseNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
+    }
     this.initialized = false;
   }
 
@@ -135,22 +178,41 @@ export struct LynxTabContainer {
   }
 
   private configureForLoad(): void {
+    this.currentBundleMetadata = undefined; this.currentTransitionMetadataKey = '';
+    this.healthGate.fail();
+    this.preparedBundle = null;
+    this.preparedRuntime = null;
     const generation = ++this.prepareGeneration;
+    this.healthGate = new LynxOtaHealthGate(() => generation === this.prepareGeneration && (!this.request.isOtaRequest() ||
+      (this.preparedRuntime === PageBundleRuntimeRegistry.current() && this.preparedBundle?.userIdentityEpoch === this.preparedRuntime?.userIdentityEpoch)));
     let monitorClient: ShellLynxViewClient | null = null;
     this.contextCreated = (context: LynxContext) => {
-      if (generation !== this.prepareGeneration) { context.onEnterBackground(); return; }
+      if (generation !== this.prepareGeneration || (this.request.isOtaRequest() &&
+        (this.preparedRuntime !== PageBundleRuntimeRegistry.current() || this.preparedBundle?.userIdentityEpoch !== this.preparedRuntime?.userIdentityEpoch))) {
+        context.onEnterBackground();
+        HostNativeModules.destroyForContext(context);
+        return;
+      }
+      if (this.lynxContext === context) return;
       this.lynxContext = context;
+      HostNativeModules.attachContext(context, this.getUIContext(), () => this.visible);
       monitorClient?.markCreated();
-      monitorClient?.markVisible();
+      if (this.visible) monitorClient?.markVisible(); else monitorClient?.markHidden();
       // Harmony LynxView 的 colorScheme 字段由 SDK 保持私有；Context 建立后立即使用
       // 官方动态 API 设定首值，避免 Tab 首帧继续沿用旧主题。
       context.updateColorScheme(ShellThemeState.colorScheme());
       ShellMessageHub.register({ pageId: this.request.entryID, containerId: this.request.entryID,
-        pageKey: this.request.routeKey, hostMode: 'arkui_tab_container' }, context);
+        pageKey: this.request.routeKey, hostMode: 'arkui_tab_container', lynxAppId: this.request.lynxAppId, sessionID: this.request.sessionID, hasHostAnchor: this.request.hasHostAnchor, navigationSnapshotID: this.preparedBundle?.navigationSnapshotID }, context);
+      ShellMessageHub.bindHealth(this.request.entryID, this.healthGate);
+      ShellMessageHub.bindBackGestureEnabled(this.request.entryID, this.request.backGestureEnabled, (enabled: boolean) => { this.request.backGestureEnabled = enabled; });
+      ShellMessageHub.bindVisibility(this.request.entryID, () => this.visible);
       monitorClient?.bindContext(context, this.request.entryID);
-      context.onEnterForeground();
-      context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
-      ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_tab_appear');
+      this.bindTransitionView(generation);
+      if (this.visible) {
+        context.onEnterForeground();
+        context.sendGlobalEvent('viewAppear', [new ShellViewAppearPayload(this.request.bundleUrl)]);
+        ShellMessageHub.sendLifecycle(this.request.entryID, 'active', 'arkui_tab_appear');
+      } else { context.onEnterBackground(); }
       const rawScreen = ShellLayoutState.rawScreenSize();
       const layout = ShellLayoutState.snapshot(this.request.entryID);
       context.updateScreenMetrics(rawScreen.width, rawScreen.height);
@@ -165,12 +227,14 @@ export struct LynxTabContainer {
     );
     monitorClient = new ShellLynxViewClient(
       () => { if (generation === this.prepareGeneration) this.handleLoadSuccess(); },
-      (message: string) => { if (generation === this.prepareGeneration && !this.firstScreenReached) this.handleLoadError(message); },
+      (failure: ShellLynxLoadFailure) => { if (generation === this.prepareGeneration) this.handleLoadError(failure); },
       () => { if (generation === this.prepareGeneration) this.handleFirstScreen(); },
-      'tab'
+      'tab',
+      this.contextCreated
     );
     monitorClient.setLoadKind(this.nextLoadKind);
     this.clients = [monitorClient];
+    this.bindTransitionView(generation);
     this.templateFetcher = new ShellTemplateResourceFetcher(false);
     this.genericFetcher = new ShellGenericResourceFetcher();
     this.mediaFetcher = new ShellMediaResourceFetcher();
@@ -204,6 +268,7 @@ export struct LynxTabContainer {
   }
 
   private reloadFromCurrent(): void {
+    if (!this.visible) { this.pendingReload = true; this.healthGate.fail('Tab 待可见时重新加载'); return; }
     PageBundleRuntimeRegistry.current()?.resetNavigationSnapshot(this.request.sessionID, this.request.lynxAppId);
     this.disposeCurrentView('arkui_tab_explicit_refresh');
     this.nextLoadKind = 'reload';
@@ -213,6 +278,8 @@ export struct LynxTabContainer {
   }
 
   private disposeCurrentView(reason: string): void {
+    ShellTransitionRuntime.shared.unbind(this.request.entryID, this.lynxContext ?? undefined);
+    this.healthGate.fail();
     this.prepareGeneration += 1;
     this.templateFetcher.cancelAll();
     this.genericFetcher.cancelAll();
@@ -222,7 +289,7 @@ export struct LynxTabContainer {
       ShellMessageHub.sendLifecycle(this.request.entryID, 'destroyed', reason);
       HostNativeModules.destroyForContext(this.lynxContext);
     }
-    ShellMessageHub.unregister(this.request.entryID);
+    if (this.lynxContext !== null) ShellMessageHub.unregisterContext(this.request.entryID, this.lynxContext);
     this.lynxContext = null;
     this.showLynxView = false;
     this.releaseCurrentLease();
@@ -253,6 +320,7 @@ export struct LynxTabContainer {
     request.title = this.spec.title;
     request.initDataJson = this.spec.initDataJson;
     request.globalPropsJson = this.spec.globalPropsJson;
+    request.backGestureEnabled = this.request.backGestureEnabled;
     request.hideNavigationBar = true;
     request.fullscreen = true;
     request.backgroundColor = this.spec.backgroundColor;
@@ -286,6 +354,9 @@ export struct LynxTabContainer {
           this.errorMessage = `Tab ${this.spec.tabId} 没有 active Bundle；切换 Tab 不联网`;
           return;
         }
+        this.preparedBundle = prepared;
+        this.preparedRuntime = runtime;
+        this.healthGate.configure(runtime, prepared);
         this.templateFetcher.cancelAll();
         this.templateFetcher = new ShellTemplateResourceFetcher(
           false,
@@ -313,6 +384,7 @@ export struct LynxTabContainer {
           bundleName: prepared.bundleName,
           sha256: prepared.sha256
         };
+        this.currentBundleMetadata = bundleMetadata;
         this.metaData = new MetaData(
           new TemplateData(this.request.initDataJson),
           new TemplateData(this.buildTabGlobalProps(bundleMetadata, localeState))
@@ -342,20 +414,45 @@ export struct LynxTabContainer {
   }
 
   private handleLoadSuccess(): void {
-    this.isLoading = false;
-    this.errorMessage = '';
+    // 首帧仅消费 SDK onFirstScreen。
   }
 
   private handleFirstScreen(): void {
     this.firstScreenReached = true;
+    ShellTransitionRuntime.shared.firstScreen(this.request.entryID);
+    this.healthGate.markFirstScreen();
     this.isLoading = false;
   }
 
-  private handleLoadError(message: string): void {
+  private handleLoadError(failure: ShellLynxLoadFailure): void {
+    if (!failure.requiresErrorState()) return;
+    const prepared = this.preparedBundle;
+    const runtime = this.preparedRuntime;
+    const candidate = this.healthGate.isCandidateTrial();
+    const canRecover = prepared !== null && runtime !== null && runtime === PageBundleRuntimeRegistry.current() &&
+      prepared.userIdentityEpoch === runtime.userIdentityEpoch && (candidate || !this.firstScreenReached) && !this.rollbackAttempted && !this.recovering;
+    this.healthGate.fail('Tab 发生终止性加载错误');
+    if (canRecover && prepared !== null && runtime !== null) {
+      this.rollbackAttempted = true; this.recovering = true;
+      this.disposeCurrentView('arkui_tab_ota_recovery');
+      const generation = this.prepareGeneration;
+      runtime.recoverFailedRelease(prepared.lynxAppId, failure.message, prepared.releaseId, prepared.userIdentityEpoch,
+        this.request.sessionID, prepared.navigationSnapshotID ?? '', candidate).then((restored: boolean) => {
+        if (generation !== this.prepareGeneration || runtime !== PageBundleRuntimeRegistry.current() || prepared.userIdentityEpoch !== runtime.userIdentityEpoch) return;
+        this.recovering = false;
+        if (!restored) { this.isLoading = false; this.errorMessage = `${failure.message}；没有可恢复的稳定版本`; return; }
+        if (!this.visible) { this.pendingReload = true; return; }
+        this.configureForLoad(); this.startLoad();
+      }).catch((error: Error) => {
+        if (generation !== this.prepareGeneration) return;
+        this.recovering = false; this.isLoading = false; this.errorMessage = `Tab 恢复失败：${error.message}`;
+      });
+      return;
+    }
     this.clients[0]?.markLoadFailed('lynx_load_error');
     this.disposeCurrentView('arkui_tab_load_failed');
     this.isLoading = false;
-    this.errorMessage = message.length > 0 ? message : 'Lynx Tab 加载失败';
+    this.errorMessage = failure.message.length > 0 ? failure.message : 'Lynx Tab 加载失败';
   }
 
   private releaseCurrentLease(): void {
@@ -364,12 +461,34 @@ export struct LynxTabContainer {
     lease?.close();
   }
 
+  private bindTransitionView(generation: number): void {
+    ShellTransitionRuntime.shared.bind({ entryID: this.request.entryID, viewID: this.request.entryID, context: this.lynxContext ?? undefined,
+      ui: this.getUIContext(), holderID: `lynx-tab-body-${this.request.entryID}`, sessionID: this.request.sessionID,
+      applyWindowPolicy: () => { if (this.alive && generation === this.prepareGeneration) ShellWindowController.restore(); }, rootContent: true, setCovered: (covered: boolean) => { if (this.alive && generation === this.prepareGeneration) this.navigationCovered = covered; },
+      presentationSpec: this.request.presentationSpec(), updateTransition: (id: string) => {
+        if (!this.alive || generation !== this.prepareGeneration || this.lynxContext === null) return;
+        const state = ShellTransitionRuntime.shared.currentState();
+        const key = `${id}:${state.effectiveTransition}:${state.direction}:${state.reason}`;
+        if (key === this.currentTransitionMetadataKey) return;
+        this.currentTransitionMetadataKey = key; this.request.transitionID = id;
+        this.lynxContext.updateMetaData(new MetaData(undefined, new TemplateData(this.buildTabGlobalProps(this.currentBundleMetadata))));
+      },
+      loadGeneration: generation, identityEpoch: this.preparedBundle?.userIdentityEpoch, backgroundColor: this.request.backgroundColor, firstScreen: this.firstScreenReached,
+      isActive: () => this.alive && generation === this.prepareGeneration,
+      getPresentation: () => ({ x: this.transitionX, y: this.transitionY, scale: this.transitionScale }),
+      setPresentation: (value) => { if (this.alive && generation === this.prepareGeneration) { this.transitionX = value.x; this.transitionY = value.y; this.transitionScale = value.scale; } },
+      getOpacity: () => this.transitionOpacity, setOpacity: (value: number) => { if (this.alive && generation === this.prepareGeneration) this.transitionOpacity = value; } });
+  }
+
   /** 外层 ArkUI 区域是当前 Native Tab 的 viewport；切换 Tab 不会重建或联网。 */
   private onAreaChanged(area: Area): void {
     ShellLayoutState.updateViewport(
       this.request.entryID,
       Number(area.width),
-      Number(area.height)
+      Number(area.height),
+      Number(area.globalPosition.x),
+      Number(area.globalPosition.y),
+      this.getUIContext().vp2px(1)
     );
   }
 
@@ -437,6 +556,10 @@ export struct LynxTabContainer {
           .borderRadius(16)
         }
       }
+      .id(`lynx-tab-body-${this.request.entryID}`)
+      .opacity(this.transitionOpacity)
+      .translate({ x: this.transitionX, y: this.transitionY })
+      .scale({ x: this.transitionScale, y: this.transitionScale })
       .width('100%')
       .layoutWeight(1)
       .onAreaChange((oldValue: Area, newValue: Area) => this.onAreaChanged(newValue))

@@ -106,8 +106,8 @@ export default class ReleaseTransaction {
     const oldState = this.readState(snapshot.lynxAppId);
     if (oldState !== null) {
       this.ensureScope(oldState, snapshot.lynxAppId);
-      if (oldState.current.releaseId === snapshot.releaseId &&
-        oldState.current.kind === 'downloaded' &&
+      if (oldState.current?.releaseId === snapshot.releaseId &&
+        oldState.current?.kind === 'downloaded' &&
         this.verifyRelease(snapshot.releaseId, snapshot.lynxAppId)) {
         this.pruneUnreferencedReleases(snapshot.lynxAppId);
         return;
@@ -186,7 +186,7 @@ export default class ReleaseTransaction {
 
       // 当前版本的直接前驱进入 previous；同一 Release 修复时不制造自引用。
       const previous: OtaReleaseRef | undefined = oldState !== null &&
-        oldState.current.releaseId !== snapshot.releaseId ? oldState.current : oldState?.previous;
+        oldState.current?.releaseId !== snapshot.releaseId ? oldState.current : oldState?.previous;
       const state: OtaReleaseState = {
         schemaVersion: ReleaseTransaction.STORE_SCHEMA_VERSION,
         env: this.config.environment,
@@ -276,7 +276,7 @@ export default class ReleaseTransaction {
       }
       this.recoverStaging(name);
       const retained = new Set<string>();
-      if (state?.current.kind === 'downloaded') retained.add(state.current.releaseId);
+      if (state?.current?.kind === 'downloaded') retained.add(state.current.releaseId);
       if (state?.previous?.kind === 'downloaded') retained.add(state.previous.releaseId);
       this.pruneDownloadedDirectories(name, retained);
     }
@@ -317,7 +317,7 @@ export default class ReleaseTransaction {
         .sort()
         .forEach((releaseId: string) => {
           const roles: OtaStorageReleaseRole[] = [];
-          if (state?.current.kind === 'downloaded' && state.current.releaseId === releaseId) {
+          if (state?.current?.kind === 'downloaded' && state.current.releaseId === releaseId) {
             roles.push(OtaStorageReleaseRole.CURRENT);
           }
           if (state?.previous?.kind === 'downloaded' && state.previous.releaseId === releaseId) {
@@ -359,8 +359,8 @@ export default class ReleaseTransaction {
     const appScan = this.scanTree(this.appDirectory(appId), maxFilesPerTree);
     const stateSnapshot: OtaStorageStateSnapshot | undefined = state === null ? undefined : {
       generation: state.generation,
-      currentReleaseId: state.current.releaseId,
-      currentKind: state.current.kind,
+      currentReleaseId: state.current?.releaseId ?? '',
+      currentKind: state.current?.kind ?? 'none',
       previousReleaseId: state.previous?.releaseId,
       previousKind: state.previous?.kind
     };
@@ -741,7 +741,7 @@ export default class ReleaseTransaction {
       // 状态损坏时不猜测删除；显式 deleteBundles 会先移除 state 后再执行清理。
       return;
     }
-    if (state?.current.kind === 'downloaded') retained.add(state.current.releaseId);
+    if (state?.current?.kind === 'downloaded') retained.add(state.current.releaseId);
     if (state?.previous?.kind === 'downloaded') retained.add(state.previous.releaseId);
     this.pruneDownloadedDirectories(lynxAppId, retained);
   }

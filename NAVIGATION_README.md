@@ -1,12 +1,13 @@
-# Lynx Android / iOS NativeModules 高级导航
+# Lynx Android / iOS / HarmonyOS NativeModules 高级导航
 
-本文是当前壳工程的导航与原生交互接入手册。实现直接使用 Lynx 4.0 官方
+本文是当前壳工程的导航与原生交互接入手册。实现直接使用 Lynx 4.1 官方
 `NativeModules`，Android/iOS 都由宿主手写 `LynxShellModule`，不依赖
 `sparkling-method`、`spkPipe`、autolink 或 codegen。
 
-本阶段没有实现路由拦截、登录鉴权和异步路由放行。HarmonyOS 已补齐与 Playground
-一致的导航方法并映射到 ArkUI Router；共享元素转场仍返回明确的降级状态，媒体/文件桥
-则返回 `1004` 未接入。
+本阶段没有实现路由拦截、登录鉴权和异步路由放行。HarmonyOS 当前源码已使用
+`ShellNavigationHost + Navigation/NavPathStack`，Shared/OpenContainer、preset、跟手取消
+与真实 proxy 终态形成原生闭环；旧 Shell 媒体通过中性 Host SPI 复用 Cap 后端。
+业务导航仍由 Lynx 自绘。2026-10-05 本轮完成的是源码与独立审查，不是构建或设备证明。
 
 ## 1. 架构
 
@@ -27,8 +28,9 @@ ReactLynx 页面
                       └─ ShellAppHomeHandler
             └─ HarmonyOS LynxShellModule.ets（HAR）
                  └─ LynxNavigator
-                      ├─ ArkUI Router
-                      └─ 进程内 session/entry/routeKey 注册表
+                      ├─ ShellNavigationHost / NavPathStack / Native proxy
+                      ├─ Shared/Open/preset coordinator 与原生 Canvas/活体 fallback
+                      └─ Native commit 后更新的 session/entry/routeKey/结果注册表
 ```
 
 职责边界：
@@ -286,7 +288,10 @@ consumeNavigationResult((result) => {
 - 每个目标 entry 同时只保留一条待消费结果，新结果会覆盖旧结果；
 - 一次读取后删除；
 - Android Activity 重建、iOS Scene 恢复后仍可读取；
-- 页面应在自己的 appear/resume 语义中主动调用消费方法。
+- 页面应在自己的 appear/resume 语义中主动调用消费方法；
+- Harmony 仅在 Native 真 commit 后发布结果，取消或失败不产生待消费结果；
+- NativeTab 不计入 Lynx entries，不是结果 receiver；Tab→首个 Page 的 `closeWithResult`
+  无上一 Lynx entry 时返回 `1005`，回 Tab 消费为 `1002`，与双端现有边界一致。
 
 ## 4. 直接调用 NativeModules
 
@@ -367,9 +372,10 @@ interface LynxShellModule {
 }
 ```
 
-`deduplicateWindowMs` 范围为 0 到 5000。默认在 350ms 内抑制重复或转场重入，
-返回 `1006`。设为 0 或 `deduplicate=false` 可关闭时间窗抑制，但 iOS 仍会拒绝
-正在执行 UIKit transition 时的栈重入。
+`deduplicateWindowMs` 范围为 0 到 5000 整数。默认在 350ms 内抑制重复或转场重入，
+返回 `1006`；`animated=false` 时抑制窗最多 80ms。设为 0 或 `deduplicate=false`
+可关闭时间窗，但三端仍拒绝正在执行的 Native 转场重入。Harmony 的 `back`、`popTo`、
+`closeAllWithOptions`、`reLaunch` 和 `redirect` 均实际消费选项，不只校验后丢弃。
 
 成功回调只表示原生导航事务已执行或提交，不表示 Lynx Bundle 已下载、解析或完成首帧。
 
@@ -481,8 +487,8 @@ ShellNavigator.shared.clearSavedNavigationState()
 - 声明 `routeType` 或非 `default` transition：打开、返回、手势和 fallback 全部由
   壳的自定义 coordinator 绘制，系统 Window/UIKit 默认动画被抑制；
 - `animated=false`：Android 使用无动画 Activity flag，iOS 使用非动画 push/pop，HarmonyOS
-  使用目标 Page 的零时长 `pageTransition`；
-- `backGestureEnabled=true`：允许 iOS 侧滑和 Android 系统 Back；
+  由实际 Native driver 使用 `none/0ms`，包含命令回退；
+- `backGestureEnabled=true`：允许 iOS 侧滑、Android 系统 Back 与 Harmony 原生手势；
 - `backGestureEnabled=false`：系统返回被禁用，但原生导航栏返回和 Module API 保留。
 
 页面显示后可通过 `NativeModules.LynxShellModule.setBackGestureEnabled(enabled, callback)` 原位切换当前页策略；Playground 的同名 wrapper 保留原生结果。成功原始回调为 `code=0`，data 含 `backGestureEnabled`、`affectedCount=1`；Playground 沿用 `code=1` 成功归一化。关闭后显式 `back/close` 仍可退出，不会重载 Bundle。
@@ -545,6 +551,8 @@ NativeModules 与系统返回最终进入同一个原生状态机，不会再补
 
 ## 12. 当前验证边界
 
+以下 Android/iOS 记录保留为既有历史证据，不代表 2026-10-05 Harmony 扩展已运行：
+
 - Android Kotlin 编译已通过；
 - iOS Simulator Debug compile-only build 已通过；
 - TypeScript 已通过；
@@ -552,6 +560,18 @@ NativeModules 与系统返回最终进入同一个原生状态机，不会再补
 - iOS 没有重复执行真机/模拟器点击矩阵；
 - Android 真机按钮矩阵由用户在最终 APK 上自行测试；
 - 路由拦截明确未实现。
+
+Harmony 本轮完整软件 API 源码闭环通过有界独立审查；61 条手工用例全未执行，
+未编译、未运行 checks、未设备验收，也没有视觉/FPS/零泄漏证明。宿主必须实际挂载
+`ShellNavigationHost`；缺失返回 `1004`，初始化阶段等待 Area-ready 有界，销毁拒绝未完成
+请求。`maintainState=false` 仅在真实成功隐藏后释放，返回在 `onWillShow` 提前加载，取消
+不会提前销毁 Context/lease。窗口策略先实际生效、布局稳定后预捕；返回 Home/Tab 恢复
+宿主基线，默认 `fullscreen=false` 保留宿主既有沉浸布局与底部系统导航条。
+
+`prepareRoute` 真实预取字节（4 条/32 MiB/30 秒），OTA 预热不激活候选，真实页面消费
+才 claim lease；过期/不匹配走正常 Provider。复杂洞父 gradient/image 背景、preset 平台
+默认数值及 NativeTab 结果 receiver 边界见 [转场文档](TRANSITIONS_README.md)；
+[本轮报告](docs/harmony-native-parity-v1/implementation-report.html) 区分源码与运行状态。
 
 相关源码：
 
@@ -561,3 +581,6 @@ NativeModules 与系统返回最终进入同一个原生状态机，不会再补
 - `android/lynx-shell/src/main/java/com/example/lynxshell/routing/LynxNavigator.kt`
 - `ios/LynxShellKit/Bridge/LynxShellModule.swift`
 - `ios/LynxShellKit/Routing/ShellNavigator.swift`
+- `harmony/lynx_shell_kit/src/main/ets/transition/`
+- `harmony/lynx_shell_kit/src/main/ets/routing/LynxNavigator.ets`
+- `harmony/lynx_shell_kit/src/main/ets/routing/ShellNavigationCommandOptions.ets`

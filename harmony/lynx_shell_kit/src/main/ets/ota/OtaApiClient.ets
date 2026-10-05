@@ -1,3 +1,4 @@
+import fs from '@ohos.file.fs';
 import http from '@ohos.net.http';
 import OtaJson from './OtaJson';
 import { LynxOtaConfig, OtaLatestBundleLists, OtaPrepareSignal, OtaReleaseSnapshot } from './OtaModels';
@@ -103,30 +104,111 @@ export default class OtaApiClient {
       this.validateContext(context);
       return binary.slice(0);
     }
+    const chunks: ArrayBuffer[] = [];
     const request = http.createHttp();
     this.activeRequests.add(request);
+    let bytes = 0;
+    let complete: (() => void) | null = null;
+    let fail: ((error: Error) => void) | null = null;
+    const ended = new Promise<void>((resolve, reject) => { complete = resolve; fail = reject; });
+    request.on('dataReceive', (chunk: ArrayBuffer) => {
+      try {
+        signal?.throwIfCancelled(); this.validateContext(context);
+        bytes += chunk.byteLength;
+        if (bytes > 20 * 1024 * 1024) throw new Error('OTA Bundle 超过 20 MiB');
+        chunks.push(chunk);
+      } catch (error) { fail?.(error as Error); request.destroy(); }
+    });
+    request.on('dataEnd', () => { complete?.(); });
     try {
-      const response = await request.request(bundleUrl, {
-        method: http.RequestMethod.GET,
-        expectDataType: http.HttpDataType.ARRAY_BUFFER,
-        usingCache: false,
-        connectTimeout: 15_000,
-        readTimeout: 30_000
-      });
-      signal?.throwIfCancelled();
-      this.validateContext(context);
-      this.ensureSuccess(response.responseCode, '下载 Bundle 失败');
-      const binary = response.result as ArrayBuffer;
-      if (binary === undefined || binary.byteLength === 0) {
-        throw new Error('OTA Bundle 内容为空');
+      let status = 0;
+      const response = request.requestInStream(bundleUrl, { method: http.RequestMethod.GET, usingCache: false,
+        connectTimeout: 15_000, readTimeout: 30_000 }).then((code: number) => { status = code; });
+      await Promise.all([response, ended]);
+      this.ensureSuccess(status, '下载 Bundle 失败');
+      signal?.throwIfCancelled(); this.validateContext(context);
+      if (bytes === 0) throw new Error('OTA Bundle 内容为空');
+      const output = new Uint8Array(bytes);
+      let offset = 0;
+      chunks.forEach((chunk: ArrayBuffer) => { output.set(new Uint8Array(chunk), offset); offset += chunk.byteLength; });
+      return output.buffer;
+    } finally { request.destroy(); this.activeRequests.delete(request); }
+  }
+
+  /** 主 Bundle/Async 对象直接接收到本次 transaction 文件；接收阶段即执行字节预算。 */
+  async downloadBundleToFile(bundleUrl: string, target: string, signal?: OtaPrepareSignal, context?: OtaUserContext,
+    maximumBytes: number = 20 * 1024 * 1024): Promise<number> {
+    this.validateContext(context); signal?.throwIfCancelled();
+    if (!Number.isSafeInteger(maximumBytes) || maximumBytes <= 0 || maximumBytes > 20 * 1024 * 1024) throw new Error('OTA 下载字节预算不合法');
+    const normalized = bundleUrl.trim().toLowerCase();
+    if (!normalized.startsWith('https://') && !(this.config.allowLocalHTTPForTest &&
+      this.config.environment.toUpperCase() === 'TEST' && this.isTestHttpUrl(normalized))) throw new Error('OTA Bundle 必须使用 HTTPS');
+    const file = await fs.open(target, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+    let request: http.HttpRequest | null = null;
+    let received = 0;
+    let queuedBytes = 0;
+    let streamFailure: Error | null = null;
+    let writes: Promise<void> = Promise.resolve();
+    try {
+      if (this.config.debugMockEnabled && this.mockSource !== null) {
+        const bytes = await this.mockSource.downloadBundle(bundleUrl);
+        if (bytes.byteLength === 0 || bytes.byteLength > maximumBytes) throw new Error('OTA Bundle 大小超过声明预算');
+        signal?.throwIfCancelled(); this.validateContext(context);
+        let offset = 0;
+        while (offset < bytes.byteLength) {
+          const chunk = bytes.slice(offset, Math.min(offset + 64 * 1024, bytes.byteLength));
+          let written = 0;
+          while (written < chunk.byteLength) {
+            const count = await fs.write(file.fd, chunk.slice(written));
+            if (count <= 0) throw new Error('OTA 文件写入失败');
+            written += count;
+          }
+          offset += chunk.byteLength;
+        }
+        received = bytes.byteLength;
+      } else {
+        const stream = http.createHttp(); request = stream; this.activeRequests.add(stream);
+        let complete: (() => void) | null = null;
+        let fail: ((error: Error) => void) | null = null;
+        const ended = new Promise<void>((resolve, reject) => { complete = resolve; fail = reject; });
+        stream.on('dataReceive', (chunk: ArrayBuffer) => {
+          if (streamFailure !== null) return;
+          try {
+            signal?.throwIfCancelled(); this.validateContext(context);
+            received += chunk.byteLength;
+            if (received > maximumBytes) throw new Error('OTA Bundle 超过声明字节预算');
+            if (queuedBytes + chunk.byteLength > 512 * 1024) throw new Error('OTA 文件写入等待队列超过 512 KiB');
+            queuedBytes += chunk.byteLength;
+            writes = writes.then(async () => {
+              signal?.throwIfCancelled(); this.validateContext(context);
+              let written = 0;
+              while (written < chunk.byteLength) {
+                if (streamFailure !== null) throw streamFailure;
+                const count = await fs.write(file.fd, chunk.slice(written));
+                if (count <= 0) throw new Error('OTA 文件写入失败');
+                written += count;
+              }
+            }).finally(() => { queuedBytes -= chunk.byteLength; });
+            writes.catch((error: Error) => { streamFailure = streamFailure ?? error; fail?.(error); stream.destroy(); });
+          } catch (error) { streamFailure = error as Error; fail?.(streamFailure); stream.destroy(); }
+        });
+        stream.on('dataEnd', () => { complete?.(); });
+        let status = 0;
+        const response = stream.requestInStream(bundleUrl, { method: http.RequestMethod.GET, usingCache: false,
+          connectTimeout: 15_000, readTimeout: 30_000 }).then((code: number) => { status = code; });
+        await Promise.all([response, ended]);
+        this.ensureSuccess(status, '下载 Bundle 失败');
+        await writes;
       }
-      if (binary.byteLength > 20 * 1024 * 1024) {
-        throw new Error('OTA Bundle 超过 20 MB');
-      }
-      return binary;
+      signal?.throwIfCancelled(); this.validateContext(context);
+      if (received === 0) throw new Error('OTA Bundle 内容为空');
+      await fs.fsync(file.fd);
+      return received;
     } finally {
-      request.destroy();
-      this.activeRequests.delete(request);
+      request?.destroy(); if (request !== null) this.activeRequests.delete(request);
+      // 请求失败时先等待已经接收的有界写入结束，避免关闭 fd 后后台写错新复用的 fd。
+      await writes.catch(() => undefined);
+      await fs.close(file);
     }
   }
 

@@ -1,6 +1,11 @@
 import display from '@ohos.display';
 import window from '@ohos.window';
 
+interface ShellViewport extends ShellRawScreenSize {
+  left?: number;
+  top?: number;
+}
+
 export type ShellCapabilityStatus = 'supported' | 'unsupported' | 'unavailable' | 'unknown';
 export type ShellLayoutOrientation = 'portrait' | 'landscape' | 'unknown';
 export type ShellWindowMode = 'fullscreen' | 'split' | 'floating' | 'unknown';
@@ -85,7 +90,7 @@ export default class ShellLayoutState {
   private static windowLeftPx: number = 0;
   private static windowTopPx: number = 0;
   private static currentWindow: window.Window | null = null;
-  private static readonly pageViewports: Map<string, ShellRawScreenSize> = new Map();
+  private static readonly pageViewports: Map<string, ShellViewport> = new Map();
   private static readonly avoidAreas: Map<number, window.AvoidArea> = new Map();
   private static safeAreaInsets: ShellInsets = {
     top: 0,
@@ -95,7 +100,9 @@ export default class ShellLayoutState {
   };
   private static revision: number = 0;
   private static safeAreaCapability: ShellCapabilityStatus = 'unknown';
-  private static windowModeCapability: ShellCapabilityStatus = 'unsupported';
+  private static windowMetricsCapability: ShellCapabilityStatus = 'unknown';
+  private static windowModeCapability: ShellCapabilityStatus = 'unknown';
+  private static windowMode: ShellWindowMode = 'unknown';
   private static foldable: boolean = false;
   private static foldStatus: ShellFoldStatus = 'unknown';
   private static foldStatusRaw: number | undefined = undefined;
@@ -151,9 +158,26 @@ export default class ShellLayoutState {
     try {
       const properties = target.getWindowProperties();
       ShellLayoutState.updateWindowRect(properties.windowRect, 'window_attached');
+      // 初始值不能等系统栏再次变化；键盘另由实际viewport/Keyboard处理。
+      const types: Array<window.AvoidAreaType> = [window.AvoidAreaType.TYPE_SYSTEM,
+        window.AvoidAreaType.TYPE_CUTOUT, window.AvoidAreaType.TYPE_SYSTEM_GESTURE,
+        window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR];
+      types.forEach((type: window.AvoidAreaType): void => {
+        ShellLayoutState.avoidAreas.set(type, target.getWindowAvoidArea(type));
+      });
+      ShellLayoutState.recalculateSafeArea();
+      ShellLayoutState.safeAreaCapability = 'supported';
     } catch (error) {
       ShellLayoutState.safeAreaCapability = 'unknown';
       console.warn(`LynxHarmonyShell: initial window metrics unavailable: ${error}`);
+    }
+
+    try {
+      ShellLayoutState.updateWindowMode(target.getWindowStatus());
+      target.on('windowStatusChange', ShellLayoutState.windowStatusListener);
+    } catch (error) {
+      ShellLayoutState.windowModeCapability = 'unknown';
+      console.warn(`LynxHarmonyShell: window status unavailable: ${error}`);
     }
 
     try {
@@ -188,24 +212,46 @@ export default class ShellLayoutState {
       try { target.off('avoidAreaChange', ShellLayoutState.avoidAreaListener); } catch (error) {
         console.warn(`LynxHarmonyShell: avoidAreaChange listener cleanup failed: ${error}`);
       }
+      try { target.off('windowStatusChange', ShellLayoutState.windowStatusListener); } catch (error) {
+        console.warn(`LynxHarmonyShell: windowStatusChange listener cleanup failed: ${error}`);
+      }
     }
     ShellLayoutState.currentWindow = null;
+    ShellLayoutState.windowMetricsCapability = 'unknown';
+    ShellLayoutState.windowModeCapability = 'unknown';
+    ShellLayoutState.windowMode = 'unknown';
+    ShellLayoutState.safeAreaCapability = 'unknown';
+    ShellLayoutState.avoidAreas.clear();
+    ShellLayoutState.safeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     ShellLayoutState.unregisterFoldListeners();
     ShellLayoutState.pageViewports.clear();
   }
 
-  static updateViewport(pageId: string, width: number, height: number): void {
+  static updateDensity(density: number): void {
+    if (!Number.isFinite(density) || density <= 0 || density === ShellLayoutState.density) return;
+    ShellLayoutState.density = density;
+    ShellLayoutState.recalculateSafeArea();
+    ShellLayoutState.refreshCreaseRegion();
+    ShellLayoutState.bumpRevision('density_changed');
+  }
+
+  static updateViewport(pageId: string, width: number, height: number, windowLeft?: number, windowTop?: number, density?: number): void {
     ShellLayoutState.initialize();
+    if (density !== undefined) ShellLayoutState.updateDensity(density);
     const normalizedPageId = pageId.trim();
     if (normalizedPageId.length === 0 || width <= 0 || height <= 0 ||
       !Number.isFinite(width) || !Number.isFinite(height)) {
       return;
     }
     const current = ShellLayoutState.pageViewports.get(normalizedPageId);
-    if (current !== undefined && current.width === width && current.height === height) {
+    // Area.globalPosition 已是当前窗口坐标系的vp；不能再次扣屏幕上的窗口原点。
+    const left = windowLeft === undefined || !Number.isFinite(windowLeft) ? undefined : windowLeft;
+    const top = windowTop === undefined || !Number.isFinite(windowTop) ? undefined : windowTop;
+    if (current !== undefined && current.width === width && current.height === height && current.left === left && current.top === top) {
       return;
     }
-    ShellLayoutState.pageViewports.set(normalizedPageId, { width: width, height: height });
+    const viewport: ShellViewport = { width: width, height: height, left: left, top: top };
+    ShellLayoutState.pageViewports.set(normalizedPageId, viewport);
     ShellLayoutState.bumpRevision('viewport_changed');
   }
 
@@ -228,6 +274,15 @@ export default class ShellLayoutState {
     const viewport = ShellLayoutState.pageViewports.get(pageId);
     const viewportWidth = viewport === undefined ? width : viewport.width;
     const viewportHeight = viewport === undefined ? height : viewport.height;
+    const relativeInsets: ShellInsets = viewport === undefined || viewport.left === undefined || viewport.top === undefined ? {
+      top: ShellLayoutState.safeAreaInsets.top, right: ShellLayoutState.safeAreaInsets.right,
+      bottom: ShellLayoutState.safeAreaInsets.bottom, left: ShellLayoutState.safeAreaInsets.left
+    } : {
+      top: Math.max(0, Math.min(viewportHeight, ShellLayoutState.safeAreaInsets.top - viewport.top)),
+      right: Math.max(0, Math.min(viewportWidth, viewport.left + viewportWidth - (width - ShellLayoutState.safeAreaInsets.right))),
+      bottom: Math.max(0, Math.min(viewportHeight, viewport.top + viewportHeight - (height - ShellLayoutState.safeAreaInsets.bottom))),
+      left: Math.max(0, Math.min(viewportWidth, ShellLayoutState.safeAreaInsets.left - viewport.left))
+    };
     const viewportCapability: ShellCapabilityStatus = viewport === undefined ? 'unknown' : 'supported';
     const orientation: ShellLayoutOrientation = width === height ? 'unknown' :
       width > height ? 'landscape' : 'portrait';
@@ -254,18 +309,14 @@ export default class ShellLayoutState {
       viewportHeight: viewportHeight,
       density: ShellLayoutState.density,
       orientation: orientation,
-      windowMode: 'unknown',
-      safeAreaInsets: {
-        top: ShellLayoutState.safeAreaInsets.top,
-        right: ShellLayoutState.safeAreaInsets.right,
-        bottom: ShellLayoutState.safeAreaInsets.bottom,
-        left: ShellLayoutState.safeAreaInsets.left
-      },
+      windowMode: ShellLayoutState.windowMode,
+      safeAreaInsets: relativeInsets,
       fold: fold,
       capabilities: {
-        windowMetrics: 'supported',
+        windowMetrics: ShellLayoutState.windowMetricsCapability,
         viewportMetrics: viewportCapability,
-        safeArea: ShellLayoutState.safeAreaCapability,
+        safeArea: pageId.length > 0 && (viewport === undefined || viewport.left === undefined || viewport.top === undefined) ?
+          'unknown' : ShellLayoutState.safeAreaCapability,
         windowMode: ShellLayoutState.windowModeCapability,
         foldStatus: ShellLayoutState.foldStatusCapability,
         foldDisplayMode: ShellLayoutState.foldDisplayModeCapability,
@@ -282,6 +333,7 @@ export default class ShellLayoutState {
     if (ShellLayoutState.screenWidthPx === size.width && ShellLayoutState.screenHeightPx === size.height) return;
     ShellLayoutState.screenWidthPx = size.width;
     ShellLayoutState.screenHeightPx = size.height;
+    ShellLayoutState.windowMetricsCapability = 'supported';
     // 折叠/展开通常先触发窗口尺寸变化；此处刷新可选折痕快照，不推导业务分区。
     ShellLayoutState.refreshCreaseRegion();
     ShellLayoutState.bumpRevision('window_size_changed');
@@ -290,6 +342,20 @@ export default class ShellLayoutState {
   private static readonly windowRectListener = (options: window.RectChangeOptions): void => {
     ShellLayoutState.updateWindowRect(options.rect, 'window_rect_changed');
   };
+
+  private static readonly windowStatusListener = (status: window.WindowStatusType): void => {
+    ShellLayoutState.updateWindowMode(status);
+  };
+
+  private static updateWindowMode(status: window.WindowStatusType): void {
+    const mode: ShellWindowMode = status === window.WindowStatusType.FULL_SCREEN || status === window.WindowStatusType.MAXIMIZE ?
+      'fullscreen' : status === window.WindowStatusType.FLOATING ? 'floating' :
+        status === window.WindowStatusType.SPLIT_SCREEN ? 'split' : 'unknown';
+    ShellLayoutState.windowModeCapability = mode === 'unknown' ? 'unknown' : 'supported';
+    if (mode === ShellLayoutState.windowMode) return;
+    ShellLayoutState.windowMode = mode;
+    ShellLayoutState.bumpRevision('window_mode_changed');
+  }
 
   private static readonly avoidAreaListener = (options: window.AvoidAreaOptions): void => {
     ShellLayoutState.avoidAreas.set(Number(options.type), options.area);
@@ -326,6 +392,7 @@ export default class ShellLayoutState {
 
   private static updateWindowRect(rect: window.Rect, reason: string): void {
     if (rect.width <= 0 || rect.height <= 0) return;
+    ShellLayoutState.windowMetricsCapability = 'supported';
     const changed = ShellLayoutState.screenWidthPx !== rect.width ||
       ShellLayoutState.screenHeightPx !== rect.height ||
       ShellLayoutState.windowLeftPx !== rect.left ||
@@ -343,7 +410,8 @@ export default class ShellLayoutState {
     let right = 0;
     let bottom = 0;
     let left = 0;
-    ShellLayoutState.avoidAreas.forEach((area: window.AvoidArea) => {
+    ShellLayoutState.avoidAreas.forEach((area: window.AvoidArea, type: number) => {
+      if (type === window.AvoidAreaType.TYPE_KEYBOARD) return;
       if (!area.visible) return;
       top = Math.max(top, area.topRect.height);
       right = Math.max(right, area.rightRect.width);

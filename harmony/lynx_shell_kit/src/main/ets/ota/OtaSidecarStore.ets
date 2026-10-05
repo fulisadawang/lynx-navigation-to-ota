@@ -1,6 +1,6 @@
+import { hashOtaFile } from './OtaFileIO';
 import { statfs } from '@kit.CoreFileKit';
 import fs from '@ohos.file.fs';
-import util from '@ohos.util';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import OtaApiClient from './OtaApiClient';
 import OtaJson from './OtaJson';
@@ -84,15 +84,30 @@ export default class OtaSidecarStore {
     this.ensureAllowedUrl(ref.url);
     if (this.verifyAsync(appId, ref, owners, true)) return;
     signal.throwIfCancelled();
-    const bytes = await this.api.downloadBundle(ref.url, signal, context);
-    this.ensureBytes(bytes, ref.size, ref.sha256);
-    const raw = new util.TextDecoder().decode(new Uint8Array(bytes));
+    const metadataRoot = this.transactionRoot(appId, 'async-bundles');
+    this.ensureDirectory(metadataRoot);
+    const metadataPart = `${metadataRoot}/manifest-${this.randomToken()}.part`;
+    this.activeTransactions.add(metadataPart);
+    let raw: string;
+    try {
+      const byteCount = await this.api.downloadBundleToFile(ref.url, metadataPart, signal, context, ref.size);
+      if (byteCount !== ref.size || await hashOtaFile(metadataPart, ref.size) !== ref.sha256) throw new Error('附属资源清单 size/SHA 校验失败');
+      raw = await fs.readText(metadataPart);
+      signal.throwIfCancelled(); this.identityGuard(context);
+    } finally {
+      this.activeTransactions.delete(metadataPart);
+      this.removeIfPresent(metadataPart);
+    }
     const manifest = OtaJson.parseAsyncBundleManifest(raw);
     const ownerSet = new Set<string>(owners);
     manifest.entries.forEach((entry: OtaAsyncBundleResource) => {
       if (!ownerSet.has(entry.ownerBundlePath)) throw new Error('Async ownerBundlePath 不属于当前代码 Release');
       this.ensureAllowedUrl(entry.url);
     });
+    for (const entry of manifest.entries) {
+      await this.validateObjectAsync(appId, 'async-bundles', entry.sha256, entry.size, true);
+      signal.throwIfCancelled(); this.identityGuard(context);
+    }
     const declaredObjects = new Map<string, number>();
     const missingObjects = new Map<string, number>();
     manifest.entries.forEach((entry: OtaAsyncBundleResource) => {
@@ -126,6 +141,26 @@ export default class OtaSidecarStore {
     } finally {
       this.activeTransactions.delete(transaction);
     }
+  }
+
+  async validateManifestObjects(appId: string, manifest: OtaLocalManifest, forceHash: boolean = false): Promise<void> {
+    if (manifest.asyncBundleManifest === undefined) return;
+    let resources: OtaAsyncBundleManifest;
+    try { resources = this.readAsyncManifest(appId, manifest.asyncBundleManifest); }
+    catch (error) { return; }
+    for (const entry of resources.entries) await this.validateObjectAsync(appId, 'async-bundles', entry.sha256, entry.size, forceHash);
+  }
+
+  private async validateObjectAsync(appId: string, kind: string, sha: string, size: number, forceHash: boolean = false): Promise<void> {
+    const path = this.objectPath(appId, kind, sha);
+    if (!this.isRegularFile(path) || this.fileSize(path) !== size) return;
+    const stat = fs.statSync(path);
+    const key = `${path}|${size}|${stat.mtime}|${stat.ctime}|${stat.ino}`;
+    if (!forceHash && this.validatedObjects.has(key)) return;
+    if (forceHash) this.validatedObjects.delete(key);
+    if (await hashOtaFile(path) !== sha) { this.validatedObjects.delete(key); return; }
+    const after = fs.statSync(path);
+    if (stat.size === after.size && stat.mtime === after.mtime && stat.ctime === after.ctime && stat.ino === after.ino) this.validatedObjects.add(key);
   }
 
   verifyBound(appId: string, manifest: OtaLocalManifest): boolean {
@@ -229,12 +264,11 @@ export default class OtaSidecarStore {
 
   private async fetchObject(appId: string, kind: string, url: string, sha: string, size: number,
     transaction: string, index: number, signal: OtaPrepareSignal, context?: OtaUserContext): Promise<void> {
-    const bytes = await this.api.downloadBundle(url, signal, context);
-    signal.throwIfCancelled();
-    this.identityGuard(context);
-    this.ensureBytes(bytes, size, sha);
     const part = `${transaction}/object-${index}.part`;
-    this.writeBinary(part, bytes);
+    const byteCount = await this.api.downloadBundleToFile(url, part, signal, context);
+    const digest = await hashOtaFile(part);
+    signal.throwIfCancelled(); this.identityGuard(context);
+    if (byteCount !== size || digest !== sha) throw new Error('附属资源 size/SHA 校验失败');
     const destination = this.objectPath(appId, kind, sha);
     this.ensureParent(destination);
     if (this.objectUsable(appId, kind, sha, size)) this.removeIfPresent(part);
@@ -242,6 +276,8 @@ export default class OtaSidecarStore {
       fs.renameSync(part, destination);
       this.syncDirectory(transaction);
       this.syncDirectory(destination.substring(0, destination.lastIndexOf('/')));
+      await this.validateObjectAsync(appId, kind, sha, size);
+      signal.throwIfCancelled(); this.identityGuard(context);
     }
   }
 
@@ -299,29 +335,8 @@ export default class OtaSidecarStore {
       if (!this.isRegularFile(path) || this.fileSize(path) !== size) return false;
       const stat = fs.statSync(path);
       const key = `${path}|${size}|${stat.mtime}|${stat.ctime}|${stat.ino}`;
-      if (!forceHash && this.validatedObjects.has(key)) return true;
-      const file = fs.openSync(path, fs.OpenMode.READ_ONLY | fs.OpenMode.NOFOLLOW);
-      try {
-        const bytes = new ArrayBuffer(size);
-        if (fs.readSync(file.fd, bytes) !== size) return false;
-        const valid = this.sha256(bytes) === sha;
-        if (valid) this.validatedObjects.add(key);
-        else this.validatedObjects.delete(key);
-        return valid;
-      } finally { fs.closeSync(file); }
+      return this.validatedObjects.has(key);
     } catch (error) { return false; }
-  }
-
-  private ensureBytes(bytes: ArrayBuffer, size: number, sha: string): void {
-    if (bytes.byteLength !== size || this.sha256(bytes) !== sha) throw new Error('附属资源 size/SHA 校验失败');
-  }
-
-  private sha256(bytes: ArrayBuffer): string {
-    const digest = cryptoFramework.createMd('SHA256');
-    digest.updateSync({ data: new Uint8Array(bytes) });
-    let hex = '';
-    digest.digestSync().data.forEach((byte: number) => { hex += byte.toString(16).padStart(2, '0'); });
-    return `sha256:${hex}`;
   }
 
   private async sha256Async(bytes: ArrayBuffer): Promise<string> {
@@ -406,11 +421,6 @@ export default class OtaSidecarStore {
     fs.mkdirSync(path, true);
   }
   private ensureParent(path: string): void { this.ensureDirectory(path.substring(0, path.lastIndexOf('/'))); }
-  private writeBinary(path: string, bytes: ArrayBuffer): void {
-    this.ensureParent(path);
-    const file = fs.openSync(path, fs.OpenMode.WRITE_ONLY | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    try { fs.writeSync(file.fd, bytes); fs.fsyncSync(file.fd); } finally { fs.closeSync(file); }
-  }
   private writeTextAtomic(path: string, raw: string): void {
     this.ensureParent(path);
     const temporary = `${path}.tmp-${this.randomToken()}`;
