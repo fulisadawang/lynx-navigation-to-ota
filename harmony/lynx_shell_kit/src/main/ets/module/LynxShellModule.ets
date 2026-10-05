@@ -1,3 +1,6 @@
+import PageBundleRuntimeRegistry from '../ota/OtaModels';
+import HostNativeModules from '../common/HostNativeModules';
+import { ShellMediaResult } from '../common/ShellTypes';
 import { preferences } from '@kit.ArkData';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { LLog, LynxContext, LynxModule } from '@lynx/lynx';
@@ -9,6 +12,8 @@ import LynxNavigator from '../routing/LynxNavigator';
 import LynxRouter from '../routing/LynxRouter';
 import ShellMessageHub from '../common/ShellMessageHub';
 import BusinessEventReporter, { NativeBusinessEventResult } from '../monitoring/BusinessEventReporter';
+import ShellTransitionRuntime from '../transition/ShellTransitionRuntime';
+import ShellPreparedRouteStore from '../transition/ShellPreparedRouteStore';
 
 interface ShellLocaleReadData {
   state: ShellLocaleStateValue;
@@ -36,24 +41,37 @@ export class LynxShellModule extends LynxModule {
       return;
     }
 
+    if (this.rejectNavigationSource(callback)) return;
+    parsed.request.sourceSnapshotID = ShellMessageHub.sourceSnapshotID(this.context);
+    parsed.request.sourceEntryID = ShellMessageHub.pageId(this.context) ?? '';
+    parsed.request.sourceNativeViewID = ShellTransitionRuntime.shared.viewIDForContext(this.context);
+    parsed.request.sessionID = ShellMessageHub.sourceSessionID(this.context);
+    parsed.request.hasHostAnchor = ShellMessageHub.sourceHasHostAnchor(this.context);
+    try { PageBundleRuntimeRegistry.current()?.validateNavigationSource(parsed.request.sourceSnapshotID); }
+    catch (error) { callback({ code: 1002, message: '来源导航版本已退休或正在恢复' }); return; }
     LynxNavigator.openResult(parsed.request, false, optionsJSON).then((result: ShellBridgeResult) => {
       callback(result);
     });
   }
 
   public close(callback: (result: ShellBridgeResult) => void): void {
+    if (this.rejectNavigationSource(callback)) return;
+    let result: ShellBridgeResult;
     try {
-      callback(LynxNavigator.closeResult());
+      result = LynxNavigator.closeResult();
     } catch (error) {
-      callback({ code: 1500, message: `关闭页面失败: ${error}` });
+      result = { code: 1500, message: `关闭页面失败: ${error}` };
     }
+    callback(result);
   }
 
   public back(delta: number, optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
+    if (this.rejectNavigationSource(callback)) return;
     callback(LynxNavigator.back(delta, optionsJSON));
   }
 
   public popTo(routeKey: string, callback: (result: ShellBridgeResult) => void): void {
+    if (this.rejectNavigationSource(callback)) return;
     callback(LynxNavigator.popTo(routeKey));
   }
 
@@ -62,19 +80,23 @@ export class LynxShellModule extends LynxModule {
     optionsJSON: string,
     callback: (result: ShellBridgeResult) => void
   ): void {
+    if (this.rejectNavigationSource(callback)) return;
     callback(LynxNavigator.popTo(routeKey, optionsJSON));
   }
 
   public closeAll(callback: (result: ShellBridgeResult) => void): void {
+    if (this.rejectNavigationSource(callback)) return;
     callback(LynxNavigator.closeAll());
   }
 
   public closeAllWithOptions(optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
-    callback(LynxNavigator.closeAll());
+    if (this.rejectNavigationSource(callback)) return;
+    callback(LynxNavigator.closeAll(optionsJSON));
   }
 
   public reLaunch(optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
-    callback(LynxNavigator.reLaunch());
+    if (this.rejectNavigationSource(callback)) return;
+    callback(LynxNavigator.reLaunch(optionsJSON));
   }
 
   public redirect(url: string, optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
@@ -83,7 +105,15 @@ export class LynxShellModule extends LynxModule {
       callback({ code: 1001, message: parsed.errorMessage });
       return;
     }
-    LynxNavigator.redirectResult(parsed.request).then((result: ShellBridgeResult) => callback(result));
+    if (this.rejectNavigationSource(callback)) return;
+    parsed.request.sourceSnapshotID = ShellMessageHub.sourceSnapshotID(this.context);
+    parsed.request.sourceEntryID = ShellMessageHub.pageId(this.context) ?? '';
+    parsed.request.sourceNativeViewID = ShellTransitionRuntime.shared.viewIDForContext(this.context);
+    parsed.request.sessionID = ShellMessageHub.sourceSessionID(this.context);
+    parsed.request.hasHostAnchor = ShellMessageHub.sourceHasHostAnchor(this.context);
+    try { PageBundleRuntimeRegistry.current()?.validateNavigationSource(parsed.request.sourceSnapshotID); }
+    catch (error) { callback({ code: 1002, message: '来源导航版本已退休或正在恢复' }); return; }
+    LynxNavigator.redirectResult(parsed.request, optionsJSON).then((result: ShellBridgeResult) => callback(result));
   }
 
   public getNavigationState(callback: (result: ShellBridgeResult) => void): void {
@@ -93,6 +123,7 @@ export class LynxShellModule extends LynxModule {
   }
 
   public closeWithResult(resultJSON: string, callback: (result: ShellBridgeResult) => void): void {
+    if (this.rejectNavigationSource(callback)) return;
     callback(LynxNavigator.closeWithResult(resultJSON));
   }
 
@@ -182,11 +213,34 @@ export class LynxShellModule extends LynxModule {
       callback({ code: 1001, message: parsed.errorMessage });
       return;
     }
-    callback(LynxNavigator.prepareRoute(url, optionsJSON));
+    if (this.rejectNavigationSource(callback)) return;
+    parsed.request.sourceSnapshotID = ShellMessageHub.sourceSnapshotID(this.context);
+    parsed.request.sourceEntryID = ShellMessageHub.pageId(this.context) ?? '';
+    parsed.request.sourceNativeViewID = ShellTransitionRuntime.shared.viewIDForContext(this.context);
+    parsed.request.sessionID = ShellMessageHub.sourceSessionID(this.context);
+    parsed.request.hasHostAnchor = ShellMessageHub.sourceHasHostAnchor(this.context);
+    const request = parsed.request;
+    ShellPreparedRouteStore.shared.prepare(request, (): boolean =>
+      ShellTransitionRuntime.shared.viewIDForContext(this.context).length > 0).then(
+        (result: ShellBridgeResult): void => callback(result),
+        (error: Object): void => callback({ code: 1003, message: 'Bundle预加载失败: ' + String(error) }));
   }
 
   public cancelPreparedRoute(token: string, callback: (result: ShellBridgeResult) => void): void {
-    callback(LynxNavigator.cancelPreparedRoute(token));
+    callback(ShellPreparedRouteStore.shared.cancel(token));
+  }
+
+  // 保活页面的旧定时器不能关闭另一个前台页面；已退休版本的活体页面仍允许退出。
+  private rejectNavigationSource(callback: (result: ShellBridgeResult) => void): boolean {
+    if (ShellMessageHub.isNavigationBusy()) {
+      callback({ code: 1006, message: '原生转场正在进行' });
+      return true;
+    }
+    if (!ShellMessageHub.isContextVisible(this.context) || !HostNativeModules.isContextVisible(this.context)) {
+      callback({ code: 1002, message: '来源Context已销毁或不在前台' });
+      return true;
+    }
+    return false;
   }
 
   public markTransitionReady(transactionID: string, callback: (result: ShellBridgeResult) => void): void {
@@ -197,25 +251,27 @@ export class LynxShellModule extends LynxModule {
     callback(LynxNavigator.getTransitionState());
   }
 
-  /** Harmony 首版只保证导航/存储桥；媒体方法保留稳定错误码，避免 JS 侧再遇到“方法不存在”。 */
-  public chooseMedia(optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
-    callback({ code: 1004, message: 'HarmonyOS 媒体选择桥尚未接入' });
+  public markOtaHealthy(callback: (result: ShellBridgeResult) => void): void { ShellMessageHub.markOtaHealthy(this.context, callback); }
+
+  public setBackGestureEnabled(enabled: boolean, callback: (result: ShellBridgeResult) => void): void {
+    callback(ShellMessageHub.setBackGestureEnabled(this.context, enabled));
   }
 
-  public uploadFile(optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
-    callback({ code: 1004, message: 'HarmonyOS 文件上传桥尚未接入' });
-  }
+  public chooseMedia(optionsJSON: string, callback: (result: ShellMediaResult) => void): void { this.callMedia('chooseMedia', optionsJSON, callback); }
+  public uploadFile(optionsJSON: string, callback: (result: ShellMediaResult) => void): void { this.callMedia('uploadFile', optionsJSON, callback); }
+  public uploadImage(optionsJSON: string, callback: (result: ShellMediaResult) => void): void { this.callMedia('uploadImage', optionsJSON, callback); }
+  public downloadFile(optionsJSON: string, callback: (result: ShellMediaResult) => void): void { this.callMedia('downloadFile', optionsJSON, callback); }
+  public saveDataURL(optionsJSON: string, callback: (result: ShellMediaResult) => void): void { this.callMedia('saveDataURL', optionsJSON, callback); }
 
-  public uploadImage(optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
-    callback({ code: 1004, message: 'HarmonyOS 图片上传桥尚未接入' });
-  }
-
-  public downloadFile(optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
-    callback({ code: 1004, message: 'HarmonyOS 文件下载桥尚未接入' });
-  }
-
-  public saveDataURL(optionsJSON: string, callback: (result: ShellBridgeResult) => void): void {
-    callback({ code: 1004, message: 'HarmonyOS DataURL 保存桥尚未接入' });
+  private callMedia(method: string, optionsJSON: string, callback: (result: ShellMediaResult) => void): void {
+    HostNativeModules.callMedia(this.context, method, optionsJSON, (raw: string) => {
+      let result: ShellMediaResult;
+      try {
+        result = JSON.parse(raw) as ShellMediaResult;
+        if (typeof result.code !== 'number' || typeof result.msg !== 'string') throw new Error('invalid_media_receipt');
+      } catch (error) { result = { code: -1, msg: '原生媒体返回协议无效' }; }
+      callback(result);
+    });
   }
 
   public setStorageItem(key: string, value: string): void {

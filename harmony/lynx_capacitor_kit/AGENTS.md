@@ -14,7 +14,7 @@
 2. sibling Shell 规则：`harmony/lynx_shell_kit/AGENTS.md`。
 3. 本目录 `oh-package.json5`、`build-profile.json5`、`src/main/module.json5`。
 4. 协议目录：`LynxCapacitorCatalog.ets`、`LynxCapacitorEnvelope.ets`。
-5. transport/runtime：`LynxCapacitorModule.ets`。
+5. SDK facade/共享 runtime：`LynxCapacitorModule.ets`、`LynxHarmonyCapabilityRuntime.ets`、`LynxHarmonyNativeOwner.ets`、`LynxCapacitorHost.ets`、`LynxHarmonyNativeIO.ets`。
 6. 独立音频 adapter：`LynxHarmonyAudioCapabilities.ets`。
 7. 测试：`src/test/NativeCapabilityContract.test.ets`。
 8. Android 基线：`android/lynx-capacitor/.../NativeCapabilityCatalog.kt`。
@@ -32,11 +32,15 @@
 ## ArkTS 与平台 owner
 
 - 保持 ArkTS 严格类型，避免隐式 any、动态 prototype、运行时 monkey patch 和不支持的 TS 语法。
-- `UIAbilityContext` 由宿主通过 `setHostContext` 注入，并在 Ability 销毁时 `clearHostContext`。
+- `UIAbilityContext` 的进程事件接线仍由 `setHostContext/clearHostContext` 管理；每个真实 LynxContext 的 UIContext、Window 与前台 getter 由 `LynxCapacitorHosts.bind/unbind` 显式提供，不从全局最后窗口推断。
+- SDK Module 与旧 Shell 共用 exact Context 的 plain Runtime/owner；销毁 tombstone 拒绝晚到 factory，隐藏不等于销毁。Lynx 4.1 普通 Module 方法在 UI 线程，三个 syncMethods 查询也由 UI 线程同步返回，constructor/同步快照不得做大 IO。
+- bulk 文件、Base64 和大结果使用有界 TaskPool；native async 网络/数据库进入并发2、队列16的执行器。Bridge取消不提前释放仍在执行的 native 操作槽与同数据库串行锁。
+- KeepAwake/Privacy 以 Window 多owner lease恢复baseline；关闭自己的页面不能取消别的页面需求。
 - App URL、push、前后台、backButton 等事件由 EntryAbility/LynxContainer 显式转发。
 - UIContext、Picker、Dialog、Toast、Window、权限和 Want 操作必须使用当前有效宿主上下文。
 - Camera、Audio、FileTransfer、Geolocation、Motion、Notifications 和 SQLite 的资源必须在 `destroy()` 中释放。
 - CameraPicker/PhotoViewPicker 等对象按当前 SDK 类型构造，不用写入只读 profile 属性。
+- CameraPicker 显式提供已存在且可写的私有 saveUri；saveToGallery 通过系统创建授权后真正写入内容并 fsync，不能把返回目标URI当保存完成。旧 Shell 与Cap沿同媒体后端，保留各自ABI。
 
 ## 权限与错误语义
 

@@ -63,7 +63,7 @@ export default class EmbeddedBundleRegistry {
     if (raw.byteLength !== descriptor.size) {
       throw new Error(`内置 Bundle size 校验失败：${assetPath}`);
     }
-    const actualSha = this.sha256(raw.buffer as ArrayBuffer);
+    const actualSha = await this.sha256(raw.buffer as ArrayBuffer);
     if (actualSha.toLowerCase() !== descriptor.sha256.toLowerCase()) {
       throw new Error(`内置 Bundle SHA-256 校验失败：${assetPath}`);
     }
@@ -187,10 +187,10 @@ export default class EmbeddedBundleRegistry {
     return value;
   }
 
-  private sha256(buffer: ArrayBuffer): string {
+  private async sha256(buffer: ArrayBuffer): Promise<string> {
     const digest = cryptoFramework.createMd('SHA256');
-    digest.updateSync({ data: new Uint8Array(buffer) });
-    const bytes = digest.digestSync().data;
+    await digest.update({ data: new Uint8Array(buffer) });
+    const bytes = (await digest.digest()).data;
     let hex = '';
     bytes.forEach((value: number) => {
       hex += value.toString(16).padStart(2, '0');
@@ -206,6 +206,10 @@ export class EmbeddedOnlyRuntime implements PageBundleRuntime {
 
   constructor(context: common.UIAbilityContext) {
     this.registry = new EmbeddedBundleRegistry(context);
+  }
+
+  validateNavigationSource(sourceSnapshotID: string): void {
+    if (sourceSnapshotID.length > 0) throw new Error('stale_navigation_snapshot');
   }
 
   onApplicationStarted(): void {
@@ -229,9 +233,42 @@ export class EmbeddedOnlyRuntime implements PageBundleRuntime {
     return result;
   }
 
+  async prewarm(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal,
+    navigationSessionID: string = '', sourceSnapshotID: string = ''): Promise<PreparedPageBundle> {
+    this.validateNavigationSource(sourceSnapshotID);
+    const result = await this.prepare(lynxAppId, bundleName, signal, navigationSessionID);
+    result.actualSizeBytes = result.bytes?.byteLength;
+    result.prewarm = { navigationSessionID: navigationSessionID, sourceSnapshotID: sourceSnapshotID, identityEpoch: 0 };
+    return result;
+  }
+
+  async claimPrewarmed(prepared: PreparedPageBundle, navigationSessionID: string,
+    sourceSnapshotID: string, signal: OtaPrepareSignal): Promise<PreparedPageBundle> {
+    signal.throwIfCancelled(); this.validateNavigationSource(sourceSnapshotID);
+    const ticket = prepared.prewarm;
+    if (ticket === undefined || ticket.identityEpoch !== 0 || ticket.navigationSessionID !== navigationSessionID ||
+      ticket.sourceSnapshotID !== sourceSnapshotID) throw new Error('stale_prepared_route');
+    const current = await this.registry.resolve(prepared.lynxAppId, prepared.bundleName);
+    signal.throwIfCancelled();
+    if (current === null || current.releaseId !== prepared.releaseId || current.sha256 !== prepared.sha256 ||
+      current.bytes?.byteLength !== prepared.bytes?.byteLength) throw new Error('stale_prepared_route');
+    return current;
+  }
+
   resolveCurrent(lynxAppId: string, bundleName: string, navigationSessionID?: string): Promise<PreparedPageBundle | null> {
     return this.registry.resolve(lynxAppId, bundleName);
   }
+
+  resolvePage(lynxAppId: string, bundleName: string, navigationSessionID?: string, sourceSnapshotID?: string): Promise<PreparedPageBundle | null> {
+    return this.registry.resolve(lynxAppId, bundleName);
+  }
+
+  confirmCandidateHealthy(lynxAppId: string, expectedReleaseId: string, expectedIdentityEpoch?: number): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
+  recoverFailedRelease(lynxAppId: string, reason: string, expectedReleaseId: string, expectedIdentityEpoch: number | undefined,
+    navigationSessionID: string, snapshotID: string, candidate: boolean): Promise<boolean> { return Promise.resolve(false); }
 
   refreshAppBundleIfNeeded(lynxAppId: string): void {
   }

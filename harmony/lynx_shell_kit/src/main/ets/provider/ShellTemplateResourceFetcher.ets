@@ -53,6 +53,17 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
     });
   }
 
+  /** 预置路由复用同一安全模板Provider，只预取字节，不创建LynxView或JS runtime。 */
+  preload(rawUrl: string): Promise<ArrayBuffer> {
+    return new Promise<ArrayBuffer>((resolve, reject): void => {
+      this.loadBinary(rawUrl, (error: BusinessError, data: ArrayBuffer): void => {
+        if (error !== undefined && error !== null) { reject(error); return; }
+        if (data.byteLength === 0) { reject(new Error('预置Bundle内容为空')); return; }
+        resolve(data);
+      });
+    });
+  }
+
   fetchSSRData(request: LynxResourceRequest, callback: AsyncCallback<ArrayBuffer, void>): void {
     if (this.asyncResolver !== undefined) {
       callback(this.createError(1108, '当前 OTA 页面没有声明 SSR 资源'), new ArrayBuffer(0));
@@ -93,10 +104,10 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
    * OTA 根 Bundle 已经在 ContentAddressedOtaStore 中完成 size/SHA 校验；Fetcher 对远程文件仍二次
    * 限制路径、普通文件和体积；embedded rawfile 则直接消费已校验的 ArrayBuffer。
    */
-  private loadPreparedBundle(
+  private async loadPreparedBundle(
     callback: AsyncCallback<ArrayBuffer, void>,
     generation: number
-  ): void {
+  ): Promise<void> {
     if (generation !== this.requestGeneration) return;
     if (this.preparedBytes !== null) {
       if (generation === this.requestGeneration) callback(undefined, this.preparedBytes.slice(0));
@@ -117,7 +128,8 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
         }
         return;
       }
-      const stat = fs.lstatSync(this.preparedFilePath);
+      const stat = await fs.lstat(this.preparedFilePath);
+      if (generation !== this.requestGeneration) return;
       if (!stat.isFile() || stat.isSymbolicLink()) {
         if (generation === this.requestGeneration) {
           callback(this.createError(1102, 'OTA Bundle 不是普通文件'), new ArrayBuffer(0));
@@ -130,19 +142,21 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
         }
         return;
       }
-      const file = fs.openSync(this.preparedFilePath, fs.OpenMode.READ_ONLY | fs.OpenMode.NOFOLLOW);
+      const file = await fs.open(this.preparedFilePath, fs.OpenMode.READ_ONLY | fs.OpenMode.NOFOLLOW);
       try {
         const binary = new ArrayBuffer(stat.size);
-        const count = fs.readSync(file.fd, binary);
-        if (count !== stat.size) {
-          if (generation === this.requestGeneration) {
-            callback(this.createError(1104, 'OTA Bundle 读取不完整'), new ArrayBuffer(0));
-          }
-          return;
+        const output = new Uint8Array(binary);
+        let offset = 0;
+        while (offset < stat.size) {
+          if (generation !== this.requestGeneration) return;
+          const chunk = new ArrayBuffer(Math.min(256 * 1024, stat.size - offset));
+          const count = await fs.read(file.fd, chunk);
+          if (count <= 0) throw new Error('OTA Bundle读取不完整');
+          output.set(new Uint8Array(chunk, 0, count), offset); offset += count;
         }
         if (generation === this.requestGeneration) callback(undefined, binary);
       } finally {
-        fs.closeSync(file);
+        await fs.close(file);
       }
     } catch (error) {
       if (generation === this.requestGeneration) {

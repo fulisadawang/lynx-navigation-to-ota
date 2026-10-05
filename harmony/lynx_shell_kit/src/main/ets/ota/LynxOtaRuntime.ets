@@ -126,6 +126,8 @@ interface NavigationSnapshotRecord {
   embedded: boolean;
   lease: OtaBundleLease | null;
   identityEpoch: number;
+  source: string;
+  retired: boolean;
 }
 
 /** 生命周期票据使用对象身份，reset 后无需永久保存每个已结束 session 的计数墓碑。 */
@@ -149,6 +151,10 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
   private readonly activeSignals: Set<OtaPrepareSignal> = new Set();
   private readonly snapshotTokens: Map<string, NavigationSnapshotToken> = new Map();
   private reconciledEpoch: number = -1;
+  private startupMaintenanceCompleted: boolean = false;
+  private readonly snapshotsByID: Map<string, NavigationSnapshotRecord> = new Map();
+  private readonly recoverySessions: Set<string> = new Set();
+  private readonly processNonce: string = `${new Date().getTime()}-${Math.random().toString(36).substring(2)}`;
   private closed: boolean = false;
   private fullSyncTaskId: number = 0;
   private readonly navigationSnapshots: Map<string, NavigationSnapshotRecord> = new Map();
@@ -200,6 +206,7 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     if (this.closed) throw new Error('ota_runtime_closed');
     const changed = this.identity.register(userId);
     if (!changed) return false;
+    this.navigationSnapshots.forEach((snapshot) => { snapshot.retired = true; });
     this.api.cancelAll();
     this.activeSignals.forEach((signal) => signal.cancel());
     this.activeSignals.clear();
@@ -229,6 +236,8 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     this.fullSyncWaiters.splice(0).forEach((waiter) => waiter(false));
     this.navigationSnapshots.forEach((snapshot) => snapshot.lease?.close());
     this.navigationSnapshots.clear();
+    this.snapshotsByID.clear();
+    this.recoverySessions.clear();
     this.snapshotTokens.clear();
   }
 
@@ -240,6 +249,10 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
 
   private reconcile(context: OtaUserContext): void {
     this.guard(context);
+    if (!this.startupMaintenanceCompleted) {
+      this.transaction.recoverInterruptedCandidates(context);
+      this.startupMaintenanceCompleted = true;
+    }
     if (this.reconciledEpoch === context.identityEpoch) return;
     this.transaction.reconcileUserContext(context);
     this.guard(context);
@@ -263,12 +276,15 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     lynxAppId: string,
     bundleName: string,
     signal: OtaPrepareSignal,
-    navigationSessionID: string = ''
+    navigationSessionID: string = '',
+    sourceSnapshotID: string = ''
   ): Promise<PreparedPageBundle> {
     const context = this.identity.capture();
     this.validateLogicalAddress(lynxAppId, bundleName);
     this.guard(context, signal);
+    this.reconcile(context);
     const sessionID = navigationSessionID.trim();
+    this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
     const snapshotGeneration = this.snapshotToken(sessionID, lynxAppId);
     const snapshot = this.snapshotFor(sessionID, lynxAppId, context);
     if (snapshot !== null) {
@@ -276,9 +292,16 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       if (pinned === null) {
         throw new Error(`NavigationSnapshot 已失效：${snapshot.id}/${lynxAppId}/${bundleName}`);
       }
+      try { this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context); }
+      catch (error) { pinned.lease?.close(); throw (error as Error); }
       return this.attachSnapshot(snapshot, this.preparedForContext(context, pinned, signal));
     }
-    const local = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName, context);
+    const local = await this.transaction.acquireCachedBundleLease(lynxAppId, bundleName, true, context,
+      () => !this.closed && !signal.cancelled && context.identityEpoch === this.userIdentityEpoch);
+    try {
+      this.guard(context, signal);
+      this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
+    } catch (error) { local?.lease?.close(); throw (error as Error); }
     if (local !== null) {
       this.syncAppBundleAsync(lynxAppId);
       return this.createOrAttachSnapshot(sessionID, local, context, snapshotGeneration);
@@ -286,6 +309,7 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     const repairDownloadedCurrent = this.transaction.hasDownloadedCurrent(lynxAppId, context);
     const embedded = repairDownloadedCurrent ? null : await this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
     this.guard(context, signal);
+    this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
     if (embedded !== null) {
       return this.createOrAttachSnapshot(sessionID, embedded, context, snapshotGeneration);
     }
@@ -297,8 +321,116 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     }).finally(() => this.activeSignals.delete(signal));
     // ensureBundleReady 已交付带 lease 的结果，不能丢弃后再次租用造成永久额外引用。
     this.preparedForContext(context, repaired, signal);
+    try { this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context); }
+    catch (error) { repaired.lease?.close(); throw (error as Error); }
     this.refreshGate.markSuccess(lynxAppId, context.identityEpoch, this.uptimeMillis());
     return this.createOrAttachSnapshot(sessionID, repaired, context, snapshotGeneration);
+  }
+
+  /** 预热不建立正式 session Snapshot、不安排后台同步，也不进入候选 TRIAL。 */
+  async prewarm(lynxAppId: string, bundleName: string, signal: OtaPrepareSignal,
+    navigationSessionID: string = '', sourceSnapshotID: string = ''): Promise<PreparedPageBundle> {
+    const context = this.identity.capture();
+    this.validateLogicalAddress(lynxAppId, bundleName);
+    this.guard(context, signal);
+    const sessionID = navigationSessionID.trim();
+    this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
+    const snapshot = this.snapshotFor(sessionID, lynxAppId, context);
+    this.activeSignals.add(signal);
+    try {
+      if (snapshot !== null) {
+        const ticket = this.transaction.capturePrewarmTicket(lynxAppId, context);
+        ticket.navigationSnapshotID = snapshot.id;
+        const pinned = snapshot.embedded ? await this.prepareFromSnapshot(snapshot, bundleName, context) :
+          await this.queue.run(() => {
+            this.guard(context, signal);
+            this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
+            return this.transaction.prewarmPinnedBundleLease(lynxAppId, snapshot.releaseId, bundleName, snapshot.manifestId ?? '', signal, context);
+          });
+        if (pinned === null) throw new Error('pinned_bundle_unavailable');
+        pinned.prewarm = pinned.prewarm ?? ticket;
+        pinned.prewarm.navigationSnapshotID = snapshot.id;
+        pinned.source = snapshot.source;
+        return this.completePrewarm(pinned, sessionID, sourceSnapshotID, context, signal);
+      }
+      const cached = await this.transaction.acquireCachedBundleLease(lynxAppId, bundleName, true, context,
+        () => !this.closed && !signal.cancelled && context.identityEpoch === this.userIdentityEpoch, false);
+      if (cached !== null) return this.completePrewarm(cached, sessionID, sourceSnapshotID, context, signal);
+      const ticket = this.transaction.capturePrewarmTicket(lynxAppId, context);
+      const embedded = this.transaction.hasDownloadedCurrent(lynxAppId, context) ? null :
+        await this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
+      this.guard(context, signal);
+      if (embedded !== null) {
+        embedded.prewarm = ticket;
+        return this.completePrewarm(embedded, sessionID, sourceSnapshotID, context, signal);
+      }
+      const repaired = await this.queue.run(() => {
+        this.guard(context, signal);
+        this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
+        return this.transaction.ensureBundleReady(lynxAppId, bundleName, signal, context, false);
+      });
+      return this.completePrewarm(repaired, sessionID, sourceSnapshotID, context, signal);
+    } finally { this.activeSignals.delete(signal); }
+  }
+
+  private completePrewarm(prepared: PreparedPageBundle, sessionID: string, sourceID: string,
+    context: OtaUserContext, signal: OtaPrepareSignal): PreparedPageBundle {
+    try {
+      this.preparedForContext(context, prepared, signal);
+      this.validateSourceSnapshot(sessionID, prepared.lynxAppId, sourceID, context);
+      const ticket = prepared.prewarm;
+      if (ticket === undefined) throw new Error('invalid_prewarm_ticket');
+      const snapshot = this.snapshotFor(sessionID, prepared.lynxAppId, context);
+      if ((ticket.navigationSnapshotID !== undefined && ticket.navigationSnapshotID !== snapshot?.id) ||
+        (snapshot !== null && (snapshot.releaseId !== prepared.releaseId || snapshot.manifestId !== prepared.manifestId))) throw new Error('stale_navigation_snapshot');
+      ticket.navigationSessionID = sessionID;
+      ticket.sourceSnapshotID = sourceID;
+      ticket.navigationSnapshotID = snapshot?.id;
+      this.transaction.validatePrewarmTicket(prepared.lynxAppId, ticket, context);
+      if (prepared.bytes !== undefined) prepared.actualSizeBytes = prepared.bytes.byteLength;
+      return prepared;
+    } catch (error) { this.closePrepared(prepared); throw (error as Error); }
+  }
+
+  async claimPrewarmed(warm: PreparedPageBundle, navigationSessionID: string, sourceSnapshotID: string,
+    signal: OtaPrepareSignal): Promise<PreparedPageBundle> {
+    const ticket = warm.prewarm;
+    if (ticket === undefined) throw new Error('invalid_prewarm_ticket');
+    const context = this.identity.capture(ticket.identityEpoch);
+    const sessionID = navigationSessionID.trim();
+    if (ticket.navigationSessionID !== sessionID || ticket.sourceSnapshotID !== sourceSnapshotID) throw new Error('stale_prewarm_source');
+    this.validateLogicalAddress(warm.lynxAppId, warm.bundleName);
+    const active = (): boolean => {
+      this.guard(context, signal);
+      this.validateSourceSnapshot(sessionID, warm.lynxAppId, sourceSnapshotID, context);
+      const snapshot = this.snapshotFor(sessionID, warm.lynxAppId, context);
+      if ((ticket.navigationSnapshotID !== undefined && ticket.navigationSnapshotID !== snapshot?.id) ||
+        (snapshot !== null && (snapshot.releaseId !== warm.releaseId || snapshot.manifestId !== warm.manifestId))) throw new Error('stale_navigation_snapshot');
+      return true;
+    };
+    active();
+    this.transaction.validatePrewarmTicket(warm.lynxAppId, ticket, context);
+    const generation = this.snapshotToken(sessionID, warm.lynxAppId);
+    this.activeSignals.add(signal);
+    let claimed: PreparedPageBundle | null = null;
+    try {
+      claimed = await this.queue.run(async () => {
+        active();
+        if (warm.manifestId !== undefined) {
+          return this.transaction.claimPrewarmedBundleLease(warm, context, () => generation.active && active());
+        }
+        const embedded = await this.embeddedBundleRegistry.resolve(warm.lynxAppId, warm.bundleName);
+        active();
+        this.transaction.validatePrewarmTicket(warm.lynxAppId, ticket, context);
+        if (embedded === null || embedded.releaseId !== warm.releaseId || embedded.sha256 !== warm.sha256 ||
+          embedded.bytes?.byteLength !== warm.actualSizeBytes) throw new Error('stale_prewarm_bundle');
+        embedded.actualSizeBytes = embedded.bytes?.byteLength;
+        return embedded;
+      });
+      active();
+      return this.createOrAttachSnapshot(sessionID, this.preparedForContext(context, claimed, signal), context, generation);
+    } catch (error) { claimed?.lease?.close(); throw (error as Error); }
+    finally { this.activeSignals.delete(signal); }
   }
 
   /**
@@ -309,26 +441,95 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
   async resolveCurrent(
     lynxAppId: string,
     bundleName: string,
-    navigationSessionID: string = ''
+    navigationSessionID: string = '',
+    sourceSnapshotID: string = '',
+    allowCandidate: boolean = false,
+    signal?: OtaPrepareSignal
   ): Promise<PreparedPageBundle | null> {
     const context = this.identity.capture();
     this.guard(context);
     this.validateLogicalAddress(lynxAppId, bundleName);
+    this.reconcile(context);
     const sessionID = navigationSessionID.trim();
+    this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
     const snapshotGeneration = this.snapshotToken(sessionID, lynxAppId);
     const snapshot = this.snapshotFor(sessionID, lynxAppId, context);
     if (snapshot !== null) {
       const pinned = await this.prepareFromSnapshot(snapshot, bundleName, context);
-      if (pinned !== null) this.preparedForContext(context, pinned); else this.guard(context);
+      if (pinned !== null) this.preparedForContext(context, pinned, signal); else this.guard(context, signal);
+      try { this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context); }
+      catch (error) { pinned?.lease?.close(); throw (error as Error); }
       return pinned === null ? null : this.attachSnapshot(snapshot, pinned);
     }
-    const current = this.transaction.acquireCurrentBundleLease(lynxAppId, bundleName, context);
+    const current = await this.transaction.acquireCachedBundleLease(lynxAppId, bundleName, allowCandidate, context,
+      () => !this.closed && signal?.cancelled !== true && context.identityEpoch === this.userIdentityEpoch);
+    try {
+      this.guard(context, signal);
+      this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
+    } catch (error) { current?.lease?.close(); throw (error as Error); }
     if (current !== null) {
       return this.createOrAttachSnapshot(sessionID, current, context, snapshotGeneration);
     }
     const embedded = await this.embeddedBundleRegistry.resolve(lynxAppId, bundleName);
-    this.guard(context);
+    this.guard(context, signal);
+    this.validateSourceSnapshot(sessionID, lynxAppId, sourceSnapshotID, context);
     return embedded === null ? null : this.createOrAttachSnapshot(sessionID, embedded, context, snapshotGeneration);
+  }
+
+  resolvePage(lynxAppId: string, bundleName: string, navigationSessionID: string = '', sourceSnapshotID: string = '', signal?: OtaPrepareSignal): Promise<PreparedPageBundle | null> {
+    return this.resolveCurrent(lynxAppId, bundleName, navigationSessionID, sourceSnapshotID, true, signal);
+  }
+
+  async confirmCandidateHealthy(lynxAppId: string, expectedReleaseId: string, expectedIdentityEpoch?: number, isSourceActive?: () => boolean, expectedManifestId?: string): Promise<boolean> {
+    const context = this.identity.capture(expectedIdentityEpoch);
+    return this.queue.run(async () => {
+      this.guard(context);
+      await this.transaction.validateCachedObjects(context, true);
+      this.guard(context);
+      if (isSourceActive !== undefined && !isSourceActive()) throw new Error('invalid_health_source');
+      const confirmed = this.transaction.confirmCandidateHealthy(lynxAppId, expectedReleaseId, context, expectedManifestId);
+      if (confirmed) this.navigationSnapshots.forEach((snapshot) => {
+        if (snapshot.lynxAppId === lynxAppId && snapshot.releaseId === expectedReleaseId && snapshot.identityEpoch === context.identityEpoch) snapshot.source = 'ota_current';
+      });
+      return confirmed;
+    });
+  }
+
+  async recoverFailedRelease(lynxAppId: string, reason: string, expectedReleaseId: string, expectedIdentityEpoch: number | undefined,
+    navigationSessionID: string, snapshotID: string, candidate: boolean): Promise<boolean> {
+    const context = this.identity.capture(expectedIdentityEpoch);
+    const key = this.snapshotKey(navigationSessionID, lynxAppId);
+    if (this.recoverySessions.has(key)) throw new Error('ota_recovery_in_progress');
+    this.guard(context);
+    const source = this.snapshotsByID.get(snapshotID);
+    if (snapshotID.length > 0 && (source === undefined || source.retired || source.sessionID !== navigationSessionID ||
+      source.lynxAppId !== lynxAppId || source.releaseId !== expectedReleaseId || source.identityEpoch !== context.identityEpoch)) throw new Error('stale_navigation_snapshot');
+    const ticket = this.transaction.captureFailedRelease(lynxAppId, expectedReleaseId, source?.manifestId,
+      candidate && source?.source !== 'ota_current', context);
+    this.recoverySessions.add(key);
+    try {
+      return await this.queue.run(async () => {
+        this.guard(context);
+        await this.transaction.validateCachedObjects(context);
+        this.guard(context);
+        this.transaction.validateFailedRelease(ticket, context);
+        if (ticket.candidate) {
+          if (!this.transaction.discardCandidate(lynxAppId, expectedReleaseId, context, ticket.manifestId)) throw new Error('stale_decision');
+        } else { this.transaction.rollback(lynxAppId, expectedReleaseId, context); }
+        const failedSnapshots: NavigationSnapshotRecord[] = [];
+        this.navigationSnapshots.forEach((record) => {
+          if (record.lynxAppId === lynxAppId && record.releaseId === expectedReleaseId && record.manifestId === ticket.manifestId && record.identityEpoch === context.identityEpoch) failedSnapshots.push(record);
+        });
+        failedSnapshots.forEach((record) => this.retireSnapshot(record));
+        this.resetNavigationSnapshot(navigationSessionID, lynxAppId);
+        this.refreshGate.clearApp(lynxAppId, context.identityEpoch);
+        const current = this.transaction.hasDownloadedCurrent(lynxAppId, context);
+        if (current) return true;
+        const embedded = await this.embeddedBundleRegistry.containsApp(lynxAppId);
+        this.guard(context);
+        return embedded;
+      });
+    } finally { ticket.lease.close(); this.recoverySessions.delete(key); }
   }
 
   releaseNavigationSnapshot(navigationSessionID: string, lynxAppId: string): void {
@@ -339,11 +540,22 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     const snapshot = this.navigationSnapshots.get(key);
     if (snapshot === undefined) return;
     this.navigationSnapshots.delete(key);
+    snapshot.retired = true;
     snapshot.lease?.close();
+    snapshot.lease = null;
+    this.snapshotsByID.forEach((value, id) => {
+      if (value.sessionID === navigationSessionID && value.lynxAppId === lynxAppId) this.snapshotsByID.delete(id);
+    });
   }
 
   resetNavigationSnapshot(navigationSessionID: string, lynxAppId: string): void {
-    this.releaseNavigationSnapshot(navigationSessionID, lynxAppId);
+    const key = this.snapshotKey(navigationSessionID, lynxAppId);
+    const token = this.snapshotTokens.get(key);
+    if (token !== undefined) token.active = false;
+    this.snapshotTokens.delete(key);
+    const snapshot = this.navigationSnapshots.get(key);
+    this.navigationSnapshots.delete(key);
+    if (snapshot !== undefined) { snapshot.retired = true; snapshot.lease?.close(); snapshot.lease = null; this.snapshotsByID.delete(snapshot.id); }
   }
 
   /** cache-first 普通页面使用的后台刷新入口；syncAppBundleAsync 自带 AppId 门控。 */
@@ -416,10 +628,32 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     return token;
   }
 
+  validateNavigationSource(sourceSnapshotID: string): void {
+    const context = this.identity.capture();
+    this.guard(context);
+    if (sourceSnapshotID.length === 0) return;
+    const source = this.snapshotsByID.get(sourceSnapshotID);
+    if (source !== undefined && source.source === 'candidate_trial' &&
+      !this.transaction.isTrialCandidate(source.lynxAppId, source.releaseId, source.manifestId, context)) this.retireSnapshot(source);
+    if (source === undefined || source.retired || source.identityEpoch !== context.identityEpoch ||
+      this.recoverySessions.has(this.snapshotKey(source.sessionID, source.lynxAppId))) throw new Error('stale_navigation_snapshot');
+  }
+
+  private validateSourceSnapshot(sessionID: string, appId: string, sourceID: string, context: OtaUserContext): void {
+    if (this.recoverySessions.has(this.snapshotKey(sessionID, appId))) throw new Error('ota_recovery_in_progress');
+    if (sourceID.length === 0) return;
+    const source = this.snapshotsByID.get(sourceID);
+    if (source !== undefined && source.source === 'candidate_trial' &&
+      !this.transaction.isTrialCandidate(source.lynxAppId, source.releaseId, source.manifestId, context)) this.retireSnapshot(source);
+    if (source === undefined || source.retired || source.identityEpoch !== context.identityEpoch || source.sessionID !== sessionID) throw new Error('stale_navigation_snapshot');
+  }
+
   private snapshotFor(sessionID: string, lynxAppId: string, context: OtaUserContext): NavigationSnapshotRecord | null {
     if (sessionID.length === 0) return null;
     const snapshot = this.navigationSnapshots.get(this.snapshotKey(sessionID, lynxAppId)) ?? null;
-    if (snapshot !== null && snapshot.identityEpoch !== context.identityEpoch) throw new Error('旧用户导航会话不能打开新页面');
+    if (snapshot !== null && snapshot.source === 'candidate_trial' &&
+      !this.transaction.isTrialCandidate(snapshot.lynxAppId, snapshot.releaseId, snapshot.manifestId, context)) this.retireSnapshot(snapshot);
+    if (snapshot !== null && (snapshot.retired || snapshot.identityEpoch !== context.identityEpoch)) throw new Error('旧用户导航会话不能打开新页面');
     return snapshot;
   }
 
@@ -456,27 +690,31 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     try { this.guard(context); } catch (error) { lease?.close(); this.closePrepared(prepared); throw (error as Error); }
     this.navigationSnapshotSequence += 1;
     const snapshot: NavigationSnapshotRecord = {
-      id: `lynx-snapshot-${new Date().getTime()}-${this.navigationSnapshotSequence}`,
+      id: `lynx-snapshot-${this.processNonce}-${this.navigationSnapshotSequence}`,
       sessionID: sessionID,
       lynxAppId: prepared.lynxAppId,
       releaseId: prepared.releaseId,
       manifestId: prepared.manifestId,
       embedded: embedded,
       lease: lease,
-      identityEpoch: context.identityEpoch
+      identityEpoch: context.identityEpoch,
+      source: prepared.source ?? 'ota_current',
+      retired: false
     };
     this.navigationSnapshots.set(key, snapshot);
+    this.snapshotsByID.set(snapshot.id, snapshot);
     return this.attachSnapshot(snapshot, prepared);
   }
 
   private attachSnapshot(snapshot: NavigationSnapshotRecord, prepared: PreparedPageBundle): PreparedPageBundle {
     if (this.navigationSnapshots.get(this.snapshotKey(snapshot.sessionID, snapshot.lynxAppId)) !== snapshot ||
-      snapshot.identityEpoch !== this.userIdentityEpoch || snapshot.releaseId !== prepared.releaseId ||
+      snapshot.retired || snapshot.identityEpoch !== this.userIdentityEpoch || snapshot.releaseId !== prepared.releaseId ||
       snapshot.manifestId !== prepared.manifestId) {
       this.closePrepared(prepared);
       throw new Error('stale_navigation_snapshot');
     }
     prepared.navigationSnapshotID = snapshot.id;
+    prepared.source = snapshot.source;
     return prepared;
   }
 
@@ -493,7 +731,7 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       const value = await this.embeddedBundleRegistry.resolve(snapshot.lynxAppId, bundleName);
       return value === null ? null : this.preparedForContext(context, value);
     }
-    return this.transaction.acquireBundleLeaseForRelease(
+    return this.transaction.acquirePinnedBundleLease(
       snapshot.lynxAppId,
       snapshot.releaseId,
       bundleName,
@@ -517,6 +755,8 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     let succeeded = true;
     this.queue.run(async () => {
       this.reconcile(context);
+      await this.transaction.validateCachedObjects(context);
+      this.guard(context, signal);
       const result = await this.selectionSync.syncAll(signal, context);
       this.guard(context, signal);
       this.markChecked(result, context);
@@ -531,6 +771,7 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
       this.activeSignals.delete(signal);
       if (taskId !== this.fullSyncTaskId || context.identityEpoch !== this.userIdentityEpoch || this.closed) return;
       this.fullSyncInFlight = false;
+      this.retireInvalidCandidates(context);
       if (this.fullSyncPending) {
         this.fullSyncPending = false;
         this.syncAllBundlesAsync();
@@ -557,6 +798,9 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     this.activeSignals.add(signal);
     this.queue.run(async () => {
       this.guard(context, signal);
+      this.reconcile(context);
+      await this.transaction.validateCachedObjects(context);
+      this.guard(context, signal);
       if (this.fullSyncInFlight) return;
       const result = await this.selectionSync.syncApp(lynxAppId, signal, context);
       this.guard(context, signal);
@@ -567,10 +811,33 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     }).finally(() => {
       this.activeSignals.delete(signal);
       this.refreshGate.complete(lynxAppId, context.identityEpoch);
+      if (context.identityEpoch === this.userIdentityEpoch && !this.closed) this.retireInvalidCandidates(context);
+    });
+  }
+
+  private retireSnapshot(snapshot: NavigationSnapshotRecord): void {
+    snapshot.retired = true;
+    const key = this.snapshotKey(snapshot.sessionID, snapshot.lynxAppId);
+    if (this.navigationSnapshots.get(key) === snapshot) this.navigationSnapshots.delete(key);
+    const token = this.snapshotTokens.get(key);
+    if (token !== undefined) token.active = false;
+    this.snapshotTokens.delete(key);
+    this.snapshotsByID.delete(snapshot.id);
+    snapshot.lease?.close(); snapshot.lease = null;
+  }
+
+  private retireInvalidCandidates(context: OtaUserContext): void {
+    this.guard(context);
+    const records: NavigationSnapshotRecord[] = [];
+    this.navigationSnapshots.forEach((snapshot) => records.push(snapshot));
+    records.forEach((snapshot) => {
+      if (snapshot.identityEpoch === context.identityEpoch && snapshot.source === 'candidate_trial' &&
+        !this.transaction.isTrialCandidate(snapshot.lynxAppId, snapshot.releaseId, snapshot.manifestId, context)) this.retireSnapshot(snapshot);
     });
   }
 
   private markChecked(result: OtaSelectionSyncResult, context: OtaUserContext): void {
+    this.retireInvalidCandidates(context);
     result.completedAppIds.forEach((appId) => this.refreshGate.markSuccess(appId, context.identityEpoch, this.uptimeMillis()));
   }
 

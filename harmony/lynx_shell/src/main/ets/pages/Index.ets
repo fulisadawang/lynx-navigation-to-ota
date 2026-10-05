@@ -1,5 +1,7 @@
 import router from '@ohos.router';
 import {
+  LynxNavigator,
+  ShellNavigationHost,
   ShellConstants,
   LynxRouter,
   LynxTabContainer,
@@ -58,6 +60,7 @@ struct Index {
   }
 
   aboutToAppear(): void {
+    LynxNavigator.expectNavigationHost();
     ShellLocaleState.subscribe(this.localeListener);
     this.localeRevision = LynxRouter.currentLocaleState().revision;
     this.otaIdentityEpoch = LynxRouter.getOtaUserIdentityEpoch();
@@ -414,7 +417,7 @@ struct Index {
     .width('100%')
   }
 
-  build() {
+  @Builder private homeContent(hostShown: boolean) {
     if (this.showNativeTabDemo) {
       Column() {
         Row() {
@@ -474,6 +477,7 @@ struct Index {
           TabContent() {
             LynxTabContainer({
               spec: this.tabSpec('home', '首页'),
+              hostVisible: hostShown && this.selectedNativeTab === 0,
               refreshGeneration: this.tabReloadGeneration
             })
           }
@@ -482,6 +486,7 @@ struct Index {
           TabContent() {
             LynxTabContainer({
               spec: this.tabSpec('settings', '设置'),
+              hostVisible: hostShown && this.selectedNativeTab === 1,
               refreshGeneration: this.tabReloadGeneration
             })
           }
@@ -658,5 +663,7 @@ struct Index {
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
   }
+
+  build() { ShellNavigationHost({ home: (visible: boolean) => this.homeContent(visible) }); }
 
 }

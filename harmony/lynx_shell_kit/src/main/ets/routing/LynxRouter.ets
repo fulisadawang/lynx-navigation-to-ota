@@ -32,7 +32,7 @@ interface ShellLocaleResultData {
 /**
  * HarmonyOS 端与 Android `LynxRouter`、iOS `LynxRouter` 对齐的统一门面。
  *
- * 默认承载始终是 ArkUI Router + LynxContainer Page；NavPathStack 可以在本适配层内替换。
+ * 默认承载为 Navigation/NavPathStack + LynxContainer Page，导航栏由 Lynx 自绘。
  * 业务只传 Bundle 与 params，不注册 routeId；旧的 LynxNavigator 仍导出给已有宿主使用。
  */
 export default class LynxRouter {
@@ -342,22 +342,22 @@ export default class LynxRouter {
       const failure: ShellBridgeResult = { code: 1001, message: parsed.errorMessage };
       return Promise.resolve(failure);
     }
-    return LynxNavigator.redirectResult(parsed.request);
+    return LynxNavigator.redirectResult(parsed.request, optionsJSON);
   }
 
   /** 关闭当前 Page。 */
-  static pop(): ShellBridgeResult {
-    return LynxNavigator.closeResult();
+  static pop(options: ShellRouterPayload = {}): ShellBridgeResult {
+    return LynxNavigator.closeResult(JSON.stringify(options));
   }
 
   /** 回到当前 session 中最近的目标 Bundle/pageKey。 */
-  static popTo(pageKey: string): ShellBridgeResult {
-    return LynxNavigator.popTo(pageKey);
+  static popTo(pageKey: string, options: ShellRouterPayload = {}): ShellBridgeResult {
+    return LynxNavigator.popTo(pageKey, JSON.stringify(options));
   }
 
   /** 关闭当前 Lynx session。 */
-  static closeAll(): ShellBridgeResult {
-    return LynxNavigator.closeAll();
+  static closeAll(options: ShellRouterPayload = {}): ShellBridgeResult {
+    return LynxNavigator.closeAll(JSON.stringify(options));
   }
 
   /** 清空当前 session 后打开新的目标 Bundle。 */
@@ -366,11 +366,10 @@ export default class LynxRouter {
     params: ShellRouterPayload = {},
     options: ShellRouterPayload = {}
   ): Promise<ShellBridgeResult> {
-    const closed = LynxNavigator.closeAll();
-    if (closed.code !== 0) {
-      return Promise.resolve(closed);
-    }
-    return LynxRouter.open(bundle, params, options);
+    const optionsJSON = LynxRouter.optionsJSON(params, options);
+    const parsed = LynxRouteParser.parseWithOptions(bundle, optionsJSON);
+    if (!parsed.isSuccess || parsed.request === null) return Promise.resolve({ code: 1001, message: parsed.errorMessage });
+    return LynxNavigator.reLaunchRequest(parsed.request, optionsJSON);
   }
 
   static setMessageHandler(handler: ShellRouterMessageHandler | null): void {

@@ -27,7 +27,7 @@ Catalog 本地 Store 或 `__lynxI18n` 词典注入。中英文本在 Bundle 内�
 Android APK 内置 `10020000` 新验收版本由 `sidecarIndexAssetPath` 关联主包与三个 Async；
 iOS/HarmonyOS 当前新增的 `10020000` 内置 baseline 仅有 HomePage，电商 lazy 以下载态 Store v3
 为验收目标，不能把前者说成已支持内置 Async。三端资源能力头 `x-ota-resource-schema: 1`
-继续保护含 Async 的 Release。HarmonyOS 仍无 candidate/trial。
+继续保护含 Async 的 Release。HarmonyOS 本轮新增默认关闭的 candidate/trial 源码流程，构建和运行尚未验收。
 
 旧 Catalog Release 的网络响应由三端拒绝。当前本地 TEST 验收按用户决定采用新双语版本并重装
 旧测试安装；没有验证存量真实用户设备原地升级。五仓实施计划、官方插件失败证据与模板构建
@@ -127,7 +127,8 @@ Shell 在换包、错误、退出时按真实 Context 释放能力，再销毁 L
 harmony/
 ├── lynx_shell_kit/                     唯一可复用 HAR Module
 │   └── src/main/ets/
-│       ├── routing/                     Router、ArkUI Page Stack
+│       ├── routing/                     公开Router、逻辑entries、CommandOptions
+│       ├── transition/                  Navigation/NavPathStack adapter、Shared/Open/preset/proxy、预热token
 │       ├── pages/                       LynxContainer
 │       ├── provider/                    Bundle/资源 Provider
 │       ├── module/                      LynxShellModule Bridge
@@ -137,7 +138,8 @@ harmony/
 
 `lynx_shell/oh-package.json5` 声明 `@lynx/lynx-shell-kit` 与独立的 `@lynx/lynx-capacitor-kit`；底层 Lynx、Service、
 XElement 和 OTA 依赖由 HAR 管理。
-`ota/OtaUserContext.ets` 提供同步身份 box 与显式 captured context；`OtaSelection*.ets`、JSON/API 与 v3 Store 承载选择协议。Harmony 没有 candidate/trial。
+`ota/OtaUserContext.ets` 提供同步身份 box 与显式 captured context；`OtaSelection*.ets`、JSON/API 与 v3 Store 承载选择协议。
+Harmony `candidateActivationEnabled` 默认关闭，开启后 PENDING/TRIAL 与 SDK首屏、业务 markOtaHealthy 双信号确认共用唯一 State；旧 TRIAL 启动恢复、候选/稳定回退、NavigationSnapshot 与页面独立 lease 属于 Shell HAR。
 `harmony/lynx_capacitor_kit` 已加入根 build profile 和 Entry Demo；Ability 注入宿主上下文，
 Shell 的普通 Page/Native Tab 通过宿主注册表安装 Module，并在 Context 真正移除时释放。
 当前没有 HarmonyOS Debug HAR；三端调试能力首版先覆盖 Android/iOS，HarmonyOS 保持现有
@@ -222,4 +224,19 @@ VideoView/MediaController、iOS普通AVPlayerViewController；NativeMedia图片�
 源码与专项复审完成后已授权编译，Android/iOS最终宿主与本地模板Bundle已构建安装，
 新Demo与iOS来源菜单可见；实际拍摄、多图滑动与完整媒体验收尚未完成。docs/native-readiness-v1/
 旧六项报告是媒体修改前的软件证据，不代表媒体扩展后的完整回归。接口/预算/平台差异
-及待执行验收见 docs/native-media-v1/；40域146方法和四transport未增加，Harmony未改。
+及待执行验收见 docs/native-media-v1/；40域146方法和四transport未增加。Harmony 后续源码对齐见下一节，双端既有验收不能替代其运行证据。
+
+## Harmony 软件能力对齐（2026-10-05，源码闭环与独立审查）
+
+当前分支 `codex/harmony-native-parity` 从原生 PR20 的 `b5d649e` 创建。地图按用户最新指令延期；硬件和三端共同未配置的正式业务 Provider 如实返回不可用，不伪造成功。
+
+- Cap HAR：SDK薄facade → exact LynxContext共享Runtime → Owner/真实Host → 有界NativeIO及平台能力adapter。Shell通过中性HostNativeModules SPI装配，保持独立依赖边界；Entry提供Ability/UIContext/Window及Ability前台与页面可见的联合getter。
+- IO/存储：普通payload1MiB、内联512KiB、结果2MiB、文件20MiB；TaskPool处理bulk文件/编码，native异步网络/数据库共用并发2、等待16。SQLite返回columns/values、真实changes/lastId、只读打开、可靠分句和同DB串行，取消后等真实工作完成再close。
+- 媒体：系统图片/视频选择与CameraPicker、自有ArkUI Video/Swiper图片预览、来源/方向/限制/标签/私有输出/相册保存参数；旧Shell媒体保持原ABI并消费同后端。ActionSheet复用可关闭原生菜单，不再依赖无法随owner关闭的旧系统ActionMenu。
+- OTA/布局：Storev3保留CAS/Async/原子State/用户epoch/decimal revision，增加默认关闭候选、首屏+业务健康确认、失败来源退休与恢复；容器安全区以当前窗口vp坐标测量，真实UIContext density动态更新，键盘不计入系统安全区。
+- 导航/转场：实际ShellNavigationHost+Navigation/NavPathStack承载，标题和业务导航Lynx自绘；Native proxy终态提交逻辑entries。Shared/Open/preset正反向、手势取消、source预捕与真实首屏/绘制门禁共用原生时钟，64MiB全局预算包含pending/临时mask/late释放，失败有live fallback。
+- hero：透明全屏、[28,56,100]初始56元数据由Lynx管理surface/滚动，不裁剪为Native56vh；bottomSheet单独使用Native档位/遮罩/手势。普通与高级颜色领域保持既有Native ARGB/高级RRGGBBAA各自语义。
+- 预热/命令：prepareRoute真实Provider bytes，4条/32MiB/30秒一次token，预热OTA不TRIAL、页面消费claimlease；命令animated/dedup实际消费，公开SDK reLaunch等真实清栈成功再打开fresh session。
+- 生命周期：实际覆盖Page/Tab进入SDK background与owner hidden；取消恢复exactContext和lease。Window政策预捕前实际生效、返回当前栈顶恢复；默认保宿主沉浸布局与底部系统导航条。API13 nothing/none明确拒绝，API14+可用。
+- 软件API源码闭环通过有界独立审查；61条手工用例全未执行。本轮无Harmony parse/typecheck/checks、HAR/App编译、设备或性能验收，不能描述为三端已经全部运行一致。
+- 明确边界：NativeTab不计入Lynx entries/结果receiver；复杂共享洞父gradient/image无法完整复原；preset默认几何/曲线数值存在平台差异。主干双端旧运行证据保留为历史，不替代本轮。见[实施报告](docs/harmony-native-parity-v1/implementation-report.html)。

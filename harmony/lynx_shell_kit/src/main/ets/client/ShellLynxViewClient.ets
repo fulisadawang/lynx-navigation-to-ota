@@ -32,25 +32,41 @@ import {
   monitorTruncate
 } from '../monitoring/MonitorUtils';
 
+export class ShellLynxLoadFailure {
+  code: number; subCode: number; fatal: boolean; level: string; message: string;
+  constructor(error: LynxError) {
+    this.code = Number(error.getErrorCode()); this.subCode = Number(error.getSubCode());
+    this.fatal = error.isFatal(); this.level = String(error.getLevel()).toLowerCase(); this.message = error.getSummaryMessage();
+  }
+  requiresErrorState(): boolean {
+    if (this.level === 'warn' || this.level === 'warning') return false;
+    if (this.code === 301 || (this.code >= 30000 && this.code <= 39999) || (this.subCode >= 30000 && this.subCode <= 39999)) return false;
+    return this.fatal || this.code === 102 || (this.code >= 10201 && this.code <= 10299) || (this.subCode >= 10201 && this.subCode <= 10299);
+  }
+}
+
 /**
  * LynxView 生命周期回调适配器。
  * 页面只关心 loading/error/success，日志和性能事件在这里集中处理。
  */
 export default class ShellLynxViewClient extends LynxViewClient {
   private readonly onSuccessCallback: (url: string) => void;
-  private readonly onErrorCallback: (message: string) => void;
+  private readonly onErrorCallback: (failure: ShellLynxLoadFailure) => void;
   private readonly onFirstScreenCallback: () => void;
   private readonly monitor: ViewMonitorBinding;
+  private readonly onContextCallback: ((context: LynxContext) => void) | null;
   private monitorContext: LynxContext | null = null;
   private hasFirstContent: boolean = false;
 
   constructor(
     onSuccess: (url: string) => void,
-    onError: (message: string) => void,
+    onError: (failure: ShellLynxLoadFailure) => void,
     onFirstScreen: () => void,
-    containerKind: 'page' | 'tab'
+    containerKind: 'page' | 'tab',
+    onContext: ((context: LynxContext) => void) | null = null
   ) {
     super();
+    this.onContextCallback = onContext;
     this.onSuccessCallback = onSuccess;
     this.onErrorCallback = onError;
     this.onFirstScreenCallback = onFirstScreen;
@@ -124,6 +140,7 @@ export default class ShellLynxViewClient extends LynxViewClient {
   }
 
   override onPageStarted(lynxContext: LynxContext, pipelineInfo: LynxPipelineInfo): void {
+    this.onContextCallback?.(lynxContext);
     this.monitor.pageStarted();
     LLog.d(ShellConstants.TAG, `onPageStarted: ${pipelineInfo}`);
   }
@@ -144,10 +161,11 @@ export default class ShellLynxViewClient extends LynxViewClient {
   }
 
   override onReceivedError(error: LynxError): void {
-    const message = error.getMsg();
+    const failure = new ShellLynxLoadFailure(error);
+    const message = failure.message;
     LLog.e(ShellConstants.TAG, `onReceivedError: ${message}`);
     if (!LynxMonitor.shared().enabled) {
-      this.onErrorCallback(message ?? '');
+      this.onErrorCallback(failure);
       return;
     }
     const jsPayload = this.toJsErrorPayload(error);
@@ -156,7 +174,7 @@ export default class ShellLynxViewClient extends LynxViewClient {
     } else {
       this.monitor.jsError(jsPayload);
     }
-    this.onErrorCallback(message ?? '');
+    this.onErrorCallback(failure);
   }
 
   override onTemplateBundleReady(bundle: TemplateBundle): void {

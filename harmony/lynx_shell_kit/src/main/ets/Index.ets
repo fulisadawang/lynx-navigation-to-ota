@@ -5,6 +5,9 @@
  * 容器由本 Module 提供，业务宿主可按需复用这些稳定类型。
  */
 export { LynxContainer } from './pages/LynxContainer';
+export { ShellNavigationHost } from './transition/ShellNavigationHost';
+export { default as ShellTransitionRuntime } from './transition/ShellTransitionRuntime';
+export { default as ShellPreparedRouteStore } from './transition/ShellPreparedRouteStore';
 export { default as ShellConstants } from './common/ShellConstants';
 export { default as ShellGlobalPropsFactory } from './common/ShellGlobalPropsFactory';
 export { ShellTheme } from './common/ShellTheme';

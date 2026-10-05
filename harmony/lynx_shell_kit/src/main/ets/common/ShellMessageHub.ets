@@ -1,3 +1,5 @@
+import LynxOtaHealthGate from '../runtime/LynxOtaHealthGate';
+import { ShellBridgeResult } from './ShellTypes';
 import { LynxContext, MetaData, TemplateData } from '@lynx/lynx';
 import { ShellRouterMessage, ShellRouterMessageHandler, ShellRouterMessageReply, ShellRouterPageInfo } from './ShellTypes';
 import ShellThemeState, { ShellTheme } from './ShellTheme';
@@ -35,6 +37,12 @@ export default class ShellMessageHub {
   static readonly LAYOUT_EVENT: string = 'lynxShellLayoutChanged';
   private static infos: Map<string, ShellRouterPageInfo> = new Map();
   private static contexts: Map<string, LynxContext> = new Map();
+  private static visibility: Map<string, () => boolean> = new Map();
+  private static health: Map<string, LynxOtaHealthGate> = new Map();
+  private static backGestures: Map<string, boolean> = new Map();
+  private static contextBackGestures: WeakMap<LynxContext, boolean> = new WeakMap();
+  private static backGestureUpdaters: WeakMap<LynxContext, (enabled: boolean) => void> = new WeakMap();
+  private static navigationBusyReader: (() => boolean) | null = null;
   private static messageHandler: ShellRouterMessageHandler | null = null;
 
   static setMessageHandler(handler: ShellRouterMessageHandler | null): void {
@@ -48,9 +56,87 @@ export default class ShellMessageHub {
   }
 
   static unregister(pageId: string): void {
+    ShellMessageHub.health.get(pageId)?.fail();
+    ShellMessageHub.health.delete(pageId);
+    ShellMessageHub.visibility.delete(pageId);
+    ShellMessageHub.backGestures.delete(pageId);
     ShellMessageHub.infos.delete(pageId);
     ShellMessageHub.contexts.delete(pageId);
     ShellLayoutState.clearViewport(pageId);
+  }
+
+  /** replace取消时新旧Context可能暂用同逻辑entry，旧销毁不能注销新的实际绑定。 */
+  static unregisterContext(pageId: string, context: LynxContext): void {
+    if (ShellMessageHub.contexts.get(pageId) !== context) return;
+    ShellMessageHub.unregister(pageId);
+  }
+
+  static setNavigationBusyReader(reader: (() => boolean) | null): void { ShellMessageHub.navigationBusyReader = reader; }
+  static isNavigationBusy(): boolean { return ShellMessageHub.navigationBusyReader?.() === true; }
+  static isContextVisible(context: LynxContext): boolean {
+    const pageId = ShellMessageHub.pageId(context);
+    return pageId !== null && ShellMessageHub.visibility.get(pageId)?.() === true;
+  }
+
+  static hasContextsForSession(sessionID: string, excludeContext?: LynxContext, lynxAppId?: string): boolean {
+    const infos = Array.from(ShellMessageHub.infos.values());
+    return infos.some((info: ShellRouterPageInfo): boolean => {
+      const context = ShellMessageHub.contexts.get(info.pageId);
+      return info.sessionID === sessionID && context !== undefined && context !== excludeContext &&
+        (lynxAppId === undefined || info.lynxAppId === lynxAppId);
+    });
+  }
+
+  static bindHealth(pageId: string, gate: LynxOtaHealthGate): void { ShellMessageHub.health.set(pageId, gate); }
+  static bindVisibility(pageId: string, isVisible: () => boolean): void { ShellMessageHub.visibility.set(pageId, isVisible); }
+
+  /** 初始化与重新绑定不走公开admission，保留同Context最近的动态策略。 */
+  static bindBackGestureEnabled(pageId: string, enabled: boolean, onUpdate?: (enabled: boolean) => void): void {
+    const context = ShellMessageHub.contexts.get(pageId);
+    if (context === undefined) return;
+    const value = ShellMessageHub.contextBackGestures.get(context) ?? enabled;
+    ShellMessageHub.contextBackGestures.set(context, value);
+    ShellMessageHub.backGestures.set(pageId, value);
+    if (onUpdate !== undefined) ShellMessageHub.backGestureUpdaters.set(context, onUpdate);
+  }
+
+  static markOtaHealthy(context: LynxContext, callback: (result: ShellBridgeResult) => void): void {
+    const pageId = ShellMessageHub.pageId(context);
+    const gate = pageId === null ? undefined : ShellMessageHub.health.get(pageId);
+    if (gate === undefined) { callback({ code: 1002, message: '来源 Context 已销毁或未绑定健康代次' }); return; }
+    gate.markBusinessHealthy(callback);
+  }
+
+  static sourceSnapshotID(context: LynxContext): string {
+    const pageId = ShellMessageHub.pageId(context);
+    return pageId === null ? '' : (ShellMessageHub.infos.get(pageId)?.navigationSnapshotID ?? '');
+  }
+
+  static sourceSessionID(context: LynxContext): string {
+    const pageId = ShellMessageHub.pageId(context);
+    return pageId === null ? '' : (ShellMessageHub.infos.get(pageId)?.sessionID ?? '');
+  }
+
+  static sourceHasHostAnchor(context: LynxContext): boolean {
+    const pageId = ShellMessageHub.pageId(context);
+    return pageId === null ? true : (ShellMessageHub.infos.get(pageId)?.hasHostAnchor ?? true);
+  }
+
+  static setBackGestureEnabled(context: LynxContext, enabled: boolean): ShellBridgeResult {
+    if (ShellMessageHub.navigationBusyReader?.() === true) return { code: 1006, message: '原生转场正在进行' };
+    const pageId = ShellMessageHub.pageId(context);
+    if (pageId === null || ShellMessageHub.visibility.get(pageId)?.() !== true) return { code: 1002, message: '来源页面已销毁、被覆盖或当前不可见' };
+    ShellMessageHub.backGestures.set(pageId, enabled);
+    ShellMessageHub.contextBackGestures.set(context, enabled);
+    ShellMessageHub.backGestureUpdaters.get(context)?.(enabled);
+    const data: Record<string, Object> = { backGestureEnabled: enabled, affectedCount: 1 };
+    return { code: 0, message: '返回开关已更新', data: data };
+  }
+
+  static backGestureEnabled(pageId: string): boolean {
+    const context = ShellMessageHub.contexts.get(pageId);
+    return (context === undefined ? undefined : ShellMessageHub.contextBackGestures.get(context)) ??
+      ShellMessageHub.backGestures.get(pageId) ?? true;
   }
 
   /** 将已解析的主题同步到所有仍登记的 LynxContext；不重建 View 或重新加载 Bundle。 */

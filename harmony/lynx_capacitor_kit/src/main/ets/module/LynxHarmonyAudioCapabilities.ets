@@ -1,7 +1,8 @@
+import { LynxHarmonyNativeOwner } from './LynxHarmonyNativeOwner';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
 import { audio } from '@kit.AudioKit';
-import { fileIo } from '@kit.CoreFileKit';
+import { fileIo, fileUri } from '@kit.CoreFileKit';
 import { media } from '@kit.MediaKit';
 
 interface LynxHarmonyAudioError {
@@ -58,6 +59,7 @@ export default class LynxHarmonyAudioCapabilities {
   private static nextRecordingId: number = 0;
 
   private readonly context: common.UIAbilityContext;
+  private activeOwner: LynxHarmonyNativeOwner | null = null;
   private state: LynxHarmonyAudioState = 'idle';
   private operationGeneration: number = 0;
   private released: boolean = false;
@@ -93,6 +95,7 @@ export default class LynxHarmonyAudioCapabilities {
    */
   public static dispatch(
     context: common.UIAbilityContext,
+    owner: LynxHarmonyNativeOwner,
     methodName: string,
     options: Record<string, Object>,
     complete: LynxHarmonyAudioCompletion,
@@ -106,7 +109,18 @@ export default class LynxHarmonyAudioCapabilities {
     }
 
     try {
-      session.dispatch(methodName, options, complete);
+      owner.checkActive();
+      const mutating = methodName === 'record' || methodName === 'play' || methodName === 'stopRecording' || methodName === 'stopPlayback';
+      if (mutating && session.activeOwner !== null && session.activeOwner !== owner && session.state !== 'idle') {
+        LynxHarmonyAudioCapabilities.safeComplete(complete, LynxHarmonyAudioCapabilities.failure('BUSY', 'Audio 资源属于另一个活动页面'));
+        return true;
+      }
+      if (mutating) session.activeOwner = owner;
+      session.dispatch(methodName, options, (result: LynxHarmonyAudioResult): void => {
+        if (!owner.isActive) { LynxHarmonyAudioCapabilities.safeComplete(complete, LynxHarmonyAudioCapabilities.failure('ACTIVITY_DESTROYED', 'Audio owner 已销毁')); return; }
+        if (session !== undefined && session.state === 'idle' && session.activeOwner === owner) session.activeOwner = null;
+        LynxHarmonyAudioCapabilities.safeComplete(complete, result);
+      });
     } catch (error) {
       LynxHarmonyAudioCapabilities.safeComplete(
         complete,
@@ -114,6 +128,16 @@ export default class LynxHarmonyAudioCapabilities {
       );
     }
     return true;
+  }
+
+  public static releaseOwner(ownerId: string): void {
+    const matching: Array<common.UIAbilityContext> = [];
+    LynxHarmonyAudioCapabilities.sessions.forEach((session: LynxHarmonyAudioCapabilities, context: common.UIAbilityContext): void => {
+      if (session.activeOwner?.id !== ownerId) return;
+      matching.push(context);
+      session.dispose().catch((error: Object): void => console.error('LynxCapacitor', 'Audio owner cleanup failed: ' + String(error)));
+    });
+    matching.forEach((context: common.UIAbilityContext): void => { LynxHarmonyAudioCapabilities.sessions.delete(context); });
   }
 
   /**
@@ -642,7 +666,7 @@ export default class LynxHarmonyAudioCapabilities {
   }
 
   private isCurrent(generation: number): boolean {
-    return !this.released && this.operationGeneration === generation;
+    return !this.released && this.operationGeneration === generation && (this.activeOwner === null || this.activeOwner.isActive);
   }
 
   private isBusy(): boolean {
@@ -967,10 +991,8 @@ export default class LynxHarmonyAudioCapabilities {
 
     let path = requested;
     if (path.startsWith('file://')) {
-      path = path.substring('file://'.length);
-      if (path.startsWith('localhost/')) path = path.substring('localhost'.length);
       try {
-        path = decodeURIComponent(path);
+        path = new fileUri.FileUri(path).path;
       } catch (error) {
         return { path: '', error: { code: 'INVALID_ARGUMENT', message: 'Audio.play 的 file URI 无效' } };
       }
