@@ -1,4 +1,3 @@
-import org.gradle.api.publish.maven.MavenPublication
 import com.android.build.api.variant.BuildConfigField
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.tasks.testing.Test
@@ -94,7 +93,8 @@ android {
     sourceSets.getByName("main").java.setSrcDirs(emptyList<String>())
     sourceSets.getByName("main").kotlin.setSrcDirs(emptyList<String>())
     publishing {
-        singleVariant("release") {
+        multipleVariants("native") {
+            includeBuildTypeValues("debug", "release")
             withSourcesJar()
         }
     }
@@ -195,21 +195,4 @@ tasks.withType<Test>().configureEach {
     inputs.property("otaUserGrayEvidenceDirectory", providers.environmentVariable("OTA_USER_GRAY_EVIDENCE_DIR").orElse(""))
     // 真实 Server 是外部可变状态；显式协议验收每次实跑，不能复用曾经的 skipped/通过结果。
     outputs.upToDateWhen { origin.get().isBlank() }
-}
-
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("release") {
-                from(components["release"])
-                groupId = "com.example.lynx"
-                artifactId = "lynx-shell-android"
-                version = "1.0.0"
-                pom {
-                    name.set("Lynx Shell Android")
-                description.set("Lynx 4.1 Runtime、NativeModules、Activity-first 路由、转场和内置 OTA Runtime")
-                }
-            }
-        }
-    }
 }

@@ -1,16 +1,18 @@
+# 发布时导出固定git根路径JSON；本地:path仍以现有ios目录为Pod根。
+native_source_prefix = ENV['LYNX_NATIVE_REMOTE_SPEC'] == '1' ? 'ios/' : ''
+
 Pod::Spec.new do |spec|
   spec.name = 'LynxShellKit'
-  spec.version = '1.0.0'
+  spec.version = '1.1.0'
   spec.summary = 'Lynx 4.1 iOS Router、Runtime、NativeModules、OTA 与原生转场模块'
   spec.description = <<-DESC
     显式单一 CocoaPods Module。包含 Lynx 4.1 容器、手写 NativeModules、资源加载、
     高级导航、Skyline 风格转场、XElement 全量注册以及内置 OTA 事务，不使用 Sparkling autolink。
   DESC
-  spec.homepage = 'https://github.com/lynx-family/lynx'
+  spec.homepage = 'https://github.com/fulisadawang/lynx-navigation-to-ota'
   spec.license = { :type => 'Apache-2.0' }
   spec.author = { 'LynxShell' => 'local-module@example.invalid' }
-  # 开发 Pod 由 Podfile 的 :path 指定本地源码；该 source 仅满足 Podspec 元数据。
-  spec.source = { :git => 'https://github.com/lynx-family/lynx.git', :tag => '4.1.0' }
+  spec.source = { :git => 'https://github.com/fulisadawang/lynx-navigation-to-ota.git', :tag => "native-v#{spec.version}" }
 
   # 与 KMP capp-iOS 主 target 的最低系统版本保持一致；高德 11.2.100 也在此边界内接入。
   spec.platform = :ios, '14.0'
@@ -18,15 +20,15 @@ Pod::Spec.new do |spec|
   spec.module_name = 'LynxShellKit'
   spec.static_framework = true
   spec.requires_arc = true
-  spec.resource_bundles = { 'LynxShellKitPrivacy' => ['LynxShellKit/Resources/PrivacyInfo.xcprivacy'] }
+  spec.resource_bundles = { 'LynxShellKitPrivacy' => ["#{native_source_prefix}LynxShellKit/Resources/PrivacyInfo.xcprivacy"] }
   # 生产公开 Pod 默认带地图；本地 E2E 宿主使用独立 Core-only Pod。
   spec.default_subspecs = 'Map'
   # OTA 源码作为 Router 的内部实现一起编译；业务方不需要再引入独立 OTA Pod。
   spec.source_files = [
-    'LynxShellKit/**/*.{swift,h,m}',
-    'OtaIOSSDK/Sources/OtaIOSSDK/**/*.swift',
+    "#{native_source_prefix}LynxShellKit/**/*.{swift,h,m}",
+    "#{native_source_prefix}OtaIOSSDK/Sources/OtaIOSSDK/**/*.swift",
   ]
-  spec.public_header_files = 'LynxShellKit/Native/LynxNativeRuntime.h'
+  spec.public_header_files = "#{native_source_prefix}LynxShellKit/Native/LynxNativeRuntime.h"
   spec.frameworks = 'Foundation', 'UIKit', 'MobileCoreServices'
   spec.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
@@ -55,7 +57,7 @@ Pod::Spec.new do |spec|
   spec.dependency 'XElement/Behavior', '4.1.0'
 
   spec.subspec 'Map' do |map|
-    map.dependency 'LynxMapKit', '1.0.0'
+    map.dependency 'LynxMapKit', '1.1.0'
     map.pod_target_xcconfig = {
       'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) LYNX_SHELL_ENABLE_MAP=1',
     }

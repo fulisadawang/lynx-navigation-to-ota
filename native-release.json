@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "version": "1.1.0",
+  "tagPrefix": "native-v",
+  "repository": "fulisadawang/lynx-navigation-to-ota",
+  "lynxVersion": "4.1.0",
+  "primjsVersion": "4.1.1",
+  "android": {
+    "groupId": "io.github.fulisadawang.lynx",
+    "gradleVersion": "8.11.1",
+    "javaVersion": "21",
+    "modules": {
+      "lynx-shell": "lynx-shell-android",
+      "lynx-capacitor": "lynx-capacitor-android",
+      "lynx-map": "lynx-map-android",
+      "lynx-debug-tool": "lynx-debug-tool-android"
+    },
+    "agpVersion": "8.9.1",
+    "kotlinVersion": "1.9.24",
+    "compileSdk": 36,
+    "minSdk": 26
+  },
+  "ios": {
+    "specsBranch": "native-specs",
+    "podspecs": [
+      "ios/LynxShellKit.podspec",
+      "ios/LynxCapacitorKit.podspec",
+      "ios/LynxMapKit/LynxMapKit.podspec",
+      "ios/LynxShellDebugKit.podspec"
+    ],
+    "additionalSpecs": [
+      "ios/LocalPods/AMapLocation.podspec"
+    ],
+    "runner": "macos-15-intel"
+  },
+  "harmony": {
+    "runnerLabel": "harmony-native",
+    "sdkApi": 24,
+    "gfxVersion": "4.1.0",
+    "assets": {
+      "lynx_shell_kit": "lynx-shell-kit",
+      "lynx_capacitor_kit": "lynx-capacitor-kit",
+      "lynx_gfx": "lynx-gfx"
+    },
+    "gfxSha256": {
+      "arm64-v8a": "4a353e2e5215085c2ce96570dfa75481ab67744bc2fd76d4dc03791e0641e309",
+      "x86_64": "56cb1c9e2ed69a9710edbaa104dd8308d47fd3a295b15ee2ba6f771a0cb3da6b"
+    }
+  }
+}

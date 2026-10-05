@@ -23,6 +23,7 @@ ios/LynxShellSample/Resources/Bundles/.lynx/
 # 本地发布/验收产物与历史独立工程
 .release/
 .workflow/
+/dist/native/
 LynxScreens-Android/
 
 # 本机与 CI 密钥配置：只允许通过安全运行时注入

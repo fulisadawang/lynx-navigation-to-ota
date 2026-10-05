@@ -7,6 +7,14 @@
 三端 Shell 业务方分别引入一个平台模块：Android AAR、iOS CocoaPods Module、HarmonyOS HAR。
 本仓库不包含旧的 `LynxScreens-Android` 工程，也不依赖 Sparkling 原生 SDK。
 
+## 三端 GitHub 发布配置（2026-10-05）
+
+`native-release.json` 维护自有 SDK 1.1.0、`native-v` tag 前缀及已审引擎依赖；`scripts/native_release.py set-version` 同步四个自有 Pod、HAR 元数据和自有依赖，Android publication直接读取同一配置。
+
+`.github/workflows/native-release.yml` 仅手动 verify/publish：GitHub托管Android/Intel iOS，Harmony使用隔离的SDK24自托管Runner。当前仓库Runner为0，未触发CI。Android多variant Staging与GitHubPackages保留GMM、Debug SPI和已验收原字节；iOS生成独立RemoteSpecs到同仓`native-specs`；Harmony发布3HAR及固定tag下载工具，Gfx两ABI核冻结源码SHA。
+
+平台回执、sourceSHA、固定资产集合和摘要闭合后才写Draft/Maven/Specs；最终再次核远端tag与资产再公开。源码配置与独立审查不代表已经编译、发布或外部安装成功。详细操作和失败边界见[原生发布说明](docs/native-github-release.md)。现有Runtime/Host注册、OTA协议和JS包交付职责保持。
+
 ## Async Bundle 与中英文随包 OTA（2026-09-29）
 
 当前工作根下的五个独立 Git 项目已改为**译文随代码 Bundle 同版本**的方案；此节记录代码所有权，

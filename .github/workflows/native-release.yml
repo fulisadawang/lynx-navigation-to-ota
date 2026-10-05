@@ -1,0 +1,290 @@
+name: Native SDK verification and release
+run-name: Native SDK · ${{ inputs.mode }} · ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: verify只构建校验；publish在全部成功后发布三端包
+        type: choice
+        options: [verify, publish]
+        default: verify
+        required: true
+      release_tag:
+        description: 可省略；填写时必须等于native-release.json中的native-v版本
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-sdk-release
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      source_sha: ${{ steps.release.outputs.source_sha }}
+      trusted: ${{ steps.release.outputs.trusted }}
+      harmony_enabled: ${{ steps.release.outputs.harmony_enabled }}
+      java: ${{ steps.release.outputs.java }}
+      gradle: ${{ steps.release.outputs.gradle }}
+      artifact_suffix: ${{ steps.release.outputs.artifact_suffix }}
+      attempt: ${{ steps.release.outputs.attempt }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 核对统一版本与唯一源码提交
+        id: release
+        env:
+          RELEASE_MODE: ${{ inputs.mode }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+          HARMONY_RUNNER_READY: ${{ vars.HARMONY_RUNNER_READY }}
+        run: |
+          git fetch origin main
+          python3 scripts/native_release.py ci-metadata --mode "$RELEASE_MODE" --tag "$REQUESTED_TAG"
+
+  android:
+    needs: metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NATIVE_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ needs.metadata.outputs.java }}
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          gradle-version: ${{ needs.metadata.outputs.gradle }}
+          cache-read-only: true
+      - name: 安装当前工程Android SDK
+        run: |
+          sdkmanager --licenses < <(printf 'y\n%.0s' {1..100})
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: 构建四模块及Staging Maven
+        run: gradle --no-daemon -p android publishNativeAndroidToStaging
+      - name: 编译独立消费工程的Debug与Release
+        run: |
+          python3 scripts/native_release.py android-consumer --maven dist/native/android/maven --output "$RUNNER_TEMP/native-android-consumer"
+          gradle --no-daemon -p "$RUNNER_TEMP/native-android-consumer" :app:assembleDebug :app:assembleRelease
+          python3 scripts/native_release.py package --platform android --output dist/native/android
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-android-${{ needs.metadata.outputs.artifact_suffix }}
+          path: |
+            dist/native/android/*.zip
+            dist/native/android/platform.json
+          if-no-files-found: error
+
+  ios:
+    needs: metadata
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    env:
+      NATIVE_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+      - name: 准备CocoaPods
+        run: gem install cocoapods -v 1.16.2 --no-document
+      - name: 校验实际本地Pod编译与依赖
+        run: |
+          includes='{ios/LynxShellKit.podspec,ios/LynxCapacitorKit.podspec,ios/LynxMapKit/LynxMapKit.podspec,ios/LynxShellDebugKit.podspec}'
+          sources="https://cdn.cocoapods.org/,https://github.com/lynx-family/Specs.git"
+          for spec in ios/LynxShellKit.podspec ios/LynxCapacitorKit.podspec ios/LynxMapKit/LynxMapKit.podspec ios/LynxShellDebugKit.podspec; do
+            configuration=Release
+            if [[ "$spec" == "ios/LynxShellDebugKit.podspec" ]]; then configuration=Debug; fi
+            pod lib lint "$spec" --include-podspecs="$includes" --external-podspecs=ios/LocalPods/AMapLocation.podspec --sources="$sources" --platforms=ios --configuration="$configuration" --use-static-frameworks --use-modular-headers --skip-tests --allow-warnings --fail-fast
+          done
+          python3 scripts/native_release.py package --platform ios --output dist/native/ios
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-ios-${{ needs.metadata.outputs.artifact_suffix }}
+          path: |
+            dist/native/ios/*.zip
+            dist/native/ios/platform.json
+          if-no-files-found: error
+
+  harmony:
+    needs: metadata
+    # 自托管机器不接受分支或Fork代码；Runner接好后才显式启用。
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.metadata.outputs.trusted == 'true' && needs.metadata.outputs.harmony_enabled == 'true'
+    runs-on: [self-hosted, harmony-native]
+    timeout-minutes: 60
+    env:
+      NATIVE_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+      - name: 在无签名临时工程构建三个HAR
+        shell: bash
+        run: |
+          : "${DEVECO_SDK_HOME:?Runner需要预装Harmony SDK 24}"
+          : "${NATIVE_OHPM_BIN:?Runner需要设置ohpm可执行文件}"
+          : "${NATIVE_HVIGOR_BIN:?Runner需要设置hvigorw可执行文件}"
+          stage="$RUNNER_TEMP/native-harmony-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 scripts/native_harmony_release.py prepare --repo-root "$GITHUB_WORKSPACE" --output "$stage"
+          cd "$stage"
+          "$NATIVE_OHPM_BIN" install --all
+          for module in lynx_gfx lynx_shell_kit lynx_capacitor_kit; do
+            "$NATIVE_HVIGOR_BIN" assembleHar --mode module -p "module=$module@default" -p buildMode=release --no-daemon
+          done
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/native_harmony_release.py collect --stage "$stage" --output dist/native/harmony
+          python3 scripts/native_release.py package --platform harmony --output dist/native/harmony
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-harmony-${{ needs.metadata.outputs.artifact_suffix }}
+          path: |
+            dist/native/harmony/*.har
+            dist/native/harmony/platform.json
+          if-no-files-found: error
+
+  draft:
+    needs: [metadata, android, ios, harmony]
+    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      NATIVE_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+      NATIVE_BUILD_ATTEMPT: ${{ needs.metadata.outputs.attempt }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: native-android-${{ needs.metadata.outputs.artifact_suffix }}
+          path: dist/native/inputs/android
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: native-ios-${{ needs.metadata.outputs.artifact_suffix }}
+          path: dist/native/inputs/ios
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: native-harmony-${{ needs.metadata.outputs.artifact_suffix }}
+          path: dist/native/inputs/harmony
+      - name: 整合已校验的同源字节并保存Draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/native_github_publish.py assemble --inputs dist/native/inputs --assets dist/native/release
+          python3 scripts/native_github_publish.py draft --assets dist/native/release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-release-${{ needs.metadata.outputs.artifact_suffix }}
+          path: dist/native/release/*
+          if-no-files-found: error
+
+  maven:
+    needs: [metadata, draft]
+    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      NATIVE_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ needs.metadata.outputs.java }}
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          gradle-version: ${{ needs.metadata.outputs.gradle }}
+          cache-read-only: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: native-release-${{ needs.metadata.outputs.artifact_suffix }}
+          path: dist/native/release
+      - name: 核对既有Maven版本并准备同字节发布输入
+        id: maven
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/native_github_publish.py maven-status --assets dist/native/release --status-file dist/native/maven-status.json
+      - name: 仅发布尚不存在的模块
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PUBLISH_TASKS: ${{ steps.maven.outputs.tasks }}
+          NATIVE_MAVEN_INPUT: ${{ github.workspace }}/dist/native/maven-input
+        run: |
+          if [[ -n "$PUBLISH_TASKS" ]]; then
+            read -r -a tasks <<< "$PUBLISH_TASKS"
+            gradle --no-daemon -p android "${tasks[@]}"
+          fi
+      - name: 复核已上传的Maven实际字节
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/native_github_publish.py maven-status --assets dist/native/release --status-file dist/native/maven-final-status.json
+
+  finalize:
+    needs: [metadata, draft, maven]
+    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      NATIVE_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: native-release-${{ needs.metadata.outputs.artifact_suffix }}
+          path: dist/native/release
+      - name: 更新独立Specs分支并公开完整Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/native_github_publish.py specs --assets dist/native/release
+          python3 scripts/native_github_publish.py finalize --assets dist/native/release
+
+  summary:
+    needs: [metadata, android, ios, harmony, draft, maven, finalize]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: 明确各平台实际结果
+        env:
+          ANDROID_RESULT: ${{ needs.android.result }}
+          IOS_RESULT: ${{ needs.ios.result }}
+          HARMONY_RESULT: ${{ needs.harmony.result }}
+          RELEASE_RESULT: ${{ needs.finalize.result }}
+        run: |
+          {
+            echo "Android: $ANDROID_RESULT"
+            echo "iOS: $IOS_RESULT"
+            echo "Harmony: $HARMONY_RESULT"
+            echo "Release: $RELEASE_RESULT"
+            echo "Harmony为skipped时，仅完成部分平台验证，不能当作三端发布通过。"
+          } >> "$GITHUB_STEP_SUMMARY"

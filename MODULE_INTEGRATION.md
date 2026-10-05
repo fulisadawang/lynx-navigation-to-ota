@@ -62,7 +62,8 @@ dependencies {
 }
 ```
 
-其他仓库可以复制 `lynx-shell` Module，或者先发布到本机 Maven：
+跨仓库接入采用版本化 Maven 依赖；完整 GitHub 发布、iOS Specs 与 Harmony HAR 操作见
+[三端原生 SDK 发布说明](docs/native-github-release.md)。本地联调可将仓库中的模块发布到本机 Maven：
 
 ```bash
 # 在包含该 Module 的 Android 工程根目录执行；使用该工程自己的 Wrapper。
@@ -80,7 +81,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.example.lynx:lynx-shell-android:1.0.0")
+    implementation("io.github.fulisadawang.lynx:lynx-shell-android:1.1.0")
 }
 ```
 
