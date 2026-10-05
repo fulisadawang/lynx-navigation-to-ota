@@ -126,6 +126,21 @@ python3 native_harmony_release.py install \
 
 工具使用已有 gh 认证，下载该 tag 的描述、校验和及三份 HAR，校验元数据、版本、完整 SHA与 gfx 双 ABI冻结字节，然后只打印 `dependencies`/`overrides`片段。它不自动改业务配置、不执行 OHPM、不覆盖已有不同文件。按片段配置根工程的 gfx override及业务模块的 Shell/Cap依赖后，再执行正常 OHPM安装。
 
+`--config-root` 只决定输出片段的路径基准。根工程与Entry模块通常有各自的 `oh-package.json5`，不能将同一相对路径原样粘贴两处。从工程根执行上面的安装命令后，文件位于 `vendor/native/`；若业务模块为 `entry/`，分别配置：
+
+```json5
+// 根工程 oh-package.json5
+"overrides": { "@lynx/gfx": "file:./vendor/native/lynx-gfx-4.1.0.har" }
+```
+
+```json5
+// entry/oh-package.json5
+"dependencies": {
+  "@lynx/lynx-shell-kit": "file:../vendor/native/lynx-shell-kit-1.1.0.har",
+  "@lynx/lynx-capacitor-kit": "file:../vendor/native/lynx-capacitor-kit-1.1.0.har"
+}
+```
+
 Gfx版本来自所选发行描述，工具可独立使用，不要求拥有当前源码目录或相邻 Module。消费者仍按原合同配置 Module注册、Ability/UIContext/Window、生命周期与系统回调。
 
 ## 失败与重复发布
@@ -135,6 +150,7 @@ Gfx版本来自所选发行描述，工具可独立使用，不要求拥有当�
 - Draft 同字节资产和已完整上传的同字节 Maven 模块可以复用；Maven 已部分写入或发生不同字节冲突时明确停止，保留 Draft，要求维护者核对或升级版本。
 - 多注册表没有共同事务，流程不宣称原子回滚；不会自动删除已上传版本。Specs 已有同内容可复用，不同内容拒绝覆盖。
 - `native-specs` 是隔离分支，只接受 `Specs/**`，使用显式普通 fast-forward 推送，不写 main。现有内容包含其它文件时停止，不清空用户分支。
+- 新SDK Release正文由版本清单生成Android坐标、iOS Pod和Harmony安装命令，附件逐项列名，并将接入文档固定到本次sourceSHA。旧源码Release保留自己的历史范围，不将新SDK功能写回旧tag。
 
 ## 当前证据
 

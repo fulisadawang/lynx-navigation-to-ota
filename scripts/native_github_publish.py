@@ -119,14 +119,95 @@ def assert_remote_tag(tag, sha, allow_missing=False):
         raise ValueError("远端 tag 已指向另一提交，禁止覆盖或重新打 tag")
 
 
+def release_notes(data, sha, tag):
+    version = data["version"]
+    repository = data["repository"]
+    source = f"https://github.com/{repository}/blob/{sha}"
+    coordinate = lambda module: data["android"]["groupId"] + ":" + data["android"]["modules"][module] + ":" + version
+    assets = "\n".join(f"- `{name}`" for name in sorted(set().union(*expected_assets(data).values())))
+    return f'''# {tag} · 三端原生 SDK
+
+自有 SDK **{version}**，固定源码 `{sha}`。Lynx/Gfx **{data['lynxVersion']}**、PrimJS **{data['primjsVersion']}**。
+
+如果此页面仍标为 **Draft**，Maven/Specs/附件的分阶段发布尚未全部完成；公开后再使用以下远程安装命令。GitHub自动生成的Source code归档用于源码下载。
+
+## Android：从GitHub Packages引入
+
+Maven仓库：`https://maven.pkg.github.com/{repository}`。公开Maven包的读取也需要认证，凭据放本机或CI环境，完整配置见下方接入手册。
+
+```kotlin
+dependencies {{
+    implementation("{coordinate('lynx-shell')}")
+    implementation("{coordinate('lynx-capacitor')}")
+    debugImplementation("{coordinate('lynx-debug-tool')}")
+}}
+```
+
+Shell带入Map。保留Gradle `.module` 元数据以选择Debug/Release；DebugTool只在Debug使用。附件的Maven ZIP包含本次原AAR/POM/GMM/sources，正式接入优先使用Maven坐标。
+
+## iOS：从Specs分支引入Pod
+
+```bash
+pod repo add lynx-native-specs https://github.com/{repository}.git {data['ios']['specsBranch']}
+```
+
+```ruby
+source 'https://github.com/{repository}.git'
+source 'https://github.com/lynx-family/Specs.git'
+source 'https://cdn.cocoapods.org/'
+platform :ios, '14.0'
+use_modular_headers!
+use_frameworks! :linkage => :static
+
+target 'YourApp' do
+  pod 'LynxShellKit', '{version}'
+  pod 'LynxCapacitorKit', '{version}'
+  pod 'LynxShellDebugKit', '{version}', :configurations => ['Debug']
+end
+```
+
+本仓Specs分支与附件提供Podspec JSON；源码从相同native tag获取，由消费App正常编译。该附件不是预编译XCFramework。Shell默认依赖Map及其固定第三方依赖。
+
+## Harmony：安装同一发行的三个HAR
+
+在Harmony工程根目录执行：
+
+```bash
+gh release download {tag} --repo {repository} --pattern native_harmony_release.py
+python3 native_harmony_release.py install --version {version} --destination vendor/native --config-root .
+```
+
+安装器使用已有gh认证，验证发行描述、SHA256与Gfx双ABI，不覆盖不同文件，只打印配置片段。根工程gfx override与Entry的依赖路径应分别以各自oh-package.json5所在目录计算；完整双目录示例见接入手册。GitHub不是OHPM registry，配置file依赖后再正常安装。
+
+## 本次附件
+
+{assets}
+- `native-release.json`：版本、sourceSHA与构建回执
+- `SHA256SUMS`：最终上传字节的校验和
+- `native_harmony_release.py`：独立HAR安装工具
+
+## 装好依赖后
+
+正式App还需初始化Router/OTA、注册能力Module、配置Host/窗口和生命周期/系统回调。JS入口由独立的@cclx/lynx-native-bridge提供。
+
+- [本版三端接入与发布手册]({source}/docs/native-github-release.md)
+- [Shell宿主接入]({source}/MODULE_INTEGRATION.md)
+- [Cap注册与能力模块装配]({source}/CAPACITOR_DEMO_INTEGRATION.md)
+
+CI构建、产物与分发校验不替代真机、媒体权限、视觉、性能和OTA业务验收。
+'''
+
+
 def draft(output):
     data, sha, tag = verify_release(output)
     assert_remote_tag(tag, sha, allow_missing=True)
     existing = release_info(data, tag)
     if existing is None:
-        gh("release", "create", tag, "--repo", data["repository"], "--target", sha, "--draft",
-           "--title", f"{tag} · Lynx 三端原生 SDK", "--notes",
-           f"统一版本 {data['version']}；源码 {sha}。三端构建与分发产物见附件，业务仍需完成宿主初始化。")
+        with tempfile.TemporaryDirectory(prefix="native-release-notes-") as folder:
+            notes = Path(folder) / "release-notes.md"
+            notes.write_text(release_notes(data, sha, tag))
+            gh("release", "create", tag, "--repo", data["repository"], "--target", sha, "--draft",
+               "--title", f"{tag} · Lynx 三端原生 SDK", "--notes-file", str(notes))
         existing = release_info(data, tag)
     assert_remote_tag(tag, sha)
     if not existing["draft"]:
