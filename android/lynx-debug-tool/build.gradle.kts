@@ -1,6 +1,9 @@
+import com.android.build.api.attributes.BuildTypeAttr
+
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    id("maven-publish")
 }
 
 android {
@@ -17,6 +20,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    publishing {
+        multipleVariants("native") {
+            // release 已由 beforeVariants 禁用；allVariants 保留唯一 debug 的构建类型属性。
+            allVariants()
+            withSourcesJar()
+        }
+    }
 }
 
 // 工具本身不提供生产 variant，防止宿主误用 implementation 带入 Release。
@@ -27,7 +37,10 @@ androidComponents {
 }
 
 dependencies {
-    implementation(project(":lynx-shell"))
+    implementation(project(":lynx-shell")) {
+        // 即使宿主使用变体 fallback，工具的 SPI 依赖也必须解析到 Shell debug。
+        attributes { attribute(BuildTypeAttr.ATTRIBUTE, objects.named("debug")) }
+    }
     implementation("androidx.activity:activity-ktx:1.8.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-ktx:1.15.0")

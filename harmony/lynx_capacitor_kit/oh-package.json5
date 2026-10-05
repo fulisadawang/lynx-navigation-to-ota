@@ -1,13 +1,13 @@
 {
   "name": "@lynx/lynx-capacitor-kit",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "Explicit Lynx NativeModule bridge for Capacitor-compatible APIs on HarmonyOS",
   "main": "src/main/ets/Index.ets",
   "license": "Apache-2.0",
   "dependencies": {
-    "@lynx/lynx": "@param:dependencies.lynx_version",
-    "@lynx/lynx_base": "@param:dependencies.lynx_version",
-    "@lynx/lynx_log_service": "@param:dependencies.lynx_version"
+    "@lynx/lynx": "4.1.0",
+    "@lynx/lynx_base": "4.1.0",
+    "@lynx/lynx_log_service": "4.1.0"
   },
   "devDependencies": {
     "@ohos/hypium": "1.0.25"
