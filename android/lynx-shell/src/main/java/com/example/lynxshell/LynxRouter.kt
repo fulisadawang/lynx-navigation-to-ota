@@ -77,6 +77,7 @@ object LynxRouter {
     internal fun notifyOtaUserContext(runtime: LynxOtaRuntime, epoch: Long) {
         val notify = Runnable {
             if (LynxShell.activityBundleRuntime() === runtime && runtime.userIdentityEpoch == epoch) {
+                com.example.lynxshell.container.LynxTemplateGroupCache.clear()
                 otaUserListeners.forEach { listener -> runCatching { listener(epoch) } }
             }
         }

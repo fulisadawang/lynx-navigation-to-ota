@@ -64,6 +64,9 @@ class LynxViewMonitor internal constructor(
     private var loaded = false
     private var ambiguous = false
     private var pageStarts = 0
+    private var warmView = false
+    private var expectedInitialReloadStart = false
+    private var expectedInitialReloadEntry = false
     private val primaryMetrics = HashSet<String>()
 
     private val lifecycleClient = object : LynxViewClient() {
@@ -165,25 +168,40 @@ class LynxViewMonitor internal constructor(
         emit(LoadPayload("loaded_unconfirmed"))
     }
 
-    @Synchronized internal fun firstContent() {
+    @Synchronized internal fun expectInitialEngineReuse() {
+        warmView = true
+        expectedInitialReloadStart = true
+        expectedInitialReloadEntry = true
+    }
+
+    @Synchronized internal fun cachedFirstContent(source: String) {
+        firstContent(source)
+    }
+
+    @Synchronized internal fun firstContent(reason: String? = null) {
         if (!open() || terminal || ambiguous) return
+        if (warmView && reason == null) return
         firstContent = true; terminal = true
-        emit(LoadPayload("first_content", durationMs = elapsed(startedAt)))
+        emit(LoadPayload("first_content", reason, durationMs = elapsed(startedAt)))
     }
 
     @Synchronized internal fun pageStarted(reload: Boolean) {
         if (!open()) return
+        if (reload && expectedInitialReloadStart) { expectedInitialReloadStart = false; return }
         pageStarts++
         if (reload || pageStarts > 1) {
             if (!terminal && !ambiguous) emit(LoadPayload("incomplete", "untracked_same_view_load"))
             ambiguous = true
+            expectedInitialReloadEntry = false
             runtime.count("ambiguous_load")
         }
     }
 
     @Synchronized internal fun performance(entry: PerformanceEntry) {
         if (!open()) return
-        if (entry is ReloadBundleEntry) ambiguous = true
+        if (entry is ReloadBundleEntry) {
+            if (expectedInitialReloadEntry) expectedInitialReloadEntry = false else ambiguous = true
+        }
         val projection = try { MonitorProjection.performance(entry) } catch (_: Exception) {
             runtime.count("performance_projection_error"); null
         } ?: run { runtime.count("unsupported_performance_entry"); return }

@@ -1,0 +1,12 @@
+# 仅保留报告引用的已筛选小型回归日志，原始堆转储与构建产物留在本地。
+!baseline-instrumentation-2.log
+!grouped-instrumentation-4.log
+!heap-drain-instrumentation.log
+!safe-final-build.log
+!safe-instrumentation-1.log
+!safe-instrumentation-final.log
+!screenshots-instrumentation.log
+!bounded/bounded-host-final-11.log
+!bounded/bounded-host-final-build.log
+!bounded/bounded-host-helper-fix-heap.log
+!bounded/manual-native-page-instrumentation-2.log

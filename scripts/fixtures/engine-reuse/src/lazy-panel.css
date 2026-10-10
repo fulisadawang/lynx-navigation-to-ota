@@ -1,0 +1,2 @@
+.lazy-panel { display: flex; flex-direction: column; padding: 18px; margin-top: 14px; background-color: #d9f0e8; border-radius: 8px; }
+.lazy-title { font-size: 20px; font-weight: bold; margin-bottom: 12px; color: #13513d; }

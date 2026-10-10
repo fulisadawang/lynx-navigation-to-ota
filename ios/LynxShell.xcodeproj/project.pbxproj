@@ -39,6 +39,7 @@
 		CAD57C4AC17AB5A965339F9E /* ShellContainerHealthIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E41A077B5ED07054207B96C4 /* ShellContainerHealthIntegrationTests.swift */; };
 		DBA3449C11D85900F50C72AB /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC72B6468F3396CF46F2562 /* AppDelegate.swift */; };
 		FBBFD6E7E6AEAB9FD113BEF7 /* CapHTTPDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EDFF0C1EA8E761DDE94B320 /* CapHTTPDatabaseTests.swift */; };
+		A11020000000000000000001 /* BundleLoadingBenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11020000000000000000002 /* BundleLoadingBenchmarkTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,6 +100,7 @@
 		EB68D288FC09A76F8E3ABDBE /* LauncherViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherViewController.swift; sourceTree = "<group>"; };
 		FDFE6EDFEA96961A72494905 /* LynxShellUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LynxShellUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FEC559492CD3CE5E5564261E /* NativeTabBarDemoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabBarDemoViewController.swift; sourceTree = "<group>"; };
+		A11020000000000000000002 /* BundleLoadingBenchmarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundleLoadingBenchmarkTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +185,7 @@
 				E41A077B5ED07054207B96C4 /* ShellContainerHealthIntegrationTests.swift */,
 				00CC2FA5E5BBEC344A4186E0 /* ShellOtaHealthGateTests.swift */,
 				7C33EF42AE6A227DF13D2663 /* ShellOtaRuntimeReadinessTests.swift */,
+				A11020000000000000000002 /* BundleLoadingBenchmarkTests.swift */,
 				CF9A24DBE078479391727179 /* ShellSDKDestroyIntegrationTests.swift */,
 			);
 			name = NativeReadiness;
@@ -541,6 +544,7 @@
 				CAD57C4AC17AB5A965339F9E /* ShellContainerHealthIntegrationTests.swift in Sources */,
 				4DFF2FE74896020E838307CF /* ShellOtaHealthGateTests.swift in Sources */,
 				1653C5FD80EDAF0612D614AB /* ShellOtaRuntimeReadinessTests.swift in Sources */,
+				A11020000000000000000001 /* BundleLoadingBenchmarkTests.swift in Sources */,
 				5C08645A63891DEC93BCF677 /* ShellSDKDestroyIntegrationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -757,7 +761,8 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.huangbaoche.client.store.otae2e;
+				BUNDLE_LOADING_HOST_BUNDLE_ID = com.huangbaoche.client.store.otae2e;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(BUNDLE_LOADING_HOST_BUNDLE_ID)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) LYNX_SHELL_E2E_CORE_ONLY";
 				TARGETED_DEVICE_FAMILY = 1;

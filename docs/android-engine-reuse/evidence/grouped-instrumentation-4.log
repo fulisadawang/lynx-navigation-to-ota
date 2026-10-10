@@ -1,0 +1,86 @@
+
+com.example.lynxshell.sample.LynxEngineGroupReuseTest:
+LynxEngineGroupReuse: small page=engine-reuse-small-5da96aba-5a63-4151-81ed-c26eec428e67 engine=6470806 enginePtr=-5476376652364744128 shellPtr=-5476376649412189200 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: small page=engine-reuse-small-e72a6371-eb29-4d94-b367-f1fcfd06ab63 engine=8522146 enginePtr=-5476376652364760608 shellPtr=-5476376649412124400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: small page=engine-reuse-small-5da96aba-5a63-4151-81ed-c26eec428e67 engine=6470806 enginePtr=-5476376652364744128 shellPtr=-5476376649412189200 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-0cc3f8f5-b15e-46dd-8871-377c2236f1fc engine=260722840 enginePtr=-5476376652364389328 shellPtr=-5476376649412076400 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-299b53ad-7dda-4dcf-b8ff-3f034837185c engine=5456732 enginePtr=-5476376652364784448 shellPtr=-5476376649412079600 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-0cc3f8f5-b15e-46dd-8871-377c2236f1fc engine=260722840 enginePtr=-5476376652364389328 shellPtr=-5476376649412076400 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: async page=engine-reuse-async-89967a52-3b75-47a5-9ef0-76d39828c818 engine=26841499 enginePtr=-5476376652364998368 shellPtr=-5476376649412215600 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxEngineGroupReuse: async page=engine-reuse-async-b847acf9-1412-48e7-8fa8-5f4b2d639436 engine=215526151 enginePtr=-5476376652364752608 shellPtr=-5476376649411969200 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxEngineGroupReuse: async page=engine-reuse-async-89967a52-3b75-47a5-9ef0-76d39828c818 engine=26841499 enginePtr=-5476376652364998368 shellPtr=-5476376649412215600 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+.
+LynxEngineGroupReuse: small page=engine-reuse-small-80d5dfa2-4763-4473-b5f0-27ed9bbf5a08 engine=65887946 enginePtr=-5476376652364834528 shellPtr=-5476376649412019600 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: small page=engine-reuse-small-4208cecc-3d7a-4caa-ac98-054fe10a60d9 engine=65887946 enginePtr=-5476376652364834528 shellPtr=-5476376649412098000 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-a86dd493-849c-411a-854b-a0f86ce0eb9b engine=18297805 enginePtr=-5476376652364790048 shellPtr=-5476376649412086800 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-cfac56c3-8c62-41cf-8133-2c8696310692 engine=18297805 enginePtr=-5476376652364790048 shellPtr=-5476376649412154000 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: async page=engine-reuse-async-1418c216-2f57-473e-9166-959f97bbfc89 engine=258495825 enginePtr=-5476376652364723168 shellPtr=-5476376649412099600 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxEngineGroupReuse: async page=engine-reuse-async-c0a2f74e-1af2-45bf-80ce-361553a730a9 engine=258495825 enginePtr=-5476376652364723168 shellPtr=-5476376649411997200 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+.
+com.example.lynxshell.sample.EngineStateReuseTest:
+EngineStateReuse: actual Native event=engine-reuse-probe.ready source=engine-state-lazy-781436c7-80f3-4060-82db-ef9ab9e578c1 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"lazy-A","globalHasOldOnly":true,"caseName":"lazy","counter":0.0,"lazyStatus":"not-requested","pageId":"engine-state-lazy-781436c7-80f3-4060-82db-ef9ab9e578c1","globalMarker":"global-lazy-A"}
+
+EngineStateReuse: actual Native event=engine-reuse-probe.ready source=engine-state-lazy-22cb3ce9-dc88-469f-b6a5-b58834c74a9c accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"lazy-B","globalHasOldOnly":false,"caseName":"lazy","counter":0.0,"lazyStatus":"not-requested","pageId":"engine-state-lazy-22cb3ce9-dc88-469f-b6a5-b58834c74a9c","globalMarker":"global-lazy-B"}
+
+Failure in testWarmLazyPageFirstRequestUsesCurrentBindingAndRealBundleBytes:
+junit.framework.ComparisonFailure: Native接受后必须显示真实READY节点 expected:<...e=engine-state-lazy-[22cb3ce9-dc88-469f-b6a5-b58834c74a9c:marker=lazy-B:counter=0:mount=1:oldOnly=false:globalOldOnly=fals]e> but was:<...e=engine-state-lazy-[781436c7-80f3-4060-82db-ef9ab9e578c1:marker=lazy-A:counter=0:mount=1:oldOnly=true:globalOldOnly=tru]e>
+	at com.example.lynxshell.sample.EngineStateReuseTest.awaitLabel(EngineStateReuseTest.kt:492)
+	at com.example.lynxshell.sample.EngineStateReuseTest.access$awaitLabel(EngineStateReuseTest.kt:52)
+	at com.example.lynxshell.sample.EngineStateReuseTest$Fixture.assertReady(EngineStateReuseTest.kt:343)
+	at com.example.lynxshell.sample.EngineStateReuseTest$Fixture.assertInitialReady(EngineStateReuseTest.kt:288)
+	at com.example.lynxshell.sample.EngineStateReuseTest$testWarmLazyPageFirstRequestUsesCurrentBindingAndRealBundleBytes$1.invoke(EngineStateReuseTest.kt:79)
+	at com.example.lynxshell.sample.EngineStateReuseTest$testWarmLazyPageFirstRequestUsesCurrentBindingAndRealBundleBytes$1.invoke(EngineStateReuseTest.kt:69)
+	at com.example.lynxshell.sample.EngineStateReuseTest.withFixture(EngineStateReuseTest.kt:151)
+	at com.example.lynxshell.sample.EngineStateReuseTest.testWarmLazyPageFirstRequestUsesCurrentBindingAndRealBundleBytes(EngineStateReuseTest.kt:69)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+
+EngineStateReuse: actual Native event=engine-reuse-probe.ready source=engine-state-state-2c9d1b1b-26b2-4b42-900a-ca8772c80c11 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"engine-state-state-2c9d1b1b-26b2-4b42-900a-ca8772c80c11","globalMarker":"global-state-A"}
+
+EngineStateReuse: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1297 - 965, 1423)
+
+EngineStateReuse: actual Native event=engine-reuse-probe.ready source=engine-state-state-2c9d1b1b-26b2-4b42-900a-ca8772c80c11 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"engine-state-state-2c9d1b1b-26b2-4b42-900a-ca8772c80c11","globalMarker":"global-state-A"}
+
+EngineStateReuse: actual Native event=engine-reuse-probe.ready source=engine-state-state-da8abdc8-ccae-40b3-b788-2a2c20d6d583 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"engine-state-state-da8abdc8-ccae-40b3-b788-2a2c20d6d583","globalMarker":"global-state-B"}
+
+Failure in testWarmStatePageResetsInitialDataGlobalPropsAndJsState:
+junit.framework.ComparisonFailure: Native接受后必须显示真实READY节点 expected:<...=engine-state-state-[da8abdc8-ccae-40b3-b788-2a2c20d6d583:marker=state-B:counter=0:mount=1:oldOnly=false:globalOldOnly=fals]e> but was:<...=engine-state-state-[2c9d1b1b-26b2-4b42-900a-ca8772c80c11:marker=state-A:counter=1:mount=1:oldOnly=true:globalOldOnly=tru]e>
+	at com.example.lynxshell.sample.EngineStateReuseTest.awaitLabel(EngineStateReuseTest.kt:492)
+	at com.example.lynxshell.sample.EngineStateReuseTest.access$awaitLabel(EngineStateReuseTest.kt:52)
+	at com.example.lynxshell.sample.EngineStateReuseTest$Fixture.assertReady(EngineStateReuseTest.kt:343)
+	at com.example.lynxshell.sample.EngineStateReuseTest$Fixture.assertInitialReady(EngineStateReuseTest.kt:288)
+	at com.example.lynxshell.sample.EngineStateReuseTest$testWarmStatePageResetsInitialDataGlobalPropsAndJsState$1.invoke(EngineStateReuseTest.kt:64)
+	at com.example.lynxshell.sample.EngineStateReuseTest$testWarmStatePageResetsInitialDataGlobalPropsAndJsState$1.invoke(EngineStateReuseTest.kt:53)
+	at com.example.lynxshell.sample.EngineStateReuseTest.withFixture(EngineStateReuseTest.kt:151)
+	at com.example.lynxshell.sample.EngineStateReuseTest.testWarmStatePageResetsInitialDataGlobalPropsAndJsState(EngineStateReuseTest.kt:53)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+
+Test results for InstrumentationTestRunner=...F.F
+Time: 106.691
+
+FAILURES!!!
+Tests run: 4,  Failures: 2,  Errors: 0
+
+

@@ -12,6 +12,7 @@ import com.example.lynxshell.routing.LynxRouteParser
 import com.example.lynxshell.routing.SessionExitHandler
 import com.example.lynxshell.runtime.LynxRuntimeInitializer
 import com.example.lynxshell.ota.ActivityBundleRuntime
+import com.example.lynxshell.container.LynxTemplateGroupCache
 import com.example.lynxshell.transition.LynxSnapshotStore
 import com.example.lynxshell.transition.PreparedRouteStore
 
@@ -23,11 +24,21 @@ import com.example.lynxshell.transition.PreparedRouteStore
  * 复制壳源码，也不需要 Sparkling autolink。
  */
 object LynxShell {
+    private val destroyedViews = java.util.Collections.newSetFromMap(
+        java.util.WeakHashMap<com.lynx.tasm.LynxView, Boolean>(),
+    )
+    private data class ViewHosts(val module: com.example.lynxshell.runtime.LynxNativeModuleHost?,
+        val media: com.example.lynxshell.runtime.LynxNativeMediaHost?)
+    private val viewHosts = java.util.WeakHashMap<com.lynx.tasm.LynxView, ViewHosts>()
+    internal fun bindViewHosts(view: com.lynx.tasm.LynxView) {
+        viewHosts[view] = ViewHosts(nativeModuleHost, nativeMediaHost)
+    }
     @Volatile
     private var nativeModuleHost: com.example.lynxshell.runtime.LynxNativeModuleHost? = null
 
     /** 宿主在首个 LynxView 创建前安装额外能力的生命周期接线。 */
     fun installNativeModuleHost(host: com.example.lynxshell.runtime.LynxNativeModuleHost) {
+        if (nativeModuleHost !== host) LynxTemplateGroupCache.clear()
         nativeModuleHost = host
     }
 
@@ -37,6 +48,7 @@ object LynxShell {
     private var nativeMediaHost: com.example.lynxshell.runtime.LynxNativeMediaHost? = null
 
     fun installNativeMediaHost(host: com.example.lynxshell.runtime.LynxNativeMediaHost) {
+        if (nativeMediaHost !== host) LynxTemplateGroupCache.clear()
         nativeMediaHost = host
     }
 
@@ -44,7 +56,16 @@ object LynxShell {
 
     /** 先释放 exact Context 的原生任务，再进入 SDK Module/View 销毁链。 */
     internal fun destroyView(view: com.lynx.tasm.LynxView) {
-        try { nativeMediaHost?.onViewDestroy(view.lynxContext) } finally { view.destroy() }
+        if (!destroyedViews.add(view)) return
+        val hosts = viewHosts.remove(view) ?: ViewHosts(nativeModuleHost, nativeMediaHost)
+        val lifecycle = hosts.module as? com.example.lynxshell.runtime.LynxNativeModuleLifecycleHost
+        try {
+            try {
+                lifecycle?.onViewDestroy(view.lynxContext)
+            } finally {
+                if (hosts.media !== lifecycle) hosts.media?.onViewDestroy(view.lynxContext)
+            }
+        } finally { LynxTemplateGroupCache.destroy(view) }
     }
 
     /**
@@ -65,10 +86,12 @@ object LynxShell {
     /** 必须在 Application.onCreate 中、创建首个 LynxView 前调用。 */
     fun initialize(application: Application) {
         LynxRuntimeInitializer.initialize(application)
+        LynxTemplateGroupCache.initialize(application)
     }
 
     /** 安装宿主 OTA 适配器；传 null 表示关闭显式 appId + bundleName 页面。 */
     fun installActivityBundleRuntime(runtime: ActivityBundleRuntime?) {
+        if (installedActivityBundleRuntime !== runtime) LynxTemplateGroupCache.clear()
         installedActivityBundleRuntime = runtime
     }
 
@@ -111,6 +134,7 @@ object LynxShell {
     /** 低内存时只清性能缓存，不破坏导航身份和页面结果。 */
     fun onTrimMemory(level: Int) {
         if (level >= Application.TRIM_MEMORY_RUNNING_LOW) {
+            LynxTemplateGroupCache.clear()
             PreparedRouteStore.clear()
             LynxSnapshotStore.clear()
         }

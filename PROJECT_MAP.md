@@ -99,6 +99,21 @@ Cap 提供公开 Host provider；Sample 将容器系统栏、方向和文字缩�
 实际宿主用例分别执行，完整结果以本轮报告为准。公开 Host 接口中的 LynxView 类型由
 Shell 对同一 Lynx 4.1 Core 的 api 依赖导出，消费 App 不必重复声明 SDK。
 
+2026-10-10 Android 主库增加 `LynxTemplateGroupCache`：Factory、Page 与 Native Tab 共用
+按已验证主包、Release、用户 epoch、资源快照和环境配置区分的官方 `LynxViewGroup`，
+`setEnableCacheEngine(true)`、不共享 NativeModule。固定 ReactLynx 版本下每个 Engine
+只从冷 A 借给一次新 B，B 退出立即释放 Group；C 必须新 Engine，不宣称无限复用。
+重用前公开 reset/reload 与 View tree rebuild；warm 消费独立真实 frame commit，不假 SDK首屏。
+空闲上限 2 个 Group、8 MiB 编码体积权重、60 秒 TTL；active 失效先退休，压力/身份/
+回滚/资源删除清池。候选版本、业务重载页与未证明脱绑的 list/frame/Map/Video 等保留新 Engine。
+真实 Heap 定位并处理旧 Context 的 ListNodeInfoFetcher、body drawing helper 对旧 Activity 的
+持有链；idle Engine 仍活时，旧 Activity 在队列排空后可回收。8 MiB 不是 native RAM 硬限制。
+12 项功能（含真实 Page/Tab）和限定严格 Heap 场景通过；性能样本不能支持90分或更快承诺。
+完整结果见 `docs/android-engine-reuse/BOUNDED_ENGINE_TEST_REPORT.html`；旧 parsed cache 报告
+与不受限 Engine 原型保留在相同目录历史报告/归档中，不能用于描述当前产品源码。
+`emitToNative` 按真实调用 View 寻址，Native Tab 的 GlobalProps 使用同一 pageInfo；
+可选 `LynxNativeModuleLifecycleHost` 与 MediaHost 共用 Context 销毁签名，旧 Host 接口保留。
+
 ### iOS
 
 ```text

@@ -3,6 +3,8 @@ package com.example.lynxshell.transition
 import android.graphics.Rect
 import android.view.View
 import com.lynx.tasm.LynxView
+import com.lynx.tasm.behavior.ui.LynxBaseUI
+import com.lynx.tasm.behavior.ui.LynxUI
 
 data class ResolvedLynxElement(
     val selector: String,
@@ -18,15 +20,24 @@ object LynxElementResolver {
         val normalized = selector.trim().removePrefix("#")
         if (normalized.isEmpty()) return null
 
-        val nativeView = view.findViewByIdSelector(normalized)
+        // SDK ID 索引可保留已脱离树的同 ID 节点；几何只从当前根树读取。
+        val ui = findCurrent(view.lynxUIRoot, normalized) ?: return null
+        val nativeView = (ui as? LynxUI<*>)?.view
         val rect = nativeView?.takeIf(::isUsableView)?.let(::rectOnScreen)
-            ?: view.findUIByIdSelector(normalized)?.getRectToWindow()
+            ?: ui.rectToWindow
         if (rect == null || rect.isEmpty || !intersectsVisibleWindow(view, rect)) return null
         return ResolvedLynxElement(
             selector = normalized,
             rectOnScreen = Rect(rect),
             nativeView = nativeView?.takeIf(::isUsableView),
         )
+    }
+
+    private fun findCurrent(ui: LynxBaseUI?, id: String): LynxBaseUI? {
+        if (ui == null) return null
+        if (ui.idSelector == id) return ui
+        for (child in ui.children) findCurrent(child, id)?.let { return it }
+        return null
     }
 
     fun rectOnScreen(view: View): Rect {

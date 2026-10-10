@@ -232,6 +232,7 @@ class LynxOtaRuntime(
             // 删除成功或失败后都清掉门控：下一次页面打开必须重新确认当前 appId 的本地状态。
             clearPageRefreshGate(lynxAppId, epoch)
             Handler(Looper.getMainLooper()).post {
+                com.example.lynxshell.container.LynxTemplateGroupCache.invalidateApp(lynxAppId)
                 onComplete(result.isSuccess && epoch == userIdentityEpoch, result.exceptionOrNull()?.javaClass?.simpleName)
             }
         }) Handler(Looper.getMainLooper()).post { onComplete(false, "OTA 用户上下文已失效") }
@@ -244,6 +245,7 @@ class LynxOtaRuntime(
             val result = runCatching { withIdentity(epoch) { sdk.deleteAllDownloadedBundles() } }
             clearAllPageRefreshGates(epoch)
             Handler(Looper.getMainLooper()).post {
+                com.example.lynxshell.container.LynxTemplateGroupCache.clear()
                 onComplete(result.isSuccess && epoch == userIdentityEpoch, result.exceptionOrNull()?.javaClass?.simpleName)
             }
         }) Handler(Looper.getMainLooper()).post { onComplete(false, "OTA 用户上下文已失效") }
@@ -438,6 +440,7 @@ class LynxOtaRuntime(
                     .forEach { it.source = "ota_snapshot" }
             }
             clearPageRefreshGate(lynxAppId, epoch)
+        com.example.lynxshell.container.LynxTemplateGroupCache.invalidateApp(lynxAppId)
         return true
     }
 
@@ -451,6 +454,7 @@ class LynxOtaRuntime(
             sdk.current(lynxAppId) != null || embeddedBundleRegistry.containsApp(lynxAppId)
         }
         retireSnapshots(lynxAppId, expectedReleaseId, epoch, candidateOnly = true)
+        com.example.lynxshell.container.LynxTemplateGroupCache.invalidateApp(lynxAppId)
         return restored
     }
 
@@ -493,6 +497,7 @@ class LynxOtaRuntime(
     override fun rollback(lynxAppId: String, reason: String, expectedReleaseId: String?, expectedIdentityEpoch: Long?): Boolean {
         val epoch = expectedIdentityEpoch ?: userIdentityEpoch
         return withIdentity(epoch) {
+        com.example.lynxshell.container.LynxTemplateGroupCache.invalidateApp(lynxAppId)
         val candidate = sdk.candidate(lynxAppId)
         if (config.candidateActivationEnabled && candidate != null && (expectedReleaseId == null || candidate.release.context.releaseId == expectedReleaseId)) {
                 // candidate/trial 失败时只丢弃候选，不回滚掉仍然稳定的 current。
@@ -531,6 +536,7 @@ class LynxOtaRuntime(
 
     /** 宿主退出时释放后台队列；Application 通常只需在进程结束时由系统回收。 */
     fun close() {
+        com.example.lynxshell.container.LynxTemplateGroupCache.clear()
         closed = true
         sdk.invalidatePendingOperations()
         val callbacks = synchronized(refreshStateLock) {

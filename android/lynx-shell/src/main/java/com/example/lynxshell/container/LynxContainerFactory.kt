@@ -6,12 +6,15 @@ import android.view.View
 import com.example.lynxshell.debug.LynxDebugBridge
 // LYNX_DEBUG_TOOL_END
 import com.example.lynxshell.model.LynxPageRequest
+import com.example.lynxshell.bridge.LynxRouterPageInfo
+import com.example.lynxshell.ota.PreparedActivityBundle
 import com.example.lynxshell.monitoring.LynxViewMonitor
 import com.example.lynxshell.resource.ShellTemplateProvider
 import com.example.lynxshell.resource.ShellSidecarFetchers
 import com.example.lynxshell.runtime.LynxLocaleStore
 import com.example.lynxshell.runtime.ShellGlobalPropsFactory
 import com.example.lynxshell.runtime.XElementRuntime
+import com.example.lynxshell.util.JsonObjectCodec
 import com.example.lynxmap.LynxMapRuntime
 import com.lynx.tasm.LynxView
 import com.lynx.tasm.LynxViewBuilder
@@ -33,6 +36,9 @@ object LynxContainerFactory {
         // LYNX_DEBUG_TOOL_BEGIN
         containerKind: String = "page",
         // LYNX_DEBUG_TOOL_END
+        preparedBundle: PreparedActivityBundle? = null,
+        pageInfo: LynxRouterPageInfo? = null,
+        onCachedFrame: ((LynxFirstFrameSource) -> Unit)? = null,
     ): LynxView {
         val initialLayout = ShellGlobalPropsFactory.captureLayout(activity)
         val locale = LynxLocaleStore.current(activity)
@@ -41,7 +47,9 @@ object LynxContainerFactory {
             .setThreadStrategyForRendering(ThreadStrategyForRendering.MOST_ON_TASM)
             .setColorScheme(ShellGlobalPropsFactory.resolveColorScheme(activity))
             .setScreenSize(initialLayout.screenWidthPx, initialLayout.screenHeightPx)
-        ShellSidecarFetchers.install(builder, sidecarResources, request.bundleUrl, templateProvider)
+        val groupLease = LynxTemplateGroupCache.configure(builder, activity, request, templateProvider,
+            preparedBundle, sidecarResources, initialLayout)
+        if (groupLease == null) ShellSidecarFetchers.install(builder, sidecarResources, request.bundleUrl, templateProvider)
 
         // 全部页面统一安装 Lynx 4.1 Explorer 范围内的完整 XElement Behavior，包含
         // Video；不让业务页面自行注册，避免不同页面能力不一致。
@@ -58,10 +66,18 @@ object LynxContainerFactory {
 
         val creationStart = System.nanoTime()
         val created = try { builder.build(activity) } catch (error: Exception) {
+            groupLease?.let(LynxTemplateGroupCache::abort)
             monitoring?.createFailed()
             throw error
         }
-        return created.also { lynxView ->
+        return try { created.also { lynxView ->
+            com.example.lynxshell.LynxShell.bindViewHosts(lynxView)
+            groupLease?.let { lease ->
+                LynxTemplateGroupCache.attach(lynxView, lease, lynxViewClient) { source ->
+                    monitoring?.cachedFirstContent(source.name.lowercase())
+                    onCachedFrame?.invoke(source)
+                }
+            }
             // 观测先于已有错误处理安装；监控失败不能改变首屏与 OTA 的处理结果。
             monitoring?.attach(lynxView, creationStart)
             // Lynx 4.1 仍没有 Builder.setLynxViewClient；必须在 build 后、render 前安装。
@@ -72,8 +88,12 @@ object LynxContainerFactory {
                 bundleMetadata = bundleMetadata,
                 initialLayout = initialLayout,
                 locale = locale,
+                pageInfo = pageInfo,
             )
             lynxView.updateGlobalProps(TemplateData.fromMap(globalProps))
+            if (groupLease?.reused == true) monitoring?.expectInitialEngineReuse()
+            LynxTemplateGroupCache.prepareFreshPage(lynxView,
+                JsonObjectCodec.toMap(request.initDataJson, "initData"), globalProps)
             // LYNX_DEBUG_TOOL_BEGIN
             LynxDebugBridge.attach(
                 view = lynxView,
@@ -84,6 +104,9 @@ object LynxContainerFactory {
                 globalProps = globalProps,
             )
             // LYNX_DEBUG_TOOL_END
+        } } catch (error: Throwable) {
+            try { com.example.lynxshell.LynxShell.destroyView(created) } catch (cleanup: Throwable) { error.addSuppressed(cleanup) }
+            throw error
         }
     }
 }

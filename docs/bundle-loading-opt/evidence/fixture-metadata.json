@@ -1,0 +1,421 @@
+{
+  "schemaVersion": 1,
+  "marker": "BUNDLE_LOADING_FIXTURE_V1",
+  "seed": 1280921176,
+  "sparseStride": 4093,
+  "toolchain": {
+    "reactLynx": "0.123.3",
+    "rspeedy": "0.16.3",
+    "reactPlugin": "0.18.3",
+    "engineVersion": "4.1",
+    "mode": "production"
+  },
+  "assetPrefix": "http://127.0.0.1:18781/",
+  "cases": [
+    {
+      "caseName": "small",
+      "path": "BundleLoadSmall.lynx.bundle",
+      "size": 88114,
+      "sha256": "bd55248f0883f4492245ecc18309d241eb419e992f4b2bacc00502294809fbe2",
+      "inlineScripts": true,
+      "expectedReadyPayload": {
+        "caseName": "small",
+        "moduleCount": 0,
+        "payloadLength": 0,
+        "checksum": 0
+      },
+      "asyncResources": [],
+      "emittedChunks": [
+        {
+          "names": [
+            "BundleLoadSmall"
+          ],
+          "files": []
+        },
+        {
+          "names": [
+            "BundleLoadSmall__main-thread"
+          ],
+          "files": []
+        }
+      ],
+      "expectedReadyLabel": "bundle-bench:small:payload=0:checksum=0:scripts=0",
+      "runtimePreflight": {
+        "freeProcessReferences": 0,
+        "inlineScriptsChecked": 2,
+        "externalScriptsChecked": 0,
+        "parser": "acorn@8.18.0",
+        "scopeAnalyzer": "eslint-scope@8.4.0",
+        "scripts": [
+          {
+            "inline": true,
+            "size": 45329,
+            "sha256": "da16f0bfc02884272b0424d411a50c85e106811f5f6cd76ca2d3d380af4a2386"
+          },
+          {
+            "inline": true,
+            "size": 330,
+            "sha256": "605f858182e7b083dde98f59778fe1a193d21f3dca746ffbb75b312340af624d"
+          }
+        ]
+      }
+    },
+    {
+      "caseName": "large",
+      "path": "BundleLoadLarge.lynx.bundle",
+      "size": 3234076,
+      "sha256": "3554ab411d9be7828d05029f42bcd77a5bacfaf50b43648865fbfe9e52505fbf",
+      "inlineScripts": true,
+      "expectedReadyPayload": {
+        "caseName": "large",
+        "moduleCount": 0,
+        "payloadLength": 3145728,
+        "checksum": 1009422673
+      },
+      "asyncResources": [],
+      "emittedChunks": [
+        {
+          "names": [
+            "BundleLoadLarge__main-thread"
+          ],
+          "files": []
+        },
+        {
+          "names": [
+            "BundleLoadLarge"
+          ],
+          "files": []
+        }
+      ],
+      "expectedReadyLabel": "bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0",
+      "runtimePreflight": {
+        "freeProcessReferences": 0,
+        "inlineScriptsChecked": 2,
+        "externalScriptsChecked": 0,
+        "parser": "acorn@8.18.0",
+        "scopeAnalyzer": "eslint-scope@8.4.0",
+        "scripts": [
+          {
+            "inline": true,
+            "size": 3191291,
+            "sha256": "559eb9e665833631e00d6b66beb4d3c02fdf8159c46db2a6be00d149b1655bd0"
+          },
+          {
+            "inline": true,
+            "size": 330,
+            "sha256": "49cd8f138242164ccd2ea4b519e4f2f8121df4a54fd182884fffaa2121307420"
+          }
+        ]
+      }
+    },
+    {
+      "caseName": "async",
+      "path": "BundleLoadAsync.lynx.bundle",
+      "size": 94510,
+      "sha256": "374ddaf32e80cdb56a7b9e065d4fa1b3c0239e3da63221715e74ce354596da8c",
+      "inlineScripts": false,
+      "expectedReadyPayload": {
+        "caseName": "async",
+        "moduleCount": 10,
+        "payloadLength": 0,
+        "checksum": 56430
+      },
+      "asyncResources": [
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-01.af78800c12.js",
+          "path": "static/js/bench-module-01.af78800c12.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-01.af78800c12.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-01.af78800c12.js",
+            "/static/js/bench-module-01.af78800c12.js"
+          ],
+          "size": 611,
+          "sha256": "2008877788b456df349ed8ccff2ba42346ef9773bbe280be63cd17b4cb4959d7",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-02.df4d5c310c.js",
+          "path": "static/js/bench-module-02.df4d5c310c.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-02.df4d5c310c.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-02.df4d5c310c.js",
+            "/static/js/bench-module-02.df4d5c310c.js"
+          ],
+          "size": 611,
+          "sha256": "54daa1b8639f7c51739bfa244183a38350e0a92aa11a2d28a356ca3cd7ddfad1",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-03.3490edb975.js",
+          "path": "static/js/bench-module-03.3490edb975.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-03.3490edb975.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-03.3490edb975.js",
+            "/static/js/bench-module-03.3490edb975.js"
+          ],
+          "size": 611,
+          "sha256": "433076af521233297874e1f05ba9fbb3c91b0aa663899d3a3bc76c7682274997",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-04.cde22bcb8d.js",
+          "path": "static/js/bench-module-04.cde22bcb8d.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-04.cde22bcb8d.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-04.cde22bcb8d.js",
+            "/static/js/bench-module-04.cde22bcb8d.js"
+          ],
+          "size": 610,
+          "sha256": "a5119da197a0d3200c8b16359f2a2da6cc193e7d732a629e93e593992e1adaed",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-05.646028927e.js",
+          "path": "static/js/bench-module-05.646028927e.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-05.646028927e.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-05.646028927e.js",
+            "/static/js/bench-module-05.646028927e.js"
+          ],
+          "size": 611,
+          "sha256": "2d07db51f6b58f04b250fce3ff8902a56ef22b226a42e202792f2ab72ddb5690",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-06.42d8a5b235.js",
+          "path": "static/js/bench-module-06.42d8a5b235.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-06.42d8a5b235.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-06.42d8a5b235.js",
+            "/static/js/bench-module-06.42d8a5b235.js"
+          ],
+          "size": 611,
+          "sha256": "92929fca0fc53ed20d85788b439792639d626083117d5fd8581fffdaf3f5af51",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-07.2d8b23accb.js",
+          "path": "static/js/bench-module-07.2d8b23accb.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-07.2d8b23accb.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-07.2d8b23accb.js",
+            "/static/js/bench-module-07.2d8b23accb.js"
+          ],
+          "size": 611,
+          "sha256": "97d879227796c8c022b54ab5eba99e72537c1a2de1a5000ab5225841bf73cf93",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-08.2074edd36a.js",
+          "path": "static/js/bench-module-08.2074edd36a.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-08.2074edd36a.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-08.2074edd36a.js",
+            "/static/js/bench-module-08.2074edd36a.js"
+          ],
+          "size": 611,
+          "sha256": "9daba1def7888283c5a7bab1b30f627c785b95d5bca3f9aa8745b1f1eaa4971e",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-09.935e43d493.js",
+          "path": "static/js/bench-module-09.935e43d493.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-09.935e43d493.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-09.935e43d493.js",
+            "/static/js/bench-module-09.935e43d493.js"
+          ],
+          "size": 611,
+          "sha256": "3ad80b89b27992d0dac47042926cf4d91753a3f2704e4ef66bb5abd41cc50f34",
+          "kind": "script"
+        },
+        {
+          "ownerBundlePath": "BundleLoadAsync.lynx.bundle",
+          "requestKey": "/static/js/bench-module-10.8f594f38e8.js",
+          "path": "static/js/bench-module-10.8f594f38e8.js",
+          "url": "http://127.0.0.1:18781/static/js/bench-module-10.8f594f38e8.js",
+          "requestAliases": [
+            "http://127.0.0.1:18781/static/js/bench-module-10.8f594f38e8.js",
+            "/static/js/bench-module-10.8f594f38e8.js"
+          ],
+          "size": 613,
+          "sha256": "92571aad053bc7896dce4ba1a4ad6cb0d1509f69f95bfeeb5b396158be3505bf",
+          "kind": "script"
+        }
+      ],
+      "emittedChunks": [
+        {
+          "names": [
+            "bench-module-04"
+          ],
+          "files": [
+            "static/js/bench-module-04.cde22bcb8d.js"
+          ]
+        },
+        {
+          "names": [
+            "bench-module-03"
+          ],
+          "files": [
+            "static/js/bench-module-03.3490edb975.js"
+          ]
+        },
+        {
+          "names": [
+            "bench-module-02"
+          ],
+          "files": [
+            "static/js/bench-module-02.df4d5c310c.js"
+          ]
+        },
+        {
+          "names": [
+            "bench-module-06"
+          ],
+          "files": [
+            "static/js/bench-module-06.42d8a5b235.js"
+          ]
+        },
+        {
+          "names": [
+            "bench-module-09"
+          ],
+          "files": [
+            "static/js/bench-module-09.935e43d493.js"
+          ]
+        },
+        {
+          "names": [
+            "bench-module-10"
+          ],
+          "files": [
+            "static/js/bench-module-10.8f594f38e8.js"
+          ]
+        },
+        {
+          "names": [
+            "BundleLoadAsync"
+          ],
+          "files": []
+        },
+        {
+          "names": [
+            "bench-module-05"
+          ],
+          "files": [
+            "static/js/bench-module-05.646028927e.js"
+          ]
+        },
+        {
+          "names": [
+            "bench-module-01"
+          ],
+          "files": [
+            "static/js/bench-module-01.af78800c12.js"
+          ]
+        },
+        {
+          "names": [
+            "BundleLoadAsync__main-thread"
+          ],
+          "files": []
+        },
+        {
+          "names": [
+            "bench-module-08"
+          ],
+          "files": [
+            "static/js/bench-module-08.2074edd36a.js"
+          ]
+        },
+        {
+          "names": [
+            "bench-module-07"
+          ],
+          "files": [
+            "static/js/bench-module-07.2d8b23accb.js"
+          ]
+        }
+      ],
+      "expectedReadyLabel": "bundle-bench:async:payload=0:checksum=56430:scripts=10",
+      "runtimePreflight": {
+        "freeProcessReferences": 0,
+        "inlineScriptsChecked": 2,
+        "externalScriptsChecked": 10,
+        "parser": "acorn@8.18.0",
+        "scopeAnalyzer": "eslint-scope@8.4.0",
+        "scripts": [
+          {
+            "inline": true,
+            "size": 49846,
+            "sha256": "aa575cd647fac2b0f54eaa5414bfa15f71ecb03d478289a76cbed1cc6a3d4f54"
+          },
+          {
+            "inline": true,
+            "size": 2215,
+            "sha256": "01286e358d2216e0cda9a1a0dbd2c1bab3f71e8d3c3032bd3bec1e40dfd403c9"
+          },
+          {
+            "inline": false,
+            "size": 611,
+            "sha256": "2008877788b456df349ed8ccff2ba42346ef9773bbe280be63cd17b4cb4959d7"
+          },
+          {
+            "inline": false,
+            "size": 611,
+            "sha256": "54daa1b8639f7c51739bfa244183a38350e0a92aa11a2d28a356ca3cd7ddfad1"
+          },
+          {
+            "inline": false,
+            "size": 611,
+            "sha256": "433076af521233297874e1f05ba9fbb3c91b0aa663899d3a3bc76c7682274997"
+          },
+          {
+            "inline": false,
+            "size": 610,
+            "sha256": "a5119da197a0d3200c8b16359f2a2da6cc193e7d732a629e93e593992e1adaed"
+          },
+          {
+            "inline": false,
+            "size": 611,
+            "sha256": "2d07db51f6b58f04b250fce3ff8902a56ef22b226a42e202792f2ab72ddb5690"
+          },
+          {
+            "inline": false,
+            "size": 611,
+            "sha256": "92929fca0fc53ed20d85788b439792639d626083117d5fd8581fffdaf3f5af51"
+          },
+          {
+            "inline": false,
+            "size": 611,
+            "sha256": "97d879227796c8c022b54ab5eba99e72537c1a2de1a5000ab5225841bf73cf93"
+          },
+          {
+            "inline": false,
+            "size": 611,
+            "sha256": "9daba1def7888283c5a7bab1b30f627c785b95d5bca3f9aa8745b1f1eaa4971e"
+          },
+          {
+            "inline": false,
+            "size": 611,
+            "sha256": "3ad80b89b27992d0dac47042926cf4d91753a3f2704e4ef66bb5abd41cc50f34"
+          },
+          {
+            "inline": false,
+            "size": 613,
+            "sha256": "92571aad053bc7896dce4ba1a4ad6cb0d1509f69f95bfeeb5b396158be3505bf"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -238,6 +238,7 @@ class LynxTabFragment : Fragment() {
                         preparedBytes = resolved?.bytes,
                         nextReleaseLease = resolved?.releaseLease,
                         sidecarResources = resolved?.sidecarResources,
+                        preparedBundle = resolved,
                         bundleMetadata = resolved?.let {
                             mapOf(
                                 "lynxAppId" to it.lynxAppId,
@@ -292,6 +293,7 @@ class LynxTabFragment : Fragment() {
         nextReleaseLease: AutoCloseable?,
         sidecarResources: com.ota.android.sdk.OtaSidecarViewResources? = null,
         bundleMetadata: Map<String, Any>? = null,
+        preparedBundle: com.example.lynxshell.ota.PreparedActivityBundle? = null,
     ) {
         val activity = activity ?: run {
             runCatching { nextReleaseLease?.close() }
@@ -330,16 +332,19 @@ class LynxTabFragment : Fragment() {
             },
         )
         templateProvider = provider
+        val markFirstFrame = {
+            activity.runOnUiThread {
+                if (isAdded && view === host && generation == loadGeneration) {
+                    firstScreenReady = true
+                    otaHealthGate.markFirstScreen()
+                    debugError = "ready"
+                    confirmCandidateHealthyIfNeeded(host, generation)
+                }
+            }
+        }
         val client = object : LynxViewClient() {
             override fun onFirstScreen() {
-                activity.runOnUiThread {
-                    if (isAdded && view === host && generation == loadGeneration) {
-                        firstScreenReady = true
-                        otaHealthGate.markFirstScreen()
-                        debugError = "ready"
-                        confirmCandidateHealthyIfNeeded(host, generation)
-                    }
-                }
+                markFirstFrame()
             }
             override fun onReceivedError(error: LynxError) {
                 val failure = LynxLoadFailure(error.errorCode, error.subCode, error.isFatal, error.level, error.msg)
@@ -357,6 +362,9 @@ class LynxTabFragment : Fragment() {
             bundleMetadata = bundleMetadata,
             sidecarResources = sidecarResources,
             monitoring = monitoringView,
+            preparedBundle = preparedBundle,
+            pageInfo = LynxRouterPageInfo(pageID, pageID, spec.routeKey, "android_fragment"),
+            onCachedFrame = { markFirstFrame() },
             // LYNX_DEBUG_TOOL_BEGIN
             containerKind = "tab",
             // LYNX_DEBUG_TOOL_END
@@ -466,6 +474,7 @@ class LynxTabFragment : Fragment() {
 
     private fun handleLoadFailure(host: ViewGroup, generation: Long, message: String) {
         if (!isCurrentContent(host, generation) || loadFailureHandledGeneration == generation) return
+        com.example.lynxshell.container.LynxTemplateGroupCache.reject(lynxView)
         loadFailureHandledGeneration = generation
         val appId = spec.lynxAppId
         val runtime = preparedRuntime

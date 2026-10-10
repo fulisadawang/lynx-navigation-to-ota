@@ -406,6 +406,9 @@ public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
         debugResolveCurrentCount += 1
         let resolveOrdinal = debugResolveCurrentCount
 #endif
+#if DEBUG
+        LynxBundleLoadDiagnostics.record("tab", generation, "resolve_started")
+#endif
         loadTask = Task { [weak self] in
             var pendingLease: OtaBundleLease?
             var pendingResources: OtaPreparedResources?
@@ -440,9 +443,28 @@ public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
                     )
                 }
                 pendingLease = prepared.releaseLease
+#if DEBUG
+                LynxBundleLoadDiagnostics.record("tab", generation, "resolve_completed")
+                LynxBundleLoadDiagnostics.record("tab", generation, "resources_started")
+#endif
                 let resources = try await runtime.prepareResources(for: prepared)
                 pendingResources = resources
-                let data = try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
+#if DEBUG
+                LynxBundleLoadDiagnostics.record("tab", generation, "resources_completed")
+#endif
+
+                if Task.isCancelled { return }
+                let data = try await Task.detached(priority: .userInitiated) {
+#if DEBUG
+                    LynxBundleLoadDiagnostics.record("tab", generation, "source_read_started")
+#endif
+                    let bytes = try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
+#if DEBUG
+                    LynxBundleLoadDiagnostics.record("tab", generation, "source_read_completed", bytes: bytes.count)
+#endif
+                    return bytes
+                }.value
+                if Task.isCancelled { return }
                 var metadata: [String: Any] = [
                     "lynxAppId": prepared.lynxAppId,
                     "releaseId": prepared.releaseId ?? "unknown",
@@ -557,6 +579,9 @@ public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
             props["__lynxRouterNavigationModel"] = "native_tab_host"
             props["__lynxRouterPlatformContainer"] = "uikit_tab_container"
             runtimeGlobalProps = props
+#if DEBUG
+            LynxBundleLoadDiagnostics.record("tab", generation, "view_create_started")
+#endif
             let createStarted = ProcessInfo.processInfo.systemUptime
             let created = LynxNativeRuntime.makeView(
                 provider: provider,
@@ -567,6 +592,9 @@ public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
                     ?? contentView.bounds.size,
                 globalProps: props
             )
+#if DEBUG
+            LynxBundleLoadDiagnostics.record("tab", generation, "view_create_completed")
+#endif
             if let monitoredScope {
                 LynxMonitorViewBinding.bind(monitoredScope, to: created)
                 let monitor = LynxMonitorObserver(scope: monitoredScope)
@@ -582,6 +610,9 @@ public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
                         guard let self, let view, self.loadGeneration.accepts(observedGeneration), view === self.lynxView else { return }
                         guard !self.otaHealthGate.failed else { return }
                         self.firstScreenReached = true
+#if DEBUG
+                        LynxBundleLoadDiagnostics.record("tab", observedGeneration, "first_screen")
+#endif
                         self.otaHealthGate.markFirstScreen()
                         self.confirmOtaHealthIfReady(generation: observedGeneration)
 #if DEBUG
@@ -647,6 +678,9 @@ public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
                     self.markOtaHealthy(generation: generation, view: created, completion: completion)
                 }
             )
+#if DEBUG
+            LynxBundleLoadDiagnostics.record("tab", generation, "load_submitted")
+#endif
             LynxNativeRuntime.load(url: request.bundleURL, initData: request.initialData, in: created)
         } catch {
             showError("Tab 容器创建失败：\(error.localizedDescription)")

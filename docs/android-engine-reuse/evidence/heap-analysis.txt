@@ -1,0 +1,66 @@
+MainActivity objectId=34826656 destroyed=false
+MainActivity objectId=35539976 destroyed=true
+Destroyed host candidates=1
+====================================
+HEAP ANALYSIS RESULT
+====================================
+1 APPLICATION LEAKS
+
+References underlined with "~~~" are likely causes.
+Learn more at https://squ.re/leaks.
+
+Signature: fb07520af26a38f320453667ad3afd3d101b6d32
+┬───
+│ GC Root: Thread object
+│
+├─ android.app.Instrumentation$InstrumentationThread instance
+│    Leaking: UNKNOWN
+│    ↓ Instrumentation$InstrumentationThread.this$0
+│                                            ~~~~~~
+├─ android.test.InstrumentationTestRunner instance
+│    Leaking: UNKNOWN
+│    ↓ Instrumentation.mMessageQueue
+│                      ~~~~~~~~~~~~~
+├─ android.os.MessageQueue instance
+│    Leaking: UNKNOWN
+│    ↓ MessageQueue[0]
+│                  ~~~
+├─ android.os.Message instance
+│    Leaking: UNKNOWN
+│    ↓ Message.callback
+│              ~~~~~~~~
+├─ android.view.View$ScrollabilityCache instance
+│    Leaking: UNKNOWN
+│    ↓ View$ScrollabilityCache.host
+│                              ~~~~
+├─ com.lynx.tasm.behavior.ui.scroll.AndroidScrollView$CustomHorizontalScrollView instance
+│    Leaking: UNKNOWN
+│    ↓ View.mContext
+│           ~~~~~~~~
+├─ com.lynx.tasm.LynxTemplateRender$RenderLynxContext instance
+│    Leaking: UNKNOWN
+│    ↓ ContextWrapper.mBase
+│                     ~~~~~
+╰→ com.example.lynxshell.sample.MainActivity instance
+​     Leaking: YES (This is the leaking object)
+====================================
+0 LIBRARY LEAKS
+
+A Library Leak is a leak caused by a known bug in 3rd party code that you do not have control over.
+See https://square.github.io/leakcanary/fundamentals-how-leakcanary-works/#4-categorizing-leaks
+====================================
+0 UNREACHABLE OBJECTS
+
+An unreachable object is still in memory but LeakCanary could not find a strong reference path
+from GC roots.
+====================================
+METADATA
+
+Please include this in bug reports and Stack Overflow questions.
+
+Stats: LruCache[maxSize=3000,hits=68952,misses=124677,hitRate=35%] RandomAccess[bytes=5907334,reads=124677,travel=71623393862,range=39047558,size=48729496]
+Analysis duration: 851 ms
+Heap dump file path: /tmp/codex-engine-reuse-20261010/android-group-cache/device-evidence/former-host.hprof
+Heap dump timestamp: 1791605460159
+Heap dump duration: Unknown
+====================================

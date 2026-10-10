@@ -1,0 +1,14 @@
+
+com.example.lynxshell.sample.LynxTemplateGroupReuseTest:
+LynxTemplateGroupReuse: small page=engine-reuse-small-a091eee1-0209-429d-8ce1-9e5c2c74ad8b template=251338484 tplPtr=-5476376648068729472 shellPtr=-5476376649412186000 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: 旧host WeakReference诊断 collected=false attempts=8；不代表无泄漏
+
+LynxTemplateGroupReuse: 系统队列等待后WeakReference诊断 collected=false gcAttempts=3；不代表无泄漏
+.
+Test results for InstrumentationTestRunner=.
+Time: 10.78
+
+OK (1 test)
+
+

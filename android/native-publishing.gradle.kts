@@ -12,7 +12,6 @@ import java.nio.file.LinkOption
 import java.security.MessageDigest
 import java.util.Locale
 import javax.inject.Inject
-import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
 abstract class NativeStagedPublishingServices {
@@ -64,8 +63,8 @@ fun readStagedPublication(directory: File, group: String, artifact: String, vers
     val xml = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
         setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
-        setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+        setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
+        setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
     }.newDocumentBuilder().parse(pom).documentElement
     require(xml.localName == "project") { "Staging POM 根元素必须为 project" }
     val pomCoordinates = mutableMapOf<String, String>()

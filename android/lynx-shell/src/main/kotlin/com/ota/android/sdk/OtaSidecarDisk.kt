@@ -3,6 +3,7 @@ package com.ota.android.sdk
 import java.io.File
 import java.io.IOException
 import java.net.URI
+import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
@@ -13,6 +14,7 @@ import kotlin.concurrent.withLock
 class OtaSidecarViewResources internal constructor(
   val ownerBundlePath: String,
   val entries: List<ResolvedEntry>,
+  val snapshotIdentity: String? = null,
 ) {
   class ResolvedEntry private constructor(
     val requestKey: String,
@@ -20,9 +22,12 @@ class OtaSidecarViewResources internal constructor(
     val kind: OtaSidecarModels.AsyncKind,
     private val fileSource: File?,
     private val assetReader: (() -> ByteArray)?,
+    val expectedSha256: String? = null,
+    val expectedSize: Int? = null,
   ) {
-    constructor(requestKey: String, url: String, kind: OtaSidecarModels.AsyncKind, file: File) :
-      this(requestKey, url, kind, file, null)
+    @JvmOverloads constructor(requestKey: String, url: String, kind: OtaSidecarModels.AsyncKind, file: File,
+      expectedSha256: String? = null, expectedSize: Int? = null) :
+      this(requestKey, url, kind, file, null, expectedSha256, expectedSize)
 
     /** 下载态保留文件入口；APK assets 没有对应的 java.io.File。 */
     val file: File get() = fileSource ?: throw IllegalStateException("APK 内置资源没有文件路径")
@@ -41,6 +46,11 @@ class OtaSidecarViewResources internal constructor(
     companion object {
       fun fromAsset(requestKey: String, kind: OtaSidecarModels.AsyncKind,
         reader: () -> ByteArray): ResolvedEntry = ResolvedEntry(requestKey, requestKey, kind, null, reader)
+
+      fun fromAsset(requestKey: String, kind: OtaSidecarModels.AsyncKind,
+        expectedSha256: String, expectedSize: Int,
+        reader: () -> ByteArray): ResolvedEntry =
+        ResolvedEntry(requestKey, requestKey, kind, null, reader, expectedSha256, expectedSize)
     }
   }
 
@@ -51,6 +61,27 @@ class OtaSidecarViewResources internal constructor(
       else -> raw
     }
     return entries.singleOrNull { it.requestKey == normalized || it.url == raw }
+  }
+
+  internal companion object {
+    fun downloadedSnapshotIdentity(ownerBundlePath: String, entries: List<OtaSidecarModels.AsyncEntry>): String {
+      val sorted = entries.sortedWith(compareBy<OtaSidecarModels.AsyncEntry>(
+        { it.requestKey }, { it.url.toString() }, { it.kind.wireValue }, { it.path },
+        { it.ownerBundlePath }, { it.sha256 }, { it.size },
+      ))
+      // 用字段数组序列化，避免路径、URL 中的分隔符造成身份碰撞；不使用 CAS 绝对路径。
+      return identityHash(listOf("downloaded-sidecar-v1", ownerBundlePath, sorted.map { entry ->
+        listOf(entry.requestKey, entry.url.toString(), entry.kind.wireValue, entry.path,
+          entry.ownerBundlePath, entry.sha256, entry.size)
+      }))
+    }
+
+    fun embeddedSnapshotIdentity(ownerBundlePath: String, indexSha256: String): String =
+      identityHash(listOf("embedded-sidecar-v1", ownerBundlePath, indexSha256))
+
+    private fun identityHash(value: List<Any>): String = "sha256:" +
+      MessageDigest.getInstance("SHA-256").digest(OtaJson.stringify(value).toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
   }
 }
 
@@ -138,18 +169,18 @@ internal class OtaSidecarDisk(
   fun viewResources(
     appId: String,
     ownerBundlePath: String,
-    asyncRef: OtaSidecarModels.AsyncManifestRef?,
-  ): OtaSidecarViewResources? = withLock(appId) {
-    if (asyncRef == null) return@withLock null
-    val async = readAsync(appId, asyncRef, emptySet(), restrictOwners = false)
-      ?: throw IOException("页面 Async 快照缺失或损坏")
-    val entries = async.entries.filter { it.ownerBundlePath == ownerBundlePath }.map { entry ->
+    async: OtaSidecarModels.AsyncManifest,
+  ): OtaSidecarViewResources = withLock(appId) {
+    val ownerEntries = async.entries.filter { it.ownerBundlePath == ownerBundlePath }
+    val entries = ownerEntries.map { entry ->
       OtaSidecarViewResources.ResolvedEntry(
         entry.requestKey, entry.url.toString(), entry.kind,
         objectPath(appId, "async-bundles", entry.sha256),
+        entry.sha256, entry.size,
       )
     }
-    OtaSidecarViewResources(ownerBundlePath, entries)
+    OtaSidecarViewResources(ownerBundlePath, entries,
+      OtaSidecarViewResources.downloadedSnapshotIdentity(ownerBundlePath, ownerEntries))
   }
 
   fun prune(appId: String, asyncRefs: Set<OtaSidecarModels.AsyncManifestRef>): Boolean = withLock(appId) {

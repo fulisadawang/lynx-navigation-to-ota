@@ -591,6 +591,9 @@ final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
         }
         let sessionID = navigationSessionID
         let recovering = otaRecoveryUsed
+#if DEBUG
+        LynxBundleLoadDiagnostics.record("page", generation, "resolve_started")
+#endif
         otaPrepareTask = Task { [weak self] in
             var pendingLease: OtaBundleLease?
             var pendingResources: OtaPreparedResources?
@@ -673,11 +676,27 @@ final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
                     }
                     return
                 }
+
+#if DEBUG
+                LynxBundleLoadDiagnostics.record("page", generation, "resolve_completed")
+                LynxBundleLoadDiagnostics.record("page", generation, "resources_started")
+#endif
                 let resources = try await runtime.prepareResources(for: prepared)
                 pendingResources = resources
+#if DEBUG
+                LynxBundleLoadDiagnostics.record("page", generation, "resources_completed")
+#endif
+
                 if Task.isCancelled { return }
                 let data = try await Task.detached(priority: .userInitiated) {
-                    try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
+#if DEBUG
+                    LynxBundleLoadDiagnostics.record("page", generation, "source_read_started")
+#endif
+                    let bytes = try Data(contentsOf: prepared.fileURL, options: .mappedIfSafe)
+#if DEBUG
+                    LynxBundleLoadDiagnostics.record("page", generation, "source_read_completed", bytes: bytes.count)
+#endif
+                    return bytes
                 }.value
                 if Task.isCancelled { return }
                 let accepted: Bool = await MainActor.run { [weak self] in
@@ -791,6 +810,10 @@ final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
             layoutSnapshot: layoutSnapshot
         )
         let createStarted = ProcessInfo.processInfo.systemUptime
+
+#if DEBUG
+        LynxBundleLoadDiagnostics.record("page", generation, "view_create_started")
+#endif
         let createdView = LynxNativeRuntime.makeView(
             provider: provider,
             resourceFetcher: localFetcher,
@@ -798,6 +821,9 @@ final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
             viewportSize: layoutSnapshot.viewportSize,
             globalProps: globalProps
         )
+#if DEBUG
+        LynxBundleLoadDiagnostics.record("page", generation, "view_create_completed")
+#endif
         if let monitoredScope {
             LynxMonitorViewBinding.bind(monitoredScope, to: createdView)
             let monitor = LynxMonitorObserver(scope: monitoredScope)
@@ -868,6 +894,10 @@ final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
             // 不让首屏事件竞速决定故障是否生效。
             return
         }
+#endif
+
+#if DEBUG
+        LynxBundleLoadDiagnostics.record("page", generation, "load_submitted")
 #endif
         LynxNativeRuntime.load(
             url: request.bundleURL,
@@ -1061,6 +1091,10 @@ final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
                 return
             }
             self.firstScreenReady = true
+#if DEBUG
+            LynxBundleLoadDiagnostics.record("page", generation, "first_screen")
+#endif
+
             self.otaHealthGate.markFirstScreen()
             self.firstScreenFailed = false
             self.loadingView.hide()

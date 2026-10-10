@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "fixtureMainSHAEqual": true,
+  "iosActualInputs": 13,
+  "harnessSourceFilesEqual": 2,
+  "iosFormalSamplesPerVersion": 60,
+  "iosWarmupsPerVersion": 18,
+  "androidRenderedCasesPerVersion": 3,
+  "iOSTabReadThreadChanged": true,
+  "iOSSummaryRecomputed": true,
+  "androidJVM": {
+    "tests": 124,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3
+  }
+}

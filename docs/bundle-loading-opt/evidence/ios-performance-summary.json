@@ -1,0 +1,489 @@
+{
+  "platform": "iOS Simulator 27.0 iPhone 18 Pro Max",
+  "formalSamplesPerVersion": 60,
+  "warmupPerGroup": 3,
+  "inputSHAEqual": true,
+  "p95Method": "nearest rank ceil(n*0.95), n=10",
+  "groups": [
+    {
+      "bundleName": "BundleLoadSmall.lynx.bundle",
+      "container": "page",
+      "versions": {
+        "baseline": {
+          "n": 10,
+          "sourceBytes": 88114,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 6.321229171589948,
+              "p95": 14.879041671520099
+            },
+            "resourcesMs": {
+              "median": 0.6141666672192514,
+              "p95": 0.8538333349861205
+            },
+            "sourceReadMs": {
+              "median": 0.061937498685438186,
+              "p95": 0.12170833360869437
+            },
+            "viewCreateMs": {
+              "median": 1.3408541708486155,
+              "p95": 2.4647083337185904
+            },
+            "submitToFirstScreenMs": {
+              "median": 4.988166670955252,
+              "p95": 11.338374999468215
+            },
+            "openToFirstScreenMs": {
+              "median": 27.118083329696674,
+              "p95": 73.46454166690819
+            },
+            "openToBusinessReadyMs": {
+              "median": 43.47674999735318,
+              "p95": 93.38791665504687
+            }
+          }
+        },
+        "optimized": {
+          "n": 10,
+          "sourceBytes": 88114,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 6.563541668583639,
+              "p95": 11.033583330572583
+            },
+            "resourcesMs": {
+              "median": 0.7526041663368233,
+              "p95": 2.025208334089257
+            },
+            "sourceReadMs": {
+              "median": 0.08043749403441325,
+              "p95": 0.15799999528098851
+            },
+            "viewCreateMs": {
+              "median": 1.512124996224884,
+              "p95": 10.82487498933915
+            },
+            "submitToFirstScreenMs": {
+              "median": 5.287500003760215,
+              "p95": 41.2099583336385
+            },
+            "openToFirstScreenMs": {
+              "median": 28.400979172147345,
+              "p95": 90.9092083456926
+            },
+            "openToBusinessReadyMs": {
+              "median": 44.11431249900488,
+              "p95": 163.12175001075957
+            }
+          }
+        }
+      }
+    },
+    {
+      "bundleName": "BundleLoadSmall.lynx.bundle",
+      "container": "tab",
+      "versions": {
+        "baseline": {
+          "n": 10,
+          "sourceBytes": 88114,
+          "sourceReadOnMainThread": [
+            true
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 5.1219166634837165,
+              "p95": 10.77741666813381
+            },
+            "resourcesMs": {
+              "median": 0.5810833317809738,
+              "p95": 0.918666657526046
+            },
+            "sourceReadMs": {
+              "median": 0.04789583181263879,
+              "p95": 0.09625000529922545
+            },
+            "viewCreateMs": {
+              "median": 1.3918125041527674,
+              "p95": 2.151374996174127
+            },
+            "submitToFirstScreenMs": {
+              "median": 6.665062501269858,
+              "p95": 8.276166670839302
+            },
+            "openToFirstScreenMs": {
+              "median": 24.44410417228937,
+              "p95": 29.30120834207628
+            },
+            "openToBusinessReadyMs": {
+              "median": 38.10681249888148,
+              "p95": 51.338250006665476
+            }
+          }
+        },
+        "optimized": {
+          "n": 10,
+          "sourceBytes": 88114,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 5.0396458391333,
+              "p95": 13.341166661120951
+            },
+            "resourcesMs": {
+              "median": 0.8230000021285377,
+              "p95": 1.3797499996144325
+            },
+            "sourceReadMs": {
+              "median": 0.08506249287165701,
+              "p95": 0.16258333926089108
+            },
+            "viewCreateMs": {
+              "median": 1.4770416601095349,
+              "p95": 7.038083334919065
+            },
+            "submitToFirstScreenMs": {
+              "median": 6.815104170527775,
+              "p95": 32.40220832230989
+            },
+            "openToFirstScreenMs": {
+              "median": 24.56220833119005,
+              "p95": 63.86049999855459
+            },
+            "openToBusinessReadyMs": {
+              "median": 40.06068750459235,
+              "p95": 85.13483333808836
+            }
+          }
+        }
+      }
+    },
+    {
+      "bundleName": "BundleLoadLarge.lynx.bundle",
+      "container": "page",
+      "versions": {
+        "baseline": {
+          "n": 10,
+          "sourceBytes": 3234076,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 12.086145841749385,
+              "p95": 14.856624999083579
+            },
+            "resourcesMs": {
+              "median": 0.555395832634531,
+              "p95": 0.8298750035464764
+            },
+            "sourceReadMs": {
+              "median": 0.08495833753840998,
+              "p95": 0.13533333549275994
+            },
+            "viewCreateMs": {
+              "median": 1.5652499932912178,
+              "p95": 5.806916655274108
+            },
+            "submitToFirstScreenMs": {
+              "median": 15.356416668510064,
+              "p95": 22.00754165824037
+            },
+            "openToFirstScreenMs": {
+              "median": 44.881541667564306,
+              "p95": 58.96549999306444
+            },
+            "openToBusinessReadyMs": {
+              "median": 52.654312501545064,
+              "p95": 81.90920832566917
+            }
+          }
+        },
+        "optimized": {
+          "n": 10,
+          "sourceBytes": 3234076,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 13.43599999381695,
+              "p95": 16.669958335114643
+            },
+            "resourcesMs": {
+              "median": 0.8176041665137745,
+              "p95": 2.6937499933410436
+            },
+            "sourceReadMs": {
+              "median": 0.14125000598141924,
+              "p95": 1.8246666732011363
+            },
+            "viewCreateMs": {
+              "median": 1.428395822586026,
+              "p95": 2.0081666589248925
+            },
+            "submitToFirstScreenMs": {
+              "median": 16.180937498575076,
+              "p95": 18.706750008277595
+            },
+            "openToFirstScreenMs": {
+              "median": 46.83025000122143,
+              "p95": 72.60695833247155
+            },
+            "openToBusinessReadyMs": {
+              "median": 57.33616666839225,
+              "p95": 79.97520834032912
+            }
+          }
+        }
+      }
+    },
+    {
+      "bundleName": "BundleLoadLarge.lynx.bundle",
+      "container": "tab",
+      "versions": {
+        "baseline": {
+          "n": 10,
+          "sourceBytes": 3234076,
+          "sourceReadOnMainThread": [
+            true
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 11.294312498648651,
+              "p95": 12.428416666807607
+            },
+            "resourcesMs": {
+              "median": 0.48368749412475154,
+              "p95": 0.631458344287239
+            },
+            "sourceReadMs": {
+              "median": 0.07270833157235757,
+              "p95": 0.1129583251895383
+            },
+            "viewCreateMs": {
+              "median": 1.4122916691121645,
+              "p95": 4.337041667895392
+            },
+            "submitToFirstScreenMs": {
+              "median": 16.099041669804137,
+              "p95": 22.289541666395962
+            },
+            "openToFirstScreenMs": {
+              "median": 39.66122916608583,
+              "p95": 50.46358333493117
+            },
+            "openToBusinessReadyMs": {
+              "median": 46.18602083064616,
+              "p95": 64.1391250101151
+            }
+          }
+        },
+        "optimized": {
+          "n": 10,
+          "sourceBytes": 3234076,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 10.90293750166893,
+              "p95": 18.57124999514781
+            },
+            "resourcesMs": {
+              "median": 0.6809999977122061,
+              "p95": 1.3441666669677943
+            },
+            "sourceReadMs": {
+              "median": 0.08489583706250414,
+              "p95": 0.302583328448236
+            },
+            "viewCreateMs": {
+              "median": 1.2599166730069555,
+              "p95": 2.4053749948507175
+            },
+            "submitToFirstScreenMs": {
+              "median": 15.708437502325978,
+              "p95": 19.19833333522547
+            },
+            "openToFirstScreenMs": {
+              "median": 39.35608333267737,
+              "p95": 46.667541668284684
+            },
+            "openToBusinessReadyMs": {
+              "median": 46.142562503519,
+              "p95": 60.37891666346695
+            }
+          }
+        }
+      }
+    },
+    {
+      "bundleName": "BundleLoadAsync.lynx.bundle",
+      "container": "page",
+      "versions": {
+        "baseline": {
+          "n": 10,
+          "sourceBytes": 94510,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 6.149791668576654,
+              "p95": 7.051708322251216
+            },
+            "resourcesMs": {
+              "median": 2.7023124930565245,
+              "p95": 3.7452916585607454
+            },
+            "sourceReadMs": {
+              "median": 0.05914583016419783,
+              "p95": 0.13858333113603294
+            },
+            "viewCreateMs": {
+              "median": 1.3928958287579007,
+              "p95": 5.5252916645258665
+            },
+            "submitToFirstScreenMs": {
+              "median": 4.8924375005299225,
+              "p95": 10.039999993750826
+            },
+            "openToFirstScreenMs": {
+              "median": 29.817312497470994,
+              "p95": 39.69866666011512
+            },
+            "openToBusinessReadyMs": {
+              "median": 47.4593749968335,
+              "p95": 72.76545833155978
+            }
+          }
+        },
+        "optimized": {
+          "n": 10,
+          "sourceBytes": 94510,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 6.229333332157694,
+              "p95": 8.08112500817515
+            },
+            "resourcesMs": {
+              "median": 3.458208331721835,
+              "p95": 4.399666664539836
+            },
+            "sourceReadMs": {
+              "median": 0.05952082574367523,
+              "p95": 0.12425000022631139
+            },
+            "viewCreateMs": {
+              "median": 1.2817291644751094,
+              "p95": 5.501666673808359
+            },
+            "submitToFirstScreenMs": {
+              "median": 4.915833334962372,
+              "p95": 14.790375003940426
+            },
+            "openToFirstScreenMs": {
+              "median": 30.295791664684657,
+              "p95": 48.85216667025816
+            },
+            "openToBusinessReadyMs": {
+              "median": 45.91043749678647,
+              "p95": 122.4567500030389
+            }
+          }
+        }
+      }
+    },
+    {
+      "bundleName": "BundleLoadAsync.lynx.bundle",
+      "container": "tab",
+      "versions": {
+        "baseline": {
+          "n": 10,
+          "sourceBytes": 94510,
+          "sourceReadOnMainThread": [
+            true
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 4.971812493749894,
+              "p95": 6.466750011895783
+            },
+            "resourcesMs": {
+              "median": 2.748875005636364,
+              "p95": 4.097749988432042
+            },
+            "sourceReadMs": {
+              "median": 0.03908333746949211,
+              "p95": 0.06704167753923684
+            },
+            "viewCreateMs": {
+              "median": 1.295958340051584,
+              "p95": 1.5266249974956736
+            },
+            "submitToFirstScreenMs": {
+              "median": 4.43485416326439,
+              "p95": 7.379125003353693
+            },
+            "openToFirstScreenMs": {
+              "median": 24.41720832575811,
+              "p95": 30.186125004547648
+            },
+            "openToBusinessReadyMs": {
+              "median": 44.61654166516382,
+              "p95": 49.53800000657793
+            }
+          }
+        },
+        "optimized": {
+          "n": 10,
+          "sourceBytes": 94510,
+          "sourceReadOnMainThread": [
+            false
+          ],
+          "metricsMs": {
+            "resolveMs": {
+              "median": 8.141666672599968,
+              "p95": 13.609416666440666
+            },
+            "resourcesMs": {
+              "median": 5.491916665050667,
+              "p95": 9.479083339101635
+            },
+            "sourceReadMs": {
+              "median": 0.07704166637267917,
+              "p95": 0.16308334306813776
+            },
+            "viewCreateMs": {
+              "median": 2.556937499321066,
+              "p95": 9.532625001156703
+            },
+            "submitToFirstScreenMs": {
+              "median": 11.193458340130746,
+              "p95": 51.34337500203401
+            },
+            "openToFirstScreenMs": {
+              "median": 39.822729166189674,
+              "p95": 86.61116666917223
+            },
+            "openToBusinessReadyMs": {
+              "median": 55.185604163852986,
+              "p95": 123.48925000696909
+            }
+          }
+        }
+      }
+    }
+  ]
+}

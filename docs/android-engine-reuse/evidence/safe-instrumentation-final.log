@@ -1,0 +1,95 @@
+
+com.example.lynxshell.sample.LynxTemplateGroupReuseTest:
+LynxTemplateGroupReuse: small page=engine-reuse-small-5964ed56-89ed-4d61-9175-5ec8c042eb73 template=76185821 tplPtr=-5476376648068726160 shellPtr=-5476376649412214000 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+.
+LynxTemplateGroupReuse: small page=engine-reuse-small-b7ec4e1b-a153-4df7-9e22-ca370f3bba3c template=76185821 tplPtr=-5476376648068726160 shellPtr=-5476376649412152400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-72bfd0b5-9d1e-4529-9991-119481d63450 template=117627398 tplPtr=-5476376648069008784 shellPtr=-5476376649412095600 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-b7ec4e1b-a153-4df7-9e22-ca370f3bba3c template=76185821 tplPtr=-5476376648068726160 shellPtr=-5476376649412152400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+.
+LynxTemplateGroupReuse: small page=engine-reuse-small-f0b0ff72-06d8-4975-83ff-99f5606f9a58 template=117627398 tplPtr=-5476376648069008784 shellPtr=-5476376649412250000 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-dc97446a-dceb-470b-94d3-93070fda5ef8 template=76185821 tplPtr=-5476376648068726160 shellPtr=-5476376649412164400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-f0b0ff72-06d8-4975-83ff-99f5606f9a58 template=117627398 tplPtr=-5476376648069008784 shellPtr=-5476376649412250000 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: large page=engine-reuse-large-324b0ea3-366e-4542-9881-103ddd3d5010 template=26117427 tplPtr=-5476376648068985600 shellPtr=-5476376649412174800 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxTemplateGroupReuse: large page=engine-reuse-large-096879f6-1335-4d99-8905-3fecdeaf4ac8 template=189594143 tplPtr=-5476376648069037488 shellPtr=-5476376649412183600 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxTemplateGroupReuse: large page=engine-reuse-large-324b0ea3-366e-4542-9881-103ddd3d5010 template=26117427 tplPtr=-5476376648068985600 shellPtr=-5476376649412174800 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxTemplateGroupReuse: async page=engine-reuse-async-e3cd5511-da81-437b-80b1-eb7bd0318037 template=152575488 tplPtr=-5476376648069066192 shellPtr=-5476376649412251600 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxTemplateGroupReuse: async page=engine-reuse-async-a5d7ab21-4c53-4bb7-9bc4-c20f86366d63 template=137454682 tplPtr=-5476376648068764800 shellPtr=-5476376649412188400 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxTemplateGroupReuse: async page=engine-reuse-async-e3cd5511-da81-437b-80b1-eb7bd0318037 template=152575488 tplPtr=-5476376648069066192 shellPtr=-5476376649412251600 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+.
+LynxTemplateGroupReuse: small page=engine-reuse-small-6004205d-549c-45eb-912c-d161f026bf8f template=21871353 tplPtr=-5476376648068869680 shellPtr=-5476376649412202800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-21af130d-0f47-4e2c-9796-e0290426db8f template=21871353 tplPtr=-5476376648068869680 shellPtr=-5476376649412218800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: large page=engine-reuse-large-b4c3790a-6774-4c93-9233-a08eb66aefbb template=120360859 tplPtr=-5476376648069037488 shellPtr=-5476376649412161200 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxTemplateGroupReuse: large page=engine-reuse-large-0ce14302-b9cd-483d-b0e7-c3680f3f2105 template=120360859 tplPtr=-5476376648069037488 shellPtr=-5476376649412153200 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxTemplateGroupReuse: async page=engine-reuse-async-b44c3d5d-7ddf-4479-889a-98acba80b9f5 template=229356907 tplPtr=-5476376648068760384 shellPtr=-5476376649412134000 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxTemplateGroupReuse: async page=engine-reuse-async-c7d379b5-a0a8-4591-a5bc-cf789e5a5158 template=229356907 tplPtr=-5476376648068760384 shellPtr=-5476376649412094800 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+.
+LynxTemplateGroupReuse: small page=engine-reuse-small-6740c084-16ff-464a-b29b-4405fbc90c22 template=169867217 tplPtr=-5476376648069024240 shellPtr=-5476376649412222800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: 旧host WeakReference诊断 collected=false attempts=8；不代表无泄漏
+
+LynxTemplateGroupReuse: 系统队列等待后WeakReference诊断 collected=false gcAttempts=3；不代表无泄漏
+.
+LynxTemplateGroupReuse: small page=engine-reuse-small-e6a7f241-cac2-4f0e-b722-28446e9d5b47 template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412092400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-e1a2c0d6-6c07-4a80-af09-bdd17adde627 template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412141200 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-cf8672dd-a4a9-428d-a047-ee66f0ecca21 template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412202800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-9ce16d9f-38a8-4f47-94d3-375a3a6c80dc template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412092400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-276c5d68-b0ad-42f8-81fa-d3109ca0184b template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412132400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-648457a1-9d3e-49f8-b2d5-9f423fe54f3e template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412142800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-87ad0d82-767f-4fbf-b1ab-3c37c11ad5a0 template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412090800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-3e895083-5d01-4a82-af40-b8ff051ed377 template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412218800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-4559a0e1-f3b6-411f-a4c1-03376836559e template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412218800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-889bb0ec-acd3-41cc-9583-6afe3cfaf5e5 template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412230800 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+.
+LynxTemplateGroupReuse: small page=engine-reuse-small-55962f3f-b914-4669-9728-7c93fde7f52f template=101003160 tplPtr=-5476376648068760384 shellPtr=-5476376649412141200 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxTemplateGroupReuse: small page=engine-reuse-small-22e484a6-deb4-4e72-a357-00862612f87e template=222813906 tplPtr=-5476376648068755968 shellPtr=-5476376649412072400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+.
+com.example.lynxshell.sample.TemplateGroupStateTest:
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-lazy-053b18ea-71eb-4b35-8eae-39090f1cbbbd accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"lazy-A","globalHasOldOnly":true,"caseName":"lazy","counter":0.0,"lazyStatus":"not-requested","pageId":"engine-state-lazy-053b18ea-71eb-4b35-8eae-39090f1cbbbd","globalMarker":"global-lazy-A"}
+
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-lazy-522fbc68-0a15-4946-9e85-c8c547292750 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"lazy-B","globalHasOldOnly":false,"caseName":"lazy","counter":0.0,"lazyStatus":"not-requested","pageId":"engine-state-lazy-522fbc68-0a15-4946-9e85-c8c547292750","globalMarker":"global-lazy-B"}
+
+TemplateGroupState: 真实UI触控 selector=engine-reuse-load-lazy ui=LynxFlattenUI screenRect=Rect(116, 1563 - 965, 1700)
+
+TemplateGroupState: 真实Native Lazy请求 loader=mLoader url=http://127.0.0.1:18782/lazy-bundle/EngineReuseLazyPanel.lynx.bundle
+
+TemplateGroupState: actual Native event=engine-reuse-probe.lazy-ready source=engine-state-lazy-522fbc68-0a15-4946-9e85-c8c547292750 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"lazy-mounted","hasOldOnly":false,"component":"EngineReuseLazyPanel","moduleMountCount":1.0,"marker":"lazy-B","globalHasOldOnly":false,"caseName":"lazy","counter":0.0,"lazyStatus":"mounted","pageId":"engine-state-lazy-522fbc68-0a15-4946-9e85-c8c547292750","globalMarker":"global-lazy-B"}
+.
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-state-a8581bd0-4c23-468c-8dd7-8fa52a74d28b accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"engine-state-state-a8581bd0-4c23-468c-8dd7-8fa52a74d28b","globalMarker":"global-state-A"}
+
+TemplateGroupState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1297 - 965, 1423)
+
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-state-a8581bd0-4c23-468c-8dd7-8fa52a74d28b accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"engine-state-state-a8581bd0-4c23-468c-8dd7-8fa52a74d28b","globalMarker":"global-state-A"}
+
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-state-0b8faa58-f672-4f2a-a8e0-1867183909af accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"engine-state-state-0b8faa58-f672-4f2a-a8e0-1867183909af","globalMarker":"global-state-B"}
+.
+Test results for InstrumentationTestRunner=.........
+Time: 17.828
+
+OK (9 tests)
+
+

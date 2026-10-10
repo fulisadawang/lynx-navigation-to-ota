@@ -1,0 +1,334 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+> Task :lynx-map:checkKotlinGradlePluginConfigurationErrors
+> Task :lynx-map:preBuild UP-TO-DATE
+> Task :lynx-map:preDebugBuild UP-TO-DATE
+> Task :lynx-map:generateDebugResValues UP-TO-DATE
+> Task :lynx-map:generateDebugResources UP-TO-DATE
+> Task :lynx-map:packageDebugResources UP-TO-DATE
+> Task :lynx-map:parseDebugLocalResources UP-TO-DATE
+> Task :lynx-map:generateDebugRFile UP-TO-DATE
+> Task :lynx-map:compileDebugKotlin UP-TO-DATE
+> Task :lynx-map:javaPreCompileDebug UP-TO-DATE
+> Task :lynx-map:compileDebugJavaWithJavac NO-SOURCE
+> Task :lynx-map:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :lynx-map:processDebugJavaRes UP-TO-DATE
+> Task :lynx-map:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :lynx-shell:checkKotlinGradlePluginConfigurationErrors
+> Task :lynx-shell:preBuild UP-TO-DATE
+> Task :lynx-shell:preDebugBuild UP-TO-DATE
+> Task :lynx-shell:generateDebugBuildConfig UP-TO-DATE
+> Task :lynx-shell:generateDebugResValues UP-TO-DATE
+> Task :lynx-shell:generateDebugResources UP-TO-DATE
+> Task :lynx-shell:packageDebugResources UP-TO-DATE
+> Task :lynx-shell:parseDebugLocalResources UP-TO-DATE
+> Task :lynx-shell:generateDebugRFile UP-TO-DATE
+> Task :lynx-shell:javaPreCompileDebug UP-TO-DATE
+> Task :lynx-shell:preDebugUnitTestBuild UP-TO-DATE
+> Task :lynx-shell:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :lynx-shell:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :lynx-shell:preReleaseBuild UP-TO-DATE
+> Task :lynx-shell:mergeReleaseJniLibFolders
+> Task :lynx-shell:mergeReleaseNativeLibs NO-SOURCE
+> Task :lynx-shell:stripReleaseDebugSymbols NO-SOURCE
+> Task :lynx-shell:generateReleaseResValues
+> Task :lynx-shell:copyReleaseJniLibsProjectAndLocalJars
+> Task :lynx-shell:extractDeepLinksForAarRelease
+> Task :lynx-map:preReleaseBuild UP-TO-DATE
+> Task :lynx-map:generateReleaseResValues
+> Task :lynx-map:generateReleaseResources
+> Task :lynx-map:packageReleaseResources
+> Task :lynx-map:javaPreCompileRelease
+> Task :lynx-shell:generateReleaseBuildConfig
+> Task :lynx-map:parseReleaseLocalResources
+> Task :lynx-shell:generateReleaseProductionSources
+> Task :lynx-shell:generateReleaseResources
+> Task :lynx-map:generateReleaseRFile
+> Task :lynx-shell:packageReleaseResources
+> Task :lynx-shell:mergeReleaseShaders
+> Task :lynx-shell:compileReleaseShaders NO-SOURCE
+> Task :lynx-shell:generateReleaseAssets UP-TO-DATE
+> Task :lynx-shell:mergeReleaseAssets
+> Task :lynx-shell:javaPreCompileRelease
+> Task :lynx-shell:parseReleaseLocalResources
+> Task :lynx-shell:prepareLintJarForPublish
+> Task :lynx-shell:prepareReleaseArtProfile
+> Task :lynx-shell:generateReleaseRFile
+> Task :lynx-shell:writeReleaseAarMetadata
+> Task :lynx-map:compileReleaseLibraryResources
+> Task :lynx-shell:mapReleaseSourceSetPaths
+> Task :lynx-shell:processReleaseManifest
+> Task :lynx-shell:mergeReleaseResources
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :lynx-capacitor:preBuild UP-TO-DATE
+> Task :lynx-capacitor:preDebugBuild UP-TO-DATE
+> Task :lynx-capacitor:writeDebugAarMetadata UP-TO-DATE
+> Task :lynx-debug-tool:preBuild UP-TO-DATE
+> Task :lynx-debug-tool:preDebugBuild UP-TO-DATE
+> Task :lynx-debug-tool:writeDebugAarMetadata UP-TO-DATE
+> Task :lynx-map:writeDebugAarMetadata UP-TO-DATE
+> Task :lynx-shell:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :lynx-capacitor:generateDebugResValues UP-TO-DATE
+> Task :lynx-capacitor:generateDebugResources UP-TO-DATE
+> Task :lynx-capacitor:packageDebugResources UP-TO-DATE
+> Task :lynx-debug-tool:generateDebugResValues UP-TO-DATE
+> Task :lynx-debug-tool:generateDebugResources UP-TO-DATE
+> Task :lynx-debug-tool:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :lynx-capacitor:extractDeepLinksDebug UP-TO-DATE
+> Task :lynx-capacitor:processDebugManifest UP-TO-DATE
+> Task :lynx-debug-tool:extractDeepLinksDebug UP-TO-DATE
+> Task :lynx-debug-tool:processDebugManifest UP-TO-DATE
+> Task :lynx-map:extractDeepLinksDebug UP-TO-DATE
+> Task :lynx-map:processDebugManifest UP-TO-DATE
+> Task :lynx-shell:extractDeepLinksDebug UP-TO-DATE
+> Task :lynx-shell:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :lynx-capacitor:compileDebugLibraryResources UP-TO-DATE
+> Task :lynx-capacitor:parseDebugLocalResources UP-TO-DATE
+> Task :lynx-capacitor:generateDebugRFile UP-TO-DATE
+> Task :lynx-debug-tool:compileDebugLibraryResources UP-TO-DATE
+> Task :lynx-debug-tool:parseDebugLocalResources UP-TO-DATE
+> Task :lynx-debug-tool:generateDebugRFile UP-TO-DATE
+> Task :lynx-map:compileDebugLibraryResources UP-TO-DATE
+> Task :lynx-shell:compileDebugLibraryResources UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :lynx-capacitor:checkKotlinGradlePluginConfigurationErrors
+> Task :lynx-capacitor:compileDebugKotlin UP-TO-DATE
+> Task :lynx-capacitor:javaPreCompileDebug UP-TO-DATE
+> Task :lynx-capacitor:compileDebugJavaWithJavac NO-SOURCE
+> Task :lynx-capacitor:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :lynx-debug-tool:checkKotlinGradlePluginConfigurationErrors
+> Task :lynx-debug-tool:javaPreCompileDebug UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :lynx-capacitor:mergeDebugShaders UP-TO-DATE
+> Task :lynx-capacitor:compileDebugShaders NO-SOURCE
+> Task :lynx-capacitor:generateDebugAssets UP-TO-DATE
+> Task :lynx-capacitor:mergeDebugAssets UP-TO-DATE
+> Task :lynx-debug-tool:mergeDebugShaders UP-TO-DATE
+> Task :lynx-debug-tool:compileDebugShaders NO-SOURCE
+> Task :lynx-debug-tool:generateDebugAssets UP-TO-DATE
+> Task :lynx-debug-tool:mergeDebugAssets UP-TO-DATE
+> Task :lynx-map:mergeDebugShaders UP-TO-DATE
+> Task :lynx-map:compileDebugShaders NO-SOURCE
+> Task :lynx-map:generateDebugAssets UP-TO-DATE
+> Task :lynx-map:mergeDebugAssets UP-TO-DATE
+> Task :lynx-shell:mergeDebugShaders UP-TO-DATE
+> Task :lynx-shell:compileDebugShaders NO-SOURCE
+> Task :lynx-shell:generateDebugAssets UP-TO-DATE
+> Task :lynx-shell:mergeDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :lynx-capacitor:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :lynx-capacitor:processDebugJavaRes UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :lynx-map:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :lynx-capacitor:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :lynx-capacitor:mergeDebugJniLibFolders UP-TO-DATE
+> Task :lynx-capacitor:mergeDebugNativeLibs NO-SOURCE
+> Task :lynx-capacitor:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :lynx-debug-tool:mergeDebugJniLibFolders UP-TO-DATE
+> Task :lynx-debug-tool:mergeDebugNativeLibs NO-SOURCE
+> Task :lynx-debug-tool:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :lynx-map:mergeDebugJniLibFolders UP-TO-DATE
+> Task :lynx-map:mergeDebugNativeLibs NO-SOURCE
+> Task :lynx-map:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :lynx-shell:mergeDebugJniLibFolders UP-TO-DATE
+> Task :lynx-shell:mergeDebugNativeLibs NO-SOURCE
+> Task :lynx-shell:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:processDebugAndroidTestManifest UP-TO-DATE
+> Task :app:generateDebugAndroidTestBuildConfig UP-TO-DATE
+> Task :app:checkDebugAndroidTestAarMetadata UP-TO-DATE
+> Task :app:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :app:mapDebugAndroidTestSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugAndroidTestResources UP-TO-DATE
+> Task :app:mergeDebugAndroidTestResources UP-TO-DATE
+> Task :app:processDebugAndroidTestResources UP-TO-DATE
+> Task :app:javaPreCompileDebugAndroidTest UP-TO-DATE
+> Task :app:mergeDebugAndroidTestShaders UP-TO-DATE
+> Task :app:compileDebugAndroidTestShaders NO-SOURCE
+> Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :app:mergeDebugAndroidTestAssets UP-TO-DATE
+> Task :app:compressDebugAndroidTestAssets UP-TO-DATE
+> Task :app:desugarDebugAndroidTestFileDependencies UP-TO-DATE
+> Task :app:checkDebugAndroidTestDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebugAndroidTest UP-TO-DATE
+> Task :app:mergeDebugAndroidTestJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+> Task :app:validateSigningDebugAndroidTest UP-TO-DATE
+> Task :app:writeDebugAndroidTestSigningConfigVersions UP-TO-DATE
+> Task :lynx-shell:verifyReleaseResources
+> Task :lynx-shell:compileDebugKotlin
+> Task :lynx-shell:compileDebugJavaWithJavac UP-TO-DATE
+> Task :lynx-shell:processDebugJavaRes UP-TO-DATE
+> Task :lynx-shell:bundleLibRuntimeToDirDebug
+> Task :lynx-shell:bundleLibRuntimeToJarDebug
+> Task :lynx-shell:bundleLibCompileToJarDebug
+> Task :lynx-debug-tool:compileDebugKotlin
+> Task :lynx-debug-tool:compileDebugJavaWithJavac NO-SOURCE
+> Task :lynx-debug-tool:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :lynx-shell:compileDebugUnitTestKotlin
+> Task :lynx-shell:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :lynx-shell:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :app:compileDebugKotlin
+
+> Task :lynx-map:compileReleaseKotlin
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-map/src/main/java/com/example/lynxmap/LynxMapLocationModule.kt:49:87 There is more than one label with such a name in this scope
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-map/src/main/java/com/example/lynxmap/LynxMapLocationModule.kt:55:35 There is more than one label with such a name in this scope
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-map/src/main/java/com/example/lynxmap/LynxMapLocationModule.kt:82:61 There is more than one label with such a name in this scope
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-map/src/main/java/com/example/lynxmap/LynxMapUI.kt:371:24 Parameter 'params' is never used
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-map/src/main/java/com/example/lynxmap/LynxMapUI.kt:444:32 Parameter 'params' is never used
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-map/src/main/java/com/example/lynxmap/LynxMapUI.kt:485:25 Parameter 'params' is never used
+
+> Task :lynx-shell:testDebugUnitTest
+> Task :lynx-map:compileReleaseJavaWithJavac NO-SOURCE
+> Task :lynx-map:bundleLibCompileToJarRelease
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :lynx-debug-tool:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :lynx-debug-tool:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :lynx-debug-tool:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:mergeLibDexDebugAndroidTest UP-TO-DATE
+> Task :app:mergeLibDexDebug
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug
+
+> Task :app:compileDebugAndroidTestKotlin
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:9:21 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:36:39 'constructor InstrumentationTestCase()' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:36:39 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:41:67 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:42:21 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:48:15 'tearDown(): Unit' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:180:50 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:200:51 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:205:28 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:370:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingOptimizationTest.kt:410:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:8:21 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:9:21 'InstrumentationTestRunner' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:37:37 'constructor InstrumentationTestCase()' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:37:37 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:39:23 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:41:22 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:41:41 'InstrumentationTestRunner' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:41:68 'getter for arguments: Bundle!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:63:24 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:143:53 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:170:21 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:210:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:219:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/BundleLoadingRealBundleTest.kt:233:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:8:21 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:9:21 'InstrumentationTestRunner' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:43:36 'constructor InstrumentationTestCase()' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:43:36 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:130:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:194:13 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:210:23 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:212:22 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:212:41 'InstrumentationTestRunner' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:212:68 'getter for arguments: Bundle!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:246:24 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:300:17 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:301:28 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:442:13 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:555:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/LynxTemplateGroupReuseTest.kt:560:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/NativeReadinessColdStartTest.kt:9:21 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/NativeReadinessColdStartTest.kt:46:38 'constructor InstrumentationTestCase()' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/NativeReadinessColdStartTest.kt:46:38 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/NativeReadinessColdStartTest.kt:62:23 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/NativeReadinessColdStartTest.kt:96:15 'tearDown(): Unit' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/NativeReadinessColdStartTest.kt:119:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/NativeReadinessColdStartTest.kt:241:20 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/NativeReadinessColdStartTest.kt:418:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:8:21 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:9:21 'InstrumentationTestRunner' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:53:32 'constructor InstrumentationTestCase()' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:53:32 'InstrumentationTestCase' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:105:23 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:107:22 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:107:41 'InstrumentationTestRunner' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:107:68 'getter for arguments: Bundle!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:141:24 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:423:13 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:441:16 'scrollIntoView(Boolean, String!, String!): Unit' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:443:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:459:19 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:462:19 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:538:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/app/src/androidTest/java/com/example/lynxshell/sample/TemplateGroupStateTest.kt:542:9 'getter for instrumentation: Instrumentation!' is deprecated. Deprecated in Java
+
+> Task :app:compileDebugAndroidTestJavaWithJavac UP-TO-DATE
+> Task :app:dexBuilderDebugAndroidTest UP-TO-DATE
+> Task :app:mergeDebugAndroidTestGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugAndroidTestJavaRes UP-TO-DATE
+> Task :app:mergeDebugAndroidTestJavaResource UP-TO-DATE
+> Task :app:mergeProjectDexDebugAndroidTest UP-TO-DATE
+> Task :app:packageDebugAndroidTest UP-TO-DATE
+> Task :app:createDebugAndroidTestApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebugAndroidTest UP-TO-DATE
+
+> Task :lynx-shell:compileReleaseKotlin
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/LynxShell.kt:136:34 'TRIM_MEMORY_RUNNING_LOW: Int' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/bridge/LynxShellModule.kt:623:16 'toHashMap(): HashMap<String!, Any!>!' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/container/LynxShellActivity.kt:266:16 'setter for statusBarColor: Int' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/container/LynxShellActivity.kt:271:16 'setter for navigationBarColor: Int' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/container/LynxShellActivity.kt:281:20 'setter for isStatusBarContrastEnforced: Boolean' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/container/LynxShellActivity.kt:286:56 'FLAG_FULLSCREEN: Int' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/container/LynxShellActivity.kt:288:58 'FLAG_FULLSCREEN: Int' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/container/LynxTemplateGroupCache.kt:57:26 This declaration overrides deprecated member but not marked as deprecated itself. Please add @Deprecated annotation or suppress. See https://youtrack.jetbrains.com/issue/KT-47902 for details
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/container/LynxTemplateGroupCache.kt:59:50 'TRIM_MEMORY_RUNNING_LOW: Int' is deprecated. Deprecated in Java
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/java/com/example/lynxshell/transition/LynxTransitionSpec.kt:284:46 Parameter 'animated' is never used
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/kotlin/com/ota/android/sdk/ContentAddressedOtaStore.kt:1150:11 Variable 'scan' is never used
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/kotlin/com/ota/android/sdk/ContentAddressedOtaStore.kt:1364:36 Parameter 'maxFiles' is never used
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/kotlin/com/ota/android/sdk/OtaJson.kt:27:20 No cast needed
+w: file:///Users/nieyutan/.codex/worktrees/bundle-loading-opt/lynx-navigation-to-ota/android/lynx-shell/build/generated/java/generateReleaseProductionSources/kotlin/com/ota/android/sdk/OtaJson.kt:187:19 Variable 'escaped' is never used
+
+> Task :lynx-shell:extractReleaseAnnotations
+> Task :lynx-shell:compileReleaseJavaWithJavac
+> Task :lynx-shell:mergeReleaseGeneratedProguardFiles
+> Task :lynx-shell:mergeReleaseConsumerProguardFiles
+> Task :lynx-shell:processReleaseJavaRes
+> Task :lynx-shell:mergeReleaseJavaResource
+> Task :lynx-shell:syncReleaseLibJars
+> Task :lynx-shell:bundleReleaseAar
+> Task :lynx-shell:assembleRelease
+
+BUILD SUCCESSFUL in 30s
+192 actionable tasks: 54 executed, 138 up-to-date

@@ -17,12 +17,13 @@ internal class EmbeddedSidecarResources(context: Context) {
     fun resolve(bundle: EmbeddedBundle, indexPath: String, owners: Set<String>): OtaSidecarViewResources? {
         val snapshot = snapshots.getOrPut(indexPath) { readSnapshot(bundle.lynxAppId, indexPath, owners) }
         val entries = snapshot.asyncEntries.filter { it.ownerBundlePath == bundle.bundlePath }.map { entry ->
-            OtaSidecarViewResources.ResolvedEntry.fromAsset(entry.requestKey, entry.kind) {
+            OtaSidecarViewResources.ResolvedEntry.fromAsset(entry.requestKey, entry.kind, entry.sha256, entry.size) {
                 verifiedAsset(entry.assetPath, entry.size, entry.sha256)
             }
         }
         if (entries.isEmpty()) return null
-        return OtaSidecarViewResources(bundle.bundlePath, entries)
+        return OtaSidecarViewResources(bundle.bundlePath, entries,
+            OtaSidecarViewResources.embeddedSnapshotIdentity(bundle.bundlePath, snapshot.indexSha256))
     }
 
     private fun readSnapshot(appId: String, indexPath: String, owners: Set<String>): Snapshot {
@@ -61,7 +62,7 @@ internal class EmbeddedSidecarResources(context: Context) {
             "内置 Async Bundle requestKey 重复"
         }
 
-        return Snapshot(asyncEntries)
+        return Snapshot(asyncEntries, sha256(indexBytes))
     }
 
     private fun verifiedAsset(path: String, expectedSize: Int, expectedSha: String): ByteArray {
@@ -89,6 +90,7 @@ internal class EmbeddedSidecarResources(context: Context) {
 
     private data class Snapshot(
         val asyncEntries: List<AsyncEntry>,
+        val indexSha256: String,
     )
 
     private companion object {

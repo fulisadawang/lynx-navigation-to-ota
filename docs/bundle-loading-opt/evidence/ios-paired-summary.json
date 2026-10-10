@@ -1,0 +1,78 @@
+{
+  "scope": "Async Tab concern recheck only",
+  "fixtureSHA": "374ddaf32e80cdb56a7b9e065d4fa1b3c0239e3da63221715e74ce354596da8c",
+  "versions": {
+    "baseline": {
+      "n": 10,
+      "sourceReadOnMainThread": [
+        true
+      ],
+      "metricsMs": {
+        "resolveMs": {
+          "median": 4.239291665726341,
+          "p95": 5.489125003805384
+        },
+        "resourcesMs": {
+          "median": 2.2145416733110324,
+          "p95": 3.727208328200504
+        },
+        "sourceReadMs": {
+          "median": 0.03416666004341096,
+          "p95": 0.08183333557099104
+        },
+        "viewCreateMs": {
+          "median": 1.2412291616783477,
+          "p95": 1.6937500040512532
+        },
+        "submitToFirstScreenMs": {
+          "median": 5.091041661216877,
+          "p95": 7.145083334762603
+        },
+        "openToFirstScreenMs": {
+          "median": 23.63679166592192,
+          "p95": 28.369958337862045
+        },
+        "openToBusinessReadyMs": {
+          "median": 39.78166666638572,
+          "p95": 47.09558334434405
+        }
+      }
+    },
+    "optimized": {
+      "n": 10,
+      "sourceReadOnMainThread": [
+        false
+      ],
+      "metricsMs": {
+        "resolveMs": {
+          "median": 4.73841666826047,
+          "p95": 6.621791661018506
+        },
+        "resourcesMs": {
+          "median": 2.9561458359239623,
+          "p95": 4.691124995588325
+        },
+        "sourceReadMs": {
+          "median": 0.06233333260752261,
+          "p95": 0.12991666153538972
+        },
+        "viewCreateMs": {
+          "median": 1.4010624945512973,
+          "p95": 3.497749989037402
+        },
+        "submitToFirstScreenMs": {
+          "median": 4.294999998819549,
+          "p95": 15.54783333267551
+        },
+        "openToFirstScreenMs": {
+          "median": 24.63333332707407,
+          "p95": 41.62437499326188
+        },
+        "openToBusinessReadyMs": {
+          "median": 40.63114582822891,
+          "p95": 75.7025416532997
+        }
+      }
+    }
+  }
+}

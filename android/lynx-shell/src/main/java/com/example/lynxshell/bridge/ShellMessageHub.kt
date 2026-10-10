@@ -129,11 +129,21 @@ object ShellMessageHub {
         eventName: String,
         payload: Map<String, Any?>,
     ): LynxRouterMessageReply {
+        return dispatch(eventName, payload) { it.activity.get() === activity }
+    }
+
+    /** 多个 Tab 共用 Activity，业务消息也必须按实际调用 View 定位。 */
+    internal fun dispatchFromView(view: LynxView?, eventName: String,
+        payload: Map<String, Any?>): LynxRouterMessageReply =
+        dispatch(eventName, payload) { view != null && it.view.get() === view }
+
+    private fun dispatch(eventName: String, payload: Map<String, Any?>,
+        matches: (Endpoint) -> Boolean): LynxRouterMessageReply {
         val endpoint: Endpoint
         val handler: LynxRouterMessageHandler?
         synchronized(lock) {
             pruneLocked()
-            endpoint = endpoints.values.firstOrNull { it.activity.get() === activity }
+            endpoint = endpoints.values.firstOrNull(matches)
                 ?: return LynxRouterMessageReply(false, "页面已销毁或 pageId 已失效")
             handler = messageHandler
         }

@@ -1,0 +1,89 @@
+
+com.example.lynxshell.sample.BoundedEngineSmokeTest:.......
+com.example.lynxshell.sample.BoundedEngineStateTest:
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-lazy-d3e253d9-67c7-4721-88e1-b353ef91c502 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"lazy-A","globalHasOldOnly":true,"caseName":"lazy","counter":0.0,"lazyStatus":"not-requested","pageId":"engine-state-lazy-d3e253d9-67c7-4721-88e1-b353ef91c502","globalMarker":"global-lazy-A"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-lazy-03ef47a6-d5a4-46b9-85d5-f6e843e39883 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"lazy-B","globalHasOldOnly":false,"caseName":"lazy","counter":0.0,"lazyStatus":"not-requested","pageId":"engine-state-lazy-03ef47a6-d5a4-46b9-85d5-f6e843e39883","globalMarker":"global-lazy-B"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-load-lazy ui=LynxFlattenUI screenRect=Rect(116, 1563 - 965, 1700)
+
+BoundedEngineState: 真实Native Lazy请求 loader=mLoader url=http://127.0.0.1:18782/lazy-bundle/EngineReuseLazyPanel.lynx.bundle
+
+BoundedEngineState: actual Native event=engine-reuse-probe.lazy-ready source=engine-state-lazy-03ef47a6-d5a4-46b9-85d5-f6e843e39883 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"lazy-mounted","hasOldOnly":false,"component":"EngineReuseLazyPanel","moduleMountCount":1.0,"marker":"lazy-B","globalHasOldOnly":false,"caseName":"lazy","counter":0.0,"lazyStatus":"mounted","pageId":"engine-state-lazy-03ef47a6-d5a4-46b9-85d5-f6e843e39883","globalMarker":"global-lazy-B"}
+.
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-f3d938ab-f014-43d0-bf34-804226472cc2 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-0","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"engine-state-state-f3d938ab-f014-43d0-bf34-804226472cc2","globalMarker":"global-state-A-pair-0"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1297 - 965, 1423)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-f3d938ab-f014-43d0-bf34-804226472cc2 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-0","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"engine-state-state-f3d938ab-f014-43d0-bf34-804226472cc2","globalMarker":"global-state-A-pair-0"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-4ae29f7a-9832-46d2-b657-c6742844378e accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-0-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"engine-state-state-4ae29f7a-9832-46d2-b657-c6742844378e","globalMarker":"global-state-B-pair-0-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1955 - 965, 2081)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-4ae29f7a-9832-46d2-b657-c6742844378e accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-0-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":1.0,"pageId":"engine-state-state-4ae29f7a-9832-46d2-b657-c6742844378e","globalMarker":"global-state-B-pair-0-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-1114b88c-536f-4371-a8a1-97b2125a443d accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-1","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"engine-state-state-1114b88c-536f-4371-a8a1-97b2125a443d","globalMarker":"global-state-A-pair-1"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1297 - 965, 1423)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-1114b88c-536f-4371-a8a1-97b2125a443d accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-1","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"engine-state-state-1114b88c-536f-4371-a8a1-97b2125a443d","globalMarker":"global-state-A-pair-1"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-d6d1119e-e81b-4e32-aa0c-59366fdd9d4e accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-1-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"engine-state-state-d6d1119e-e81b-4e32-aa0c-59366fdd9d4e","globalMarker":"global-state-B-pair-1-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1955 - 965, 2081)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-d6d1119e-e81b-4e32-aa0c-59366fdd9d4e accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-1-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":1.0,"pageId":"engine-state-state-d6d1119e-e81b-4e32-aa0c-59366fdd9d4e","globalMarker":"global-state-B-pair-1-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-da730a8b-a4b8-48e1-8be0-67785aea7a7c accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-2","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"engine-state-state-da730a8b-a4b8-48e1-8be0-67785aea7a7c","globalMarker":"global-state-A-pair-2"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1297 - 965, 1423)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-da730a8b-a4b8-48e1-8be0-67785aea7a7c accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-2","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"engine-state-state-da730a8b-a4b8-48e1-8be0-67785aea7a7c","globalMarker":"global-state-A-pair-2"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-7950ea06-84c5-474e-a39c-6996ddea3abe accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-2-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"engine-state-state-7950ea06-84c5-474e-a39c-6996ddea3abe","globalMarker":"global-state-B-pair-2-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1955 - 965, 2081)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-7950ea06-84c5-474e-a39c-6996ddea3abe accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-2-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":1.0,"pageId":"engine-state-state-7950ea06-84c5-474e-a39c-6996ddea3abe","globalMarker":"global-state-B-pair-2-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-2aba4557-95a5-41ca-b4b5-77090f0d3649 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-3","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"engine-state-state-2aba4557-95a5-41ca-b4b5-77090f0d3649","globalMarker":"global-state-A-pair-3"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1297 - 965, 1423)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-2aba4557-95a5-41ca-b4b5-77090f0d3649 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-3","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"engine-state-state-2aba4557-95a5-41ca-b4b5-77090f0d3649","globalMarker":"global-state-A-pair-3"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-8afe75ea-6f99-40da-953d-39cc9b51d760 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-3-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"engine-state-state-8afe75ea-6f99-40da-953d-39cc9b51d760","globalMarker":"global-state-B-pair-3-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1955 - 965, 2081)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-8afe75ea-6f99-40da-953d-39cc9b51d760 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-3-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":1.0,"pageId":"engine-state-state-8afe75ea-6f99-40da-953d-39cc9b51d760","globalMarker":"global-state-B-pair-3-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-920bd6ee-aaed-4879-b340-fc2a659b2bd4 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-4","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"engine-state-state-920bd6ee-aaed-4879-b340-fc2a659b2bd4","globalMarker":"global-state-A-pair-4"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1297 - 965, 1423)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-920bd6ee-aaed-4879-b340-fc2a659b2bd4 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A-pair-4","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"engine-state-state-920bd6ee-aaed-4879-b340-fc2a659b2bd4","globalMarker":"global-state-A-pair-4"}
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-9c4a20f7-880b-45b9-b664-f041297d5e7e accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-4-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"engine-state-state-9c4a20f7-880b-45b9-b664-f041297d5e7e","globalMarker":"global-state-B-pair-4-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+
+BoundedEngineState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1955 - 965, 2081)
+
+BoundedEngineState: actual Native event=engine-reuse-probe.ready source=engine-state-state-9c4a20f7-880b-45b9-b664-f041297d5e7e accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B-pair-4-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-","globalHasOldOnly":false,"caseName":"state","counter":1.0,"pageId":"engine-state-state-9c4a20f7-880b-45b9-b664-f041297d5e7e","globalMarker":"global-state-B-pair-4-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-fresh-long-marker-"}
+.
+com.example.lynxshell.sample.BoundedEngineNativeTabTest:
+BoundedEngineNativeTab: Native Tab source=lynx-tab-bounded-engine-state-57992415 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"native-tab-A","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"lynx-tab-bounded-engine-state-57992415","globalMarker":"global-native-tab-A"}
+
+BoundedEngineNativeTab: Native Tab source=lynx-tab-bounded-engine-state-57992415 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"native-tab-A","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"lynx-tab-bounded-engine-state-57992415","globalMarker":"global-native-tab-A"}
+
+BoundedEngineNativeTab: Native Tab source=lynx-tab-bounded-engine-state-24571073 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"native-tab-B-fresh","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"lynx-tab-bounded-engine-state-24571073","globalMarker":"global-native-tab-B-fresh"}
+
+BoundedEngineNativeTab: Native Tab source=lynx-tab-bounded-engine-state-24571073 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":false,"moduleMountCount":1.0,"marker":"native-tab-B-fresh","globalHasOldOnly":false,"caseName":"state","counter":1.0,"pageId":"lynx-tab-bounded-engine-state-24571073","globalMarker":"global-native-tab-B-fresh"}
+.
+com.example.lynxshell.sample.StaticEngineWarmFrameTest:.
+Test results for InstrumentationTestRunner=...........
+Time: 55.18
+
+OK (11 tests)
+
+
