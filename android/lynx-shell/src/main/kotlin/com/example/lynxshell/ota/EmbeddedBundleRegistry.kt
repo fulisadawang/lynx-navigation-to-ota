@@ -267,6 +267,7 @@ class EmbeddedBundleRuntime(context: Context) : ActivityBundleRuntime {
             bytes = embedded.bytes,
             releaseId = embedded.releaseId,
             sha256 = embedded.sha256,
+            bundlePath = embedded.bundlePath,
             source = "embedded_baseline",
             sidecarResources = registry.resolveSidecars(embedded),
         )
@@ -283,6 +284,7 @@ class EmbeddedBundleRuntime(context: Context) : ActivityBundleRuntime {
             bytes = embedded.bytes,
             releaseId = embedded.releaseId,
             sha256 = embedded.sha256,
+            bundlePath = embedded.bundlePath,
             source = "embedded_baseline",
             sidecarResources = registry.resolveSidecars(embedded),
         )

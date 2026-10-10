@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 enum LynxMonitorSanitizer {
@@ -7,6 +8,7 @@ enum LynxMonitorSanitizer {
     private static let cookie = try! NSRegularExpression(pattern: "(?im)\\b(cookie|set-cookie)\\s*[:=][^\\r\\n]*")
     private static let remoteURL = try! NSRegularExpression(pattern: "https?://[^\\s)]+")
     private static let debugKey = try! NSRegularExpression(pattern: "debugmetadata:([^\\s:()]+)")
+    private static let validDebugRelease = try! NSRegularExpression(pattern: "^debugmetadata:[A-Za-z0-9._/-]+$")
     private static let explicitPC = try! NSRegularExpression(pattern: "function[_-]?id\\s*[:=]\\s*(\\d+)\\s*[,; ]+pc(?:[_-]?index)?\\s*[:=]\\s*(\\d+)", options: .caseInsensitive)
     private static let explicitLine = try! NSRegularExpression(pattern: "line\\s*[:=]\\s*(\\d+)\\s*[,; ]+column\\s*[:=]\\s*(\\d+)", options: .caseInsensitive)
     private static let location = try! NSRegularExpression(
@@ -41,21 +43,102 @@ enum LynxMonitorSanitizer {
             let redacted = customRedactor?(safe) ?? safe
             return (bounded(redacted, bytes: limit), redacted.utf8.count > limit)
         }
-        let cleanedMessage = clean(error.message, limit: 4 * 1024)
-        let cleanedStack = error.rawStack.map { clean($0, limit: 16 * 1024) }
+        let projected = error.sdkErrorJSON.flatMap(projectSDKError)
+        let cleanedMessage = clean(projected?.message ?? error.message, limit: 4 * 1024)
+        let cleanedStack = (projected?.stack ?? error.rawStack).map { clean($0, limit: 16 * 1024) }
         let message = cleanedMessage.text
         let stack = cleanedStack?.text
-        let frames = stack.map(parseFrames) ?? []
-        var missing = event.quality.missingFields
-        if frames.isEmpty, !missing.contains("frames") { missing.append("frames") }
-        var truncated = event.quality.truncatedFields
-        if cleanedMessage.truncated, !truncated.contains("message") { truncated.append("message") }
-        if cleanedStack?.truncated == true, !truncated.contains("rawStack") { truncated.append("rawStack") }
-        if (stack?.split(separator: "\n").count ?? 0) > 64 { truncated.append("frames") }
+        let reportedFrames: [LynxMonitorErrorFrame]
+        if let projected, !projected.frames.isEmpty {
+            reportedFrames = projected.frames
+        } else {
+            reportedFrames = stack.map(parseFrames) ?? []
+        }
+        var missing = Set(event.quality.missingFields)
+        var invalid = Set(event.quality.invalidFields)
+        var truncated = Set(event.quality.truncatedFields + (projected?.truncated ?? []))
+        if truncated.remove("sdkCallStack") != nil, projected?.stack == nil {
+            truncated.insert("rawStack")
+        }
+        let frames = reportedFrames.map { frame -> LynxMonitorErrorFrame in
+            let release = frame.runtimeRelease.flatMap { value -> String? in
+                guard value.utf8.count <= 512,
+                      let match = validDebugRelease.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)),
+                      match.range.length == value.utf16.count else {
+                    invalid.insert("frames.runtimeRelease")
+                    if value.utf8.count > 512 { truncated.insert("frames.runtimeRelease") }
+                    return nil
+                }
+                return value
+            }
+            let file = frame.file.map { clean($0, limit: 512) }
+            let function = frame.functionName.map { clean($0, limit: 256) }
+            if file?.truncated == true { truncated.insert("frames.file") }
+            if function?.truncated == true { truncated.insert("frames.functionName") }
+            return .init(file: file?.text, functionName: function?.text,
+                         runtimeRelease: release,
+                         debugKey: release.map { String($0.dropFirst("debugmetadata:".count)) }, position: frame.position)
+        }
+        if error.sdkErrorJSON != nil && projected == nil { missing.formUnion(["structuredError", "message"]) }
+        if message.isEmpty { missing.insert("message") }
+        if stack == nil { missing.insert("rawStack") }
+        if frames.isEmpty { missing.insert("frames") }
+        if frames.contains(where: { $0.debugKey == nil }) { missing.insert("frames.debugKey") }
+        if frames.contains(where: { if case .unknown = $0.position { return true }; return false }) {
+            missing.insert("frames.positionKind")
+        }
+        if cleanedMessage.truncated { truncated.insert("message") }
+        if cleanedStack?.truncated == true { truncated.insert("rawStack") }
+        if (stack?.split(separator: "\n").count ?? 0) > 64 { truncated.insert("frames") }
         let result = LynxMonitorJSError(errorCode: error.errorCode, subCode: error.subCode, level: error.level,
                                        realm: error.realm, message: message, rawStack: stack, frames: frames,
-                                       handled: error.handled, phase: error.phase)
-        return event.replacing(payload: .jsError(result), missing: missing, truncated: truncated)
+                                       handled: error.handled, phase: error.phase, sdkErrorJSON: nil)
+        return event.replacing(payload: .jsError(result), missing: missing.sorted(), truncated: truncated.sorted(), invalid: invalid.sorted())
+    }
+
+    private struct SDKProjection {
+        let message: String
+        let stack: String?
+        let frames: [LynxMonitorErrorFrame]
+        let truncated: [String]
+    }
+
+    /** 仅投影 4.1 JSErrorReporter 的公开实际格式，SDK 对象和任意 customInfo 不进入 Provider。 */
+    private static func projectSDKError(_ text: String) -> SDKProjection? {
+        guard let root = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+              let raw = root["rawError"] as? [String: Any], let message = raw["message"] as? String else { return nil }
+        let stack = (raw["stack"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let sentry = root["sentry"] as? [String: Any]
+        let exception = sentry?["exception"] as? [String: Any]
+        let values = exception?["values"] as? [[String: Any]]
+        let stacktrace = values?.first?["stacktrace"] as? [String: Any]
+        let reported = stacktrace?["frames"] as? [[String: Any]] ?? []
+        var truncated: Set<String> = []
+        if reported.count > 64 { truncated.insert("frames") }
+        func string(_ value: Any?, field: String, limit: Int) -> String? {
+            guard let text = value as? String, !text.isEmpty else { return nil }
+            if text.utf8.count > limit { truncated.insert(field) }
+            return bounded(text, bytes: limit)
+        }
+        func number(_ value: Any?) -> Int? {
+            guard let value = value as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(),
+                  let result = Int(exactly: value.doubleValue), result >= 0 else { return nil }
+            return result
+        }
+        let frames = reported.prefix(64).map { frame -> LynxMonitorErrorFrame in
+            let rawRelease = frame["release"] as? String
+            let release = rawRelease.flatMap { $0.isEmpty ? nil : $0 }
+            let position: LynxMonitorErrorFrame.Position
+            if let first = number(frame["lineno"]), let second = number(frame["colno"]) {
+                position = .reported(first: first, second: second)
+            } else {
+                position = .unknown
+            }
+            return .init(file: string(frame["filename"], field: "frames.file", limit: 512),
+                         functionName: string(frame["function"], field: "frames.functionName", limit: 256),
+                         runtimeRelease: release, debugKey: nil, position: position)
+        }
+        return .init(message: message, stack: stack, frames: frames, truncated: truncated.sorted())
     }
 
     static func sanitizeBusiness(_ value: LynxMonitorBusinessEvent) -> LynxMonitorBusinessEvent {
@@ -101,11 +184,8 @@ enum LynxMonitorSanitizer {
                       line > 0, column >= 0 {
                 position = .lineColumn(line: line, column: column)
             } else if let pair = captures(location), pair.count == 3,
-                      let line = Int(pair[1]), let column = Int(pair[2]), line > 0, column >= 0 {
-                // 后台脚本的常见 file:line:column 格式可直接交给 Source Map；主线程数字含义仍保持未知。
-                position = pair[0].contains("main-thread.js")
-                    ? .unknown
-                    : .lineColumn(line: line, column: column)
+                      let first = Int(pair[1]), let second = Int(pair[2]), first >= 0, second >= 0 {
+                position = .reported(first: first, second: second)
             } else {
                 // 裸数字对的编译格式必须由产物清单证明，采集端不按文件名或线程猜测。
                 position = .unknown
@@ -128,12 +208,12 @@ enum LynxMonitorSanitizer {
 }
 
 extension LynxMonitorEvent {
-    func replacing(payload: LynxMonitorPayload, missing: [String], truncated: [String]) -> LynxMonitorEvent {
+    func replacing(payload: LynxMonitorPayload, missing: [String], truncated: [String], invalid: [String]? = nil) -> LynxMonitorEvent {
         .init(eventId: eventId, processSessionId: processSessionId, observedAtMs: observedAtMs,
               runtimeVersion: runtimeVersion, hostBuild: hostBuild, viewId: viewId, nativeInstanceId: nativeInstanceId,
               containerKind: containerKind, loadId: loadId, loadKind: loadKind, bundle: bundle, visibility: visibility,
               quality: .init(association: quality.association, late: quality.late, missingFields: missing,
-                             invalidFields: quality.invalidFields, truncatedFields: truncated), sampling: sampling, payload: payload)
+                             invalidFields: invalid ?? quality.invalidFields, truncatedFields: truncated), sampling: sampling, payload: payload)
     }
 
     /** 计算 JSON 字符串转义后的上界；固定结构另预留空间，入队前不做 JSON 编码。 */
@@ -146,12 +226,14 @@ extension LynxMonitorEvent {
         }
         var strings = [group, eventId, processSessionId, runtimeVersion, hostBuild, viewId, nativeInstanceId, loadId]
         if let bundle {
-            strings += [bundle.lynxAppId, bundle.bundleName, bundle.releaseId, bundle.releaseSequence, bundle.sha256, bundle.missingReason, bundle.buildId]
+            strings += [bundle.env, bundle.hostApp, bundle.lynxAppId, bundle.bundleName, bundle.bundlePath, bundle.releaseId, bundle.releaseSequence, bundle.sha256, bundle.missingReason, bundle.buildId]
         }
         strings += quality.missingFields.map(Optional.some) + quality.invalidFields.map(Optional.some) + quality.truncatedFields.map(Optional.some)
         var fixed = 2048
         switch payload {
         case let .jsError(error):
+            // 内部 SDK JSON 不编码，但排队期间仍占用内存预算。
+            fixed += error.sdkErrorJSON?.utf8.count ?? 0
             strings += [error.errorCode, error.subCode, error.message, error.rawStack]
             for frame in error.frames {
                 strings += [frame.file, frame.functionName, frame.runtimeRelease, frame.debugKey]

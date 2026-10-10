@@ -427,6 +427,7 @@ struct EmbeddedBundleDescriptor {
     let lynxAppId: String
     let releaseId: String
     let bundleName: String
+    let bundlePath: String?
     let fileURL: URL
     let size: Int
     let sha256: String
@@ -524,6 +525,7 @@ final class EmbeddedBundleRegistry {
             lynxAppId: app.lynxAppId,
             releaseId: app.releaseId,
             bundleName: bundle.bundleName,
+            bundlePath: bundle.bundlePath,
             fileURL: fileURL,
             size: bundle.size,
             sha256: bundle.sha256

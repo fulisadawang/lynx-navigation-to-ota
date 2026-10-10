@@ -261,6 +261,14 @@ export struct LynxTabContainer {
       this.resolveOtaCurrent();
       return;
     }
+    const monitorClient = this.clients[0];
+    const generation = this.prepareGeneration;
+    const bundleUrl = this.request.bundleUrl;
+    this.templateFetcher.cancelAll();
+    this.templateFetcher = new ShellTemplateResourceFetcher(false, '', '', '', null, undefined,
+      bundleUrl, monitorClient?.monitoringEnabled === true ? (sha256: string | null) => {
+        if (generation === this.prepareGeneration) monitorClient.setDirectBundle(bundleUrl, sha256);
+      } : undefined);
     this.extraTiming.prepareTemplateEnd = new Date().getTime();
     this.clients[0]?.markBundleUnavailable('direct_bundle_identity_unavailable', this.request.bundleUrl);
     this.clients[0]?.markLoadStarted();
@@ -391,7 +399,8 @@ export struct LynxTabContainer {
         );
         this.clients[0]?.setPreparedBundle(
           prepared.source ?? 'ota_current', prepared.lynxAppId, prepared.bundleName,
-          prepared.releaseId, prepared.releaseSequence ?? null, prepared.sha256
+          prepared.releaseId, prepared.releaseSequence ?? null, prepared.sha256,
+          prepared.env ?? null, prepared.hostApp ?? null, prepared.bundlePath ?? null
         );
         this.clients[0]?.markLoadResolved(null);
         this.clients[0]?.markLoadStarted();

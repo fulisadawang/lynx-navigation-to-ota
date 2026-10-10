@@ -196,6 +196,8 @@ Tab 普通切换 cache-only、后台不重建；身份变化和主动完成后�
 [研发方案 v1.0](docs/lynx-view-monitoring-v1/README.md) 定义三端 Page/Native Tab 性能、运行期 JS 异常、实际 Bundle 身份、可替换第三方 SDK 适配，以及构建调试材料归档和源码还原。
 [G1 实现说明](docs/lynx-view-monitoring-v1/implementation.md) 对应当前分支的 Android、iOS、HarmonyOS 接线和 Playground 归档工具；不依赖 OTA Server/Admin，G2 第三方平台 Provider 仍未接入。
 
+2026-10-09 SourceMap 管理扩展：原生 Page/Tab 在本次 prepare/lease/snapshot 中冻结 `env / hostApp / bundlePath` 与实际 SHA，错误采集保留 SDK 逐帧 `debugmetadata:key` 和 `reportedFirst / reportedSecond`。模板在生产构建清理前归档同次 metadata，私有上传后由 Server 按 `env + hostApp + lynxAppId + bundleSha256` 登记；Admin 从每个主/Async/script 内容行浏览与反解。Contracts `0.4.0` 统一 DTO；Server/Admin 引用固定版本。运行时事件仍由可替换 Provider 交付，OTA Server 不接收错误上报。范围、发布顺序及编译/模拟链路证据见 [实施报告](docs/source-map-platform/implementation-report.md)。
+
 ## 关键验证
 
 ```bash

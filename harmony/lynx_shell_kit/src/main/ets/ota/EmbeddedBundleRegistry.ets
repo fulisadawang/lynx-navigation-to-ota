@@ -10,6 +10,7 @@ import {
 
 interface EmbeddedManifestBundle {
   bundleName: string;
+  bundlePath?: string;
   assetPath: string;
   size: number;
   sha256: string;
@@ -72,6 +73,7 @@ export default class EmbeddedBundleRegistry {
     return {
       lynxAppId: lynxAppId,
       bundleName: descriptor.bundleName,
+      bundlePath: descriptor.bundlePath,
       filePath: '',
       bytes: bytes,
       releaseId: app.releaseId,

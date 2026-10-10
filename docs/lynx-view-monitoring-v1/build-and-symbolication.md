@@ -2,6 +2,10 @@
 
 本文件描述构建工具与适配器契约。当前分支已实现 archive 模式、manifest 校验和离线 resolve；provider 模式仍由 G2 选定厂商后实现。
 
+2026-10-09 补充：本文描述原生仓 Playground 的既有离线归档合同；复制型模板本轮新增的私有上传与 Server/Admin 反解按 [SourceMap 实施报告](../source-map-platform/implementation-report.md) 及模板 `SOURCE_MAP_RELEASE.md` 执行。两者产物目录和能力要求不同，不把 Playground 的旧强校验要求套给模板。模板保留实际 Async metadata；没有主线程 bytecode debug info 时仍可浏览源码并反解后台 JS，函数/PC 明确返回 `missing_bytecode_info`。本轮没有实现厂商 G2 上传适配器。
+
+2026-10-10 更新：模板已从同次真实 Tasm 编码结果补齐 collector 漏归档的 Async 主线程 section，实际三个 Async 均有各自 bytecode 调试表，六主线程 / 六后台合成定位和六条主线程原始文本格式堆栈均成功映射。通用资料缺失边界保持；本次结果不是三端实际 SDK 错误注入证明。
+
 ## 1. 基线与关键决定
 
 正式基座 main@e9ff9ee 的 Playground 锁定 Rspeedy 0.17.0、React 插件 0.20.0、DebugMetadata 插件 0.2.3。必须用正式分支 lockfile 复现构建，不能以遗留 node_modules 判断版本。

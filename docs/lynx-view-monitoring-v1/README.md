@@ -2,6 +2,8 @@
 
 状态：G1 三端核心设备运行态验收已完成；真实 Resource/JS Error 回调需要专项测试 Bundle，G2 第三方适配未接入。
 
+2026-10-09 SourceMap 扩展：三端 Provider 的 Bundle 上下文补齐环境、OTA 宿主与主包路径，SDK 错误帧保留调试 key 和未擅自解释的原始数字；模板、Contracts、Server 与 Admin 增加同次构建归档、私有上传登记及只读源码反解。完整范围、使用方式和本轮验证见 [实施报告](../source-map-platform/implementation-report.md) / [HTML 报告](../source-map-platform/implementation-report.html)。本轮 Android / iOS 编译通过，Harmony HAR 被既有基线错误阻断；真实云端上传、数据库迁移与三端真机错误仍未执行。
+
 2026-09-30 上线前扩展：源码新增通用 `business.event` 和全事件 `group`，仍使用统一 Schema 1.0。业务组名/名称由页面自由提供，沿同一 Core/Provider 交付；详见 [业务桥接合同](../../BRIDGE_CONTRACT.md#业务事件与分组)。本轮仅源码实施和静态复核，未执行测试/编译/设备验证，下面的历史 G1 结论不证明这次新增业务入口已运行通过。
 
 核对日期：2026-09-15。代码事实基线：正式 `main@e9ff9ee299d9cd786ad532a46f99a48988ab68ed`，已合入 PR #9 的 Lynx 4.1 升级。
@@ -59,7 +61,7 @@ JSON Schema 与示例用于冻结研发契约；示例不是 SDK 日志或实际
 
 - 订单、商品、支付、按钮点击、转化率等业务埋点。
 - 强制为业务组件添加 ActualFMP 或 Timing Flag。已由 Bundle 提供的标记可原样接收。
-- 使用用户的 OTA Server/Admin 存储或展示监控。
+- 使用 OTA Server/Admin 接收或存储运行时监控事件、生成监控大盘。本轮 SourceMap 扩展仅让 Server/Admin 保存构建资料索引、浏览源码和按需反解，不接收错误上报。
 - 提前实现 ARMS、Bugly 等厂商 SDK；目前只定义选型与适配验收要求。
 - 自建监控服务、数据库、告警平台、生产数据大盘 UI。
 - 用 Source Map 处理 Java/Kotlin、Swift/Objective-C、C++ 或 ArkTS 原生崩溃符号。

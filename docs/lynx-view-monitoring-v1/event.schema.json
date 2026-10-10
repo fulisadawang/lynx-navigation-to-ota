@@ -67,7 +67,7 @@
     "fieldList": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
     "bundle": {
       "type": "object", "additionalProperties": false,
-      "required": ["source", "lynxAppId", "bundleName", "releaseId", "releaseSequence", "sha256", "identityStatus", "missingReason", "buildId"],
+      "required": ["source", "lynxAppId", "bundleName", "releaseId", "releaseSequence", "sha256", "identityStatus", "missingReason", "buildId", "env", "hostApp", "bundlePath"],
       "properties": {
         "source": {"enum": ["ota", "embedded", "direct_https", "direct_asset"]},
         "lynxAppId": {"$ref": "#/$defs/nullableText"},
@@ -77,7 +77,9 @@
         "sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
         "identityStatus": {"enum": ["verified", "computed", "unavailable"]},
         "missingReason": {"$ref": "#/$defs/nullableText"},
-        "buildId": {"$ref": "#/$defs/nullableText"}
+        "buildId": {"$ref": "#/$defs/nullableText"},
+        "env": {"$ref": "#/$defs/nullableText"}, "hostApp": {"$ref": "#/$defs/nullableText"},
+        "bundlePath": {"$ref": "#/$defs/nullableText"}
       },
       "allOf": [
         {"if": {"properties": {"identityStatus": {"const": "unavailable"}}}, "then": {"properties": {"sha256": {"type": "null"}, "missingReason": {"type": "string", "minLength": 1}}}, "else": {"properties": {"sha256": {"$ref": "#/$defs/sha256"}, "missingReason": {"type": "null"}}}}
@@ -114,14 +116,16 @@
       "required": ["file", "functionName", "runtimeRelease", "debugKey", "positionKind"],
       "properties": {
         "file": {"$ref": "#/$defs/nullableText"}, "functionName": {"$ref": "#/$defs/nullableText"}, "runtimeRelease": {"$ref": "#/$defs/nullableText"}, "debugKey": {"$ref": "#/$defs/nullableText"},
-        "positionKind": {"enum": ["line_column", "function_pc", "unknown"]},
+        "positionKind": {"enum": ["line_column", "function_pc", "reported", "unknown"]},
         "line": {"type": "integer", "minimum": 1}, "column": {"type": "integer", "minimum": 0},
-        "functionId": {"type": "integer", "minimum": 0}, "pc": {"type": "integer", "minimum": 0}
+        "functionId": {"type": "integer", "minimum": 0}, "pc": {"type": "integer", "minimum": 0},
+        "reportedFirst": {"type": "integer", "minimum": 0}, "reportedSecond": {"type": "integer", "minimum": 0}
       },
       "oneOf": [
-        {"properties": {"positionKind": {"const": "line_column"}}, "required": ["line", "column"], "not": {"anyOf": [{"required": ["functionId"]}, {"required": ["pc"]}]}},
-        {"properties": {"positionKind": {"const": "function_pc"}}, "required": ["functionId", "pc"], "not": {"anyOf": [{"required": ["line"]}, {"required": ["column"]}]}},
-        {"properties": {"positionKind": {"const": "unknown"}}, "not": {"anyOf": [{"required": ["line"]}, {"required": ["column"]}, {"required": ["functionId"]}, {"required": ["pc"]}]}}
+        {"properties": {"positionKind": {"const": "line_column"}}, "required": ["line", "column"], "not": {"anyOf": [{"required": ["functionId"]}, {"required": ["pc"]}, {"required": ["reportedFirst"]}, {"required": ["reportedSecond"]}]}},
+        {"properties": {"positionKind": {"const": "function_pc"}}, "required": ["functionId", "pc"], "not": {"anyOf": [{"required": ["line"]}, {"required": ["column"]}, {"required": ["reportedFirst"]}, {"required": ["reportedSecond"]}]}},
+        {"properties": {"positionKind": {"const": "reported"}}, "required": ["reportedFirst", "reportedSecond"], "not": {"anyOf": [{"required": ["line"]}, {"required": ["column"]}, {"required": ["functionId"]}, {"required": ["pc"]}]}},
+        {"properties": {"positionKind": {"const": "unknown"}}, "not": {"anyOf": [{"required": ["line"]}, {"required": ["column"]}, {"required": ["functionId"]}, {"required": ["pc"]}, {"required": ["reportedFirst"]}, {"required": ["reportedSecond"]}]}}
       ]
     },
     "jsError": {

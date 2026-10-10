@@ -45,17 +45,19 @@ final class LynxMonitorScope {
                 self?.setBackground(false)
             }
         ]
-        record(.load(phase: .started, reasonCode: nil, durationMs: nil))
     }
 
     deinit { notifications.forEach(NotificationCenter.default.removeObserver) }
 
-    func setRequest(source: LynxMonitorBundleSource, appId: String?, bundleName: String?) {
+    func setRequest(source: LynxMonitorBundleSource, appId: String?, bundleName: String?,
+                    otaScope: LynxBundleMonitoringScope? = nil) {
         lock.monitorLocked {
             guard !closed, !boundBytes else { return }
-            bundle = .init(source: source, lynxAppId: appId, bundleName: bundleName, releaseId: nil,
+            bundle = .init(source: source, env: otaScope?.env, hostApp: otaScope?.hostApp,
+                           lynxAppId: appId, bundleName: bundleName, bundlePath: nil, releaseId: nil,
                            releaseSequence: nil, sha256: nil, identityStatus: .unavailable,
                            missingReason: "bytes_not_resolved", buildId: nil)
+            emitLocked(.load(phase: .started, reasonCode: nil, durationMs: nil))
         }
     }
 
@@ -63,10 +65,12 @@ final class LynxMonitorScope {
         lock.monitorLocked {
             guard !closed, !boundBytes else { return }
             bundle = .init(source: prepared.source == "embedded_baseline" ? .embedded : .ota,
+                           env: prepared.env, hostApp: prepared.hostApp,
                            lynxAppId: prepared.lynxAppId, bundleName: prepared.bundleName,
+                           bundlePath: prepared.bundlePath,
                            releaseId: prepared.releaseId, releaseSequence: prepared.releaseSequence,
                            sha256: nil, identityStatus: .unavailable, missingReason: "bytes_not_resolved", buildId: nil)
-            expectedSHA = prepared.releaseLease?.bundle.bundleSha256
+            expectedSHA = prepared.expectedSha256?
                 .lowercased().replacingOccurrences(of: "sha256:", with: "")
         }
     }
@@ -80,7 +84,9 @@ final class LynxMonitorScope {
         guard !closed, !boundBytes, let original = bundle else { return }
         let matches = expectedSHA.map { $0 == sha }
         boundBytes = true
-        bundle = .init(source: original.source, lynxAppId: original.lynxAppId, bundleName: original.bundleName,
+        bundle = .init(source: original.source, env: original.env, hostApp: original.hostApp,
+                       lynxAppId: original.lynxAppId, bundleName: original.bundleName,
+                       bundlePath: original.bundlePath,
                        releaseId: matches == false ? nil : original.releaseId,
                        releaseSequence: matches == false ? nil : original.releaseSequence,
                        sha256: sha, identityStatus: matches == true ? .verified : .computed,
@@ -195,14 +201,16 @@ final class LynxMonitorScope {
         }
     }
 
-    func jsError(code: String, subCode: String, level: String, realm: String, message: String, stack: String?, truncated: [String]) {
+    func jsError(code: String, subCode: String, level: String, realm: String, message: String, stack: String?,
+                 sdkErrorJSON: String? = nil, truncated: [String]) {
         lock.monitorLocked {
             guard !closed else { runtime.counts("late_callback_dropped"); return }
             let value = LynxMonitorJSError(errorCode: code, subCode: subCode, level: level, realm: realm,
                                            message: message, rawStack: stack, frames: [], handled: "unknown",
-                                           phase: ambiguous ? "unknown" : (firstContent ? "running" : "loading"))
+                                           phase: ambiguous ? "unknown" : (firstContent ? "running" : "loading"),
+                                           sdkErrorJSON: sdkErrorJSON)
             emitLocked(.jsError(value),
-                       missing: stack == nil ? ["rawStack"] : [],
+                       missing: stack == nil && sdkErrorJSON == nil ? ["rawStack"] : [],
                        truncated: truncated)
         }
     }

@@ -25,6 +25,13 @@ data class BundleIdentity internal constructor(
     val identityStatus: String = "unavailable",
     val missingReason: String? = "bytes_not_resolved",
     val buildId: String? = null,
+    val env: String? = null,
+    val hostApp: String? = null,
+    val bundlePath: String? = null,
+    /** 身份字段在进入 Provider 前已验证；质量标记只参与当前事件，不写入 Bundle 身份契约。 */
+    val identityMissingFields: List<String> = emptyList(),
+    val identityInvalidFields: List<String> = emptyList(),
+    val identityTruncatedFields: List<String> = emptyList(),
 )
 
 class EventQuality internal constructor(
@@ -67,6 +74,8 @@ class PerformancePayload internal constructor(
 sealed class ErrorPosition {
     data class LineColumn(val line: Int, val column: Int) : ErrorPosition()
     data class FunctionPc(val functionId: Int, val pc: Int) : ErrorPosition()
+    /** SDK 原始数字对，格式由配套调试资料决定。 */
+    data class Reported(val first: Int, val second: Int) : ErrorPosition()
     object Unknown : ErrorPosition()
 }
 data class ErrorFrame internal constructor(
@@ -132,7 +141,8 @@ class MonitorEvent internal constructor(
         "loadId" to loadId, "loadKind" to loadKind?.wire, "bundle" to bundle?.let {
             linkedMapOf("source" to it.source, "lynxAppId" to it.lynxAppId, "bundleName" to it.bundleName,
                 "releaseId" to it.releaseId, "releaseSequence" to it.releaseSequence, "sha256" to it.sha256,
-                "identityStatus" to it.identityStatus, "missingReason" to it.missingReason, "buildId" to it.buildId)
+                "identityStatus" to it.identityStatus, "missingReason" to it.missingReason, "buildId" to it.buildId,
+                "env" to it.env, "hostApp" to it.hostApp, "bundlePath" to it.bundlePath)
         },
         "visibility" to visibility.wire,
         "quality" to linkedMapOf("association" to quality.association, "late" to quality.late,
@@ -160,6 +170,7 @@ class MonitorEvent internal constructor(
                 when (val position = frame.position) {
                     is ErrorPosition.LineColumn -> { put("positionKind", "line_column"); put("line", position.line); put("column", position.column) }
                     is ErrorPosition.FunctionPc -> { put("positionKind", "function_pc"); put("functionId", position.functionId); put("pc", position.pc) }
+                    is ErrorPosition.Reported -> { put("positionKind", "reported"); put("reportedFirst", position.first); put("reportedSecond", position.second) }
                     ErrorPosition.Unknown -> put("positionKind", "unknown")
                 }
             } })

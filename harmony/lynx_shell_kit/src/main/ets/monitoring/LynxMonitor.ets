@@ -1,5 +1,6 @@
 import {
   BundleIdentity,
+  BundleIdentityValue,
   ContainerKind,
   EventEnvelope,
   EventEnvelopeValue,
@@ -436,7 +437,10 @@ export class ViewMonitorBinding {
   }
 
   setBundle(bundle: BundleIdentity): void {
-    if (!this.closed) this.bundle = bundle;
+    // ArkTS 禁止 Object.freeze；逐字段复制到只读值类型，隔离上游对象后续修改。
+    if (!this.closed) this.bundle = new BundleIdentityValue(bundle.source, bundle.lynxAppId,
+      bundle.bundleName, bundle.releaseId, bundle.releaseSequence, bundle.sha256,
+      bundle.identityStatus, bundle.missingReason, bundle.buildId, bundle.env, bundle.hostApp, bundle.bundlePath);
   }
 
   setLoadKind(kind: LoadKind): void {
@@ -510,8 +514,11 @@ export class ViewMonitorBinding {
     this.record('lynx.performance', payload, 'performance');
   }
 
-  jsError(payload: JsErrorPayload): void {
-    this.record('lynx.js_error', payload, 'error');
+  jsError(payload: JsErrorPayload, missingFields: string[] = [], truncatedFields: string[] = []): void {
+    if (this.closed) return;
+    this.monitor.record(new MonitorEventValue(
+      this.envelope('error', new EventSamplingValue('none', null), missingFields, truncatedFields),
+      'lynx.js_error', payload));
   }
 
   resource(payload: ResourcePayload): void {
@@ -536,10 +543,19 @@ export class ViewMonitorBinding {
     this.monitor.record(new MonitorEventValue(this.envelope(group, sampling), eventType, payload));
   }
 
-  private envelope(group: string, sampling: EventSampling): EventEnvelope {
+  private envelope(group: string, sampling: EventSampling, missingFields: string[] = [], truncatedFields: string[] = []): EventEnvelope {
     const exactLoad = !this.ambiguous && this.bundle !== null;
+    const missing = this.ambiguous ? ['bundle', 'loadId'] : this.bundle === null ? ['bundle'] : [];
+    if (!this.ambiguous && this.bundle !== null) {
+      if (this.bundle.env === null) missing.push('bundle.env');
+      if (this.bundle.hostApp === null) missing.push('bundle.hostApp');
+      if (this.bundle.lynxAppId === null) missing.push('bundle.lynxAppId');
+      if (this.bundle.bundleName === null) missing.push('bundle.bundleName');
+      if (this.bundle.bundlePath === null) missing.push('bundle.bundlePath');
+      if (this.bundle.sha256 === null) missing.push('bundle.sha256');
+    }
     const quality = new EventQualityValue(exactLoad ? 'exact_load' : 'exact_view', false,
-      this.ambiguous ? ['bundle', 'loadId'] : this.bundle === null ? ['bundle'] : [], [], []);
+      missing.concat(missingFields), [], truncatedFields.slice());
     const envelope: EventEnvelope = new EventEnvelopeValue(
       '1.0', group, monitorId('event'), this.processSessionId, new Date().getTime(), 'harmony',
       this.runtimeVersion, this.hostBuild, this.viewId, this.nativeInstanceId, this.containerKind,

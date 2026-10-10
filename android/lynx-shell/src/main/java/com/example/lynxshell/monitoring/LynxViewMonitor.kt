@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import com.example.lynxshell.model.LynxPageRequest
 import com.example.lynxshell.ota.PreparedActivityBundle
+import com.example.lynxshell.ota.OtaMonitoringScope
 import com.lynx.tasm.LynxError
 import com.lynx.tasm.LynxView
 import com.lynx.tasm.LynxViewClient
@@ -16,26 +17,75 @@ import java.security.MessageDigest
 import java.util.UUID
 
 internal object BundleIdentities {
-    fun attempted(request: LynxPageRequest): BundleIdentity = attempted(request.bundleUrl, request.lynxAppId, request.bundleName)
-    fun attempted(url: String, appId: String?, bundleName: String?): BundleIdentity = BundleIdentity(
-        source = if (appId != null && bundleName != null) "ota" else if (LynxPageRequest.isRemoteBundleUrl(url)) "direct_https" else "direct_asset",
-        lynxAppId = appId?.takeIf(String::isNotBlank)?.let { utf8Prefix(it, 256) },
-        // 只提取不含 query/fragment 的逻辑末级文件名，不把原始 URL 放进事件。
-        bundleName = (bundleName ?: url.substringBefore('?').substringBefore('#').substringAfterLast('/'))
-            .takeIf(String::isNotBlank)?.let { utf8Prefix(it, 256) },
-    )
+    fun attempted(request: LynxPageRequest, scope: OtaMonitoringScope? = null): BundleIdentity =
+        attempted(request.bundleUrl, request.lynxAppId, request.bundleName, scope)
+    fun attempted(url: String, appId: String?, bundleName: String?, scope: OtaMonitoringScope? = null): BundleIdentity {
+        val ota = appId != null && bundleName != null
+        val metadata = metadata(scope?.env, scope?.hostApp, null, requireScope = ota, requirePath = false)
+        return BundleIdentity(
+            env = metadata.env, hostApp = metadata.hostApp,
+            source = if (ota) "ota" else if (LynxPageRequest.isRemoteBundleUrl(url)) "direct_https" else "direct_asset",
+            lynxAppId = appId?.takeIf(String::isNotBlank)?.let { utf8Prefix(it, 256) },
+            // 只提取不含 query/fragment 的逻辑末级文件名，不把原始 URL 放进事件。
+            bundleName = (bundleName ?: url.substringBefore('?').substringBefore('#').substringAfterLast('/'))
+                .takeIf(String::isNotBlank)?.let { utf8Prefix(it, 256) },
+            identityMissingFields = frozen(metadata.missing),
+            identityInvalidFields = frozen(metadata.invalid),
+            identityTruncatedFields = frozen(metadata.truncated),
+        )
+    }
 
     fun prepared(value: PreparedActivityBundle): BundleIdentity {
         val hash = value.sha256?.removePrefix("sha256:")?.lowercase()?.takeIf { SHA.matches(it) }
+        val metadata = metadata(value.env, value.hostApp, value.bundlePath, requireScope = true, requirePath = true)
         return BundleIdentity(
+            env = metadata.env, hostApp = metadata.hostApp, bundlePath = metadata.bundlePath,
             source = if (value.source == "embedded_baseline") "embedded" else "ota",
             lynxAppId = utf8Prefix(value.lynxAppId, 256), bundleName = utf8Prefix(value.bundleName, 256),
             releaseId = value.releaseId?.takeIf(String::isNotBlank)?.let { utf8Prefix(it, 256) },
             releaseSequence = value.releaseSequence?.takeIf { SEQUENCE.matches(it) },
             sha256 = hash, identityStatus = if (hash != null) "verified" else "unavailable",
             missingReason = if (hash != null) null else "verified_hash_unavailable",
+            identityMissingFields = frozen(metadata.missing),
+            identityInvalidFields = frozen(metadata.invalid),
+            identityTruncatedFields = frozen(metadata.truncated),
         )
     }
+
+    private fun metadata(
+        env: String?, hostApp: String?, bundlePath: String?, requireScope: Boolean, requirePath: Boolean,
+    ): IdentityMetadata {
+        val missing = mutableListOf<String>()
+        val invalid = mutableListOf<String>()
+        val truncated = mutableListOf<String>()
+        fun opaque(value: String?, field: String): String? = when {
+            value == null -> { missing.add(field); null }
+            value.isBlank() -> { invalid.add(field); null }
+            value.toByteArray(Charsets.UTF_8).size > MAX_IDENTITY_FIELD_BYTES -> { truncated.add(field); null }
+            else -> value
+        }
+        val resolvedEnv = if (requireScope) opaque(env, "bundle.env") else null
+        val resolvedHostApp = if (requireScope) opaque(hostApp, "bundle.hostApp") else null
+        val resolvedPath = when (val path = if (requirePath) opaque(bundlePath, "bundle.bundlePath") else null) {
+            null -> null
+            else -> if (isLogicalBundlePath(path)) path else {
+                invalid.add("bundle.bundlePath")
+                null
+            }
+        }
+        return IdentityMetadata(resolvedEnv, resolvedHostApp, resolvedPath, missing, invalid, truncated)
+    }
+
+    private fun isLogicalBundlePath(value: String): Boolean =
+        !value.startsWith('/') && !value.startsWith('\\') && !value.contains('\\') && !value.contains('\u0000') &&
+            !value.contains("://") && value.split('/').none { it.isEmpty() || it == "." || it == ".." }
+
+    private data class IdentityMetadata(
+        val env: String?, val hostApp: String?, val bundlePath: String?,
+        val missing: List<String>, val invalid: List<String>, val truncated: List<String>,
+    )
+
+    private const val MAX_IDENTITY_FIELD_BYTES = 2048
     private val SHA = Regex("[0-9a-f]{64}")
     private val SEQUENCE = Regex("0|[1-9][0-9]*")
 }
@@ -263,11 +313,15 @@ class LynxViewMonitor internal constructor(
     }
 
     private fun event(payload: MonitorPayload, missing: List<String> = emptyList(), invalid: List<String> = emptyList(),
-        truncated: List<String> = emptyList(), sampling: Sampling = Sampling("none", 1.0)): MonitorEvent =
-        MonitorEvent(UUID.randomUUID().toString(), runtime.host.processSessionId, System.currentTimeMillis(),
+        truncated: List<String> = emptyList(), sampling: Sampling = Sampling("none", 1.0)): MonitorEvent {
+        val identityMissing = if (ambiguous) emptyList() else bundle.identityMissingFields
+        val identityInvalid = if (ambiguous) emptyList() else bundle.identityInvalidFields
+        val identityTruncated = if (ambiguous) emptyList() else bundle.identityTruncatedFields
+        return MonitorEvent(UUID.randomUUID().toString(), runtime.host.processSessionId, System.currentTimeMillis(),
             runtime.host.runtimeVersion, runtime.host.hostBuild, viewId, nativeInstanceId, kind,
             if (ambiguous) null else loadId, if (ambiguous) null else loadKind, if (ambiguous) null else bundle,
             visibility(), EventQuality(if (ambiguous) "exact_view" else "exact_load", missingFields =
-                missing + if (ambiguous) listOf("ambiguous_load") else if (bundle.sha256 == null) listOf("bundle.sha256") else emptyList(),
-                invalidFields = invalid, truncatedFields = truncated), sampling, payload)
+                missing + identityMissing + if (ambiguous) listOf("ambiguous_load") else if (bundle.sha256 == null) listOf("bundle.sha256") else emptyList(),
+                invalidFields = invalid + identityInvalid, truncatedFields = truncated + identityTruncated), sampling, payload)
+    }
 }

@@ -359,3 +359,30 @@ fallback）。`wx://hero-sheet` 则使用普通全屏透明 VC：原生只负责
 页面调用、七种 preset、`onRouteDone`、`prepareRoute / markTransitionReady /
 getTransitionState`、两阶段提交和降级规则见根目录
 [TRANSITIONS_README.md](../TRANSITIONS_README.md)。
+
+## Provider 错误与 Bundle 身份
+
+`LynxMonitorProvider.record(event:)` 的 `bundle` 增加可选 `env`、`hostApp`，它们来自同次加载
+实际 Prepared Release/导航快照的 OTA 上下文。普通 Runtime 的内置 fallback 使用初始化时固定的
+OTA 作用域；无 OTA 配置的 embedded-only、Debug mock 和直接 URL 加载保持未知，不使用
+原生 App 包名或报错时的最新 Release 补值。`load.started` 在请求身份绑定后发出。
+
+可选 `bundlePath` 使用 lease 或导航快照里实际命中的包路径，内置直读只使用 Manifest 明确
+提供的逻辑路径；缺失及直接 URL 加载保持空，不从 URL 或包名推断。它用于区分同一 Release
+内复用同一 SHA 的不同页面 owner，实际字节 SHA 计算后继续保留该字段。
+
+Bundle 的 `sha256` 仍由资源读取线程对实际交付给 Lynx 的 Data 计算，并与 Prepared 的 lease、
+导航快照或内置 registry SHA 核对。不一致时保留实际 SHA，但清除 Release ID/顺序号并记录诊断；
+同 View 重载无法证明归属时，继续以 `exact_view` 和空 Bundle 降级。
+
+Lynx 4.1 将 JS 错误的 `rawError` 和 `sentry.exception.values[].stacktrace.frames` 写入
+`LynxError.summaryMessage`。SDK 回调只复制最多 24 KiB 的结构化文本，串行监控交付线程解析
+并投影最多 64 帧，仅输出消息、原始栈和白名单帧字段，内部完整 JSON 不编码或交给 Provider。
+超出范围在 `quality.truncatedFields` 明确标记。实际 `release=debugmetadata:<key>` 保留为
+帧 `runtimeRelease/debugKey`；未声明格式的 `lineno/colno` 保留为 `positionKind=reported`
+及 `reportedFirst/reportedSecond`，由对应构建资料选择行列或字节码解释，不在采集端猜测。
+结构化文本超限不把 JSON 片段作为消息外发。非合法调试标识清空并标记 `invalidFields`；
+缺失消息、帧调试 key 或数字格式在去重后的 `missingFields` 中明确披露。
+
+Provider 不新增 SourceMap 读取、网络上传或原生 Bridge 方法。构建、实际 SDK 错误载荷与
+监控平台送达需分别验证；本轮本地验证结果见 SourceMap 实施报告。

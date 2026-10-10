@@ -17,8 +17,11 @@ public enum LynxMonitorIdentityStatus: String, Codable { case verified, computed
 /** 只描述实际交给当前加载的字节；不持有 OTA Store 或可变 GlobalProps。 */
 public struct LynxMonitorBundleIdentity: Encodable {
     public let source: LynxMonitorBundleSource
+    public let env: String?
+    public let hostApp: String?
     public let lynxAppId: String?
     public let bundleName: String?
+    public let bundlePath: String?
     public let releaseId: String?
     public let releaseSequence: String?
     public let sha256: String?
@@ -27,13 +30,16 @@ public struct LynxMonitorBundleIdentity: Encodable {
     public let buildId: String?
 
     enum CodingKeys: String, CodingKey {
-        case source, lynxAppId, bundleName, releaseId, releaseSequence, sha256, identityStatus, missingReason, buildId
+        case source, env, hostApp, lynxAppId, bundleName, bundlePath, releaseId, releaseSequence, sha256, identityStatus, missingReason, buildId
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(source, forKey: .source)
+        try c.encode(env, forKey: .env)
+        try c.encode(hostApp, forKey: .hostApp)
         try c.encode(lynxAppId, forKey: .lynxAppId)
         try c.encode(bundleName, forKey: .bundleName)
+        try c.encode(bundlePath, forKey: .bundlePath)
         try c.encode(releaseId, forKey: .releaseId)
         try c.encode(releaseSequence, forKey: .releaseSequence)
         try c.encode(sha256, forKey: .sha256)
@@ -92,6 +98,8 @@ public struct LynxMonitorErrorFrame: Encodable {
     public enum Position {
         case lineColumn(line: Int, column: Int)
         case functionPC(functionId: Int, pc: Int)
+        // SDK 未声明数字含义时，由同次构建调试资料决定行列或字节码位置。
+        case reported(first: Int, second: Int)
         case unknown
     }
     public let file: String?
@@ -100,7 +108,7 @@ public struct LynxMonitorErrorFrame: Encodable {
     public let debugKey: String?
     public let position: Position
     enum CodingKeys: String, CodingKey {
-        case file, functionName, runtimeRelease, debugKey, positionKind, line, column, functionId, pc
+        case file, functionName, runtimeRelease, debugKey, positionKind, line, column, functionId, pc, reportedFirst, reportedSecond
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -117,6 +125,10 @@ public struct LynxMonitorErrorFrame: Encodable {
             try c.encode("function_pc", forKey: .positionKind)
             try c.encode(functionId, forKey: .functionId)
             try c.encode(pc, forKey: .pc)
+        case let .reported(first, second):
+            try c.encode("reported", forKey: .positionKind)
+            try c.encode(first, forKey: .reportedFirst)
+            try c.encode(second, forKey: .reportedSecond)
         case .unknown: try c.encode("unknown", forKey: .positionKind)
         }
     }
@@ -132,6 +144,8 @@ public struct LynxMonitorJSError: Encodable {
     public let frames: [LynxMonitorErrorFrame]
     public let handled: String
     public let phase: String
+    // 仅在串行交付线程解析的有界 SDK 文本，禁止编码给 Provider。
+    let sdkErrorJSON: String?
     enum CodingKeys: String, CodingKey { case errorCode, subCode, level, realm, message, rawStack, frames, handled, phase }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)

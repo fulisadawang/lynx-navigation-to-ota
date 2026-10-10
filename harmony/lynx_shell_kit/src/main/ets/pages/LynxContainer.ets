@@ -356,14 +356,19 @@ export struct LynxContainer {
 
   private prepareDirectBundle(): void {
     const generation = this.prepareGeneration; const signal = this.prepareSignal;
+    const monitorClient = this.clients[0];
+    const bundleUrl = this.request.bundleUrl;
     const token = this.request.preparedRouteToken; this.request.preparedRouteToken = '';
     const prepared = token.length > 0 ? ShellPreparedRouteStore.shared.consume(token, this.request, signal) : Promise.resolve<PreparedPageBundle | null>(null);
     prepared.then((bundle: PreparedPageBundle | null) => {
       if (!this.alive || generation !== this.prepareGeneration || signal.cancelled) { bundle?.lease?.close(); return; }
-      if (bundle !== null) {
-        this.templateFetcher.cancelAll();
-        this.templateFetcher = new ShellTemplateResourceFetcher(this.request.allowHttpInDebug, this.request.bundleUrl, '', '', bundle.bytes ?? null, bundle.asyncResolver);
-      } else if (token.length > 0) { this.clients[0]?.markBundleUnavailable('prepared_route_expired', this.request.bundleUrl); }
+      this.templateFetcher.cancelAll();
+      this.templateFetcher = new ShellTemplateResourceFetcher(
+        this.request.allowHttpInDebug, bundle !== null ? bundleUrl : '', '', '',
+        bundle?.bytes ?? null, bundle?.asyncResolver, bundleUrl,
+        monitorClient?.monitoringEnabled === true ? (sha256: string | null) => {
+          if (generation === this.prepareGeneration && !signal.cancelled) monitorClient.setDirectBundle(bundleUrl, sha256);
+        } : undefined);
       this.extraTiming.prepareTemplateEnd = Date.now();
       this.clients[0]?.markBundleUnavailable('direct_bundle_identity_unavailable', this.request.bundleUrl);
       this.clients[0]?.markLoadStarted(); this.showLynxView = true;
@@ -472,7 +477,8 @@ export struct LynxContainer {
         );
         this.clients[0]?.setPreparedBundle(
           prepared.source ?? 'ota_current', prepared.lynxAppId, prepared.bundleName,
-          prepared.releaseId, prepared.releaseSequence ?? null, prepared.sha256
+          prepared.releaseId, prepared.releaseSequence ?? null, prepared.sha256,
+          prepared.env ?? null, prepared.hostApp ?? null, prepared.bundlePath ?? null
         );
         this.clients[0]?.markLoadResolved(null);
         this.clients[0]?.markLoadStarted();

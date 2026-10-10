@@ -161,17 +161,34 @@ internal object MonitorProjection {
         val json = if (encoded.startsWith("{")) {
             try { JSONObject(encoded) } catch (_: Exception) { invalid.add("sdk_error_json"); null }
         } else null
+        val nested = json?.opt("error")
+        val report = when {
+            nested is JSONObject -> nested
+            nested is String && nested.startsWith("{") -> try { JSONObject(nested) }
+                catch (_: Exception) { invalid.add("sdk_error_body_json"); json }
+            else -> json
+        }
         if (error.truncatedInput) truncated.add("sdk_error_input")
-        val summary = error.summary.ifBlank { json?.optString("error").orEmpty() }
+        val summary = report?.optJSONObject("rawError")?.optString("message")?.takeIf(String::isNotBlank)
+            ?: report?.optString("message")?.takeIf(String::isNotBlank)
+            ?: error.summary.takeIf { !it.startsWith("{") }
+            ?: (nested as? String)?.takeIf { !it.startsWith("{") }.orEmpty()
+        if (summary.isBlank()) missing.add("message")
         val message = policy.sanitize(summary).let { value -> utf8Prefix(value, 4096).also { if (it.length < value.length) truncated.add("message") } }
-        val stack = json?.optString("error_stack")?.takeIf(String::isNotBlank)
+        val stack = report?.optJSONObject("rawError")?.optString("stack")?.takeIf(String::isNotBlank)
+            ?: report?.optString("error_stack")?.takeIf(String::isNotBlank)
+            ?: report?.optString("stack")?.takeIf(String::isNotBlank)
+            ?: json?.optString("error_stack")?.takeIf(String::isNotBlank)
             ?: summary.takeIf { it.lineSequence().any { line -> line.trimStart().startsWith("at ") } }
         val rawStack = stack?.let { policy.sanitize(it) }?.let { value ->
             utf8Prefix(value, 16 * 1024).also { if (it.length < value.length) truncated.add("rawStack") }
         }
         if (rawStack == null) missing.add("rawStack")
-        val release = json?.optString("release")?.takeIf { it.startsWith("debugmetadata:") }
-        val frames = parseFrames(rawStack.orEmpty(), release, truncated, formats)
+        val rawRelease = report?.optString("release")?.takeIf(String::isNotBlank)
+        val release = debugMetadata(rawRelease)
+        if (rawRelease != null && release == null) invalid.add("sdk_release")
+        val structured = sdkFrames(report, policy, truncated, invalid, formats)
+        val frames = structured.ifEmpty { parseFrames(rawStack.orEmpty(), release, truncated, formats) }
         if (frames.isEmpty()) missing.add("frames")
         if (frames.any { it.debugKey == null }) missing.add("frames.debugKey")
         if (frames.any { it.position == ErrorPosition.Unknown }) missing.add("frames.positionKind")
@@ -189,7 +206,7 @@ internal object MonitorProjection {
             if (position == null && explicitPc == null) continue
             if (result.size == 64 || frameBytes + line.toByteArray(Charsets.UTF_8).size > 6 * 1024) { truncated.add("frames"); break }
             frameBytes += line.toByteArray(Charsets.UTF_8).size
-            val runtimeRelease = DEBUG_KEY.find(line)?.value ?: release
+            val runtimeRelease = debugMetadataFromStack(line) ?: release
             val format = formats.find(runtimeRelease?.removePrefix("debugmetadata:"))
             val first = position?.groupValues?.get(2)?.toIntOrNull()
             val second = position?.groupValues?.get(3)?.toIntOrNull()
@@ -202,6 +219,7 @@ internal object MonitorProjection {
                 // 两个 realm 都可能遇到字节码；只使用本次构建登记的格式，不从文件名或 realm 猜测。
                 format == ScriptPositionFormat.FUNCTION_PC && first != null && second != null -> ErrorPosition.FunctionPc(first, second)
                 format == ScriptPositionFormat.LINE_COLUMN && first != null && first > 0 && second != null -> ErrorPosition.LineColumn(first, second)
+                first != null && second != null -> ErrorPosition.Reported(first, second)
                 else -> ErrorPosition.Unknown
             }
             val function = line.trim().removePrefix("at ").substringBefore(" (").takeIf { " (" in line }?.let { utf8Prefix(it, 256) }
@@ -211,7 +229,47 @@ internal object MonitorProjection {
         return result
     }
 
+    /** 官方错误报告的逐帧 release 比整段文本的单一 release 更准确。 */
+    private fun sdkFrames(report: JSONObject?, policy: MonitorTextPolicy, truncated: MutableList<String>, invalid: MutableList<String>,
+        formats: ScriptPositionFormats): List<ErrorFrame> {
+        val values = report?.optJSONObject("sentry")?.optJSONObject("exception")?.optJSONArray("values") ?: return emptyList()
+        val result = ArrayList<ErrorFrame>()
+        var bytes = 0
+        for (valueIndex in 0 until values.length()) {
+            val frames = values.optJSONObject(valueIndex)?.optJSONObject("stacktrace")?.optJSONArray("frames") ?: continue
+            for (frameIndex in 0 until frames.length()) {
+                val frame = frames.optJSONObject(frameIndex) ?: continue
+                val file = frame.optString("filename").takeIf(String::isNotBlank)?.let { utf8Prefix(policy.sanitize(it), 1024) }
+                val name = frame.optString("function").takeIf(String::isNotBlank)?.let { utf8Prefix(policy.sanitize(it), 256) }
+                val rawRelease = frame.optString("release").takeIf(String::isNotBlank)
+                val release = debugMetadata(rawRelease)
+                if (rawRelease != null && release == null) invalid.add("frames.release")
+                val first = frame.optString("lineno").toIntOrNull()
+                val second = frame.optString("colno").toIntOrNull()
+                val format = formats.find(release?.removePrefix("debugmetadata:"))
+                val position = when {
+                    first == null || second == null || first < 0 || second < 0 -> ErrorPosition.Unknown
+                    format == ScriptPositionFormat.FUNCTION_PC -> ErrorPosition.FunctionPc(first, second)
+                    format == ScriptPositionFormat.LINE_COLUMN && first > 0 -> ErrorPosition.LineColumn(first, second)
+                    else -> ErrorPosition.Reported(first, second)
+                }
+                bytes += (file.orEmpty() + name.orEmpty() + release.orEmpty()).toByteArray(Charsets.UTF_8).size
+                if (result.size == 64 || bytes > 6 * 1024) { truncated.add("frames"); return result }
+                result.add(ErrorFrame(file, name, release, release?.removePrefix("debugmetadata:"), position))
+            }
+        }
+        return result
+    }
+
     private val LOCATION = Regex("(?:\\(|@|\\s)((?:file://|https?://|/)?[^\\s()]+?):([0-9]+):([0-9]+)\\)?")
     private val FUNCTION_PC = Regex("function[_ ]?id\\s*[:=]\\s*([0-9]+).*?pc(?:_index)?\\s*[:=]\\s*([0-9]+)", RegexOption.IGNORE_CASE)
-    private val DEBUG_KEY = Regex("debugmetadata:[A-Za-z0-9._/-]+")
+    private fun debugMetadata(value: String?): String? = value?.takeIf {
+        it.length <= MAX_DEBUG_METADATA_CHARS && DEBUG_METADATA.matches(it)
+    }
+
+    private fun debugMetadataFromStack(line: String): String? = DEBUG_KEY.find(line)?.value?.let(::debugMetadata)
+
+    private const val MAX_DEBUG_METADATA_CHARS = 1024
+    private val DEBUG_METADATA = Regex("^debugmetadata:[A-Za-z0-9._/-]+$")
+    private val DEBUG_KEY = Regex("debugmetadata:[A-Za-z0-9._/-]+(?=\$|[\\s)\\],;])")
 }

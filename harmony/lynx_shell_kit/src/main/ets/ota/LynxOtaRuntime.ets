@@ -661,6 +661,10 @@ export default class LynxOtaRuntime implements PageBundleRuntime {
     try {
       this.guard(context, signal);
       if (prepared.userIdentityEpoch !== undefined && prepared.userIdentityEpoch !== context.identityEpoch) throw new Error('stale_identity');
+      if ((prepared.env !== undefined && prepared.env !== context.env) ||
+        (prepared.hostApp !== undefined && prepared.hostApp !== context.hostApp)) throw new Error('prepared_scope_mismatch');
+      prepared.env = context.env;
+      prepared.hostApp = context.hostApp;
       prepared.userIdentityEpoch = context.identityEpoch;
       return prepared;
     } catch (error) { this.closePrepared(prepared); throw (error as Error); }
