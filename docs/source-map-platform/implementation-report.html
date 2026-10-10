@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Provider 身份与 SourceMap 管理 · 实施报告</title>
+  <style>
+    :root{--ink:#182336;--muted:#53627a;--line:#dce4ef;--paper:#fff;--back:#f4f7fb;--blue:#254ac2;--blue-soft:#edf2ff;--green:#14684b;--green-soft:#e8f6ee;--amber:#8a4b07;--amber-soft:#fff5df;--radius:18px}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--back);color:var(--ink);font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}a{color:var(--blue);text-underline-offset:3px}a:focus-visible,summary:focus-visible{outline:3px solid #92adff;outline-offset:4px}h1,h2,h3{line-height:1.35;letter-spacing:-.025em}h1{font-size:clamp(30px,4vw,46px);margin:16px 0 18px}h2{font-size:25px;margin:0 0 18px}h3{font-size:18px;margin:22px 0 10px}p{margin:10px 0 16px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.87em;overflow-wrap:anywhere;background:#eef2f7;padding:2px 5px;border-radius:5px}strong{font-weight:650}.shell{max-width:1240px;margin:0 auto;padding:48px 28px 72px}.eyebrow{color:var(--blue);font-size:12px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}.lead{max-width:890px;font-size:18px;color:var(--muted)}.meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:13px}.layout{display:grid;grid-template-columns:188px minmax(0,1fr);gap:30px;margin-top:34px}nav{position:sticky;top:28px;align-self:start;padding:18px 12px;border-top:2px solid var(--ink)}nav strong{font-size:13px}nav a{display:block;color:var(--muted);font-size:13px;text-decoration:none;margin-top:14px}nav a:hover{color:var(--blue)}main{min-width:0}.section{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:30px;margin-bottom:22px}.number{display:inline-block;font-size:12px;letter-spacing:.1em;color:var(--blue);margin-bottom:7px;font-weight:700}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:24px 0}.card{padding:20px;border-radius:14px;background:var(--blue-soft)}.card .value{font-size:28px;font-weight:700;line-height:1.25;color:var(--blue)}.card .label{color:var(--muted);font-size:13px;margin-top:9px}.notice{padding:18px 20px;border-radius:12px;background:var(--amber-soft);color:var(--amber);margin:18px 0}.notice p{margin:5px 0}.ok{background:var(--green-soft);color:var(--green)}.pill{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:650;white-space:nowrap}.pass{background:var(--green-soft);color:var(--green)}.partial{background:var(--amber-soft);color:var(--amber)}.pending{background:#eef1f6;color:var(--muted)}.table-wrap{overflow-x:auto;margin:18px 0}table{border-collapse:collapse;width:100%;font-size:13px;text-align:left;min-width:580px}th{background:#f3f6fa;color:var(--muted);font-weight:650}td,th{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:top}td:first-child{font-weight:550}small,.caption{color:var(--muted);font-size:12px}.flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:22px 0}.step{flex:1;min-width:130px;background:#f6f8fc;border:1px solid var(--line);border-radius:12px;padding:16px 12px}.step b{display:block;font-size:14px}.step span{display:block;color:var(--muted);font-size:12px;margin-top:8px}.arrow{align-self:center;color:#8ea0ba;font-size:21px}.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}.subcard{border:1px solid var(--line);border-radius:12px;padding:18px}.subcard h3{margin:0 0 12px}ul,ol{padding-left:22px}li{margin:9px 0}details{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:15px 18px}summary{cursor:pointer;font-weight:600}details p{margin-top:15px}footer{margin:22px 0 0;color:var(--muted);font-size:12px}.evidence{display:flex;flex-wrap:wrap;gap:8px 20px;margin:14px 0}.evidence a{font-size:13px}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-word}
+    @media(max-width:900px){.shell{padding:30px 18px 50px}.layout{grid-template-columns:1fr;gap:18px}nav{position:static;display:flex;flex-wrap:wrap;gap:10px 18px;padding:12px 0}nav strong{width:100%}nav a{margin:0}.section{padding:24px}.cards{gap:9px}.card{padding:16px}.split{grid-template-columns:1fr}}
+    @media(max-width:540px){.cards{grid-template-columns:1fr}.card{display:flex;align-items:center;justify-content:space-between;gap:15px}.card .label{margin:0}.section{padding:21px 17px}.lead{font-size:16px}.flow{display:grid;grid-template-columns:1fr}.arrow{display:none}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+    @media print{body{background:white}.shell{padding:0}.layout{display:block}nav{display:none}.section{break-inside:avoid;border-color:#aaa}.notice{border:1px solid #aaa}a{color:inherit}.cards{grid-template-columns:repeat(3,1fr)}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="eyebrow">Lynx · SourceMap · 2026.10.09 — 10 更新</div>
+      <h1>从一条错误，找到正确的 Bundle 和源码</h1>
+      <p class="lead">三端 Provider 补齐业务身份，模板保存同次构建资料，Server 校验并反解，Admin 直接阅读源码。下面说明本轮已完成的能力、实际验证结果和正式启用条件。</p>
+      <div class="meta"><span>5 个项目 · 同一组独立 worktree</span><span>分支 codex/lynx-sourcemap-platform</span><span><a href="implementation-report.md">完整 Markdown 说明</a></span></div>
+    </header>
+    <div class="layout">
+      <nav aria-label="报告目录"><strong>目录</strong><a href="#outcome">01 本轮结论</a><a href="#identity">02 V1 / V2 / V3 怎么对应</a><a href="#flow">03 上传与查看链路</a><a href="#boundaries">04 缺失与失败</a><a href="#verification">05 验收结果</a><a href="#delivery">06 正式启用顺序</a><a href="#repos">07 项目与分支</a></nav>
+      <main>
+        <section class="section" id="outcome">
+          <span class="number">01 / OUTCOME</span><h2>源码接线与本地资料链路已完成</h2>
+          <p>Provider 的 JS 错误现在可以携带<strong>环境、OTA 宿主、Lynx App、Release、实际内容 SHA、主包路径和 SDK 逐帧调试 key</strong>。Admin 在主包、Async 包和独立 script 内容行提供 SourceMap 入口，可查看源码、粘贴原始错误栈或完整 Provider 事件，再点击已映射帧跳到对应代码。</p>
+          <div class="cards"><div class="card"><div class="value">6 份</div><div class="label">真实模板构建档案<br>3 主包 + 3 Async</div></div><div class="card"><div class="value">12 / 12</div><div class="label">合成定位帧全部 mapped<br>另 6 条主线程文本格式堆栈成功</div></div><div class="card"><div class="value">双端</div><div class="label">Android / iOS 本地编译通过<br>Harmony 保留基线阻断</div></div></div>
+          <div class="notice ok"><strong>Async 主线程资料已补齐</strong><p>归档已保存三个 Async 实际编码产生的调试表，主线程函数/PC 与后台位置均可反解。6 个 Bundle 字节和 SHA 与补齐前一致，没有关闭字节码或改写调试 key。</p></div>
+          <div class="notice"><strong>正式交付条件仍保留</strong><p>Contracts <code>0.4.0</code> 已真实打包联验，尚未远程发布。真实 OSS、正式数据库和三端实际 SDK 错误注入尚未验证。</p></div>
+          <p class="caption">本地编译、实际构建资料和模拟存储验证，不能替代三端真机错误、真实 OSS、正式数据库及外部监控平台验证。本轮没有执行包发布、真实数据库迁移、OSS 上传或生产部署。</p>
+        </section>
+        <section class="section" id="identity">
+          <span class="number">02 / IDENTITY</span><h2>发布版本、包内容、脚本 Map，分别关联</h2>
+          <div class="table-wrap"><table><thead><tr><th>身份</th><th>回答什么</th><th>从哪里取</th></tr></thead><tbody>
+            <tr><td><code>env + hostApp + lynxAppId</code></td><td>哪个环境、逻辑宿主和业务 App</td><td>本次 Runtime 与 prepare / lease / snapshot 的冻结上下文</td></tr>
+            <tr><td><code>releaseId / releaseSequence</code></td><td>当前页面来自哪次发布</td><td>实际交付本页面的发布快照</td></tr>
+            <tr><td><code>sha256</code></td><td>页面实际运行了哪份内容</td><td>已校验 Bundle 或本次读取字节的实际计算</td></tr>
+            <tr><td><code>bundlePath</code></td><td>哪个页面、哪个加载图 owner</td><td>本次清单的真实主包路径</td></tr>
+            <tr><td>frame <code>debugmetadata:key</code></td><td>这一帧使用哪个脚本的映射</td><td>SDK 的逐帧调试身份</td></tr>
+            <tr><td><code>buildId / gitCommit</code></td><td>资料是哪次构建产生的</td><td>模板本次归档，不能代替内容 SHA</td></tr>
+          </tbody></table></div>
+          <div class="notice ok"><strong>V1 用 A，V2 用 B，V3 复用 A</strong><p>错误显示各自真实 Release；V1 与 V3 的 A 复用相同有效 SourceMap。V2 的 B 始终查 B 的资料，不使用“最新版本”替代。</p></div>
+          <p>原生在本次加载和交付字节时冻结身份。Provider 分发时不查询可变的 OTA current；<code>hostApp</code> 是 OTA 逻辑宿主，不能用原生包名代替。直连资源可计算实际 SHA，但未知的 App、Release、路径保持 null。</p>
+          <details><summary>定位数字为什么新增 reported？</summary><p>SDK 只给两个原始数字、未明确行列或函数/PC 时，原生保留 <code>reportedFirst / reportedSecond</code>。Server 用逐帧 key 找到唯一脚本后才解释数字。主线程先以官方 <code>function_id / (pc_index - 1)</code> 查 bytecode 位置，再查 JS Map；后台按官方列基准传入。源码结果从 1 起算，列按 UTF-16 代码单元表示。</p><p>同 View reload 无法证明错误属于哪次 load 时降低关联精度，保留 View 和帧 key，不补造最新 Bundle 身份。内部 SDK JSON 仅用于投影合同字段，不直接暴露给 Provider。</p></details>
+        </section>
+        <section class="section" id="flow">
+          <span class="number">03 / FLOW</span><h2>资料跟构建走，错误跟实际加载走</h2>
+          <h3>构建资料链路</h3><div class="flow" aria-label="构建资料流程"><div class="step"><b>生产配置构建</b><span>清理前捕获原始 metadata</span></div><span class="arrow" aria-hidden="true">→</span><div class="step"><b>最终字节核对</b><span>主包、Async、外部 script 实际 SHA / 大小</span></div><span class="arrow" aria-hidden="true">→</span><div class="step"><b>私有上传并登记</b><span>上传回读，Server 校验并建立索引</span></div><span class="arrow" aria-hidden="true">→</span><div class="step"><b>原有 OTA 发布</b><span>公开 Bundle 上传与 Release 流程</span></div></div>
+          <h3>使用方式</h3><ol><li>在 Release 或制品列表找到对应内容，点击 <strong>SourceMap</strong>。</li><li>按脚本和文件树阅读源码；文件树可过滤、折叠和分页，代码视图只渲染视口附近的行。</li><li>粘贴原始错误栈或完整 Provider 事件，默认自动反解。手选脚本仅用于没有 key 的帧，不覆盖 SDK 自带的 key。</li><li>点击已映射帧跳到实际源码行列；Async 帧携带自己的 SHA、包路径和 owner，避免误读主包资料。</li></ol>
+          <div class="split"><div class="subcard"><h3>私有资料</h3><p>归档位于 <code>.lynx-symbols/…</code>，不进入公开 Bundle CDN、客户端下载清单或 App 资源。Admin 通过鉴权 API 查询 <code>fileId</code>，不拿到对象 key、签名链接或凭据。</p></div><div class="subcard"><h3>准确匹配</h3><p>索引唯一键是 <code>env + hostApp + lynxAppId + bundleSha256</code>。Release 图限定单个实际 owner；同 SHA 多 owner 无法消歧时拒绝猜测，不跨 App 搜索或使用最新资料。</p></div></div>
+          <details><summary>重跑、冲突与性能边界</summary><p>私有对象按内容与 metadata 摘要命名，上传前后回读校验。相同语义的登记复用；真正 Map / artifact / bytecode 冲突返回 409。数据库唯一约束负责并发登记，不要求修改 OSS 桶的版本控制状态。</p><p>Server 对受控桶读取校验大小与 hash，不接受任意 URL；源码路径只作显示标签。反解在 worker_threads 执行，最多 2 个并发，读取与处理共 45 秒预算，单次 worker 15 秒 / 192 MiB。metadata 16 MiB、单源码 2 MiB、原始栈 128 KiB / 100 帧，Release 图最多 64 个记录 / 64 MiB。忙时返回 429；这些约束降低资源争用，尚无生产负载性能证据。</p></details>
+          <details><summary>Async 主线程这次补齐了什么？</summary><p>Tasm <code>0.0.53</code> 已在同次 <code>args.debugInfo['main-thread']</code> 产生真实调试表，collector <code>0.2.1</code> 只识别 root 键导致初版遗漏。模板在 beforeEmit 保存各输出的实际编码结果，按唯一 assetPath 为归档副本补入 <code>lepusNG_debug_info</code>，核对 function_source 与对应主线程 content 相同，记录 <code>customSections / main-thread</code>。仅资料归档补齐，Bundle Buffer、key 和 Map 没有改写。</p><p>Server 从该脚本自己的真实 section / bytecode 读取 Runtime 名称，正确匹配 Async 栈内 <code>main-thread</code> 与 Map 中 <code>main-thread.js</code>。没有借其他脚本的表或凭文件名猜测位置。此前 9 映射 / 3 缺失是初版 collector 遗漏结果，已由最新全部成功结果替代。</p></details>
+        </section>
+        <section class="section" id="boundaries">
+          <span class="number">04 / BOUNDARIES</span><h2>查不到正常为空，真实失败明确显示</h2>
+          <div class="table-wrap"><table><thead><tr><th>情况</th><th>结果</th></tr></thead><tbody>
+            <tr><td>未登记，或已登记对象 NoSuchKey / NoSuchObject</td><td><code>200 / not_found</code>，Admin 正常空态</td></tr>
+            <tr><td>有映射位置但没有内嵌源码正文</td><td>保留文件位置，正文正常空态</td></tr>
+            <tr><td>其他实际资料确实缺 bytecode debug info</td><td>可浏览源码；函数/PC 返回 <code>unresolved / missing_bytecode_info</code>。本次三个 Async 资料已完整</td></tr>
+            <tr><td>非法输入、scope / owner 不匹配、无权限</td><td>明确失败，不拿其他页面或最新资料兜底</td></tr>
+            <tr><td>网络/存储权限、桶配置、坏摘要或语义冲突</td><td>真实失败；可恢复读取提供重试</td></tr>
+          </tbody></table></div>
+          <p>本轮沿用现有 Provider，不新增错误上报服务、错误数据库、监控 SDK、全局 OTA 发布门禁或老系统兼容层。模板本次上传/登记失败会停止该发布流程；Admin 资料缺失则正常显示空态。</p>
+        </section>
+        <section class="section" id="verification">
+          <span class="number">05 / VERIFICATION</span><h2>实际验收结果</h2>
+          <div class="table-wrap"><table><thead><tr><th>验证项</th><th>状态</th><th>证据和限制</th></tr></thead><tbody>
+            <tr><td>Contracts 类型检查 / 构建 / pack</td><td><span class="pill pass">通过 · 35 测试</span></td><td>真实 0.4.0 tarball 用于联验；尚未远程发布</td></tr>
+            <tr><td>模板类型检查 / SourceMap 回归</td><td><span class="pill pass">通过 · 18 测试</span></td><td>包含同次真实 section 调试资料关联；临时目录和模拟存储 / 登记，无真实云端写入</td></tr>
+            <tr><td>模板 TEST OTA 生产配置构建</td><td><span class="pill pass">通过 · 6 档案</span></td><td>3 主包 + 3 Async，最终 SHA / 资源图覆盖及 sourcesContent 核对通过</td></tr>
+            <tr><td>Server 编译 / SourceMap 回归</td><td><span class="pill pass">通过 · 7 测试</span></td><td>覆盖身份、实际 section Runtime 名称、资料处理、空态和失败边界</td></tr>
+            <tr><td>实际 metadata 上传函数 / API 联验</td><td><span class="pill pass">通过</span></td><td>6 首次登记 + 6 重复复用，源码查询正常；模拟 OSS / 内存数据库</td></tr>
+            <tr><td>合成 Provider 的 12 定位帧</td><td><span class="pill pass">12 / 12 mapped</span></td><td>6 主线程 + 6 后台；实际编码资料与合成报告位置，不是设备崩溃</td></tr>
+            <tr><td>主线程原始文本格式堆栈</td><td><span class="pill pass">6 / 6 成功</span></td><td>覆盖主包 main-thread.js 和 Async 真实 main-thread 文件名；定位为合成输入</td></tr>
+            <tr><td>Admin Nuxt 类型检查 / 生产构建</td><td><span class="pill pass">最终通过</span></td><td>真实 Contracts 0.4.0 固定包安装；自动脚本选项修正后两项均 exit 0</td></tr>
+            <tr><td>Admin 内置浏览器联调</td><td><span class="pill pass">通过</span></td><td>3 主包 / 3 Async 正确入口；真实 157 行 TSX；合成 Provider 自动 key 定位 12:1、点击帧及深链接恢复；手定位 120:3、仅 44 行 DOM；正常空态通知为空；Async 准确读取</td></tr>
+            <tr><td>自动 / 手选脚本最终回归</td><td><span class="pill pass">通过</span></td><td>automatic 与三个脚本可选；无 key Async 手选 BTS 映射 13:1；手选 MTS 但帧带 BTS key 仍正确映射；恢复 automatic 的实际 API 请求成功，不发送占位 scriptId</td></tr>
+            <tr><td>Android 监控合同 JVM 回归</td><td><span class="pill pass">通过 · 21 测试</span></td><td>0 失败 / 跳过；未替代真实设备 SDK 错误注入</td></tr>
+            <tr><td>Android App assembleDebug</td><td><span class="pill pass">通过</span></td><td>BUILD SUCCESSFUL；本轮未安装 APK 验证错误</td></tr>
+            <tr><td>iOS 最终 Debug Simulator 编译</td><td><span class="pill pass">通过</span></td><td>BUILD SUCCEEDED；本轮未做真实 SDK 错误注入</td></tr>
+            <tr><td>Harmony key / 帧选择 helper 断言</td><td><span class="pill pass">24 / 24 通过</span></td><td>从真实源码提取 helper 按 JavaScript 执行，覆盖 key 完整性、query / fragment、文本 / 换行边界、长度预算及非法帧不 fallback；不等于 ArkTS 编译或设备测试</td></tr>
+            <tr><td>Harmony 诊断摘要边界断言</td><td><span class="pill pass">5 / 5 通过</span></td><td>真实源码提取的 JavaScript 断言覆盖普通文本、JSON、超预算 JSON 和诊断调用点；结构化 SDK 摘要不经 Provider 诊断外发，UI 回调保留。<a href="../../../.workflow/implementation-20261009/artifacts/harmony-diagnostic-message-regression.json">断言结果</a></td></tr>
+            <tr><td>Harmony HAR 编译</td><td><span class="pill partial">未通过 · 基线阻断</span></td><td>基线 / 本轮均 28 错误，newErrors=[]；不能宣称 Harmony 编译通过</td></tr>
+            <tr><td>Android / iOS / Lynx / 安全复核</td><td><span class="pill pass">P1 / P2 已关闭</span></td><td>最终差异专项复核；不提供 FPS、内存或线上无故障证明</td></tr>
+            <tr><td>真实 OSS / DB 迁移 / 真机错误 / 外部平台</td><td><span class="pill pending">未执行</span></td><td>本轮授权范围为必要回归和本地编译</td></tr>
+          </tbody></table></div>
+          <h3>三个 Async 主线程的最新结果</h3><div class="table-wrap"><table><thead><tr><th>Async 内容</th><th>真实函数表</th><th>准确源码位置</th><th>验证结果</th></tr></thead><tbody><tr><td>Campaign</td><td>39 个函数</td><td><code>CampaignPage.tsx:14:1</code></td><td>Provider reported 帧与文本格式堆栈均成功</td></tr><tr><td>ProductDetail</td><td>26 个函数</td><td><code>ProductDetailPage.tsx:13:1</code></td><td>Provider reported 帧与文本格式堆栈均成功</td></tr><tr><td>Reviews</td><td>26 个函数</td><td><code>ReviewsPage.tsx:13:1</code></td><td>Provider reported 帧与文本格式堆栈均成功</td></tr></tbody></table></div><p class="caption">源码均位于 src/components/store/。证据来自实际编码结果、合成报告位置和 Runtime 源码格式；本次没有实际 SDK 报错注入。</p>
+          <div class="evidence"><a href="../../../.workflow/implementation-20261009/async-mts-completion/encoding-proof.json">真实编码与字节不变证明</a><a href="../../../.workflow/implementation-20261009/async-mts-completion/integration.log">完整联验记录</a><a href="../../../.workflow/implementation-20261009/async-mts-completion/template-build.log">模板最新构建</a><a href="../../../.workflow/implementation-20261009/async-mts-completion/template-tests.log">模板 18 项回归</a><a href="../../../.workflow/implementation-20261009/async-mts-completion/template-typecheck.log">模板最新类型检查</a><a href="../../../.workflow/implementation-20261009/async-mts-completion/server-build.log">Server 最新构建</a><a href="../../../.workflow/implementation-20261009/async-mts-completion/server-tests.log">Server 7 项回归</a></div>
+          <h3>实际源码查看页面</h3><figure style="margin:16px 0"><img src="../../../.workflow/implementation-20261009/ui-refinement/desktop.jpg" alt="Admin 只读源码查看器展示实际 OtaEcommercePage.tsx，第 12 行第 1 列合成错误自动定位高亮" style="display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:12px" loading="lazy"><figcaption class="caption" style="margin-top:9px">实际构建 TSX 源码，截图高亮 12:1 是合成错误自动定位。下方保留主包与 Async 两个定位结果；本图不代表实际设备崩溃或外部平台上报。</figcaption></figure>
+          <details><summary>查看正常缺失空态截图</summary><img src="../../../.workflow/implementation-20261009/artifacts/admin-source-empty.jpg" alt="Admin 没有 SourceMap 时显示暂无 SourceMap 的正常空态" style="display:block;width:100%;height:auto;margin-top:15px;border:1px solid var(--line);border-radius:12px" loading="lazy"><p class="caption">资料未找到时显示空态，浏览器通知列表为空，没有报错提示。</p></details>
+          <div class="evidence"><a href="../../../.workflow/implementation-20261009/artifacts/real-symbols-result.json">真实资料链路 JSON</a><a href="../../../.workflow/implementation-20261009/artifacts/admin-browser-result.json">Admin 浏览器结果</a><a href="../../../.workflow/implementation-20261009/artifacts/harmony-final-baseline-comparison.json">Harmony 最新基线比较</a><a href="../../../.workflow/implementation-20261009/artifacts/harmony-key-regression.json">Harmony helper 断言</a><a href="../../../.workflow/implementation-20261009/artifacts/harmony-build-final.log">Harmony 最新编译</a><a href="../../../.workflow/implementation-20261009/results/template-build.log">模板构建日志</a><a href="../../../.workflow/implementation-20261009/artifacts/server-source-map-tests.log">Server 回归</a><a href="../../../.workflow/implementation-20261009/artifacts/admin-typecheck-final.log">Admin 最终类型检查</a><a href="../../../.workflow/implementation-20261009/artifacts/admin-build-final.log">Admin 最终构建</a><a href="../../../.workflow/implementation-20261009/artifacts/android-app-build.log">Android 编译</a><a href="../../../.workflow/implementation-20261009/artifacts/ios-build-final.log">iOS 编译</a></div>
+          <p class="caption">证据位于这一组本地 worktree；单独发布仓库不会自动携带本机构建日志。</p>
+        </section>
+        <section class="section" id="delivery">
+          <span class="number">06 / DELIVERY</span><h2>正式启用，按依赖顺序交付</h2>
+          <ol><li><strong>Contracts 0.4.0 正式发布。</strong>确认 Server/Admin 固定版本与锁文件对应真实正式包。若正式 tarball 不同，重新生成并验证 integrity。</li><li><strong>Server 新索引表和 API。</strong>生成 Prisma Client，经授权执行 <code>20261009000000_source_maps</code> 迁移，配置私有桶读取身份。</li><li><strong>Admin 与模板 CI。</strong>部署查看页，模板配置同一私有桶的读写身份及登记 API。TEST CI 只允许精确登记 POST，不能读源码或反解；PROD 沿用管理权限。</li><li><strong>实际运行接入。</strong>正式上线验证时再做云端上传、三端真实错误样本，并将 Provider 接入选定的外部监控平台。本轮未自动执行这些外部动作。</li></ol>
+          <details><summary>需要配置哪些变量？</summary><p><code>SOURCE_MAP_OSS_BUCKET</code>、<code>SOURCE_MAP_OSS_REGION</code>、<code>SOURCE_MAP_OSS_ACCESS_KEY_ID</code>、<code>SOURCE_MAP_OSS_ACCESS_KEY_SECRET</code>；STS 场景加 <code>SOURCE_MAP_OSS_SECURITY_TOKEN</code>。模板已有 <code>OTA_API</code>、TEST <code>CI_RELEASE_TOKEN</code>、人工 / PROD <code>OTA_ADMIN_TOKEN</code> 沿用现有环境管理。只配置变量，不把实际值写入代码、日志或报告。</p></details>
+          <p>先前临时设计若仍要求全局发布门禁、OSS 版本控制 Disabled、旧 DTO 或其他与本轮不符的处理，<strong>以本实施报告及实际冻结合同为准</strong>。</p>
+        </section>
+        <section class="section" id="repos">
+          <span class="number">07 / REPOSITORIES</span><h2>五个仓库，按各自职责修改</h2>
+          <p class="mono">/Users/nieyutan/.codex/worktrees/lynx-sourcemap-platform</p>
+          <div class="table-wrap"><table><thead><tr><th>项目</th><th>创建起点</th><th>本轮责任</th></tr></thead><tbody>
+            <tr><td>lynx-navigation-to-ota</td><td>origin/main · b3837d49</td><td>三端 Page / Tab Bundle 身份和 SDK 错误帧</td></tr>
+            <tr><td>LynxAppPackagesAndTemplates</td><td>origin/main · 7673d807</td><td>同次资料归档、私有上传登记与发布接线</td></tr>
+            <tr><td>LynxContracts</td><td>origin/test · 60114270</td><td>0.4.0 DTO 和逐帧结果</td></tr>
+            <tr><td>LynxOtaServer</td><td>origin/test · 9eee86dd</td><td>索引表、受控读取、加载图校验和反解</td></tr>
+            <tr><td>LynxOtaAdmin</td><td>origin/test · d80c3c7c</td><td>入口、文件树、代码查看器与准确定位</td></tr>
+          </tbody></table></div>
+          <p>分支均为 <code>codex/lynx-sourcemap-platform</code>。<code>origin/test</code> 是新分支起点，本轮没有将 test 合并到任何其他分支。原有工作区与用户改动保留；五仓分别通过 PR / MR 交付，具体提交与链接以各仓审查页面为准。本轮未发布包、执行真实数据库迁移或上传 OSS。</p>
+          <div class="evidence"><a href="../lynx-view-monitoring-v1/runtime-contract.md">原生运行时合同</a><a href="../../../LynxAppPackagesAndTemplates/templates/lynx-template/docs/SOURCE_MAP_RELEASE.md">模板配置说明</a><a href="../../../LynxOtaServer/docs/source-maps.md">Server API 与限制</a><a href="../../../LynxOtaAdmin/docs/source-map.md">Admin 使用方式</a><a href="https://lynxjs.org/rspeedy/map-errors-to-source.html">Lynx 官方线上错误反解</a></div>
+        </section>
+        <footer>本报告仅陈述本轮已完成的源码、构建与验证事实；未知或未执行的项目保留明确状态。无外部 CDN、无远程脚本、无凭据。</footer>
+      <section class="section" id="desktop-refinement"><span class="number">桌面排查修订</span><h2>短路径与同屏定位</h2><p>左侧文件树、右侧源码、底部错误结果。默认打开业务文件，依赖收起；构建信息按需展开。反解自动定位，跨 Async 点击保留同次结果。本轮没有新增移动端适配。</p><p>归档源码路径保存为 <code>src/...</code>、<code>packages/...</code>、<code>node_modules/...</code>。路径规范化阶段核对了 6 个 Bundle 字节和 SHA、SDK key、位置映射、源码正文及已有 bytecode，15 项阶段回归和模板与 Admin 构建均通过。随后 Async 主线程资料补齐的最新结果为模板 18 项回归、12 / 12 合成帧与 6 / 6 主线程文本格式堆栈成功。</p><p><a href="../../../.workflow/implementation-20261009/ui-refinement/verification.json">桌面修订验证</a> · <a href="../../../.workflow/implementation-20261009/results/template-path-normalization-proof.json">路径逐项比较</a></p></section></main>
+    </div>
+  </div>
+</body>
+</html>

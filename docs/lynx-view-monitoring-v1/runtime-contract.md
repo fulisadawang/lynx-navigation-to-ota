@@ -4,6 +4,8 @@
 
 2026-09-30 上线前完善：同一份 Schema 1.0 增加全事件 `group` 与通用 `business.event`。业务名称、分组和属性字段由调用方定义，不列业务事件枚举；此前 G1 报告是历史采集验收，不能当作新增业务桥的运行证明。
 
+2026-10-09 SourceMap 关联完善：`BundleIdentity` 增加 `env / hostApp / bundlePath`，错误帧增加 `reported` 原始数字，保留 SDK 逐帧调试 key。本文与 [SourceMap 实施报告](../source-map-platform/implementation-report.md) 描述本轮合同；历史 G1 设备报告不证明本轮错误链路已在三端真机运行。
+
 ## 1. 标识与生命周期
 
 | 标识 | 生成/来源 | 有效期 |
@@ -28,8 +30,11 @@ type BundleSource = 'ota' | 'embedded' | 'direct_https' | 'direct_asset';
 
 interface BundleIdentity {
   source: BundleSource;
+  env: string | null; // 本次实际 OTA Runtime/准备结果的环境
+  hostApp: string | null; // OTA 逻辑宿主标识，不是原生包名
   lynxAppId: string | null;
   bundleName: string | null;
+  bundlePath: string | null; // 本次主包清单的真实路径，不是源码文件路径
   releaseId: string | null;
   releaseSequence: string | null; // 非负十进制字符串，不经 Number/Double
   sha256: Sha256 | null;
@@ -45,6 +50,10 @@ interface BundleIdentity {
 - 身份在交付 render 的时刻冻结，后续 OTA current 更新、全局语言更新、Tab 变化不能改写它。
 - 原生类型必须是只读值对象；不能把可变 Map 的引用共享给 Provider。
 - SHA 工作放已有校验或后台读取过程；禁止为每条指标重新读文件、计算哈希。
+- `env / hostApp` 在开始本次加载时取已验证的 Runtime 上下文，并与实际 prepare/lease/snapshot 一同冻结；`bundlePath` 来自该次清单条目。Page 与 Native Tab 使用相同规则，不能在 Provider 上报时查询可变的 OTA current。
+- 登记的 embedded 包只使用清单明确提供的身份；直连资源计算本次实际字节的 SHA，但无可靠发布来源的环境、App、Release 与清单路径保持 null。读取失败也不能把预期 SHA 当作实际内容 SHA。
+- 同 View reload 无法证明 SDK 回调属于哪次加载时，沿用第 3.2 节降级规则；调试 key 可保留，但不能为了反解补造 Bundle 身份。
+- 本仓 Provider 的 SHA 使用 64 位小写 hex；Server 在 SourceMap API 边界统一为 `sha256:<hex>`。前缀差异不代表不同内容。
 
 ## 3. 统一事件外层
 
@@ -172,16 +181,19 @@ interface JsErrorPayload {
 type ErrorFrame = {
   file: string | null;
   functionName: string | null;
-  runtimeRelease: string | null; // 原样保留 debugmetadata:<key>
-  debugKey: string | null; // 只去掉已知前缀；不能由 OTA SHA 假造
+  runtimeRelease: string | null; // 保留有效的 debugmetadata:<key>；不是 OTA releaseId
+  debugKey: string | null; // 从 SDK 逐帧信息提取；不能由 OTA SHA 假造
 } & (
   | {positionKind: 'line_column'; line: number; column: number}
   | {positionKind: 'function_pc'; functionId: number; pc: number}
+  | {positionKind: 'reported'; reportedFirst: number; reportedSecond: number}
   | {positionKind: 'unknown'}
 );
 ```
 
 - 定位含义由引擎/脚本实际格式决定；文件名不是充分判据。当前官方主线程 bytecode 路径须两段反解。后台 bytecode 变体也不能强制当文本行列。
+- SDK 提供的结构化 `rawError / sentry frames` 优先于从文本猜测。SDK 数字只有原始第一、第二位置而未明确语义时用 `reported`；Server 先用逐帧 key 和实际内容定位唯一脚本，再决定按 JS 行列或主线程函数/PC 解读。
+- `runtimeRelease` 必须是有效且有界的 `debugmetadata:<key>`；非法或缺失值写入 quality，不使用整个 SDK JSON 填充公开 message。结构化错误只投影合同字段，内部解析材料不直接序列化给 Provider。
 - 保留 runtime 原始行列；传给具体 v3 Source Map 库时按输入格式校验列基准，不盲目统一减一；使用已知 throw 行作为金标准验证。
 - 自定义 UI 错误提示、原生堆栈、JS 异常分别分类；不将每个 `onReceivedError` 都标为 JS，也不制造原生异常对象当作 JS 崩溃投递。
 - 首屏后的 timer、事件、Promise、main-thread handler 等属于必须测试的采集场景；回调没有覆盖的类型必须披露。被捕获且未报告的异常不在自动观测承诺内。

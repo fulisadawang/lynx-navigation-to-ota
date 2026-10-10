@@ -32,18 +32,28 @@ final class LynxMonitorObserver: NSObject, LynxViewLifecycle, LynxViewLifecycleV
             return
         }
         let message = error.summaryMessage
+        // 4.1 JSErrorReporter 将 rawError 与 sentry 帧写入 summaryMessage；保留完整有界输入，
+        // 解析交给串行 Sanitizer。为 32 KiB 总预算预留事件身份及 JSON 转义空间。
+        let structured = message.hasPrefix("{") && message.contains("\"rawError\"")
+        let sdkErrorJSON = structured && message.utf8.count <= 24 * 1024 ? message : nil
         // 官方头文件将可选 callStack 标为 nonnull，固定 KVC 键避免 nil 跨接为 String 时崩溃。
         let raw = error.value(forKey: #keyPath(LynxError.callStack)) as? String
         let stack = raw.flatMap { $0.isEmpty ? nil : $0 }
+        // SDK JSON 与独立 callStack 合计受总预算约束；解析成功时优先其原始 JS 栈。
+        let stackLimit = sdkErrorJSON == nil ? 16 * 1024 : 4 * 1024
         var truncated: [String] = []
-        if message.utf8.count > 4 * 1024 { truncated.append("message") }
-        if let stack, stack.utf8.count > 16 * 1024 { truncated.append("rawStack") }
+        if structured && sdkErrorJSON == nil { truncated.append("structuredError") }
+        if !structured && message.utf8.count > 4 * 1024 { truncated.append("message") }
+        if let stack, stack.utf8.count > stackLimit {
+            truncated.append(sdkErrorJSON == nil ? "rawStack" : "sdkCallStack")
+        }
         let level = error.isFatal ? "fatal" : (error.level == "warn" ? "warning" : (error.level == "error" ? "error" : "unknown"))
         // LynxError 不可跨线程共享，只把允许字段复制成 Swift 值。
         scope.jsError(code: String(code), subCode: String(error.getSubCode()), level: level,
                       realm: background ? "background" : "main_thread",
-                      message: LynxMonitorSanitizer.bounded(message, bytes: 4 * 1024),
-                      stack: stack.map { LynxMonitorSanitizer.bounded($0, bytes: 16 * 1024) }, truncated: truncated)
+                      message: structured ? "" : LynxMonitorSanitizer.bounded(message, bytes: 4 * 1024),
+                      stack: stack.map { LynxMonitorSanitizer.bounded($0, bytes: stackLimit) },
+                      sdkErrorJSON: sdkErrorJSON, truncated: truncated)
     }
 
     func onResourceLoaded(_ result: LynxResourceLoadInfo) {

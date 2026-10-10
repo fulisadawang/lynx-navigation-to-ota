@@ -18,7 +18,10 @@ export function monitorBundleIdentity(
   bundleName: string,
   releaseId: string,
   releaseSequence: string | null,
-  sha256: string
+  sha256: string,
+  env: string | null = null,
+  hostApp: string | null = null,
+  bundlePath: string | null = null
 ): BundleIdentity {
   const normalizedSource: BundleSource = source === 'embedded' || source === 'embedded_baseline'
     ? 'embedded'
@@ -32,7 +35,7 @@ export function monitorBundleIdentity(
     normalizedSource, lynxAppId, bundleName, releaseId, validSequence ? sequence : null,
     validSha ? normalizedSha : null,
     validSha ? 'verified' : 'unavailable',
-    validSha ? null : 'prepared_bundle_sha256_invalid', null
+    validSha ? null : 'prepared_bundle_sha256_invalid', null, env, hostApp, bundlePath
   );
 }
 
@@ -63,9 +66,13 @@ export function monitorSanitize(value: string): string {
 }
 
 /** 只接受构建产物登记格式的 debugmetadata key，不从文件名或 SHA 猜测。 */
-export function monitorDebugKey(value: string): string | null {
-  const match = new RegExp("debugmetadata:([A-Za-z0-9._/-]+)", "i").exec(value);
-  return match === null ? null : match[1];
+export function monitorDebugKey(value: string, exact: boolean = false): string | null {
+  if (exact && value.length > 2048) return null;
+  const pattern = exact ? '^debugmetadata:([A-Za-z0-9._/-]+)$' :
+    'debugmetadata:([A-Za-z0-9._/-]+)(?=$|[\\s)])';
+  const match = new RegExp(pattern).exec(value);
+  return match === null || match[0].length > 2048 || match[1].length > 2048 ||
+    (exact && match[0].length !== value.length) ? null : match[1];
 }
 
 export function monitorUtf8Bytes(value: string): number {
@@ -89,6 +96,22 @@ export function monitorUtf8Bytes(value: string): number {
     }
   }
   return bytes;
+}
+
+/** 与 Provider 的字节预算一致，截断时保留完整 Unicode 码点。 */
+export function monitorTruncateUtf8(value: string, maximumBytes: number): string {
+  let bytes = 0;
+  let index = 0;
+  while (index < value.length) {
+    const code = value.charCodeAt(index);
+    const next = value.charCodeAt(index + 1);
+    const paired = code >= 0xd800 && code <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
+    const count = code <= 0x7f ? 1 : code <= 0x7ff ? 2 : paired ? 4 : 3;
+    if (bytes + count > maximumBytes) break;
+    bytes += count;
+    index += paired ? 2 : 1;
+  }
+  return index === value.length ? value : value.substring(0, index);
 }
 
 export function monitorJsonBytes(value: Object): number {

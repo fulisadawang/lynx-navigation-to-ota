@@ -21,8 +21,11 @@ export interface BusinessPayload {
 
 export interface BundleIdentity {
   readonly source: BundleSource;
+  readonly env: string | null;
+  readonly hostApp: string | null;
   readonly lynxAppId: string | null;
   readonly bundleName: string | null;
+  readonly bundlePath: string | null;
   readonly releaseId: string | null;
   readonly releaseSequence: string | null;
   readonly sha256: string | null;
@@ -45,11 +48,13 @@ export interface ErrorFrame {
   readonly functionName: string | null;
   readonly runtimeRelease: string | null;
   readonly debugKey: string | null;
-  readonly positionKind: 'line_column' | 'function_pc' | 'unknown';
+  readonly positionKind: 'line_column' | 'function_pc' | 'reported' | 'unknown';
   readonly line: number | null;
   readonly column: number | null;
   readonly functionId: number | null;
   readonly pc: number | null;
+  readonly reportedFirst: number | null;
+  readonly reportedSecond: number | null;
 }
 
 export interface EventQuality {
@@ -195,8 +200,11 @@ export interface MonitorConfig {
 
 export class BundleIdentityValue implements BundleIdentity {
   readonly source: BundleSource;
+  readonly env: string | null;
+  readonly hostApp: string | null;
   readonly lynxAppId: string | null;
   readonly bundleName: string | null;
+  readonly bundlePath: string | null;
   readonly releaseId: string | null;
   readonly releaseSequence: string | null;
   readonly sha256: string | null;
@@ -206,10 +214,14 @@ export class BundleIdentityValue implements BundleIdentity {
   constructor(source: BundleSource, lynxAppId: string | null, bundleName: string | null,
     releaseId: string | null, releaseSequence: string | null, sha256: string | null,
     identityStatus: 'verified' | 'computed' | 'unavailable', missingReason: string | null,
-    buildId: string | null) {
+    buildId: string | null, env: string | null = null, hostApp: string | null = null,
+    bundlePath: string | null = null) {
     this.source = source;
+    this.env = env;
+    this.hostApp = hostApp;
     this.lynxAppId = lynxAppId;
     this.bundleName = bundleName;
+    this.bundlePath = bundlePath;
     this.releaseId = releaseId;
     this.releaseSequence = releaseSequence;
     this.sha256 = sha256;
@@ -418,14 +430,17 @@ export class ErrorFrameValue implements ErrorFrame {
   readonly functionName: string | null;
   readonly runtimeRelease: string | null;
   readonly debugKey: string | null;
-  readonly positionKind: 'line_column' | 'function_pc' | 'unknown';
+  readonly positionKind: 'line_column' | 'function_pc' | 'reported' | 'unknown';
   readonly line: number | null;
   readonly column: number | null;
   readonly functionId: number | null;
   readonly pc: number | null;
+  readonly reportedFirst: number | null;
+  readonly reportedSecond: number | null;
   constructor(file: string | null, functionName: string | null, runtimeRelease: string | null,
-    debugKey: string | null, positionKind: 'line_column' | 'function_pc' | 'unknown',
-    line: number | null, column: number | null, functionId: number | null, pc: number | null) {
+    debugKey: string | null, positionKind: 'line_column' | 'function_pc' | 'reported' | 'unknown',
+    line: number | null, column: number | null, functionId: number | null, pc: number | null,
+    reportedFirst: number | null = null, reportedSecond: number | null = null) {
     this.file = file;
     this.functionName = functionName;
     this.runtimeRelease = runtimeRelease;
@@ -435,6 +450,8 @@ export class ErrorFrameValue implements ErrorFrame {
     this.column = column;
     this.functionId = functionId;
     this.pc = pc;
+    this.reportedFirst = reportedFirst;
+    this.reportedSecond = reportedSecond;
   }
 }
 

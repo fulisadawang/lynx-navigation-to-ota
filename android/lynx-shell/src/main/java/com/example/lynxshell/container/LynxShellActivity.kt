@@ -406,13 +406,13 @@ class LynxShellActivity : AppCompatActivity() {
         firstScreenReadyGeneration = null
         loadFailureHandledGeneration = null
         preparedUserEpoch = null
-        preparedRuntime = null
+        preparedRuntime = if (request.isOtaRequest()) LynxShell.activityBundleRuntime() else null
         contentGeneration += 1L
         val generation = contentGeneration
         monitoringView = LynxMonitor.reserve(
             ContainerKind.PAGE,
             if (generation == 1L) LoadKind.INITIAL else LoadKind.RETRY,
-            BundleIdentities.attempted(request),
+            BundleIdentities.attempted(request, preparedRuntime?.monitoringScope),
             if (monitoringVisible) Visibility.VISIBLE else Visibility.HIDDEN,
         )
 
@@ -564,7 +564,7 @@ class LynxShellActivity : AppCompatActivity() {
     private fun prepareOtaBundle(generation: Long) {
         val appId = request.lynxAppId
         val bundleName = request.bundleName
-        val runtime: ActivityBundleRuntime? = LynxShell.activityBundleRuntime()
+        val runtime: ActivityBundleRuntime? = preparedRuntime
         if (appId.isNullOrBlank() || bundleName.isNullOrBlank() || runtime == null) {
             handleTemplateLoadFailure(generation, "OTA 页面未配置 ActivityBundleRuntime")
             return

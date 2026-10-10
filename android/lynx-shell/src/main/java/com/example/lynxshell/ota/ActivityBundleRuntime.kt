@@ -11,6 +11,8 @@ import java.io.File
  * 校验。Router 会在后台线程调用 prepare，因此不会阻塞主线程。
  */
 interface ActivityBundleRuntime {
+    /** 当前 runtime 初始化时固定的 OTA 域；不能用宿主包名代替。 */
+    val monitoringScope: OtaMonitoringScope? get() = null
     /** null 表示非用户选择运行时；异步页面必须携带准备时的代际，不在回调时重新捕获。 */
     val userIdentityEpoch: Long? get() = null
     /**
@@ -128,6 +130,10 @@ data class PreparedActivityBundle(
     val releaseSequence: String? = null,
     /** 与 releaseLease 一起固定的本地 Async/词典快照；只给当前 View 使用。 */
     val sidecarResources: com.ota.android.sdk.OtaSidecarViewResources? = null,
+    val env: String? = null,
+    val hostApp: String? = null,
+    /** Release 内的逻辑相对路径；不接受 URL、绝对路径或文件系统路径。 */
+    val bundlePath: String? = null,
 ) {
     init {
         require(lynxAppId.isNotBlank()) { "lynxAppId 不能为空" }
@@ -142,3 +148,5 @@ data class PreparedActivityBundle(
         bytes?.let { require(it.isNotEmpty()) { "已准备的 Bundle 不能为空" } }
     }
 }
+
+data class OtaMonitoringScope(val env: String, val hostApp: String)

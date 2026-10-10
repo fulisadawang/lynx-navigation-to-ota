@@ -290,9 +290,14 @@ export interface OtaPrewarmTicket {
 
 /** Router 容器只消费已校验的文件或 rawfile bytes；绝对路径不会写入 ArkUI Router 参数。 */
 export interface PreparedPageBundle {
+  /** 在 prepare 时从被校验的 Manifest 或 captured context 固定，不读取错误时的 current。 */
+  env?: string;
+  hostApp?: string;
   lynxAppId: string;
   bundleName: string;
   filePath: string;
+  /** Manifest 明确声明的 Release 包内路径；不能从逻辑名或 rawfile 路径推断。 */
+  bundlePath?: string;
   /** 内置 rawfile 或真实消费已校验的预热缓存字节；普通远程文件读取不设置。 */
   bytes?: ArrayBuffer;
   releaseId: string;

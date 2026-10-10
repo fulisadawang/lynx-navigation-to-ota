@@ -196,7 +196,8 @@ class LynxTabFragment : Fragment() {
         monitoringView = LynxMonitor.reserve(
             ContainerKind.TAB,
             if (loadCount == 1) LoadKind.INITIAL else LoadKind.RELOAD,
-            BundleIdentities.attempted(spec.bundleUrl, spec.lynxAppId, spec.bundleName),
+            BundleIdentities.attempted(spec.bundleUrl, spec.lynxAppId, spec.bundleName,
+                if (spec.lynxAppId != null && spec.bundleName != null) runtime?.monitoringScope else null),
             if (isResumed && !isHidden) Visibility.VISIBLE else Visibility.HIDDEN,
         )
         val monitoring = monitoringView

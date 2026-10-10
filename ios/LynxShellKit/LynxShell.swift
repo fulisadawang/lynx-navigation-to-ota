@@ -385,8 +385,10 @@ public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
         let generation = loadGeneration.begin()
         monitorScope = LynxMonitor.beginView(kind: .tab, loadKind: monitorLoadKind, visibility: monitorVisibility)
         let isOta = spec.lynxAppId?.isEmpty == false && spec.bundleName?.isEmpty == false
+        let bundleRuntime = isOta ? LynxShell.otaRuntime() : nil
         monitorScope?.setRequest(source: isOta ? .ota : (RemoteBundlePolicy.isRemote(spec.bundleURL) ? .directHTTPS : .directAsset),
-                                 appId: isOta ? spec.lynxAppId : nil, bundleName: isOta ? spec.bundleName : nil)
+                                 appId: isOta ? spec.lynxAppId : nil, bundleName: isOta ? spec.bundleName : nil,
+                                 otaScope: bundleRuntime?.monitoringScope)
 #if DEBUG
         debugLoadCount += 1
         debugLastError = "loading"
@@ -398,7 +400,7 @@ public final class LynxTabViewController: UIViewController, ShellSystemUIOwner {
             render(prefetchedData: nil, generation: generation)
             return
         }
-        guard let runtime = LynxShell.otaRuntime() else {
+        guard let runtime = bundleRuntime else {
             showError("Tab \(spec.tabId) 没有安装 OTA runtime；Tab 加载不会联网")
             return
         }

@@ -36,9 +36,9 @@ PODS:
     - LynxBase/Framework (= 4.1.0)
   - LynxBase/Framework (4.1.0):
     - LynxServiceAPI/Core
-  - LynxCapacitorKit (0.1.0):
+  - LynxCapacitorKit (1.1.0):
     - Lynx/Framework (= 4.1.0)
-  - LynxMapKit (1.0.0):
+  - LynxMapKit (1.1.0):
     - AMap3DMap (= 11.2.100)
     - AMapLocation (= 2.12.3)
     - AMapSearch (= 9.8.1)
@@ -62,15 +62,15 @@ PODS:
   - LynxServiceAPI/Core (4.1.0):
     - LynxServiceAPI/Native
   - LynxServiceAPI/Native (4.1.0)
-  - LynxShellDebugKit (1.0.0):
+  - LynxShellDebugKit (1.1.0):
     - LynxService/Http (= 4.1.0)
-    - LynxShellKit
-  - LynxShellKit (1.0.0):
+    - LynxShellKit (= 1.1.0)
+  - LynxShellKit (1.1.0):
     - Lynx/Framework (= 4.1.0)
     - LynxService/Http (= 4.1.0)
     - LynxService/Image (= 4.1.0)
     - LynxService/Log (= 4.1.0)
-    - LynxShellKit/Map (= 1.0.0)
+    - LynxShellKit/Map (= 1.1.0)
     - PrimJS/napi (= 4.1.1)
     - PrimJS/quickjs (= 4.1.1)
     - SDWebImage (= 5.15.5)
@@ -86,9 +86,9 @@ PODS:
     - XElement/Video (= 4.1.0)
     - XElement/ViewPager (= 4.1.0)
     - XElement/WebView (= 4.1.0)
-  - LynxShellKit/Map (1.0.0):
+  - LynxShellKit/Map (1.1.0):
     - Lynx/Framework (= 4.1.0)
-    - LynxMapKit (= 1.0.0)
+    - LynxMapKit (= 1.1.0)
     - LynxService/Http (= 4.1.0)
     - LynxService/Image (= 4.1.0)
     - LynxService/Log (= 4.1.0)
@@ -247,12 +247,12 @@ SPEC CHECKSUMS:
   libwebp: af5937a13536ef73f3784d69cc342b98961acf33
   Lynx: b9a0812cb5b0f1ff6efba8cc1d1d5c094a23f632
   LynxBase: 4d2fdb403f161e8fce8af3db8bddee50c8f1fe3e
-  LynxCapacitorKit: 307d8b988c0802184fbc41ad5a76f2049ad0bf8a
-  LynxMapKit: 6c977c839cd9d53a81d148e59d8defafc6f22dc7
+  LynxCapacitorKit: 5460404f100d24ea4b708926d120db644ab6905b
+  LynxMapKit: 7929cb1d3090e6a623daa97c8e4e63e739444ef4
   LynxService: 4e390c8080eff4bc3d3f4e2133379c2942191c1b
   LynxServiceAPI: 79446ba6dcea4353b8e2e5b77ec9f34603c0a054
-  LynxShellDebugKit: 10349253672a9bc52fbafe0c3a5f807dd2e807f1
-  LynxShellKit: cf7178025ae177c531cd05680b7c3956c43c544c
+  LynxShellDebugKit: 970aa174c4b5fb53f0fe61f467b39f7245359168
+  LynxShellKit: 5dc479c29780f6d947a0f77210d48299b2f3e9b3
   LynxShellKitE2ECore: bd36a9e16cbcc47cb6d8ea2a84f62739c81f5c72
   LynxTextra: 82539791caa56e964cde427f05cff24ed3736d36
   MJRefresh: ff9e531227924c84ce459338414550a05d2aea78

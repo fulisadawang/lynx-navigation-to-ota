@@ -1154,6 +1154,9 @@ export default class ContentAddressedOtaStore {
     return {
       lynxAppId: appId,
       bundleName: artifact.bundlePath,
+      bundlePath: artifact.bundlePath,
+      env: manifest.env,
+      hostApp: manifest.hostApp,
       filePath: filePath,
       releaseId: ref.releaseId,
       manifestId: ref.manifestId,
@@ -1171,6 +1174,9 @@ export default class ContentAddressedOtaStore {
     return {
       lynxAppId: appId,
       bundleName: manifest.bundles[0]?.bundlePath ?? '',
+      bundlePath: manifest.bundles[0]?.bundlePath,
+      env: manifest.env,
+      hostApp: manifest.hostApp,
       filePath: this.objectPath(appId, manifest.bundles[0]?.objectId ?? manifest.bundles[0]?.bundleSha256 ?? ''),
       releaseId: manifest.releaseId,
       manifestId: ref.manifestId,

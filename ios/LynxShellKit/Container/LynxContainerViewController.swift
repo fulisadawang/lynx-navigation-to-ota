@@ -563,12 +563,14 @@ final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
         lynxView = nil
         releaseCurrentLease()
 
+        let bundleRuntime = request.isOtaRequest ? LynxShell.otaRuntime() : nil
         monitorScope = LynxMonitor.beginView(kind: .page, loadKind: monitorLoadKind, visibility: monitorVisibility)
         monitorScope?.setRequest(source: request.isOtaRequest ? .ota : (RemoteBundlePolicy.isRemote(request.bundleURL) ? .directHTTPS : .directAsset),
-                                 appId: request.lynxAppId, bundleName: request.bundleName)
+                                 appId: request.lynxAppId, bundleName: request.bundleName,
+                                 otaScope: bundleRuntime?.monitoringScope)
         let generation = loadGeneration
         if request.isOtaRequest {
-            prepareOtaBundle(generation: generation)
+            prepareOtaBundle(generation: generation, runtime: bundleRuntime)
         } else {
             if RemoteBundlePolicy.isRemote(request.bundleURL) && !request.transitionSpec.explicitlyRequested {
                 loadingView.show(message: "正在加载远程 Bundle…")
@@ -578,14 +580,14 @@ final class LynxContainerViewController: UIViewController, ShellSystemUIOwner {
     }
 
     /** OTA 页面先等待 current/下载/SHA/激活完成；等待期间不会创建空 LynxView。 */
-    private func prepareOtaBundle(generation: UUID) {
+    private func prepareOtaBundle(generation: UUID, runtime: LynxBundleRuntime?) {
         preparedUserIdentityEpoch = LynxRouter.otaUserIdentityEpoch
         guard let appId = request.lynxAppId,
               let bundleName = request.bundleName else {
             handleTemplateLoadFailure(generation: generation, message: "OTA 路由缺少 lynxAppId 或 bundleName")
             return
         }
-        guard let runtime = LynxShell.otaRuntime() else {
+        guard let runtime else {
             handleTemplateLoadFailure(generation: generation, message: "OTA 页面未配置 Router 内置 OTA runtime")
             return
         }

@@ -202,6 +202,12 @@ public enum LynxOtaError: LocalizedError {
     }
 }
 
+/** 只包含 Runtime 初始化时固定的 OTA 作用域，不暴露 SDK 或用户身份。 */
+struct LynxBundleMonitoringScope: Sendable {
+    let env: String
+    let hostApp: String
+}
+
 /** OTA Runtime 向页面容器交付的已校验 current，不暴露 Manifest 或 staging 路径。 */
 struct PreparedOtaBundle {
     let lynxAppId: String
@@ -218,6 +224,10 @@ struct PreparedOtaBundle {
     let selectionKind: String?
     let releaseSequence: String?
     let resourceSnapshot: OtaInstalledRelease?
+    let env: String?
+    let hostApp: String?
+    let expectedSha256: String?
+    let bundlePath: String?
 
     init(
         lynxAppId: String,
@@ -230,7 +240,11 @@ struct PreparedOtaBundle {
         userIdentityEpoch: UInt64? = nil,
         selectionKind: String? = nil,
         releaseSequence: String? = nil,
-        resourceSnapshot: OtaInstalledRelease? = nil
+        resourceSnapshot: OtaInstalledRelease? = nil,
+        env: String? = nil,
+        hostApp: String? = nil,
+        expectedSha256: String? = nil,
+        bundlePath: String? = nil
     ) {
         self.lynxAppId = lynxAppId
         self.bundleName = bundleName
@@ -242,12 +256,21 @@ struct PreparedOtaBundle {
         self.userIdentityEpoch = userIdentityEpoch
         self.selectionKind = selectionKind
         self.releaseSequence = releaseSequence
-        self.resourceSnapshot = resourceSnapshot ?? releaseLease?.release
+        let snapshot = resourceSnapshot ?? releaseLease?.release
+        let snapshotBundle = snapshot?.bundles.first(where: { $0.bundleName == bundleName || $0.bundlePath == bundleName })
+        self.resourceSnapshot = snapshot
+        self.env = snapshot?.context.env.rawValue ?? env
+        self.hostApp = snapshot?.context.app.rawValue ?? hostApp
+        self.expectedSha256 = releaseLease?.bundle.bundleSha256
+            ?? snapshotBundle?.bundleSha256
+            ?? expectedSha256
+        self.bundlePath = releaseLease?.bundle.bundlePath ?? snapshotBundle?.bundlePath ?? bundlePath
     }
 }
 
 /** 页面容器只依赖这个最小能力；无 OTA 服务配置时由 embedded-only runtime 实现。 */
 protocol LynxBundleRuntime {
+    var monitoringScope: LynxBundleMonitoringScope? { get }
     func prepareResources(for prepared: PreparedOtaBundle) async throws -> OtaPreparedResources?
     func prepare(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle
     func resolveCurrent(lynxAppId: String, bundleName: String) async throws -> PreparedOtaBundle?
@@ -289,6 +312,7 @@ protocol LynxNavigationSnapshotRuntime: AnyObject {
 }
 
 extension LynxBundleRuntime {
+    var monitoringScope: LynxBundleMonitoringScope? { nil }
     func recoverFailedCandidate(lynxAppId: String, expectedReleaseId: String?, expectedIdentityEpoch: UInt64?) async throws -> Bool {
         try await rollback(lynxAppId: lynxAppId, reason: "candidate_failed", expectedReleaseId: expectedReleaseId, expectedIdentityEpoch: expectedIdentityEpoch)
     }
@@ -376,6 +400,7 @@ final class OtaDebugPauseAfterRollbackCommitFaultInjector: OtaTransactionFaultIn
  * 刷新；缺包或 SHA 损坏时忽略门控，等待定向下载、校验和原子激活。
  */
 public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
+    nonisolated let monitoringScope: LynxBundleMonitoringScope?
     private let sdk: OtaSDK
     private let embeddedBundleRegistry: EmbeddedBundleRegistry
     private let sdkGate = OtaSDKGate()
@@ -418,6 +443,7 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
         let sdkConfiguration = try configuration.makeSDKConfigurationForRuntime()
         otaEnvironment = sdkConfiguration.environment
         otaApp = sdkConfiguration.app
+        monitoringScope = .init(env: sdkConfiguration.environment.rawValue, hostApp: sdkConfiguration.app.rawValue)
 #if DEBUG
         if ProcessInfo.processInfo.environment["LYNX_TEST_PAUSE_AFTER_ROLLBACK_COMMIT"] == "1" {
             if ProcessInfo.processInfo.environment["LYNX_TEST_RESET_PROCESS_FAULT_MARKER"] == "1" {
@@ -654,7 +680,11 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                 fileURL: embedded.fileURL,
                 releaseId: embedded.releaseId,
                 source: "embedded_baseline",
-                userIdentityEpoch: epoch
+                userIdentityEpoch: epoch,
+                env: monitoringScope?.env,
+                hostApp: monitoringScope?.hostApp,
+                expectedSha256: embedded.sha256,
+                bundlePath: embedded.bundlePath
             )
             return try await pinIfNeeded(value, navigationSessionID: navigationSessionID)
         }
@@ -714,7 +744,11 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                 fileURL: embedded.fileURL,
                 releaseId: embedded.releaseId,
                 source: "embedded_baseline",
-                userIdentityEpoch: epoch
+                userIdentityEpoch: epoch,
+                env: monitoringScope?.env,
+                hostApp: monitoringScope?.hostApp,
+                expectedSha256: embedded.sha256,
+                bundlePath: embedded.bundlePath
             )
         }
         return try prepared(lynxAppId: lynxAppId, bundleName: bundleName, lease: lease, identityEpoch: epoch)
@@ -1240,7 +1274,11 @@ public actor LynxOtaRuntime: LynxBundleRuntime, LynxNavigationSnapshotRuntime {
                 releaseId: embedded.releaseId,
                 source: "embedded_baseline",
                 navigationSnapshotID: snapshot.id,
-                userIdentityEpoch: snapshot.identityEpoch
+                userIdentityEpoch: snapshot.identityEpoch,
+                env: monitoringScope?.env,
+                hostApp: monitoringScope?.hostApp,
+                expectedSha256: embedded.sha256,
+                bundlePath: embedded.bundlePath
             )
         }
         return nil
@@ -1320,7 +1358,9 @@ actor LynxEmbeddedOnlyRuntime: LynxBundleRuntime {
             bundleName: embedded.bundleName,
             fileURL: embedded.fileURL,
             releaseId: embedded.releaseId,
-            source: "embedded_baseline"
+            source: "embedded_baseline",
+            expectedSha256: embedded.sha256,
+            bundlePath: embedded.bundlePath
         )
     }
 
@@ -1336,7 +1376,9 @@ actor LynxEmbeddedOnlyRuntime: LynxBundleRuntime {
             bundleName: embedded.bundleName,
             fileURL: embedded.fileURL,
             releaseId: embedded.releaseId,
-            source: "embedded_baseline"
+            source: "embedded_baseline",
+            expectedSha256: embedded.sha256,
+            bundlePath: embedded.bundlePath
         )
     }
 
@@ -1446,7 +1488,9 @@ actor LynxDebugFaultRuntime: LynxBundleRuntime {
             bundleName: descriptor.bundleName,
             fileURL: descriptor.fileURL,
             releaseId: releaseId,
-            source: source
+            source: source,
+            expectedSha256: descriptor.sha256,
+            bundlePath: descriptor.bundlePath
         )
     }
 
@@ -1462,7 +1506,9 @@ actor LynxDebugFaultRuntime: LynxBundleRuntime {
             bundleName: descriptor.bundleName,
             fileURL: descriptor.fileURL,
             releaseId: descriptor.releaseId,
-            source: "embedded_baseline"
+            source: "embedded_baseline",
+            expectedSha256: descriptor.sha256,
+            bundlePath: descriptor.bundlePath
         )
     }
 }
@@ -1518,7 +1564,9 @@ actor LynxDebugMockOtaRuntime: LynxBundleRuntime {
             bundleName: descriptor.bundleName,
             fileURL: descriptor.fileURL,
             releaseId: releaseId,
-            source: "ota_current"
+            source: "ota_current",
+            expectedSha256: descriptor.sha256,
+            bundlePath: descriptor.bundlePath
         )
     }
 
@@ -1531,7 +1579,9 @@ actor LynxDebugMockOtaRuntime: LynxBundleRuntime {
             bundleName: descriptor.bundleName,
             fileURL: descriptor.fileURL,
             releaseId: descriptor.releaseId,
-            source: "embedded_baseline"
+            source: "embedded_baseline",
+            expectedSha256: descriptor.sha256,
+            bundlePath: descriptor.bundlePath
         )
     }
 }

@@ -2,6 +2,7 @@ import { AsyncCallback, BusinessError } from '@ohos.base';
 import http from '@ohos.net.http';
 import resourceManager from '@ohos.resourceManager';
 import fs from '@ohos.file.fs';
+import cryptoFramework from '@ohos.security.cryptoFramework';
 import { LynxResourceRequest, LynxTemplateResourceFetcher, TemplateProviderResult } from '@lynx/lynx';
 import ShellConstants from '../common/ShellConstants';
 import ShellSecurityPolicy from '../common/ShellSecurityPolicy';
@@ -23,6 +24,8 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
   private readonly preparedStorageRoot: string;
   private readonly preparedBytes: ArrayBuffer | null;
   private readonly asyncResolver?: OtaAsyncResourceResolver;
+  private readonly directBundleUrl: string;
+  private readonly onDirectBundleIdentity?: (sha256: string | null) => void;
   private preparedConsumed: boolean = false;
   private readonly activeRequests: Set<http.HttpRequest> = new Set();
   private requestGeneration: number = 0;
@@ -33,7 +36,9 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
     preparedFilePath: string = '',
     preparedStorageRoot: string = '',
     preparedBytes: ArrayBuffer | null = null,
-    asyncResolver?: OtaAsyncResourceResolver
+    asyncResolver?: OtaAsyncResourceResolver,
+    directBundleUrl: string = '',
+    onDirectBundleIdentity?: (sha256: string | null) => void
   ) {
     super();
     this.allowHttpInDebug = allowHttpInDebug;
@@ -42,15 +47,41 @@ export default class ShellTemplateResourceFetcher extends LynxTemplateResourceFe
     this.preparedStorageRoot = preparedStorageRoot;
     this.preparedBytes = preparedBytes;
     this.asyncResolver = asyncResolver;
+    this.directBundleUrl = directBundleUrl;
+    this.onDirectBundleIdentity = onDirectBundleIdentity;
   }
 
   fetchTemplate(
     request: LynxResourceRequest,
     callback: AsyncCallback<TemplateProviderResult, void>
   ): void {
+    const generation = this.requestGeneration;
     this.loadBinary(request.url, (error: BusinessError, data: ArrayBuffer) => {
-      callback(error, { binary: data });
+      if ((error !== undefined && error !== null) || this.onDirectBundleIdentity === undefined ||
+        request.url !== this.directBundleUrl) {
+        callback(error, { binary: data });
+        return;
+      }
+      // 对实际交给 SDK 的主包做系统异步摘要；Async/SSR 不改写主包身份。
+      this.directDigest(data).then((sha256: string) => {
+        if (generation !== this.requestGeneration) return;
+        this.onDirectBundleIdentity?.(sha256);
+        callback(undefined, { binary: data });
+      }, (_error: Error) => {
+        if (generation !== this.requestGeneration) return;
+        this.onDirectBundleIdentity?.(null);
+        callback(undefined, { binary: data });
+      });
     });
+  }
+
+  private async directDigest(bytes: ArrayBuffer): Promise<string> {
+    const digest = cryptoFramework.createMd('SHA256');
+    for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) {
+      await digest.update({ data: new Uint8Array(bytes, offset, Math.min(64 * 1024, bytes.byteLength - offset)) });
+    }
+    const result = await digest.digest();
+    return Array.from(result.data).map((byte: number) => byte.toString(16).padStart(2, '0')).join('');
   }
 
   /** 预置路由复用同一安全模板Provider，只预取字节，不创建LynxView或JS runtime。 */

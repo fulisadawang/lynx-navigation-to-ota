@@ -28,6 +28,9 @@ class LynxOtaRuntime(
 ) : ActivityBundleRuntime {
     private val appContext = context.applicationContext
     private val sdkConfiguration = config.toSdkConfiguration(appContext)
+    override val monitoringScope = OtaMonitoringScope(
+        sdkConfiguration.environment.wireValue, sdkConfiguration.hostApp.wireValue,
+    )
     private val sdk = OtaSdk(sdkConfiguration)
     private val storageDiagnostics = OtaStorageDiagnostics(
         sdkConfiguration.storageDirectory,
@@ -525,6 +528,9 @@ class LynxOtaRuntime(
                 source = "embedded_baseline",
                 userIdentityEpoch = userIdentityEpoch,
                 sidecarResources = embeddedBundleRegistry.resolveSidecars(embedded),
+                env = monitoringScope.env,
+                hostApp = monitoringScope.hostApp,
+                bundlePath = embedded.bundlePath,
             )
         }
     }
@@ -578,6 +584,9 @@ class LynxOtaRuntime(
         source: String = "ota_current",
         navigationSnapshotID: String? = null,
     ): PreparedActivityBundle = PreparedActivityBundle(
+        env = monitoringScope.env,
+        hostApp = monitoringScope.hostApp,
+        bundlePath = lease.bundle.bundlePath,
         lynxAppId = lynxAppId,
         bundleName = bundleName,
         file = lease.file,

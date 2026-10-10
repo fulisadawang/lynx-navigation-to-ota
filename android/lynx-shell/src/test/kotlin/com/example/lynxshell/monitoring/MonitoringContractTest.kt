@@ -1,5 +1,6 @@
 package com.example.lynxshell.monitoring
 
+import com.example.lynxshell.ota.PreparedActivityBundle
 import com.lynx.tasm.performance.performanceobserver.LoadBundleEntry
 import com.lynx.tasm.performance.performanceobserver.PipelineEntry
 import org.json.JSONObject
@@ -26,10 +27,10 @@ class MonitoringContractTest {
         assertTrue(value.contains("debugmetadata:abc-123"))
     }
 
-    @Test fun mainThreadNumbersWithoutFormatEvidenceStayUnknown() {
+    @Test fun mainThreadNumbersWithoutFormatEvidenceRemainReportedForLaterSymbolication() {
         val frames = MonitorProjection.parseFrames("    at handler (file:///main-thread.js:23:13)", "debugmetadata:key1", mutableListOf())
         assertEquals(1, frames.size)
-        assertEquals(ErrorPosition.Unknown, frames.single().position)
+        assertEquals(ErrorPosition.Reported(23, 13), frames.single().position)
         assertEquals("key1", frames.single().debugKey)
         val explicit = MonitorProjection.parseFrames("function_id:23 pc_index:13 debugmetadata:key2", null, mutableListOf())
         assertEquals(ErrorPosition.FunctionPc(23, 13), explicit.single().position)
@@ -40,7 +41,203 @@ class MonitoringContractTest {
             ScriptPositionFormats(mapOf("text-key" to ScriptPositionFormat.LINE_COLUMN)))
         assertEquals(ErrorPosition.LineColumn(20, 0), frames.single().position)
         val unknown = MonitorProjection.parseFrames("    at click (file:///background.js:20:0)", null, mutableListOf())
-        assertEquals(ErrorPosition.Unknown, unknown.single().position)
+        assertEquals(ErrorPosition.Reported(20, 0), unknown.single().position)
+    }
+
+    @Test fun sdkStructuredFramesKeepPerFrameDebugKeysAndReportedPositions() {
+        val report = """
+            {"error":{"rawError":{"message":"tap token=private","stack":"at ignored (file:///fallback.js:1:2)"},
+            "sentry":{"exception":{"values":[{"stacktrace":{"frames":[
+              {"filename":"file:///main-thread.js?token=secret","function":"runMain","release":"debugmetadata:main-key","lineno":23,"colno":13},
+              {"filename":"file:///background.js","function":"runBackground","release":"debugmetadata:background-key","lineno":"41","colno":"0"}
+            ]}}]}}}}
+        """.trimIndent()
+
+        val projection = MonitorProjection.error(
+            CapturedJsError("1101", "110100", "error", "main_thread", report, report, false),
+            MonitorTextPolicy(),
+            "running",
+            ScriptPositionFormats(mapOf("main-key" to ScriptPositionFormat.FUNCTION_PC)),
+        )
+
+        val payload = projection.payload
+        assertEquals("tap token=[redacted]", payload.message)
+        assertEquals(2, payload.frames.size)
+        assertEquals("main-key", payload.frames[0].debugKey)
+        assertEquals(ErrorPosition.FunctionPc(23, 13), payload.frames[0].position)
+        assertEquals("background-key", payload.frames[1].debugKey)
+        assertEquals(ErrorPosition.Reported(41, 0), payload.frames[1].position)
+        assertFalse(payload.frames[0].file.orEmpty().contains("token=secret"))
+    }
+
+    @Test fun nestedSdkJsonUsesRawErrorWithoutForwardingWrapperText() {
+        val report = """
+            {"error":{"rawError":{"message":"operation token=secret","stack":"at task (file:///main.js:8:2)"},
+            "sentry":{"exception":{"values":[]}},"ignored_wrapper":"must_not_leave_device"}}
+        """.trimIndent()
+
+        val projection = MonitorProjection.error(
+            CapturedJsError("100", "0", "error", "background", report, report, false),
+            MonitorTextPolicy(),
+            "running",
+            ScriptPositionFormats(),
+        )
+        val event = monitorEvent(identity(), projection.payload)
+        val json = event.toJson()
+
+        assertEquals("operation token=[redacted]", projection.payload.message)
+        assertEquals("at task (file:///main.js:8:2)", projection.payload.rawStack)
+        assertFalse(json.contains("ignored_wrapper"))
+        assertFalse(json.contains("must_not_leave_device"))
+        assertFalse(json.contains("token=secret"))
+    }
+
+    @Test fun structuredSdkFramesHonorBoundAndExposeTruncation() {
+        val frames = org.json.JSONArray()
+        repeat(65) { index ->
+            frames.put(JSONObject()
+                .put("filename", "file:///background-$index.js")
+                .put("function", "handler$index")
+                .put("release", "debugmetadata:key-$index")
+                .put("lineno", index + 1)
+                .put("colno", 0))
+        }
+        val report = JSONObject().put("error", JSONObject()
+            .put("rawError", JSONObject().put("message", "many frames").put("stack", "at fallback (file:///fallback.js:1:2)"))
+            .put("sentry", JSONObject().put("exception", JSONObject().put("values", org.json.JSONArray().put(
+                JSONObject().put("stacktrace", JSONObject().put("frames", frames)),
+            ))))).toString()
+
+        val projection = MonitorProjection.error(
+            CapturedJsError("100", "0", "error", "background", report, report, true),
+            MonitorTextPolicy(),
+            "running",
+            ScriptPositionFormats(),
+        )
+
+        assertEquals(64, projection.payload.frames.size)
+        assertEquals("key-0", projection.payload.frames.first().debugKey)
+        assertTrue("frames" in projection.truncated)
+        assertTrue("sdk_error_input" in projection.truncated)
+    }
+
+    @Test fun preparedOtaIdentityFreezesScopeAndBundlePathIntoProviderJson() {
+        val prepared = PreparedActivityBundle(
+            lynxAppId = "travel-app",
+            bundleName = "HomePage.lynx.bundle",
+            bytes = "bundle".toByteArray(),
+            releaseId = "release-3",
+            releaseSequence = "3",
+            sha256 = "a".repeat(64),
+            env = "production",
+            hostApp = "travel-ios-android",
+            bundlePath = "pages/home/HomePage.lynx.bundle",
+        )
+
+        val identity = BundleIdentities.prepared(prepared)
+        val bundle = JSONObject(monitorEvent(identity).toJson()).getJSONObject("bundle")
+
+        assertEquals("travel-app", bundle.getString("lynxAppId"))
+        assertEquals("HomePage.lynx.bundle", bundle.getString("bundleName"))
+        assertEquals("release-3", bundle.getString("releaseId"))
+        assertEquals("production", bundle.getString("env"))
+        assertEquals("travel-ios-android", bundle.getString("hostApp"))
+        assertEquals("pages/home/HomePage.lynx.bundle", bundle.getString("bundlePath"))
+        assertEquals("verified", bundle.getString("identityStatus"))
+    }
+
+    @Test fun invalidOtaScopeFieldsAreRemovedAndSurfacedInEventQuality() {
+        val identity = BundleIdentities.prepared(PreparedActivityBundle(
+            lynxAppId = "travel-app",
+            bundleName = "HomePage.lynx.bundle",
+            bytes = "bundle".toByteArray(),
+            sha256 = "a".repeat(64),
+            env = " ",
+            hostApp = "汉".repeat(683),
+            bundlePath = "pages/home/HomePage.lynx.bundle",
+        ))
+        assertNull(identity.env)
+        assertNull(identity.hostApp)
+        assertTrue("bundle.env" in identity.identityInvalidFields)
+        assertTrue("bundle.hostApp" in identity.identityTruncatedFields)
+
+        val provider = WaitingProvider()
+        val runtime = runtime(provider)
+        runtime.start()
+        requireNotNull(runtime.reserve(ContainerKind.PAGE, LoadKind.INITIAL, identity, Visibility.VISIBLE))
+        provider.awaitEvents = CountDownLatch(1)
+        provider.ready.complete(InitResult("ready"))
+        assertTrue(provider.awaitEvents.await(5, TimeUnit.SECONDS))
+
+        val event = provider.snapshot().single()
+        assertTrue("bundle.env" in event.quality.invalidFields)
+        assertTrue("bundle.hostApp" in event.quality.truncatedFields)
+        val bundle = JSONObject(event.toJson()).getJSONObject("bundle")
+        assertTrue(bundle.isNull("env"))
+        assertTrue(bundle.isNull("hostApp"))
+        runtime.dispose()
+    }
+
+    @Test fun preparedBundlePathRejectsNonLogicalOrAmbiguousValues() {
+        val invalidPaths = listOf(
+            "/pages/home.lynx.bundle",
+            "\\pages\\home.lynx.bundle",
+            "pages\\home.lynx.bundle",
+            "pages\u0000home.lynx.bundle",
+            "./pages/home.lynx.bundle",
+            "pages/../home.lynx.bundle",
+            "pages/./home.lynx.bundle",
+            "https://cdn.example/home.lynx.bundle",
+        )
+
+        invalidPaths.forEach { bundlePath ->
+            val identity = BundleIdentities.prepared(PreparedActivityBundle(
+                lynxAppId = "travel-app",
+                bundleName = "HomePage.lynx.bundle",
+                bytes = "bundle".toByteArray(),
+                sha256 = "a".repeat(64),
+                env = "test",
+                hostApp = "travel-app",
+                bundlePath = bundlePath,
+            ))
+            assertNull("$bundlePath must not reach Provider", identity.bundlePath)
+            assertTrue("bundle.bundlePath" in identity.identityInvalidFields)
+        }
+    }
+
+    @Test fun invalidSdkDebugMetadataNeverReachesProviderProjection() {
+        val queryRelease = "debugmetadata:main-key?access_token=private"
+        val overlongRelease = "debugmetadata:" + "a".repeat(1025)
+        val frames = org.json.JSONArray()
+            .put(JSONObject().put("filename", "file:///main.js").put("release", queryRelease).put("lineno", 1).put("colno", 2))
+            .put(JSONObject().put("filename", "file:///other.js").put("release", overlongRelease).put("lineno", 3).put("colno", 4))
+        val report = JSONObject().put("error", JSONObject()
+            .put("release", queryRelease)
+            .put("rawError", JSONObject().put("message", "bad release").put("stack", "at render (file:///fallback.js:5:6)"))
+            .put("sentry", JSONObject().put("exception", JSONObject().put("values", org.json.JSONArray().put(
+                JSONObject().put("stacktrace", JSONObject().put("frames", frames)),
+            ))))).toString()
+
+        val projection = MonitorProjection.error(
+            CapturedJsError("100", "0", "error", "background", report, report, false),
+            MonitorTextPolicy(),
+            "running",
+            ScriptPositionFormats(),
+        )
+        val stackFrames = MonitorProjection.parseFrames(
+            "at render (file:///fallback.js:5:6) $queryRelease",
+            null,
+            mutableListOf(),
+        )
+        val json = monitorEvent(identity(), projection.payload).toJson()
+
+        assertTrue("sdk_release" in projection.invalid)
+        assertTrue("frames.release" in projection.invalid)
+        assertTrue(projection.payload.frames.all { it.runtimeRelease == null && it.debugKey == null })
+        assertNull(stackFrames.single().runtimeRelease)
+        assertNull(stackFrames.single().debugKey)
+        assertFalse(json.contains("access_token"))
+        assertFalse(json.contains(overlongRelease))
     }
 
     @Test fun performanceDistinguishesMissingInvalidAndRealZero() {
@@ -97,14 +294,20 @@ class MonitoringContractTest {
         runtime.dispose()
     }
 
-    @Test fun sameViewReloadNeverReassignsUnknownEventsToCurrentBundle() {
+    @Test fun sameViewReloadNeverReassignsEventsToLaterPreparedBundle() {
         val provider = WaitingProvider()
         val runtime = runtime(provider)
         runtime.start()
-        val binding = requireNotNull(runtime.reserve(ContainerKind.TAB, LoadKind.INITIAL, identity(), Visibility.VISIBLE))
-        binding.bytesResolved(byteArrayOf(1, 2))
+        val first = PreparedActivityBundle(
+            lynxAppId = "travel-app", bundleName = "HomePage.lynx.bundle", bytes = byteArrayOf(1, 2),
+            releaseId = "release-1", sha256 = "a".repeat(64), env = "test", hostApp = "host", bundlePath = "home.lynx.bundle",
+        )
+        val later = first.copy(releaseId = "release-2", sha256 = "b".repeat(64))
+        val binding = requireNotNull(runtime.reserve(ContainerKind.TAB, LoadKind.INITIAL, BundleIdentities.prepared(first), Visibility.VISIBLE))
+        binding.resolvePrepared(first)
         binding.pageStarted(false)
         binding.pageStarted(true)
+        binding.resolvePrepared(later)
         binding.performance(pipeline(10.0))
         binding.performance(pipeline(20.0))
         provider.awaitEvents = CountDownLatch(5)
@@ -114,6 +317,7 @@ class MonitoringContractTest {
             assertEquals("exact_view", it.quality.association)
             assertNull(it.loadId); assertNull(it.loadKind); assertNull(it.bundle)
             assertTrue("ambiguous_load" in it.quality.missingFields)
+            assertFalse(it.toJson().contains("release-2"))
         }
         runtime.dispose()
     }
@@ -241,6 +445,25 @@ class MonitoringContractTest {
         MonitorConfig(provider = provider, performanceSampleRate = rate),
     )
     private fun identity() = BundleIdentity("direct_asset", null, "fixture.lynx.bundle")
+    private fun monitorEvent(identity: BundleIdentity, payload: MonitorPayload = JsErrorPayload(
+        "100", null, "error", "background", "fixture", null, emptyList(), phase = "running",
+    )) = MonitorEvent(
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222",
+        1,
+        "4.1.0",
+        "42",
+        "33333333-3333-4333-8333-333333333333",
+        null,
+        ContainerKind.PAGE,
+        "44444444-4444-4444-8444-444444444444",
+        LoadKind.INITIAL,
+        identity,
+        Visibility.VISIBLE,
+        EventQuality("exact_load"),
+        Sampling("none", 1.0),
+        payload,
+    )
     private fun pipeline(start: Double) = PipelineEntry(hashMapOf("name" to "pipeline", "entryType" to "pipeline",
         "pipelineStart" to start, "pipelineEnd" to start + 1))
 
