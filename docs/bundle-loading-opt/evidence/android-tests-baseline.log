@@ -1,0 +1,84 @@
+
+com.example.lynxshell.sample.BundleLoadingOptimizationTest:
+Failure in testCloseReleasesUnconsumedPreparedBytes:
+junit.framework.AssertionFailedError: 销毁后不能保留未消费源字节
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.testCloseReleasesUnconsumedPreparedBytes(BundleLoadingOptimizationTest.kt:134)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+
+Failure in testConcurrentRequestsConsumePreparedBytesOnlyOnce:
+junit.framework.AssertionFailedError: Expected: <null> but was: [B@8f22604
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.testConcurrentRequestsConsumePreparedBytesOnlyOnce(BundleLoadingOptimizationTest.kt:149)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+..
+Failure in testMismatchedUrlDoesNotConsumePreparedBytes:
+junit.framework.AssertionFailedError: Expected: <null> but was: [B@7ab6dd1
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.testMismatchedUrlDoesNotConsumePreparedBytes(BundleLoadingOptimizationTest.kt:127)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+.
+Failure in testPreparedBytesAreSameInstanceAndReleasedAfterConsumption:
+junit.framework.AssertionFailedError: 消费后 Provider 不能继续保留源字节
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.testPreparedBytesAreSameInstanceAndReleasedAfterConsumption(BundleLoadingOptimizationTest.kt:113)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+
+BundleLoadingOptimization: file-read payload=2097152 repetitions=3 allocatedApprox=19075072 elapsedNs=8562000
+
+Failure in testPreparedFileAllocatesOnePayloadBuffer:
+junit.framework.AssertionFailedError: 读取应只分配一个载荷数组；近似分配=19075072
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.testPreparedFileAllocatesOnePayloadBuffer(BundleLoadingOptimizationTest.kt:81)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+..
+Failure in testPreparedFileRejectsChangedLengthSnapshot:
+junit.framework.AssertionFailedError: 预备文件应拒绝: length.bundle
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.assertReadFails(BundleLoadingOptimizationTest.kt:255)
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.testPreparedFileRejectsChangedLengthSnapshot(BundleLoadingOptimizationTest.kt:92)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+.
+BundleLoadingOptimization: lease-read mainManifestOpens=3 asyncManifestOpens=2
+
+Failure in testWarmLeaseReadsEachManifestOnlyOnce:
+junit.framework.AssertionFailedError: 同一次 lease 主 Manifest 重复解析 expected:<1> but was:<3>
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.testWarmLeaseReadsEachManifestOnlyOnce(BundleLoadingOptimizationTest.kt:172)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+
+Test results for InstrumentationTestRunner=.F.F...F..F.F...F..F
+Time: 0.658
+
+FAILURES!!!
+Tests run: 13,  Failures: 7,  Errors: 0
+
+

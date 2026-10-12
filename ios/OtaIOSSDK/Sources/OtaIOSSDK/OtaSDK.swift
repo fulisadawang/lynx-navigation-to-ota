@@ -164,22 +164,18 @@ public actor OtaSDK {
 
     /// 页面只读准备；lazy 资源从已激活的 Async 快照读取，不在页面请求时联网。
     public func prepareResources(release: OtaInstalledRelease, ownerBundlePath: String) async throws -> OtaPreparedResources? {
-        guard release.asyncBundleManifest != nil else { return nil }
+        guard let reference = release.asyncBundleManifest else { return nil }
         guard selectionStoreSupported else { throw OtaSelectionError.requiresStoreV3 }
         let appId = release.context.lynxAppId
-        let reference = release.asyncBundleManifest
         let asyncStore = asyncBundleStore
-        var paths: [String: URL] = [:]
-        if let reference {
-            paths = try await asyncStore.localPaths(owner: ownerBundlePath, appId: appId, reference: reference)
-        }
+        let index = try await asyncStore.prepareIndex(owner: ownerBundlePath, appId: appId, reference: reference,
+                                                      owners: Set(release.bundles.map(\.bundlePath)))
         let transaction = releaseTransaction
-        return OtaPreparedResources(hasAsyncResources: true, localPaths: paths, resolver: { url in
-            guard let reference else { throw OtaSidecarError.unknownRequest }
-            return try await asyncStore.resolve(url, owner: ownerBundlePath, appId: appId, reference: reference)
+        return OtaPreparedResources(hasAsyncResources: true, localPaths: index.localPaths, resolver: { url in
+            return try await asyncStore.resolve(url, index: index)
         }, closeAction: {
             try? await transaction.pruneAllUnreferencedReleases()
-        })
+        }, pathResolver: { index.localURL($0) })
     }
 
     public nonisolated func registerUserId(_ userId: String?) throws -> Bool { try userContextBox.register(userId) }

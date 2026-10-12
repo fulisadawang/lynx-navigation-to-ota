@@ -1,0 +1,52 @@
+
+com.example.lynxshell.sample.LynxEngineGroupReuseTest:
+LynxEngineGroupReuse: small page=engine-reuse-small-f9a3b270-6f5d-4271-a7d4-2beaf21032e6 engine=null enginePtr=null shellPtr=-5476376649412188400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: small page=engine-reuse-small-2c282905-69cc-4380-8967-6fec43cc4d97 engine=null enginePtr=null shellPtr=-5476376649412116400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: small page=engine-reuse-small-f9a3b270-6f5d-4271-a7d4-2beaf21032e6 engine=null enginePtr=null shellPtr=-5476376649412188400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-cf29d024-8eb3-4651-b603-56399f00ff2b engine=null enginePtr=null shellPtr=-5476376649412094800 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-bc54cb09-3a29-4c15-9e8c-c42e7aba36ed engine=null enginePtr=null shellPtr=-5476376649412187600 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-cf29d024-8eb3-4651-b603-56399f00ff2b engine=null enginePtr=null shellPtr=-5476376649412094800 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: async page=engine-reuse-async-8574d44d-85d5-4b42-8dce-a0b5c640b1f6 engine=null enginePtr=null shellPtr=-5476376649412175600 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxEngineGroupReuse: async page=engine-reuse-async-d6a30f76-b325-422b-a2c7-bfd5d0374a3a engine=null enginePtr=null shellPtr=-5476376649412113200 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxEngineGroupReuse: async page=engine-reuse-async-8574d44d-85d5-4b42-8dce-a0b5c640b1f6 engine=null enginePtr=null shellPtr=-5476376649412175600 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+.
+LynxEngineGroupReuse: small page=engine-reuse-small-98f805bb-864e-4145-8c6e-199449ee8a07 engine=null enginePtr=null shellPtr=-5476376649412127600 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: small page=engine-reuse-small-6a4a24d1-5ede-4660-bc8e-93735d954ce8 engine=null enginePtr=null shellPtr=-5476376649412136400 READY=bundle-bench:small:payload=0:checksum=0:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-be9e6404-91f0-4196-9151-ac50bcc7c5bc engine=null enginePtr=null shellPtr=-5476376649412102800 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: large page=engine-reuse-large-62e582bb-8ee2-4598-975f-6f689957062f engine=null enginePtr=null shellPtr=-5476376649412100400 READY=bundle-bench:large:payload=3145728:checksum=1009422673:scripts=0
+
+LynxEngineGroupReuse: async page=engine-reuse-async-f92dc551-4574-4868-ab80-0a8272c14198 engine=null enginePtr=null shellPtr=-5476376649412086800 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+LynxEngineGroupReuse: async page=engine-reuse-async-96e05ed4-8bf0-45a2-8d22-bdf71376c49f engine=null enginePtr=null shellPtr=-5476376649412191600 READY=bundle-bench:async:payload=0:checksum=56430:scripts=10
+
+Failure in testDestroyedSameScopeReusesRealEngineWithFreshNativeSource:
+junit.framework.AssertionFailedError: 完整真实首屏/READY/source 已采集，但同scope destroy后没有复用SDK引擎：small: sdkEngine对象命中=false, 非零wrapper指针命中=false; large: sdkEngine对象命中=false, 非零wrapper指针命中=false; async: sdkEngine对象命中=false, 非零wrapper指针命中=false
+	at com.example.lynxshell.sample.LynxEngineGroupReuseTest$testDestroyedSameScopeReusesRealEngineWithFreshNativeSource$1.invoke(LynxEngineGroupReuseTest.kt:70)
+	at com.example.lynxshell.sample.LynxEngineGroupReuseTest$testDestroyedSameScopeReusesRealEngineWithFreshNativeSource$1.invoke(LynxEngineGroupReuseTest.kt:36)
+	at com.example.lynxshell.sample.LynxEngineGroupReuseTest.withFixture(LynxEngineGroupReuseTest.kt:156)
+	at com.example.lynxshell.sample.LynxEngineGroupReuseTest.testDestroyedSameScopeReusesRealEngineWithFreshNativeSource(LynxEngineGroupReuseTest.kt:36)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+
+Test results for InstrumentationTestRunner=..F
+Time: 20.163
+
+FAILURES!!!
+Tests run: 2,  Failures: 1,  Errors: 0
+
+

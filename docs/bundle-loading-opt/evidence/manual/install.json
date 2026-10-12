@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-09",
+  "device": "emulator-5554",
+  "appId": "com.hugboga.custom.otae2e",
+  "branch": "codex/bundle-loading-opt",
+  "apkSha256": "6622652fd281bc59e1dd49a184ba3bc1c95a33ce5cc7c965eecffd939d655d64",
+  "install": "adb install -r success",
+  "manualCases": {
+    "small": "READY accepted",
+    "large": "READY payload3145728 checksum1009422673",
+    "async": "READY scripts10 checksum56430"
+  },
+  "store": "App10030071 current r20260421_002 downloaded manifest valid 16files",
+  "routeKey": "explicit path, strict source/payload validation",
+  "performanceSamples": "not replaced; manual UI is separate validation"
+}

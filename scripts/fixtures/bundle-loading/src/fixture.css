@@ -1,0 +1,22 @@
+.fixture-page {
+  width: 100%;
+  height: 100%;
+  background-color: #eef3f8;
+}
+
+.fixture-card {
+  margin: 32rpx;
+  padding: 36rpx;
+  border-radius: 24rpx;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.eyebrow { font-size: 22rpx; color: #405a72; }
+.title { margin-top: 24rpx; font-size: 38rpx; font-weight: bold; color: #122738; }
+.status { margin-top: 28rpx; font-size: 28rpx; color: #17634e; }
+.value { margin-top: 20rpx; font-size: 28rpx; color: #122738; }
+.hint { margin-top: 30rpx; font-size: 24rpx; color: #596d7e; }
+.button { margin-top: 32rpx; padding: 24rpx; border-radius: 16rpx; background-color: #174e72; }
+.button-text { text-align: center; font-size: 28rpx; color: #ffffff; }

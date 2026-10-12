@@ -37,6 +37,7 @@ Store、容器和路由链路。
 - 有界保留 current / previous / candidate
 - 页面级 Release lease 与延迟回收
 - Async Bundle 作为 Release 绑定的可选 sidecar，由同一 Store v3 current / previous / candidate 激活与回滚
+- 页面 `prepareResources` 只读取并解码一次已校验 Async 清单，按 owner 建立不可变请求键/URL 索引。byte 与 path 查询共享唯一匹配，歧义均拒绝；byte 读取逐目标校验 size/SHA，path 只做准备期校验，不新增同步图片校验、目标字节缓存或回收政策。
 - 导航 session release snapshot，保证同一页面栈不混用不同版本
 - 冷启动 orphan / staging 清理
 - 下载前容量预检

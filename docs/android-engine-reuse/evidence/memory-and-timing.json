@@ -1,0 +1,45 @@
+{
+  "scope": "Small synthetic fixture, one Debug emulator process, no forced GC during timing samples",
+  "iterations": 10,
+  "readyPssKb": [
+    197004,
+    198622,
+    199932,
+    197248,
+    198608,
+    200060,
+    201640,
+    197684,
+    199004,
+    200360
+  ],
+  "afterDestroyPssKb": [
+    188996,
+    190702,
+    192344,
+    189384,
+    198032,
+    192204,
+    193668,
+    189804,
+    191148,
+    192508
+  ],
+  "sdkFirstLayoutMs": [
+    36.572,
+    11.538,
+    16.295,
+    18.063,
+    32.394,
+    19.983,
+    20.328,
+    30.225,
+    23.033,
+    25.892
+  ],
+  "firstMs": 36.572,
+  "repeatMedianMs": 20.328,
+  "afterDestroyDeltaKb": 3512,
+  "causalSpeedupProven": false,
+  "noLeakProven": false
+}

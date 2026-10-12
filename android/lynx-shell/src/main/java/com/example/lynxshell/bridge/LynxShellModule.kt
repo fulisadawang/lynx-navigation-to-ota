@@ -299,8 +299,8 @@ class LynxShellModule(context: Context) : LynxModule(context) {
             callback.invoke(result(1002, "当前 LynxContext 没有关联 Activity"))
             return
         }
-        val reply = ShellMessageHub.dispatchFromActivity(
-            activity = activity,
+        val reply = ShellMessageHub.dispatchFromView(
+            view = (mContext as? LynxContext)?.lynxView,
             eventName = eventName,
             payload = payloadMap(payload),
         )

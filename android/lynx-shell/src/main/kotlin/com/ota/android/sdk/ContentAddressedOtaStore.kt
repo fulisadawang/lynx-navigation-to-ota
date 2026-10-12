@@ -759,12 +759,25 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
     ref: Ref,
     bundleName: String,
   ): ReleaseTransaction.BundleLease? {
-    val release = resolveRef(scope, ref) ?: return null
+    if (ref.kind != RefKind.DOWNLOADED) return null
+    val identity = selectionContext()
+    val record = readManifest(scope.lynxAppId, ref.manifestId) ?: return null
+    if (record.manifest.releaseId != ref.releaseId) return null
+    requireScope(ReleaseTransaction.ReleaseScope.fromManifest(record.manifest), scope, "Manifest")
+    // 页面 lease 仍校验完整 Release；仅复用本次解析结果，不建立跨调用清单缓存。
+    if (!record.manifest.bundles.all { hasUsableObject(scope.lynxAppId, it.bundleSha256, it.size) }) return null
+    val async = runCatching {
+      sidecars.requireAsync(scope.lynxAppId, record.manifest.asyncBundleManifest,
+        record.manifest.bundles.map { it.bundlePath }.toSet())
+    }.getOrElse { return null }
+    val installed = installedManifestRelease(scope, record.manifest, record.installedAt)
+    if (identity != null) userContext?.validate(identity)
+    val release = OtaModels.InstalledRelease(installed.context, installed.installedAt, installed.bundles,
+      ref.selection, identity?.identityEpoch, installed.asyncBundleManifest)
     val bundle = findBundle(release, bundleName) ?: return null
-    val file = resolveBundle(scope, ref, bundleName) ?: return null
+    val file = objectPath(scope.lynxAppId, bundle.bundleSha256)
     val usesSidecars = release.asyncBundleManifest != null
-    val viewResources = if (usesSidecars) sidecars.viewResources(scope.lynxAppId, bundle.bundlePath,
-      release.asyncBundleManifest) else null
+    val viewResources = async?.let { sidecars.viewResources(scope.lynxAppId, bundle.bundlePath, it) }
     val key = LeaseKey(canonicalOrAbsolute(storageRoot).path, scope.lynxAppId, ref.manifestId ?: ref.releaseId)
     val token = if (usesSidecars) UUID.randomUUID().toString() else null
     LEASE_COUNTS[key] = (LEASE_COUNTS[key] ?: 0) + 1
@@ -846,6 +859,14 @@ class ContentAddressedOtaStore @JvmOverloads constructor(
   ): OtaModels.InstalledRelease? {
     if (!manifestObjectsUsable(scope.lynxAppId, manifest)) return null
     val installedAt = readManifest(scope.lynxAppId, manifestID)?.installedAt ?: clock.now()
+    return installedManifestRelease(scope, manifest, installedAt)
+  }
+
+  private fun installedManifestRelease(
+    scope: ReleaseTransaction.ReleaseScope,
+    manifest: OtaModels.ReleaseManifest,
+    installedAt: Instant,
+  ): OtaModels.InstalledRelease {
     val bundles = manifest.bundles.map { artifact ->
       OtaModels.InstalledBundle(
         artifact.pageId,

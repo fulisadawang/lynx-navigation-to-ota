@@ -465,6 +465,7 @@ class LynxShellActivity : AppCompatActivity() {
         preparedFile: File?,
         bundleMetadata: Map<String, Any>? = null,
         sidecarResources: com.ota.android.sdk.OtaSidecarViewResources? = null,
+        preparedBundle: PreparedActivityBundle? = null,
     ) {
         val monitoring = monitoringView
         val provider = ShellTemplateProvider(
@@ -485,36 +486,34 @@ class LynxShellActivity : AppCompatActivity() {
         templateProvider = provider
 
         runCatching {
-            val client = object : LynxViewClient() {
-                /** 动画可以消费加载完成，OTA 健康只能消费 SDK 的真实首屏。 */
-                private fun notifyTargetVisualReady(actualFirstScreen: Boolean) {
-                    runOnUiThread {
-                        if (!isCurrentGeneration(generation)) return@runOnUiThread
-                        if (request.isOtaRequest() && !isPreparedUserCurrent()) return@runOnUiThread
-                        if (LynxRouter.consumeDebugFirstScreenFailure()) {
-                            handleTemplateLoadFailure(generation, "Debug 注入：OTA 首屏失败")
-                            return@runOnUiThread
-                        }
-                        loadingView.hide()
-                        transitionCoordinator.onFirstScreen(
-                            lynxView = lynxView ?: return@runOnUiThread,
-                            generation = generation,
-                        )
-                        if (actualFirstScreen && firstScreenReadyGeneration != generation) {
-                            firstScreenReadyGeneration = generation
-                            otaHealthGate.markFirstScreen()
-                            updateDebugOtaState("ready")
-                            confirmCandidateHealthyIfNeeded(generation)
-                        }
+            fun notifyTargetVisualReady(actualFirstFrame: Boolean) {
+                runOnUiThread {
+                    if (!isCurrentGeneration(generation)) return@runOnUiThread
+                    if (request.isOtaRequest() && !isPreparedUserCurrent()) return@runOnUiThread
+                    if (LynxRouter.consumeDebugFirstScreenFailure()) {
+                        handleTemplateLoadFailure(generation, "Debug 注入：OTA 首屏失败")
+                        return@runOnUiThread
+                    }
+                    loadingView.hide()
+                    transitionCoordinator.onFirstScreen(
+                        lynxView = lynxView ?: return@runOnUiThread,
+                        generation = generation,
+                    )
+                    if (actualFirstFrame && firstScreenReadyGeneration != generation) {
+                        firstScreenReadyGeneration = generation
+                        otaHealthGate.markFirstScreen()
+                        updateDebugOtaState("ready")
+                        confirmCandidateHealthyIfNeeded(generation)
                     }
                 }
-
+            }
+            val client = object : LynxViewClient() {
                 override fun onFirstScreen() {
-                    notifyTargetVisualReady(actualFirstScreen = true)
+                    notifyTargetVisualReady(actualFirstFrame = true)
                 }
 
                 override fun onLoadSuccess() {
-                    notifyTargetVisualReady(actualFirstScreen = false)
+                    if (!LynxTemplateGroupCache.isReused(lynxView)) notifyTargetVisualReady(actualFirstFrame = false)
                 }
 
                 override fun onReceivedError(error: LynxError) {
@@ -533,6 +532,8 @@ class LynxShellActivity : AppCompatActivity() {
                 bundleMetadata = bundleMetadata,
                 sidecarResources = sidecarResources,
                 monitoring = monitoring,
+                preparedBundle = preparedBundle,
+                onCachedFrame = { notifyTargetVisualReady(actualFirstFrame = true) },
             )
             // 错误 View 已经在容器中，因此 LynxView 插到最底层。
             container.addView(
@@ -690,6 +691,7 @@ class LynxShellActivity : AppCompatActivity() {
                     preparedFile = value.file,
                     bundleMetadata = bundleRuntimeMetadata,
                     sidecarResources = value.sidecarResources,
+                    preparedBundle = value,
                 )
             },
             onFailure = { error ->
@@ -705,6 +707,7 @@ class LynxShellActivity : AppCompatActivity() {
     /** 根 Bundle prepare/首屏失败时按 appId 回滚一次并重新准备。 */
     private fun handleTemplateLoadFailure(generation: Long, message: String, healthFailureCode: Int = 1002) {
         if (!isCurrentGeneration(generation) || loadFailureHandledGeneration == generation) return
+        LynxTemplateGroupCache.reject(lynxView)
         loadFailureHandledGeneration = generation
         val wasConfirmed = otaHealthGate.confirmed
         cancelOtaHealth("页面健康确认已被加载错误中止", healthFailureCode)

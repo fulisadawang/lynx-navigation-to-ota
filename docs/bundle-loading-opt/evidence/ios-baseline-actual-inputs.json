@@ -1,0 +1,71 @@
+{
+  "label": "baseline",
+  "appID": "com.codex.lynx.bundleloading",
+  "verifiedInputs": [
+    {
+      "path": "BundleLoadSmall.lynx.bundle",
+      "size": 88114,
+      "sha256": "bd55248f0883f4492245ecc18309d241eb419e992f4b2bacc00502294809fbe2"
+    },
+    {
+      "path": "BundleLoadLarge.lynx.bundle",
+      "size": 3234076,
+      "sha256": "3554ab411d9be7828d05029f42bcd77a5bacfaf50b43648865fbfe9e52505fbf"
+    },
+    {
+      "path": "BundleLoadAsync.lynx.bundle",
+      "size": 94510,
+      "sha256": "374ddaf32e80cdb56a7b9e065d4fa1b3c0239e3da63221715e74ce354596da8c"
+    },
+    {
+      "path": "static/js/bench-module-01.af78800c12.js",
+      "size": 611,
+      "sha256": "2008877788b456df349ed8ccff2ba42346ef9773bbe280be63cd17b4cb4959d7"
+    },
+    {
+      "path": "static/js/bench-module-02.df4d5c310c.js",
+      "size": 611,
+      "sha256": "54daa1b8639f7c51739bfa244183a38350e0a92aa11a2d28a356ca3cd7ddfad1"
+    },
+    {
+      "path": "static/js/bench-module-03.3490edb975.js",
+      "size": 611,
+      "sha256": "433076af521233297874e1f05ba9fbb3c91b0aa663899d3a3bc76c7682274997"
+    },
+    {
+      "path": "static/js/bench-module-04.cde22bcb8d.js",
+      "size": 610,
+      "sha256": "a5119da197a0d3200c8b16359f2a2da6cc193e7d732a629e93e593992e1adaed"
+    },
+    {
+      "path": "static/js/bench-module-05.646028927e.js",
+      "size": 611,
+      "sha256": "2d07db51f6b58f04b250fce3ff8902a56ef22b226a42e202792f2ab72ddb5690"
+    },
+    {
+      "path": "static/js/bench-module-06.42d8a5b235.js",
+      "size": 611,
+      "sha256": "92929fca0fc53ed20d85788b439792639d626083117d5fd8581fffdaf3f5af51"
+    },
+    {
+      "path": "static/js/bench-module-07.2d8b23accb.js",
+      "size": 611,
+      "sha256": "97d879227796c8c022b54ab5eba99e72537c1a2de1a5000ab5225841bf73cf93"
+    },
+    {
+      "path": "static/js/bench-module-08.2074edd36a.js",
+      "size": 611,
+      "sha256": "9daba1def7888283c5a7bab1b30f627c785b95d5bca3f9aa8745b1f1eaa4971e"
+    },
+    {
+      "path": "static/js/bench-module-09.935e43d493.js",
+      "size": 611,
+      "sha256": "3ad80b89b27992d0dac47042926cf4d91753a3f2704e4ef66bb5abd41cc50f34"
+    },
+    {
+      "path": "static/js/bench-module-10.8f594f38e8.js",
+      "size": 613,
+      "sha256": "92571aad053bc7896dce4ba1a4ad6cb0d1509f69f95bfeeb5b396158be3505bf"
+    }
+  ]
+}

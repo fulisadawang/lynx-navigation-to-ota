@@ -1,5 +1,38 @@
 import Foundation
 
+/** 已校验清单的单页不可变索引；目标对象仍在每次读取时校验，不缓存字节。 */
+struct OtaPreparedAsyncIndex: Sendable {
+    let root: URL
+    let entries: [OtaAsyncResource]
+    let keys: [String: Int]
+    let urls: [String: [Int]]
+    let localPaths: [String: URL]
+
+    private func entry(_ rawURL: String) throws -> OtaAsyncResource {
+        let key: String
+        if let url = URL(string: rawURL), url.scheme != nil {
+            guard url.query == nil, url.fragment == nil else { throw OtaSidecarError.unknownRequest }
+            key = try OtaSidecarDisk.requestKey(url.path)
+        } else {
+            key = try OtaSidecarDisk.requestKey(rawURL)
+        }
+        var matches = Set(urls[rawURL] ?? [])
+        if let index = keys[key] { matches.insert(index) }
+        guard matches.count == 1, let index = matches.first else { throw OtaSidecarError.unknownRequest }
+        return entries[index]
+    }
+
+    func localURL(_ rawURL: String) -> URL? {
+        guard let entry = try? entry(rawURL) else { return nil }
+        return try? OtaSidecarDisk.object(root, sha256: entry.sha256)
+    }
+
+    func resolve(_ rawURL: String) throws -> Data {
+        let entry = try entry(rawURL)
+        return try OtaSidecarDisk.verifiedData(OtaSidecarDisk.object(root, sha256: entry.sha256), sha256: entry.sha256, size: entry.size)
+    }
+}
+
 actor OtaAsyncBundleStore {
     private let baseDirectory: URL
     private let downloader: any OtaBundleDownloading
@@ -57,18 +90,29 @@ actor OtaAsyncBundleStore {
         return try OtaSidecarDisk.verifiedData(OtaSidecarDisk.object(root, sha256: entry.sha256), sha256: entry.sha256, size: entry.size)
     }
 
-    func localPaths(owner: String, appId: String, reference: OtaAsyncManifestReference) throws -> [String: URL] {
+    func prepareIndex(owner: String, appId: String, reference: OtaAsyncManifestReference, owners: Set<String>) throws -> OtaPreparedAsyncIndex {
         let root = try OtaSidecarDisk.root(baseDirectory, appId: appId, channel: "async-bundles")
         let data = try OtaSidecarDisk.verifiedData(manifestURL(root, reference), sha256: reference.sha256, size: reference.size)
         let manifest = try JSONDecoder().decode(OtaAsyncManifest.self, from: data)
-        var result: [String: URL] = [:]
-        for entry in manifest.entries where entry.ownerBundlePath == owner {
+        try Self.validate(manifest, owners: owners)
+        let entries = manifest.entries.filter { $0.ownerBundlePath == owner }
+        var keys: [String: Int] = [:]
+        var urls: [String: [Int]] = [:]
+        var localPaths: [String: URL] = [:]
+        for (index, entry) in entries.enumerated() {
+            let key = try OtaSidecarDisk.requestKey(entry.requestKey)
             let file = try OtaSidecarDisk.object(root, sha256: entry.sha256)
             _ = try OtaSidecarDisk.verifiedData(file, sha256: entry.sha256, size: entry.size)
-            result[try OtaSidecarDisk.requestKey(entry.requestKey)] = file
-            result[entry.url.absoluteString] = file
+            keys[key] = index
+            urls[entry.url.absoluteString, default: []].append(index)
+            localPaths[key] = file
+            localPaths[entry.url.absoluteString] = file
         }
-        return result
+        return OtaPreparedAsyncIndex(root: root, entries: entries, keys: keys, urls: urls, localPaths: localPaths)
+    }
+
+    func resolve(_ rawURL: String, index: OtaPreparedAsyncIndex) throws -> Data {
+        try index.resolve(rawURL)
     }
 
     static func validate(_ manifest: OtaAsyncManifest, owners: Set<String>) throws {

@@ -2,6 +2,7 @@ package com.example.lynxshell.monitoring
 
 import com.example.lynxshell.ota.PreparedActivityBundle
 import com.lynx.tasm.performance.performanceobserver.LoadBundleEntry
+import com.lynx.tasm.performance.performanceobserver.ReloadBundleEntry
 import com.lynx.tasm.performance.performanceobserver.PipelineEntry
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -319,6 +320,35 @@ class MonitoringContractTest {
             assertTrue("ambiguous_load" in it.quality.missingFields)
             assertFalse(it.toJson().contains("release-2"))
         }
+        runtime.dispose()
+    }
+
+    @Test fun initialEngineReuseRecordsRealFrameButLaterReloadRemainsAmbiguous() {
+        val provider = WaitingProvider()
+        val runtime = runtime(provider)
+        runtime.start()
+        val binding = requireNotNull(runtime.reserve(ContainerKind.PAGE, LoadKind.INITIAL, identity(), Visibility.VISIBLE))
+        binding.expectInitialEngineReuse()
+        binding.pageStarted(true)
+        binding.pageStarted(false)
+        binding.firstContent()
+        binding.cachedFirstContent("cached_frame_committed")
+        binding.performance(ReloadBundleEntry(hashMapOf("name" to "reloadBundle", "entryType" to "pipeline")))
+        binding.pageStarted(true)
+        binding.performance(pipeline(10.0))
+        provider.awaitEvents = CountDownLatch(4)
+        provider.ready.complete(InitResult("ready"))
+        assertTrue(provider.awaitEvents.await(5, TimeUnit.SECONDS))
+        val events = provider.snapshot()
+        val content = events.single { (it.payload as? LoadPayload)?.phase == "first_content" }
+        assertEquals("cached_frame_committed", (content.payload as LoadPayload).reasonCode)
+        assertEquals("exact_load", content.quality.association)
+        assertNotNull(content.loadId)
+        val startupReload = events[2]
+        assertNotNull("初始化reload的迟到entry仍属原加载", startupReload.loadId)
+        val reload = events.last()
+        assertNull(reload.loadId)
+        assertTrue("ambiguous_load" in reload.quality.missingFields)
         runtime.dispose()
     }
 

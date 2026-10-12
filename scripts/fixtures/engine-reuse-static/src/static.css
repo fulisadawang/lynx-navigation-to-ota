@@ -1,0 +1,3 @@
+.static-page { width: 100%; height: 100%; padding: 24px; background-color: #eef3fa; display: flex; flex-direction: column; }
+.static-title { color: #173d78; font-size: 20px; font-weight: bold; margin-bottom: 14px; }
+.static-ready { color: #172438; font-size: 16px; }

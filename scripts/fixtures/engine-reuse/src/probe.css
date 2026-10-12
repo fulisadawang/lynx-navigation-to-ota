@@ -1,0 +1,7 @@
+.probe-page { width: 100%; height: 100%; background-color: #edf1f7; }
+.probe-card { margin: 24px; padding: 20px; border-radius: 12px; background-color: #ffffff; display: flex; flex-direction: column; }
+.probe-title { font-size: 22px; font-weight: bold; color: #152543; margin-bottom: 16px; }
+.probe-status { font-size: 20px; color: #174ca6; margin-bottom: 12px; }
+.probe-value { font-size: 15px; color: #24344e; margin-bottom: 10px; }
+.probe-button { background-color: #174ca6; border-radius: 8px; padding: 14px; margin-top: 10px; margin-bottom: 12px; }
+.probe-button-text { color: #ffffff; font-size: 17px; }

@@ -11,3 +11,9 @@ interface LynxNativeModuleHost {
     fun onRequestPermissionsResult(activity: Activity, requestCode: Int, permissions: Array<out String>, grantResults: IntArray)
     fun onNewIntent(activity: Activity, intent: Intent)
 }
+
+/** 可选销毁接线不改变已有 Host 的二进制接口；SDK Module.destroy 仍照常执行。 */
+interface LynxNativeModuleLifecycleHost : LynxNativeModuleHost {
+    /** context 实际为当前 LynxContext；与 MediaHost 共用签名，统一处理宿主任务且应幂等。 */
+    fun onViewDestroy(context: android.content.Context)
+}

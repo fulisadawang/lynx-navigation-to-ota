@@ -42,6 +42,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        if (!intent.getBooleanExtra("lynx_shell.show_native_launcher", false) && BundleLoadingManualDemo.enabled(this)) {
+            BundleLoadingManualDemo.show(this)
+            return
+        }
+
         if (OtaUserSelectionDebug.enabled) {
             showUserSelectionLauncher()
             return

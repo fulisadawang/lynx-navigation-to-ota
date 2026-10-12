@@ -114,6 +114,7 @@ public final class OtaPreparedResources: @unchecked Sendable {
     private let localPaths: [String: URL]
     private let resolver: @Sendable (String) async throws -> Data
     private let closeAction: @Sendable () async -> Void
+    private let pathResolver: (@Sendable (String) -> URL?)?
     private let lock = NSLock()
     private var closed = false
     private var activeResolves = 0
@@ -123,11 +124,13 @@ public final class OtaPreparedResources: @unchecked Sendable {
 
     init(hasAsyncResources: Bool, localPaths: [String: URL],
          resolver: @escaping @Sendable (String) async throws -> Data,
-         closeAction: @escaping @Sendable () async -> Void) {
+         closeAction: @escaping @Sendable () async -> Void,
+         pathResolver: (@Sendable (String) -> URL?)? = nil) {
         self.hasAsyncResources = hasAsyncResources
         self.localPaths = localPaths
         self.resolver = resolver
         self.closeAction = closeAction
+        self.pathResolver = pathResolver
     }
 
     public func resolve(_ url: String) async throws -> Data {
@@ -139,6 +142,7 @@ public final class OtaPreparedResources: @unchecked Sendable {
     public func localURL(_ rawURL: String) -> URL? {
         lock.lock(); defer { lock.unlock() }
         guard !closed else { return nil }
+        if let pathResolver { return pathResolver(rawURL) }
         if let direct = localPaths[rawURL] { return direct }
         let candidate: String
         if let url = URL(string: rawURL), url.scheme != nil {

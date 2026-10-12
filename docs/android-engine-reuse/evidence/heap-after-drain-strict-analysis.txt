@@ -1,0 +1,34 @@
+MainActivity objectId=34831824 destroyed=false
+MainActivity objectId=35559080 destroyed=true
+Destroyed host candidates=1
+====================================
+HEAP ANALYSIS RESULT
+====================================
+0 APPLICATION LEAKS
+
+References underlined with "~~~" are likely causes.
+Learn more at https://squ.re/leaks.
+====================================
+0 LIBRARY LEAKS
+
+A Library Leak is a leak caused by a known bug in 3rd party code that you do not have control over.
+See https://square.github.io/leakcanary/fundamentals-how-leakcanary-works/#4-categorizing-leaks
+====================================
+1 UNREACHABLE OBJECTS
+
+An unreachable object is still in memory but LeakCanary could not find a strong reference path
+from GC roots.
+
+com.example.lynxshell.sample.MainActivity instance
+​  Leaking: YES (This is a leaking object)
+====================================
+METADATA
+
+Please include this in bug reports and Stack Overflow questions.
+
+Stats: LruCache[maxSize=3000,hits=120014,misses=213945,hitRate=35%] RandomAccess[bytes=10557976,reads=213945,travel=79717638026,range=38890242,size=48577416]
+Analysis duration: 841 ms
+Heap dump file path: /tmp/codex-engine-reuse-20261010/android-group-cache/device-evidence/former-host-after-drain.hprof
+Heap dump timestamp: 1791605907105
+Heap dump duration: Unknown
+====================================

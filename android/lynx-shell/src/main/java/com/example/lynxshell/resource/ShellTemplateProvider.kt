@@ -34,7 +34,7 @@ class ShellTemplateProvider(
     private val onLoadError: ((url: String, message: String) -> Unit)? = null,
     /** prepareRoute 命中时只消费一次；URL 不匹配会继续走正常 Provider。 */
     private val preparedUrl: String? = null,
-    private val preparedBytes: ByteArray? = null,
+    preparedBytes: ByteArray? = null,
     /** ActivityBundleRuntime 返回的已校验文件；绝对路径不会从 Intent 进入。 */
     private val preparedFile: File? = null,
     private val monitoring: LynxViewMonitor? = null,
@@ -42,19 +42,34 @@ class ShellTemplateProvider(
     private val appContext = context.applicationContext
     private val closed = AtomicBoolean(false)
     private val preparedConsumed = AtomicBoolean(false)
+    private val hasPreparedSource = preparedBytes != null || preparedFile != null
+    @Volatile private var preparedBytes = preparedBytes
+    @Volatile private var preparedBytesReleased = false
     private val activeCalls = ConcurrentHashMap.newKeySet<Call>()
 
     override fun loadTemplate(uri: String, callback: Callback) {
         if (closed.get()) return
         monitoring?.byteReadStarted()
         ioExecutor.execute {
+            if (closed.get()) return@execute
+            if (preparedBytesReleased && preparedFile == null && uri == preparedUrl) {
+                val message = "本页预置字节已由 TemplateBundle 缓存消费"
+                if (!closed.get()) {
+                    callback.onFailed(message)
+                    onLoadError?.invoke(uri, message)
+                }
+                return@execute
+            }
             if (
-                (preparedBytes != null || preparedFile != null) &&
+                hasPreparedSource &&
                 uri == preparedUrl &&
                 preparedConsumed.compareAndSet(false, true)
             ) {
+                val claimedBytes = preparedBytes
+                preparedBytes = null
+                if (closed.get() || (claimedBytes == null && preparedFile == null)) return@execute
                 runCatching {
-                    preparedBytes ?: loadFile(requireNotNull(preparedFile))
+                    claimedBytes ?: loadFile(requireNotNull(preparedFile))
                 }.onSuccess { bytes ->
                     if (!closed.get()) {
                         monitoring?.bytesResolved(bytes)
@@ -87,9 +102,13 @@ class ShellTemplateProvider(
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        preparedBytes = null
         activeCalls.forEach(Call::cancel)
         activeCalls.clear()
     }
+
+    /** Group 已持有校验后的模板，命中时立即释放本页未消费的 Java 字节。 */
+    internal fun releasePreparedBytes() { preparedBytesReleased = true; preparedBytes = null }
 
     private fun load(uri: String): ByteArray = when {
         uri.startsWith("https://", ignoreCase = true) -> loadRemote(uri)
@@ -132,28 +151,25 @@ class ShellTemplateProvider(
     /** 只读取 OTA runtime 已校验的普通文件，并再次检查大小与空文件边界。 */
     private fun loadFile(file: File): ByteArray {
         require(file.isFile && file.canRead()) { "已准备的 Bundle 不可读: ${file.absolutePath}" }
-        require(file.length() <= MAX_BUNDLE_BYTES) {
+        val length = file.length()
+        require(length <= MAX_BUNDLE_BYTES) {
             "Bundle 超过 ${MAX_BUNDLE_BYTES / 1024 / 1024}MB 限制"
         }
+        require(length > 0L) { "Bundle 内容为空" }
+        check(!closed.get()) { "Bundle 加载已取消" }
+        val bytes = ByteArray(length.toInt())
         FileInputStream(file).use { input ->
-            return ByteArrayOutputStream().use { output ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                var total = 0L
-                while (true) {
-                    check(!closed.get()) { "Bundle 加载已取消" }
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    total += count
-                    require(total <= MAX_BUNDLE_BYTES) {
-                        "Bundle 超过 ${MAX_BUNDLE_BYTES / 1024 / 1024}MB 限制"
-                    }
-                    output.write(buffer, 0, count)
-                }
-                output.toByteArray().also { bytes ->
-                    require(bytes.isNotEmpty()) { "Bundle 内容为空" }
-                }
+            var offset = 0
+            while (offset < bytes.size) {
+                check(!closed.get()) { "Bundle 加载已取消" }
+                val count = input.read(bytes, offset, minOf(DEFAULT_BUFFER_SIZE, bytes.size - offset))
+                require(count >= 0) { "Bundle 读取期间长度发生变化" }
+                offset += count
             }
+            check(!closed.get()) { "Bundle 加载已取消" }
+            require(input.read() < 0) { "Bundle 读取期间长度发生变化" }
         }
+        return bytes
     }
 
     private fun loadRemote(uri: String): ByteArray {
@@ -174,6 +190,10 @@ class ShellTemplateProvider(
         val call = httpClient.newCall(request)
         if (trackForClose) activeCalls += call
         try {
+            if (trackForClose && closed.get()) {
+                call.cancel()
+                error("Bundle 加载已取消")
+            }
             call.execute().use { response ->
                 val finalUrl = response.request.url
                 require(response.isSuccessful) { "Bundle HTTP 状态码异常: ${response.code}" }

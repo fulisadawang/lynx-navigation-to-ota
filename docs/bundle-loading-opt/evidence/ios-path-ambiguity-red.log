@@ -1,0 +1,30 @@
+Building for debugging...
+[1 / 10]
+[2 / 6] OtaIOSSDKTests-product
+[4 / 8] OtaIOSSDKTests-product
+[10 / 12] OtaIOSSDKTests-product
+Build complete! (1.67秒)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "页面固定 Async 索引回归" started.
+◇ Test "完整 URL 与另一项请求路径冲突时 byte/path 都拒绝" started.
+◇ Test "同 owner 的 URL 别名冲突仍拒绝歧义请求" started.
+✘ Test "完整 URL 与另一项请求路径冲突时 byte/path 都拒绝" recorded an issue at OtaPreparedResourceIndexTests.swift:94:9: Expectation failed: page.localURL(first.url.absoluteString) == nil
+↳ page.localURL(first.url.absoluteString) == nil → false
+↳   page.localURL(first.url.absoluteString) → file:///var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/ota-prepared-index-4A8E0DA3-3C36-4482-A11F-9B61EF4C4A5A/apps/10030071/async-bundles/objects/4e/4e55216692a1987d47eb76e7914e378811c0d58122f9c002c9a4f6afb2b6be3e
+↳     some → file:///var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/ota-prepared-index-4A8E0DA3-3C36-4482-A11F-9B61EF4C4A5A/apps/10030071/async-bundles/objects/4e/4e55216692a1987d47eb76e7914e378811c0d58122f9c002c9a4f6afb2b6be3e
+↳       _url → file:///var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/ota-prepared-index-4A8E0DA3-3C36-4482-A11F-9B61EF4C4A5A/apps/10030071/async-bundles/objects/4e/4e55216692a1987d47eb76e7914e378811c0d58122f9c002c9a4f6afb2b6be3e
+↳         _url → file:///var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/ota-prepared-index-4A8E0DA3-3C36-4482-A11F-9B61EF4C4A5A/apps/10030071/async-bundles/objects/4e/4e55216692a1987d47eb76e7914e378811c0d58122f9c002c9a4f6afb2b6be3e
+✘ Test "同 owner 的 URL 别名冲突仍拒绝歧义请求" recorded an issue at OtaPreparedResourceIndexTests.swift:82:9: Expectation failed: page.localURL(first.url.absoluteString) == nil
+↳ page.localURL(first.url.absoluteString) == nil → false
+↳   page.localURL(first.url.absoluteString) → file:///var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/ota-prepared-index-D9A931DC-5EBB-48D3-8940-EAE9E41E2BF4/apps/10030071/async-bundles/objects/4e/4e55216692a1987d47eb76e7914e378811c0d58122f9c002c9a4f6afb2b6be3e
+↳     some → file:///var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/ota-prepared-index-D9A931DC-5EBB-48D3-8940-EAE9E41E2BF4/apps/10030071/async-bundles/objects/4e/4e55216692a1987d47eb76e7914e378811c0d58122f9c002c9a4f6afb2b6be3e
+↳       _url → file:///var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/ota-prepared-index-D9A931DC-5EBB-48D3-8940-EAE9E41E2BF4/apps/10030071/async-bundles/objects/4e/4e55216692a1987d47eb76e7914e378811c0d58122f9c002c9a4f6afb2b6be3e
+↳         _url → file:///var/folders/29/1fp3l27x2cjgbvlgwg6rdhsw0000gn/T/ota-prepared-index-D9A931DC-5EBB-48D3-8940-EAE9E41E2BF4/apps/10030071/async-bundles/objects/4e/4e55216692a1987d47eb76e7914e378811c0d58122f9c002c9a4f6afb2b6be3e
+✘ Test "同 owner 的 URL 别名冲突仍拒绝歧义请求" failed after 0.027 seconds with 1 issue.
+✘ Test "完整 URL 与另一项请求路径冲突时 byte/path 都拒绝" failed after 0.028 seconds with 1 issue.
+✘ Suite "页面固定 Async 索引回归" failed after 0.028 seconds with 2 issues.
+✘ Test run with 2 tests in 1 suite failed after 0.028 seconds with 2 issues.
+Note: Some test targets reported failures:
+  - OtaIOSSDKTests (Swift Testing)

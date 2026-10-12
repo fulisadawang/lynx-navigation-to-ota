@@ -1,0 +1,90 @@
+Building for debugging...
+[Planning deferred tasks]
+[28 / 52]
+[29 / 53] OtaIOSSDK
+[39 / 109]
+[44 / 109]
+[49 / 109]
+[53 / 109]
+[56 / 109]
+[62 / 109]
+[63 / 109]
+[64 / 109]
+[65 / 109]
+[85 / 109] OtaIOSSDK
+[86 / 109] OtaIOSSDK
+[93 / 109] OtaIOSSDK
+[99 / 110] OtaIOSSDKTests-product
+[100 / 127]
+[116 / 127] OtaIOSSDKTests-product
+[121 / 127] OtaIOSSDKTests-product
+[123 / 127] OtaIOSSDKTests-product
+Build complete! (10.50秒)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "页面固定 Async 索引回归" started.
+◇ Test "索引保持 owner 隔离及请求地址规范化" started.
+◇ Test "close 等待在途解析结束后才执行 drain" started.
+◇ Test "已准备页面的十次读取不再依赖清单文件" started.
+◇ Test "新开页面仍拒绝已损坏清单" started.
+◇ Test "同 owner 的 URL 别名冲突仍拒绝歧义请求" started.
+◇ Test "真实 SDK 页面关闭后拒绝读取和媒体 URL" started.
+◇ Test case passing 1 argument cancel → false to "close 等待在途解析结束后才执行 drain" started.
+◇ Test "已准备索引每次读取仍校验目标大小和 SHA" started.
+◇ Test case passing 1 argument change → "missing" to "已准备页面的十次读取不再依赖清单文件" started.
+◇ Test case passing 1 argument change → "same-size" to "已准备索引每次读取仍校验目标大小和 SHA" started.
+◇ Test case passing 1 argument change → "short" to "已准备索引每次读取仍校验目标大小和 SHA" started.
+◇ Test case passing 1 argument cancel → true to "close 等待在途解析结束后才执行 drain" started.
+◇ Test case passing 1 argument change → "corrupt" to "已准备页面的十次读取不再依赖清单文件" started.
+✔ Test "close 等待在途解析结束后才执行 drain" with 2 test cases passed after 0.001 seconds.
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p0.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p1.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p0.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p2.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p1.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p3.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p2.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p4.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p5.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p3.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p6.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p4.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p7.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p5.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p8.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "missing" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p9.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p6.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p7.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p8.js，.missingLocalResource
+✘ Test "已准备页面的十次读取不再依赖清单文件" recorded an issue with 1 argument change → "corrupt" at OtaPreparedResourceIndexTests.swift:23:29: Issue recorded
+↳ 已准备页面重新依赖了清单磁盘文件：/static/script/p9.js，.missingLocalResource
+✔ Test "真实 SDK 页面关闭后拒绝读取和媒体 URL" passed after 0.034 seconds.
+✔ Test "新开页面仍拒绝已损坏清单" passed after 0.037 seconds.
+✔ Test "同 owner 的 URL 别名冲突仍拒绝歧义请求" passed after 0.040 seconds.
+✘ Test "已准备页面的十次读取不再依赖清单文件" with 2 test cases failed after 0.041 seconds with 20 issues.
+✔ Test "已准备索引每次读取仍校验目标大小和 SHA" with 2 test cases passed after 0.041 seconds.
+✔ Test "索引保持 owner 隔离及请求地址规范化" passed after 0.042 seconds.
+✘ Suite "页面固定 Async 索引回归" failed after 0.042 seconds with 20 issues.
+✘ Test run with 7 tests in 1 suite failed after 0.042 seconds with 20 issues.
+Note: Some test targets reported failures:
+  - OtaIOSSDKTests (Swift Testing)

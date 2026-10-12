@@ -1,0 +1,265 @@
+Building for debugging...
+[2 / 4] OtaIOSSDK
+[6 / 8] OtaIOSSDK
+[13 / 16] OtaIOSSDKTests-product
+[16 / 19] OtaIOSSDKTests-product
+[18 / 19] OtaIOSSDKTests-product
+Build complete! (5.00秒)
+Test Suite 'All tests' started at 2026-10-09 16:06:22.816.
+Test Suite 'All tests' passed at 2026-10-09 16:06:22.818.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.002) seconds
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "iOS OTA release leases" started.
+◇ Suite "iOS OTA Store v2 retention" started.
+◇ Suite "OtaReadinessCancellation" started.
+◇ Suite "OtaTransactionFaults" started.
+◇ Suite "独立 Async 本地资源" started.
+◇ Suite "OtaCandidateActivation" started.
+◇ Suite "iOS OTA Store v3 Golden 100" started.
+◇ Suite "OtaSDKFaultPaths" started.
+◇ Suite "iOS OTA storage diagnostics" started.
+◇ Suite "Bundle validation cache" started.
+◇ Suite "OTA user selection and Store v3 context" started.
+◇ Suite "页面固定 Async 索引回归" started.
+◇ Test "active page lease retains old release until page closes" started.
+◇ Test "explicit delete defers leased release deletion" started.
+◇ Test "discarded candidate remains only while trial page lease is alive" started.
+◇ Test "deleting one app leaves another app with same release untouched" started.
+◇ Test "ten activations retain only current and previous" started.
+◇ Test "embedded registration never copies bundle bytes into ota store" started.
+◇ Test "insufficient storage keeps embedded current and publishes no partial release" started.
+◇ Test "sdk embedded initialization creates only store v2 metadata" started.
+◇ Test "orphan pruning happens before capacity preflight" started.
+◇ Test "same release id is physically isolated by app id" started.
+◇ Test "cancelling after candidate state commit does not roll back the committed release" started.
+◇ Test "a failure after state commit is repaired by idempotent activation" started.
+◇ Test "a failure before rollback commit leaves current untouched" started.
+◇ Test "a failure before state commit keeps old current and can retry after restart" started.
+◇ Test "a failure after rollback commit leaves the restored pointer durable" started.
+◇ Test "旧清单不因可选资源字段改变 JSON" started.
+◇ Test "低层 stage 不允许只有主包的 Async Release" started.
+◇ Test "candidate 只有完整 Async 就绪后可确认，回滚会清理 sidecar" started.
+◇ Test "主 Store Manifest 缺失时延后主包与 Async 回收" started.
+◇ Test "replaying an activation after the state commit keeps previous stable" started.
+◇ Test "cold maintenance removes orphan and staging while preserving current" started.
+◇ Test "旧页 lease 保留 A 的异步对象，关闭后回收" started.
+◇ Test "restart recovery discards an unfinished trial and keeps current" started.
+◇ Test "保留清单缺失时 GC 整轮拒绝删除" started.
+◇ Suite "OtaIOSSDK" started.
+◇ Test "页面关闭后拒绝新资源解析与媒体 URL 查询" started.
+◇ Test "cancelling candidate confirmation before its commit keeps the trial" started.
+◇ Test "相同 SHA 的 Bundle 在不同 App ID 下保持物理隔离" started.
+◇ Test "V1→V2 显式删除后，active lease 仍可读并延迟回收 V1" started.
+◇ Test "cold maintenance does not guess when state is malformed" started.
+◇ Test "candidate 确认与回滚使用各自的 Async 快照" started.
+◇ Test "真实请求键单前导斜杠允许，路径穿越拒绝" started.
+◇ Test "回滚到历史 release 时复用同一 App ID 的 CAS 对象" started.
+◇ Test "latest bundle-list timeout keeps the embedded current release" started.
+◇ Test "download failure keeps the embedded current release" started.
+◇ Test "同一清单并发准备使用不同事务保护根" started.
+◇ Test "same-size checksum failure keeps the embedded current release" started.
+◇ Test "snapshot reports state candidate lease orphan and staging" started.
+◇ Test "same key hits after insert" started.
+◇ Test "bounded cache evicts the least recently used key" started.
+◇ Test "remove and remove all invalidate entries" started.
+◇ Test "v3 candidate 在确认前不替换 current" started.
+◇ Test "identity reconciliation retains active lease files until close" started.
+◇ Test "new selection mode still downloads only one changed object out of one hundred" started.
+◇ Test "OTA-SEL-03 direct SDK begin-trial runs startup maintenance before changing pending" started.
+◇ Test "same release gray to full refreshes State metadata with no byte download" started.
+◇ Test "batch validates every selection protocol before committing any directive or starting bytes" started.
+◇ Test "OTA-SEL-02 startup preserves pending and never promotes it" started.
+◇ Test "new-mode failed queries report captured identity without raw identity in diagnostics" started.
+◇ Test "host identity wrapper refuses old A probe continuations even when B keeps the same full release" started.
+◇ Test "gray A to B invalidates reads synchronously and falls back to full previous before reconcile" started.
+◇ Test "C11 anonymous cold start cannot read disk current that is directly A gray" started.
+◇ Test "a tampered current file misses validation cache and is not returned" started.
+◇ Test "candidate retains at most current previous and one candidate" started.
+◇ Test "same-user slow download cannot replace a newer policy decision or consume its staged transaction" started.
+◇ Test "native and SDK ranges include both boundaries and compare numeric components exactly" started.
+◇ Test "delayed A response after B registration cannot write state or return success" started.
+◇ Test "download completion after switching user reports the captured identity and never commits stale state" started.
+◇ Test "wrapper closes rejected lease results synchronously, including Optional results retained elsewhere" started.
+◇ Test "host identity wrapper validates entry epoch and preserves generic return values" started.
+◇ Test "new mode refuses missing selection and native/SDK incompatibility, legacy wire remains optional" started.
+◇ Test "host query applies selected lists and explicit no-compatible directives together" started.
+◇ Test "batch commits every valid decision before downloads and continues other Apps after a download failure" started.
+◇ Test "registration immediately before final State replacement aborts activation atomically" started.
+◇ Test "current lease reads finish while a background latest download remains suspended" started.
+◇ Test "directives survive cold read and higher revision allows rollback to lower sequence" started.
+◇ Test "native context normalization is exact and HTTP uses the three specified query names" started.
+◇ Test "C05 installed A gray switches to offline B with embedded fallback or nil when no embedded exists" started.
+◇ Test "真实 SDK 页面关闭后拒绝读取和媒体 URL" started.
+◇ Test "close 等待在途解析结束后才执行 drain" started.
+◇ Test "wrapper reaches the final Store guard for rollback and deletion even with no embedded registration" started.
+◇ Test "已准备页面的十次读取不再依赖清单文件" started.
+◇ Test "新开页面仍拒绝已损坏清单" started.
+◇ Test "同 owner 的 URL 别名冲突仍拒绝歧义请求" started.
+◇ Test "完整 URL 与另一项请求路径冲突时 byte/path 都拒绝" started.
+◇ Test "late candidate health or discard cannot alter a candidate prepared for the next identity" started.
+◇ Test "已准备索引每次读取仍校验目标大小和 SHA" started.
+◇ Test "索引保持 owner 隔离及请求地址规范化" started.
+◇ Test "empty snapshot exposes real root without creating files" started.
+◇ Test "app version gate skips an incompatible latest bundle list" started.
+◇ Test "v3 Manifest 提交故障不会发布半成品，重试可恢复" started.
+◇ Test "V1 100 bundles to V2 one changed bundle only writes one CAS object" started.
+◇ Test "candidate stays out of current until healthy confirmation" started.
+◇ Test "same App ID object is shared by V1 and V2 and lease protects V1-only object" started.
+◇ Test "native protocol version gate skips an incompatible latest bundle list" started.
+◇ Test "cold native upgrades recheck stored compatibility and do not revive an embedded directive" started.
+◇ Test "same release id is visible under both app snapshots" started.
+◇ Test "OTA-SEL-03 selected startup maintenance discards interrupted trial without per-App recovery" started.
+◇ Test "wire response decodes selected and directive shapes and rejects missing metadata" started.
+◇ Test "OTA-SEL-03 repeated maintenance in the same SDK does not discard its live trial" started.
+◇ Test "unknown old v3 metadata is hidden until confirmation and all 100 CAS objects are reused" started.
+◇ Test case passing 1 argument storeVersion → .v3 to "cancelling after candidate state commit does not roll back the committed release" started.
+◇ Test "C10 B rollback refuses previous that is precisely A's gray release" started.
+◇ Test "candidate staging reports a successful check and protocol failures report decode failure" started.
+◇ Test case passing 1 argument storeVersion → .v2 to "cancelling after candidate state commit does not roll back the committed release" started.
+◇ Test case passing 1 argument storeVersion → .v2 to "cancelling candidate confirmation before its commit keeps the trial" started.
+◇ Test case passing 1 argument storeVersion → .v3 to "cancelling candidate confirmation before its commit keeps the trial" started.
+2026-10-09 16:06:23.816 swiftpm-testing-helper[48634:6690099] [Lynx OTA] prune_deferred：Store v3 保留的主 Manifest 缺失，跳过主包与附属资源回收
+◇ Test case passing 1 argument cancel → false to "close 等待在途解析结束后才执行 drain" started.
+◇ Test case passing 1 argument cancel → true to "close 等待在途解析结束后才执行 drain" started.
+◇ Test case passing 1 argument change → "missing" to "已准备页面的十次读取不再依赖清单文件" started.
+◇ Test case passing 1 argument change → "corrupt" to "已准备页面的十次读取不再依赖清单文件" started.
+◇ Test case passing 1 argument change → "same-size" to "已准备索引每次读取仍校验目标大小和 SHA" started.
+◇ Test case passing 1 argument change → "short" to "已准备索引每次读取仍校验目标大小和 SHA" started.
+✔ Test "旧清单不因可选资源字段改变 JSON" passed after 1.600 seconds.
+✔ Test "低层 stage 不允许只有主包的 Async Release" passed after 1.600 seconds.
+✔ Test "embedded registration never copies bundle bytes into ota store" passed after 1.601 seconds.
+✔ Test "sdk embedded initialization creates only store v2 metadata" passed after 1.601 seconds.
+✔ Test "insufficient storage keeps embedded current and publishes no partial release" passed after 1.601 seconds.
+✔ Test "orphan pruning happens before capacity preflight" passed after 1.601 seconds.
+✔ Test "a failure before state commit keeps old current and can retry after restart" passed after 1.600 seconds.
+✔ Test "保留清单缺失时 GC 整轮拒绝删除" passed after 1.600 seconds.
+◇ Test "syncs latest bundle list and keeps unchanged bundles local" started.
+◇ Test "reports latest bundle-list decode failure without releaseId" started.
+✔ Test "页面关闭后拒绝新资源解析与媒体 URL 查询" passed after 1.600 seconds.
+◇ Test "reuses unchanged local bundles and downloads only changed bundles" started.
+◇ Test "skips latest bundle list when Lynx baseline does not match" started.
+◇ Test "rejects downloaded bundle when manifest size does not match" started.
+◇ Test "downloads, validates, activates and rolls back release" started.
+◇ Test "release transaction installs and rolls back direct predecessor" started.
+◇ Test "rejects unsafe bundleName before touching storage" started.
+◇ Test "same latest release reuses fresh embedded bundle when active path is missing" started.
+◇ Test "reports check result when latest bundle list is already active" started.
+◇ Test "reports manifest fetch failure with structured reason code" started.
+◇ Test "policy and report payloads encode hostApp and lynxAppId" started.
+◇ Test "facade returns local template url after activation" started.
+◇ Test "syncs latest bundle lists for every LynxApp in host app" started.
+◇ Test "resolves bundleName exactly and repairs a missing bundle from latest snapshot" started.
+✔ Test "a failure before rollback commit leaves current untouched" passed after 1.601 seconds.
+✔ Test "a failure after state commit is repaired by idempotent activation" passed after 1.601 seconds.
+✔ Test "deleting one app leaves another app with same release untouched" passed after 1.602 seconds.
+✔ Test "replaying an activation after the state commit keeps previous stable" passed after 1.601 seconds.
+✔ Test "same release id is physically isolated by app id" passed after 1.601 seconds.
+✔ Test "cold maintenance removes orphan and staging while preserving current" passed after 1.601 seconds.
+✔ Test "真实请求键单前导斜杠允许，路径穿越拒绝" passed after 1.600 seconds.
+✔ Test "restart recovery discards an unfinished trial and keeps current" passed after 1.600 seconds.
+✔ Test "latest bundle-list timeout keeps the embedded current release" passed after 1.600 seconds.
+✔ Test "download failure keeps the embedded current release" passed after 1.600 seconds.
+✔ Test "同一清单并发准备使用不同事务保护根" passed after 1.600 seconds.
+✔ Test "same-size checksum failure keeps the embedded current release" passed after 1.600 seconds.
+✔ Test "same key hits after insert" passed after 1.600 seconds.
+✔ Test "ten activations retain only current and previous" passed after 1.603 seconds.
+✔ Test "bounded cache evicts the least recently used key" passed after 1.600 seconds.
+✔ Test "remove and remove all invalidate entries" passed after 1.600 seconds.
+✔ Test "active page lease retains old release until page closes" passed after 1.607 seconds.
+✔ Test "discarded candidate remains only while trial page lease is alive" passed after 1.637 seconds.
+✔ Test "explicit delete defers leased release deletion" passed after 1.637 seconds.
+✔ Test "batch validates every selection protocol before committing any directive or starting bytes" passed after 1.634 seconds.
+✔ Test "旧页 lease 保留 A 的异步对象，关闭后回收" passed after 1.635 seconds.
+✔ Test "candidate 只有完整 Async 就绪后可确认，回滚会清理 sidecar" passed after 1.635 seconds.
+✔ Test "主 Store Manifest 缺失时延后主包与 Async 回收" passed after 1.635 seconds.
+✔ Test "a tampered current file misses validation cache and is not returned" passed after 1.635 seconds.
+✔ Test "a failure after rollback commit leaves the restored pointer durable" passed after 1.636 seconds.
+✔ Test "native and SDK ranges include both boundaries and compare numeric components exactly" passed after 1.659 seconds.
+✔ Test "相同 SHA 的 Bundle 在不同 App ID 下保持物理隔离" passed after 1.661 seconds.
+✔ Test "host identity wrapper validates entry epoch and preserves generic return values" passed after 1.660 seconds.
+✔ Test "new mode refuses missing selection and native/SDK incompatibility, legacy wire remains optional" passed after 1.673 seconds.
+✔ Test "cold maintenance does not guess when state is malformed" passed after 1.674 seconds.
+✔ Test "candidate 确认与回滚使用各自的 Async 快照" passed after 1.675 seconds.
+✔ Test "snapshot reports state candidate lease orphan and staging" passed after 1.674 seconds.
+✔ Test "identity reconciliation retains active lease files until close" passed after 1.674 seconds.
+✔ Test "native context normalization is exact and HTTP uses the three specified query names" passed after 1.674 seconds.
+✔ Test "same release gray to full refreshes State metadata with no byte download" passed after 1.674 seconds.
+✔ Test "V1→V2 显式删除后，active lease 仍可读并延迟回收 V1" passed after 1.675 seconds.
+✔ Test "真实 SDK 页面关闭后拒绝读取和媒体 URL" passed after 1.674 seconds.
+✔ Test "已准备页面的十次读取不再依赖清单文件" with 2 test cases passed after 1.674 seconds.
+✔ Test "C11 anonymous cold start cannot read disk current that is directly A gray" passed after 1.675 seconds.
+✔ Test "同 owner 的 URL 别名冲突仍拒绝歧义请求" passed after 1.674 seconds.
+✔ Test "新开页面仍拒绝已损坏清单" passed after 1.675 seconds.
+✔ Test "完整 URL 与另一项请求路径冲突时 byte/path 都拒绝" passed after 1.675 seconds.
+✔ Test "gray A to B invalidates reads synchronously and falls back to full previous before reconcile" passed after 1.676 seconds.
+✔ Test "已准备索引每次读取仍校验目标大小和 SHA" with 2 test cases passed after 1.674 seconds.
+✔ Test "app version gate skips an incompatible latest bundle list" passed after 1.674 seconds.
+✔ Test "empty snapshot exposes real root without creating files" passed after 1.676 seconds.
+✔ Test "索引保持 owner 隔离及请求地址规范化" passed after 1.675 seconds.
+✔ Test "candidate retains at most current previous and one candidate" passed after 1.677 seconds.
+✔ Test "host query applies selected lists and explicit no-compatible directives together" passed after 1.676 seconds.
+✔ Test "native protocol version gate skips an incompatible latest bundle list" passed after 1.676 seconds.
+✔ Test "v3 candidate 在确认前不替换 current" passed after 1.677 seconds.
+✔ Test "wire response decodes selected and directive shapes and rejects missing metadata" passed after 1.686 seconds.
+✔ Test "registration immediately before final State replacement aborts activation atomically" passed after 1.686 seconds.
+✔ Test "new selection mode still downloads only one changed object out of one hundred" passed after 1.686 seconds.
+✔ Test "directives survive cold read and higher revision allows rollback to lower sequence" passed after 1.685 seconds.
+✔ Test "回滚到历史 release 时复用同一 App ID 的 CAS 对象" passed after 1.687 seconds.
+✔ Test "OTA-SEL-03 direct SDK begin-trial runs startup maintenance before changing pending" passed after 2.000 seconds.
+✔ Test "OTA-SEL-02 startup preserves pending and never promotes it" passed after 2.000 seconds.
+✔ Test "late candidate health or discard cannot alter a candidate prepared for the next identity" passed after 2.000 seconds.
+✔ Test "candidate stays out of current until healthy confirmation" passed after 2.019 seconds.
+✔ Suite "独立 Async 本地资源" passed after 2.026 seconds.
+✔ Suite "iOS OTA Store v2 retention" passed after 2.026 seconds.
+✔ Suite "OtaTransactionFaults" passed after 2.026 seconds.
+✔ Test "cold native upgrades recheck stored compatibility and do not revive an embedded directive" passed after 2.022 seconds.
+✔ Test "reports latest bundle-list decode failure without releaseId" passed after 0.422 seconds.
+✔ Test "wrapper closes rejected lease results synchronously, including Optional results retained elsewhere" passed after 2.022 seconds.
+✔ Test "skips latest bundle list when Lynx baseline does not match" passed after 0.422 seconds.
+✔ Test "rejects downloaded bundle when manifest size does not match" passed after 0.422 seconds.
+✔ Test "same release id is visible under both app snapshots" passed after 2.021 seconds.
+✔ Test "C05 installed A gray switches to offline B with embedded fallback or nil when no embedded exists" passed after 2.022 seconds.
+✔ Test "C10 B rollback refuses previous that is precisely A's gray release" passed after 2.020 seconds.
+✔ Test "rejects unsafe bundleName before touching storage" passed after 0.422 seconds.
+✔ Test "reports check result when latest bundle list is already active" passed after 0.422 seconds.
+✔ Test "reports manifest fetch failure with structured reason code" passed after 0.422 seconds.
+✔ Test "policy and report payloads encode hostApp and lynxAppId" passed after 0.422 seconds.
+✔ Test "candidate staging reports a successful check and protocol failures report decode failure" passed after 2.022 seconds.
+✔ Test "wrapper reaches the final Store guard for rollback and deletion even with no embedded registration" passed after 2.022 seconds.
+✔ Test "syncs latest bundle list and keeps unchanged bundles local" passed after 0.423 seconds.
+✔ Suite "OtaSDKFaultPaths" passed after 2.026 seconds.
+✔ Suite "Bundle validation cache" passed after 2.026 seconds.
+✔ Suite "iOS OTA release leases" passed after 2.027 seconds.
+✔ Test "V1 100 bundles to V2 one changed bundle only writes one CAS object" passed after 2.023 seconds.
+✔ Suite "OtaCandidateActivation" passed after 2.035 seconds.
+✔ Test "reuses unchanged local bundles and downloads only changed bundles" passed after 0.433 seconds.
+✔ Suite "iOS OTA storage diagnostics" passed after 2.036 seconds.
+✔ Test "close 等待在途解析结束后才执行 drain" with 2 test cases passed after 2.035 seconds.
+✔ Test "download completion after switching user reports the captured identity and never commits stale state" passed after 2.036 seconds.
+✔ Test "delayed A response after B registration cannot write state or return success" passed after 2.036 seconds.
+✔ Suite "页面固定 Async 索引回归" passed after 2.039 seconds.
+✔ Test "new-mode failed queries report captured identity without raw identity in diagnostics" passed after 2.039 seconds.
+✔ Test "cancelling after candidate state commit does not roll back the committed release" with 2 test cases passed after 2.041 seconds.
+✔ Test "cancelling candidate confirmation before its commit keeps the trial" with 2 test cases passed after 2.040 seconds.
+✔ Suite "OtaReadinessCancellation" passed after 2.044 seconds.
+✔ Test "batch commits every valid decision before downloads and continues other Apps after a download failure" passed after 2.041 seconds.
+✔ Test "current lease reads finish while a background latest download remains suspended" passed after 2.043 seconds.
+✔ Test "downloads, validates, activates and rolls back release" passed after 0.500 seconds.
+✔ Test "release transaction installs and rolls back direct predecessor" passed after 0.522 seconds.
+✔ Test "OTA-SEL-03 selected startup maintenance discards interrupted trial without per-App recovery" passed after 2.138 seconds.
+✔ Test "same App ID object is shared by V1 and V2 and lease protects V1-only object" passed after 2.159 seconds.
+✔ Test "unknown old v3 metadata is hidden until confirmation and all 100 CAS objects are reused" passed after 2.165 seconds.
+✔ Test "OTA-SEL-03 repeated maintenance in the same SDK does not discard its live trial" passed after 2.167 seconds.
+✔ Test "facade returns local template url after activation" passed after 0.591 seconds.
+✔ Test "same latest release reuses fresh embedded bundle when active path is missing" passed after 0.597 seconds.
+✔ Test "v3 Manifest 提交故障不会发布半成品，重试可恢复" passed after 2.199 seconds.
+✔ Suite "iOS OTA Store v3 Golden 100" passed after 2.204 seconds.
+✔ Test "syncs latest bundle lists for every LynxApp in host app" passed after 0.625 seconds.
+✔ Test "resolves bundleName exactly and repairs a missing bundle from latest snapshot" passed after 0.652 seconds.
+✔ Suite "OtaIOSSDK" passed after 2.253 seconds.
+✔ Test "same-user slow download cannot replace a newer policy decision or consume its staged transaction" passed after 2.255 seconds.
+✔ Test "host identity wrapper refuses old A probe continuations even when B keeps the same full release" passed after 2.937 seconds.
+✔ Suite "OTA user selection and Store v3 context" passed after 2.940 seconds.
+✔ Test run with 107 tests in 13 suites passed after 2.941 seconds.

@@ -1,0 +1,21 @@
+
+com.example.lynxshell.sample.BundleLoadingOptimizationTest:
+BundleLoadingOptimization: queued-close connectionAttempts=1 callbacks=0
+
+Failure in testQueuedPreparedRequestClosePreventsFallbackAndCallbacks:
+junit.framework.AssertionFailedError: 排队预备请求关闭后不能fallback联网 expected:<0> but was:<1>
+	at com.example.lynxshell.sample.BundleLoadingOptimizationTest.testQueuedPreparedRequestClosePreventsFallbackAndCallbacks(BundleLoadingOptimizationTest.kt:159)
+	at android.test.InstrumentationTestCase.runMethod(InstrumentationTestCase.java:220)
+	at android.test.InstrumentationTestCase.runTest(InstrumentationTestCase.java:205)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:195)
+	at android.test.AndroidTestRunner.runTest(AndroidTestRunner.java:181)
+	at android.test.InstrumentationTestRunner.onStart(InstrumentationTestRunner.java:563)
+	at android.app.Instrumentation$InstrumentationThread.run(Instrumentation.java:2597)
+
+Test results for InstrumentationTestRunner=.F
+Time: 0.12
+
+FAILURES!!!
+Tests run: 1,  Failures: 1,  Errors: 0
+
+

@@ -1,0 +1,272 @@
+{
+  "date": "2026-10-09",
+  "device": "emulator-5554",
+  "sampleCount": 1,
+  "source": "existing optimized manual APK; no source edits or rebuild",
+  "method": "original VFR decoded frames with fps_mode passthrough; full frames31/33 visually inspected",
+  "firstObservedWhitePTS": 1.255511,
+  "firstObservedContentPTS": 1.464133,
+  "observedBlankSpanMs": 208.622,
+  "boundary": "encoded frame observation, not SDK exact stage time; no per-stage trace",
+  "frames": [
+    {
+      "decodedFrame": 0,
+      "ptsSeconds": 0.0,
+      "regionMean": 213.33,
+      "regionStd": 51.49,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 1,
+      "ptsSeconds": 0.303656,
+      "regionMean": 213.31,
+      "regionStd": 51.52,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 2,
+      "ptsSeconds": 0.325322,
+      "regionMean": 213.3,
+      "regionStd": 51.53,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 3,
+      "ptsSeconds": 0.345778,
+      "regionMean": 213.33,
+      "regionStd": 51.49,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 4,
+      "ptsSeconds": 0.366944,
+      "regionMean": 213.33,
+      "regionStd": 51.49,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 5,
+      "ptsSeconds": 0.387233,
+      "regionMean": 213.33,
+      "regionStd": 51.48,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 6,
+      "ptsSeconds": 0.407078,
+      "regionMean": 213.34,
+      "regionStd": 51.47,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 7,
+      "ptsSeconds": 0.430933,
+      "regionMean": 213.54,
+      "regionStd": 51.18,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 8,
+      "ptsSeconds": 0.4515,
+      "regionMean": 213.64,
+      "regionStd": 51.03,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 9,
+      "ptsSeconds": 0.470344,
+      "regionMean": 213.74,
+      "regionStd": 50.86,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 10,
+      "ptsSeconds": 0.492056,
+      "regionMean": 213.83,
+      "regionStd": 50.71,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 11,
+      "ptsSeconds": 0.512511,
+      "regionMean": 213.96,
+      "regionStd": 50.5,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 12,
+      "ptsSeconds": 0.534511,
+      "regionMean": 214.01,
+      "regionStd": 50.44,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 13,
+      "ptsSeconds": 0.556511,
+      "regionMean": 214.02,
+      "regionStd": 50.42,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 14,
+      "ptsSeconds": 0.578778,
+      "regionMean": 214.01,
+      "regionStd": 50.43,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 15,
+      "ptsSeconds": 0.6075,
+      "regionMean": 214.02,
+      "regionStd": 50.43,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 16,
+      "ptsSeconds": 0.6275,
+      "regionMean": 214.02,
+      "regionStd": 50.43,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 17,
+      "ptsSeconds": 0.651489,
+      "regionMean": 213.97,
+      "regionStd": 50.5,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 18,
+      "ptsSeconds": 0.670911,
+      "regionMean": 213.98,
+      "regionStd": 50.48,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 19,
+      "ptsSeconds": 0.6864,
+      "regionMean": 213.98,
+      "regionStd": 50.48,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 20,
+      "ptsSeconds": 0.721322,
+      "regionMean": 213.98,
+      "regionStd": 50.48,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 21,
+      "ptsSeconds": 0.739944,
+      "regionMean": 213.98,
+      "regionStd": 50.48,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 22,
+      "ptsSeconds": 0.765911,
+      "regionMean": 213.98,
+      "regionStd": 50.48,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 23,
+      "ptsSeconds": 0.783067,
+      "regionMean": 213.93,
+      "regionStd": 50.55,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 24,
+      "ptsSeconds": 0.824178,
+      "regionMean": 213.86,
+      "regionStd": 50.64,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 25,
+      "ptsSeconds": 0.8468,
+      "regionMean": 213.81,
+      "regionStd": 50.72,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 26,
+      "ptsSeconds": 0.870711,
+      "regionMean": 213.77,
+      "regionStd": 50.8,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 27,
+      "ptsSeconds": 0.901244,
+      "regionMean": 213.77,
+      "regionStd": 50.8,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 28,
+      "ptsSeconds": 0.917222,
+      "regionMean": 213.77,
+      "regionStd": 50.81,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 29,
+      "ptsSeconds": 0.962489,
+      "regionMean": 213.63,
+      "regionStd": 51.0,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 30,
+      "ptsSeconds": 1.025478,
+      "regionMean": 213.6,
+      "regionStd": 51.04,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 31,
+      "ptsSeconds": 1.255511,
+      "regionMean": 252.95,
+      "regionStd": 0.36,
+      "nearWhiteRegion": true
+    },
+    {
+      "decodedFrame": 32,
+      "ptsSeconds": 1.337211,
+      "regionMean": 252.95,
+      "regionStd": 0.36,
+      "nearWhiteRegion": true
+    },
+    {
+      "decodedFrame": 33,
+      "ptsSeconds": 1.464133,
+      "regionMean": 229.88,
+      "regionStd": 40.83,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 34,
+      "ptsSeconds": 1.4982,
+      "regionMean": 229.88,
+      "regionStd": 40.83,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 35,
+      "ptsSeconds": 1.514489,
+      "regionMean": 229.88,
+      "regionStd": 40.83,
+      "nearWhiteRegion": false
+    },
+    {
+      "decodedFrame": 36,
+      "ptsSeconds": 2.914678,
+      "regionMean": 229.88,
+      "regionStd": 40.83,
+      "nearWhiteRegion": false
+    }
+  ]
+}

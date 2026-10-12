@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.view.View
 import com.example.lynxshell.model.LynxPageRequest
+import com.example.lynxshell.bridge.LynxRouterPageInfo
 import com.example.lynxshell.routing.LynxNavigator
 import com.example.lynxshell.transition.LynxTransitionIntent
 import com.example.lynxshell.util.JsonObjectCodec
@@ -80,6 +81,7 @@ object ShellGlobalPropsFactory {
         bundleMetadata: Map<String, Any>? = null,
         initialLayout: LynxLayoutSnapshot? = null,
         locale: LynxLocaleState = LynxLocaleStore.current(activity),
+        pageInfo: LynxRouterPageInfo? = null,
     ): HashMap<String, Any> {
         val props = JsonObjectCodec.toMap(request.globalPropsJson, "globalProps")
         props.remove("__lynxI18n")
@@ -110,14 +112,14 @@ object ShellGlobalPropsFactory {
         // containerID，否则 sendToPage 会把消息误投到旧 Activity。
         val identity = (activity as? com.example.lynxshell.container.LynxShellActivity)
             ?.let(LynxNavigator::routerPageIdentity)
-        val pageId = identity?.entryID ?: "lynx-shell-${request.bundleUrl.hashCode()}"
+        val pageId = pageInfo?.pageId ?: identity?.entryID ?: "lynx-shell-${request.bundleUrl.hashCode()}"
         props["containerID"] = pageId
         props["__lynxRouterContainerId"] = pageId
         props["__lynxRouterPageId"] = pageId
-        props["__lynxRouterPageKey"] = identity?.routeKey ?: request.resolvedRouteKey()
+        props["__lynxRouterPageKey"] = pageInfo?.pageKey ?: identity?.routeKey ?: request.resolvedRouteKey()
         props["__lynxRouterSessionId"] = identity?.sessionID ?: ""
         props["__lynxRouterNavigationModel"] = "native_page_stack"
-        props["__lynxRouterPlatformContainer"] = "android_activity"
+        props["__lynxRouterPlatformContainer"] = pageInfo?.hostMode ?: "android_activity"
         props["__lynxRouterParams"] = queryItems
         bundleMetadata?.let { props["__lynxBundleMeta"] = HashMap(it) }
         // 目标页在首屏 Bundle 执行前即可读取 transactionID，并据此调用 markTransitionReady。

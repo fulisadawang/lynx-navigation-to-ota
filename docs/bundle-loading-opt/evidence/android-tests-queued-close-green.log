@@ -1,0 +1,14 @@
+
+com.example.lynxshell.sample.BundleLoadingOptimizationTest:.........
+BundleLoadingOptimization: file-read payload=2097152 repetitions=3 allocatedApprox=6697488 elapsedNs=19627833
+......
+BundleLoadingOptimization: queued-close connectionAttempts=0 callbacks=0
+.
+BundleLoadingOptimization: lease-read mainManifestOpens=1 asyncManifestOpens=1
+.
+Test results for InstrumentationTestRunner=.................
+Time: 0.849
+
+OK (17 tests)
+
+

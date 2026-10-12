@@ -1,0 +1,26 @@
+
+com.example.lynxshell.sample.TemplateGroupStateTest:
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-lazy-7d004e9a-07f2-467e-8ff4-0bcdfc40933b accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"lazy-A","globalHasOldOnly":true,"caseName":"lazy","counter":0.0,"lazyStatus":"not-requested","pageId":"engine-state-lazy-7d004e9a-07f2-467e-8ff4-0bcdfc40933b","globalMarker":"global-lazy-A"}
+
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-lazy-e72f09bc-06f3-41f7-a760-ab9892fd5139 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"lazy-B","globalHasOldOnly":false,"caseName":"lazy","counter":0.0,"lazyStatus":"not-requested","pageId":"engine-state-lazy-e72f09bc-06f3-41f7-a760-ab9892fd5139","globalMarker":"global-lazy-B"}
+
+TemplateGroupState: 真实UI触控 selector=engine-reuse-load-lazy ui=LynxFlattenUI screenRect=Rect(116, 1563 - 965, 1700)
+
+TemplateGroupState: 真实Native Lazy请求 loader=mLoader url=http://127.0.0.1:18782/lazy-bundle/EngineReuseLazyPanel.lynx.bundle
+
+TemplateGroupState: actual Native event=engine-reuse-probe.lazy-ready source=engine-state-lazy-e72f09bc-06f3-41f7-a760-ab9892fd5139 accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"lazy-mounted","hasOldOnly":false,"component":"EngineReuseLazyPanel","moduleMountCount":1.0,"marker":"lazy-B","globalHasOldOnly":false,"caseName":"lazy","counter":0.0,"lazyStatus":"mounted","pageId":"engine-state-lazy-e72f09bc-06f3-41f7-a760-ab9892fd5139","globalMarker":"global-lazy-B"}
+.
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-state-c5ae9f47-6277-4b72-81ad-dd21b05a149e accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A","globalHasOldOnly":true,"caseName":"state","counter":0.0,"pageId":"engine-state-state-c5ae9f47-6277-4b72-81ad-dd21b05a149e","globalMarker":"global-state-A"}
+
+TemplateGroupState: 真实UI触控 selector=engine-reuse-increment ui=LynxFlattenUI screenRect=Rect(116, 1297 - 965, 1423)
+
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-state-c5ae9f47-6277-4b72-81ad-dd21b05a149e accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"counter","hasOldOnly":true,"moduleMountCount":1.0,"marker":"state-A","globalHasOldOnly":true,"caseName":"state","counter":1.0,"pageId":"engine-state-state-c5ae9f47-6277-4b72-81ad-dd21b05a149e","globalMarker":"global-state-A"}
+
+TemplateGroupState: actual Native event=engine-reuse-probe.ready source=engine-state-state-ddd80b94-79bd-405e-8dd5-73b8228d87ff accepted=true payload={"fixture":"ENGINE_REUSE_FIXTURE_V1","phase":"initial","hasOldOnly":false,"moduleMountCount":1.0,"marker":"state-B","globalHasOldOnly":false,"caseName":"state","counter":0.0,"pageId":"engine-state-state-ddd80b94-79bd-405e-8dd5-73b8228d87ff","globalMarker":"global-state-B"}
+.
+Test results for InstrumentationTestRunner=..
+Time: 10.689
+
+OK (2 tests)
+
+

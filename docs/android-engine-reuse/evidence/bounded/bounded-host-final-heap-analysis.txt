@@ -1,0 +1,30 @@
+MainActivity objectId=34827528 destroyed=false
+Destroyed host candidates=0
+====================================
+HEAP ANALYSIS RESULT
+====================================
+0 APPLICATION LEAKS
+
+References underlined with "~~~" are likely causes.
+Learn more at https://squ.re/leaks.
+====================================
+0 LIBRARY LEAKS
+
+A Library Leak is a leak caused by a known bug in 3rd party code that you do not have control over.
+See https://square.github.io/leakcanary/fundamentals-how-leakcanary-works/#4-categorizing-leaks
+====================================
+0 UNREACHABLE OBJECTS
+
+An unreachable object is still in memory but LeakCanary could not find a strong reference path
+from GC roots.
+====================================
+METADATA
+
+Please include this in bug reports and Stack Overflow questions.
+
+Stats: LruCache[maxSize=3000,hits=120350,misses=214775,hitRate=35%] RandomAccess[bytes=10611018,reads=214775,travel=79641022000,range=38893767,size=48584018]
+Analysis duration: 1198 ms
+Heap dump file path: /tmp/codex-engine-reuse-20261010/android-group-cache/device-evidence/bounded/files/bounded-engine-smoke-results/grouped/testFormerActivityWeakHostDiagnosticAndOptionalHprof/former-host-after-drain.hprof
+Heap dump timestamp: 1791612684759
+Heap dump duration: Unknown
+====================================

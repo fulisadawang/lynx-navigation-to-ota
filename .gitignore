@@ -10,7 +10,7 @@
 **/.build/
 **/.gradle/
 **/Pods/
-**/node_modules/
+**/node_modules
 **/oh_modules/
 **/.hvigor/
 **/.preview/
